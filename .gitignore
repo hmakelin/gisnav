@@ -1,2 +1,5 @@
 # Python virtual environment
 /venv
+
+# Pycharm generated files
+.idea/

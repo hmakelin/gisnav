@@ -13,10 +13,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='hmakelin',
+    maintainer='Harri Mäkelin',
     maintainer_email='hmakelin@protonmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='NG-RANSAC based matching of airborne drone video to map retrieved from OGC WMS endpoint.',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

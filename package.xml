@@ -3,9 +3,9 @@
 <package format="3">
   <name>ng_ransac_wms_map_matching</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="hmakelin@protonmail.com">hmakelin</maintainer>
-  <license>TODO: License declaration</license>
+  <description>NG-RANSAC based matching of airborne drone video to map retrieved from OGC WMS endpoint.</description>
+  <maintainer email="hmakelin@protonmail.com">Harri Mäkelin</maintainer>
+  <license>MIT</license>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

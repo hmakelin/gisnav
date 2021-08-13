@@ -3,3 +3,6 @@
 
 # Pycharm generated files
 .idea/
+
+# Python bytecode
+*.pyc

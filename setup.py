@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'matching_node = ng_ransac_wms_map_matching.matching_node:main'
         ],
     },
 )

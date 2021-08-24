@@ -1,0 +1,3 @@
+[submodule "ngransac"]
+	path = ngransac
+	url = https://github.com/vislearn/ngransac.git

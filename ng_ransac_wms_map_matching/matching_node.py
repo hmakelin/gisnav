@@ -2,14 +2,17 @@ import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from px4_msgs.msg import VehicleLocalPosition
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
 from cv2 import VideoCapture
+from ngransac import
 
 from geo import get_bbox
 
+
 class Matcher(Node):
     image_raw_topic = "image_raw"
+    camera_info_topic = "camera_info"
 
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
     vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
@@ -22,6 +25,8 @@ class Matcher(Node):
         super().__init__('matcher')
         self._init_wms()
         self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 1)
+        self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
+                                                         1)
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
                                                                     self.vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 1)
@@ -56,6 +61,11 @@ class Matcher(Node):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._image_raw = msg
+
+    def _camera_info_callback(self, msg):
+        """Handles reception of camera info."""
+        self.get_logger().debug('Camera info callback triggered.')
+        self._camera_info = msg
 
     def _vehicle_local_position_callback(self, msg):
         """Handles reception of latest global position estimate."""

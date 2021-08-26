@@ -8,7 +8,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
 from cv2 import VideoCapture
 
-from geo import get_bbox
+from ng_ransac_wms_map_matching.geo import get_bbox
 
 
 class Matcher(Node):

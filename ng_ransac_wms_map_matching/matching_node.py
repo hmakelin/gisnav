@@ -1,11 +1,12 @@
 import rclpy
+import os
+
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
 from cv2 import VideoCapture
-from ngransac import
 
 from geo import get_bbox
 
@@ -19,6 +20,10 @@ class Matcher(Node):
 
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 200
+
+    # Image file names for NG-RANSAC
+    img_file = 'img.jpg'
+    map_file = 'map.jpg'
 
     def __init__(self):
         """Initializes the node."""
@@ -61,6 +66,7 @@ class Matcher(Node):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._image_raw = msg
+        self._ng_ransac_match()
 
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""
@@ -72,6 +78,17 @@ class Matcher(Node):
         self.get_logger().debug('Vehicle local position callback triggered.')
         self._vehicle_local_position = msg
         self._update_map()
+
+    def _ng_ransac_match(self):
+        """Does NG-RANSAC matching on camera and map images.
+
+        See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
+        """
+        cv2.imwrite(self._image_raw, img_file)
+        cv2.imwrite(self._map, map_file)
+        cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(img_file, map_file)
+        self.get_logger().debug('Calling NG-RANSAC script.')
+        os.system(cmd) #  Stores result as demo.png
 
 
 def main(args=None):

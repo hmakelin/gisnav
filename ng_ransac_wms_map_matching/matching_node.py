@@ -84,6 +84,7 @@ class Matcher(Node):
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
         """
+        assert all(i is not None for i in [self._image_raw, self._map])
         cv2.imwrite(self._image_raw, img_file)
         cv2.imwrite(self._map, map_file)
         cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(img_file, map_file)

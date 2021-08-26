@@ -61,7 +61,7 @@ class Matcher(Node):
         # TODO: raster size? get bbox only supports EPSG:4326 although it might be configurable in the future
         self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon),
                                   self.map_bbox_radius)
-        self._map = wms_client_global.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
+        self._map = self._wms.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
                                              srs=self.get_parameter('url').get_parameter_value().string_value,
                                              bbox=bbox, size=img.size(), format='image/jpeg', transparent=True)
 

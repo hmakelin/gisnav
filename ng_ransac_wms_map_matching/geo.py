@@ -1,5 +1,7 @@
+import pyproj
+
 from functools import partial
-from pyproj import Proj, transform
+from shapely.ops import transform
 from shapely.geometry import Point
 
 
@@ -17,9 +19,9 @@ def get_bbox(latlon, radius_meters):
         The bounding box (left, bottom, right, top).
     """
     proj_str = '+proj=aeqd +lat_0={lat} +lon_0={lon} +x_0=0 +y_0=0'
-    projection = partial(transform,
-                         Proj(proj_str.format(lat=latlon[0], lon=latlon[1])),
-                         Proj('+proj=longlat +datum=WGS84'))
+    projection = partial(pyproj.transform,
+                         pyproj.Proj(proj_str.format(lat=latlon[0], lon=latlon[1])),
+                         pyproj.Proj('+proj=longlat +datum=WGS84'))
     circle = Point(0, 0).buffer(radius_meters)
     circle_transformed = transform(projection, circle).exterior.coords[:]
     lons_lats = list(zip(*circle_transformed))

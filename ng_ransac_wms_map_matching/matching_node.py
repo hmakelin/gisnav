@@ -36,6 +36,9 @@ class Matcher(Node):
                                                                     self.vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 1)
 
+        self._image_raw = None
+        self._map = None
+
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
 
@@ -66,7 +69,8 @@ class Matcher(Node):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._image_raw = msg
-        self._ng_ransac_match()
+        if all(i is not None for i in [self._image_raw, self._map]):
+            self._ng_ransac_match()
 
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""
@@ -84,7 +88,6 @@ class Matcher(Node):
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
         """
-        assert all(i is not None for i in [self._image_raw, self._map])
         cv2.imwrite(self._image_raw, img_file)
         cv2.imwrite(self._map, map_file)
         cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(img_file, map_file)

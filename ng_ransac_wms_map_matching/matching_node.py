@@ -59,7 +59,7 @@ class Matcher(Node):
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
         # TODO: raster size? get bbox only supports EPSG:4326 although it might be configurable in the future
-        self._map_bbox = get_bbox((self._vehicle_local_position.lat, self._vehicle_local_position.lon),
+        self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon),
                                   self.map_bbox_radius)
         self._map = wms_client_global.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
                                              srs=self.get_parameter('url').get_parameter_value().string_value,

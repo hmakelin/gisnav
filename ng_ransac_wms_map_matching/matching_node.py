@@ -61,9 +61,12 @@ class Matcher(Node):
         # TODO: raster size? get bbox only supports EPSG:4326 although it might be configurable in the future
         self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon),
                                   self.map_bbox_radius)
-        self._map = self._wms.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
-                                     srs=self.get_parameter('url').get_parameter_value().string_value,
-                                     bbox=self._map_bbox, size=img.size(), format='image/jpeg', transparent=True)
+
+        if all(i is not None for i in [self._camera_info]):
+            size = self._camera_info.width, self._camera_info.height
+            self._map = self._wms.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
+                                         srs=self.get_parameter('url').get_parameter_value().string_value,
+                                         bbox=self._map_bbox, size=img.size(), format='image/jpeg', transparent=True)
 
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""

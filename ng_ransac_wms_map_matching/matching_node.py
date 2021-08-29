@@ -65,7 +65,7 @@ class Matcher(Node):
 
         if all(i is not None for i in [self._camera_info]):
             img_size = self._camera_info.width, self._camera_info.height
-            self._map = self._wms.getmap(layers=[self.get_parameter('url').get_parameter_value().string_value],
+            self._map = self._wms.getmap(layers=[self.get_parameter('layer').get_parameter_value().string_value],
                                          srs=self.get_parameter('url').get_parameter_value().string_value,
                                          bbox=self._map_bbox, size=img_size, format='image/jpeg', transparent=True)
 

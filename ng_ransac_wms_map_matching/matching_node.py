@@ -6,7 +6,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
-from cv2 import VideoCapture
+from cv2 import VideoCapture, imwrite
 
 from ng_ransac_wms_map_matching.geo import get_bbox
 
@@ -92,8 +92,8 @@ class Matcher(Node):
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
         """
-        cv2.imwrite(self._image_raw, img_file)
-        cv2.imwrite(self._map, map_file)
+        imwrite(self._image_raw, img_file)
+        imwrite(self._map, map_file)
         cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(img_file, map_file)
         self.get_logger().debug('Calling NG-RANSAC script.')
         os.system(cmd) #  Stores result as demo.png

@@ -36,6 +36,7 @@ class Matcher(Node):
                                                                     self.vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 1)
 
+        self._camera_info = None
         self._image_raw = None
         self._map = None
 

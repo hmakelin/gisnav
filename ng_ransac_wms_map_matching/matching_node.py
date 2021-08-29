@@ -92,9 +92,10 @@ class Matcher(Node):
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
         """
-        imwrite(self._image_raw, img_file)
-        imwrite(self._map, map_file)
-        cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(img_file, map_file)
+        imwrite(self._image_raw, self.img_file)
+        imwrite(self._map, self.map_file)
+        cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(self.img_file,
+                                                                                               self.map_file)
         self.get_logger().debug('Calling NG-RANSAC script.')
         os.system(cmd) #  Stores result as demo.png
 

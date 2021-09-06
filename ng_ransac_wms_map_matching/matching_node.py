@@ -6,7 +6,10 @@ from rcl_interfaces.msg import ParameterDescriptor
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
-from cv2 import VideoCapture, imwrite
+from cv2 import VideoCapture, imwrite, imdecode
+import numpy as np
+import cv2  # TODO: remove
+from cv_bridge import CvBridge
 
 from ng_ransac_wms_map_matching.geo import get_bbox
 
@@ -35,9 +38,10 @@ class Matcher(Node):
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
                                                                     self.vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 1)
-
+        self._cv_bridge = CvBridge()
         self._camera_info = None
         self._image_raw = None
+        self._cv_image = None
         self._map = None
 
     def _init_wms(self):
@@ -47,11 +51,9 @@ class Matcher(Node):
         layer and srs parameters can be changed dynamically.
         """
         # TODO: don't hardcode defaults here, get values from launch file
-        self.declare_parameter('url', 'http://localhost:8080/geoserver/kestrel/wms',
-                               ParameterDescriptor(read_only=True))
-        self.declare_parameter('version', '1.1.1',
-                               ParameterDescriptor(read_only=True))
-        self.declare_parameter('layer', 'Ortho-RGB-Helsinki')
+        self.declare_parameter('url', 'http://localhost:8080/wms', ParameterDescriptor(read_only=True))
+        self.declare_parameter('version', '1.1.1', ParameterDescriptor(read_only=True))
+        self.declare_parameter('layer', 'WorldImagery')
         self.declare_parameter('srs', 'EPSG:4326')  # TODO: get_bbox currently only supports EPSG:4326
 
         self._wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
@@ -65,14 +67,25 @@ class Matcher(Node):
 
         if all(i is not None for i in [self._camera_info]):
             img_size = self._camera_info.width, self._camera_info.height
-            self._map = self._wms.getmap(layers=[self.get_parameter('layer').get_parameter_value().string_value],
-                                         srs=self.get_parameter('srs').get_parameter_value().string_value,
-                                         bbox=self._map_bbox, size=img_size, format='image/jpeg', transparent=True)
+            layer_str = self.get_parameter('layer').get_parameter_value().string_value
+            srs_str = self.get_parameter('srs').get_parameter_value().string_value
+            self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
+                                                                                                   layer_str, srs_str))
+            self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox, size=img_size,
+                                         format='image/png', transparent=True)
+
+            self._map = np.frombuffer(self._map.read(), np.uint8)
+            self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
+            # cv2.imshow('Image', self._map)  # TODO: remove
+            # cv2.waitKey(0)  # TODO: remove
 
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._image_raw = msg
+        self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
+        # cv2.imshow('Image', self._cv_image)  # TODO: remove
+        # cv2.waitKey(0) # TODO: remove
         if all(i is not None for i in [self._image_raw, self._map]):
             self._ng_ransac_match()
 
@@ -80,6 +93,7 @@ class Matcher(Node):
         """Handles reception of camera info."""
         self.get_logger().debug('Camera info callback triggered.')
         self._camera_info = msg
+        self._camera_info_sub.destroy()  # TODO: check that info was indeed received before destroying subscription
 
     def _vehicle_local_position_callback(self, msg):
         """Handles reception of latest global position estimate."""
@@ -92,8 +106,8 @@ class Matcher(Node):
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
         """
-        imwrite(self._image_raw, self.img_file)
-        imwrite(self._map, self.map_file)
+        imwrite(self.img_file, self._cv_image)
+        imwrite(self.map_file, self._map)
         cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(self.img_file,
                                                                                                self.map_file)
         self.get_logger().debug('Calling NG-RANSAC script.')

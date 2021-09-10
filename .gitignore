@@ -6,3 +6,8 @@
 
 # Python bytecode
 *.pyc
+
+# Unwanted folders
+build/
+install/
+log/

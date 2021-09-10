@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import setup
 
 package_name = 'ng_ransac_wms_map_matching'
@@ -10,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'ngransac'), glob('ngransac/ngransac_demo.py')),
+        (os.path.join('share', package_name, 'ngransac/models'), glob('ngransac/models/weights_e2e_F_orb_r0.80_.net')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

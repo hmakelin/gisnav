@@ -28,6 +28,13 @@ class Matcher(Node):
     img_file = 'img.jpg'
     map_file = 'map.jpg'
 
+    # RANSAC params
+    lowe_ratio = 0.8
+
+    # data_files locations (see setup.py)
+    ngransac_demo_script = 'ngransac/ngransac_demo.py'
+    model = 'ngransac/models/weights_e2e_F_orb_r0.80_.net'
+
     def __init__(self):
         """Initializes the node."""
         super().__init__('matcher')
@@ -108,10 +115,16 @@ class Matcher(Node):
         """
         imwrite(self.img_file, self._cv_image)
         imwrite(self.map_file, self._map)
-        cmd = 'python ngransac_demo.py -img1 {} -img2 {} -orb -nf -1 -r 0.8 -fmat -t 1'.format(self.img_file,
-                                                                                               self.map_file)
+        cmd = 'python {} -m {} -img1 {} -img2 {} -orb -nf -1 -r {} -fmat -t 1'.format(self.ngransac_demo_script,
+                                                                                      self.model, self.img_file,
+                                                                                      self.map_file, self.lowe_ratio)
+
         self.get_logger().debug('Calling NG-RANSAC script.')
-        os.system(cmd) #  Stores result as demo.png
+
+        try:
+            os.system(cmd) #  Stores result as demo.png
+        except Exception as e:
+            self.get_logger().warn('NG-RANSAC script call returned exception: {}'.format(e))
 
 
 def main(args=None):

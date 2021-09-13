@@ -3,6 +3,7 @@ import os
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
+from ament_index_python.packages import get_package_share_directory
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
@@ -32,8 +33,9 @@ class Matcher(Node):
     lowe_ratio = 0.8
 
     # data_files locations (see setup.py)
-    ngransac_demo_script = 'ngransac/ngransac_demo.py'
-    model = 'ngransac/models/weights_e2e_F_orb_r0.80_.net'
+    package_name = 'ng_ransac_wms_map_matching'
+    ngransac_demo_script = get_package_share_directory(package_name) + '/ngransac/ngransac_demo.py'
+    model = get_package_share_directory(package_name) + '/ngransac/models/weights_e2e_F_orb_r0.80_.net'
 
     def __init__(self):
         """Initializes the node."""

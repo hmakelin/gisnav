@@ -85,18 +85,18 @@ class Matcher(Node):
 
             self._map = np.frombuffer(self._map.read(), np.uint8)
             self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
-            # cv2.imshow('Image', self._map)  # TODO: remove
-            # cv2.waitKey(0)  # TODO: remove
+        else:
+            self.get_logger().debug('Camera info not available - will not yet get map from WMS endpoint.')
 
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
-        # cv2.imshow('Image', self._cv_image)  # TODO: remove
-        # cv2.waitKey(0) # TODO: remove
         if all(i is not None for i in [self._image_raw, self._map]):
             self._ng_ransac_match()
+        else:
+            self.get_logger().debug('Map or image not available - not calling NG-RANSAC yet.')
 
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""

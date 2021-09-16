@@ -23,19 +23,19 @@ class Matcher(Node):
     vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
 
     # Determines map size, radius of enclosed circle in meters
-    map_bbox_radius = 200
+    map_bbox_radius = 100
 
     # Image file names for NG-RANSAC
     img_file = 'img.jpg'
     map_file = 'map.jpg'
 
     # RANSAC params
-    lowe_ratio = 0.8
+    lowe_ratio = 0.7
 
     # data_files locations (see setup.py)
     package_name = 'ng_ransac_wms_map_matching'
     ngransac_demo_script = get_package_share_directory(package_name) + '/ngransac/ngransac_demo.py'
-    model = get_package_share_directory(package_name) + '/ngransac/models/weights_e2e_F_orb_r0.80_.net'
+    model = get_package_share_directory(package_name) + '/ngransac/models/weights_e2e_F_r0.80_kitti_inliers.net'  # weights_e2e_F_orb_r0.80_.net'
 
     def __init__(self):
         """Initializes the node."""
@@ -91,6 +91,11 @@ class Matcher(Node):
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
+        stamp = msg.header.stamp.sec
+        now = self.get_clock().now().to_msg().sec
+        if stamp + 1 < now:
+            self.get_logger().debug('Skipping frame older than 1 second ({} vs {})'.format(stamp, second))
+            return
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):

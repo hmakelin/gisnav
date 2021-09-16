@@ -16,7 +16,7 @@ setup(
         (os.path.join('share', package_name, 'ngransac'), glob('ngransac/network.py')),
         (os.path.join('share', package_name, 'ngransac'), glob('ngransac/ngransac_demo.py')),
         (os.path.join('share', package_name, 'ngransac'), glob('ngransac/util.py')),
-        (os.path.join('share', package_name, 'ngransac/models'), glob('ngransac/models/weights_e2e_F_orb_r0.80_.net')),
+        (os.path.join('share', package_name, 'ngransac/models'), glob('ngransac/models/weights_e2e_F_r0.80_kitti_inliers.net')),  # weights_e2e_F_orb_r0.80_.net')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

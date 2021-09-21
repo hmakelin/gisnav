@@ -62,8 +62,12 @@ class Matcher(Node):
         self.declare_parameter('layer', 'WorldImagery')
         self.declare_parameter('srs', 'EPSG:4326')  # TODO: get_bbox currently only supports EPSG:4326
 
-        self._wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
-                                  version=self.get_parameter('version').get_parameter_value().string_value)
+        try:
+            self._wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
+                                      version=self.get_parameter('version').get_parameter_value().string_value)
+        except Exception as e:
+            self.get_logger().error('Could not connect to WMS server.')
+            raise e
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
@@ -77,8 +81,13 @@ class Matcher(Node):
             srs_str = self.get_parameter('srs').get_parameter_value().string_value
             self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
                                                                                                    layer_str, srs_str))
-            self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox, size=img_size,
-                                         format='image/png', transparent=True)
+
+            try:
+                self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox, size=img_size,
+                                             format='image/png', transparent=True)
+            except Exception as e:
+                self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
+                return
 
             self._map = np.frombuffer(self._map.read(), np.uint8)
             self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)

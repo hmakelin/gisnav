@@ -1,9 +1,9 @@
 import rclpy
 import os
+import traceback
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from ament_index_python.packages import get_package_share_directory
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
 from owslib.wms import WebMapService
@@ -25,17 +25,8 @@ class Matcher(Node):
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 100
 
-    # Image file names for NG-RANSAC
-    img_file = 'img.jpg'
-    map_file = 'map.jpg'
-
-    # RANSAC params
-    lowe_ratio = 0.7
-
     # data_files locations (see setup.py)
     package_name = 'wms_map_matching'
-    ngransac_demo_script = get_package_share_directory(package_name) + '/ngransac/ngransac_demo.py'
-    model = get_package_share_directory(package_name) + '/ngransac/models/weights_e2e_F_r0.80_kitti_inliers.net'  # weights_e2e_F_orb_r0.80_.net'
 
     def __init__(self):
         """Initializes the node."""
@@ -99,7 +90,7 @@ class Matcher(Node):
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):
-            self._ng_ransac_match()
+            self._match()
         else:
             self.get_logger().debug('Map or image not available - not calling NG-RANSAC yet.')
 
@@ -115,7 +106,7 @@ class Matcher(Node):
         self._vehicle_local_position = msg
         self._update_map()
 
-    def _ng_ransac_match(self):
+    def _match(self):
         """Does NG-RANSAC matching on camera and map images.
 
         See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
@@ -126,12 +117,12 @@ class Matcher(Node):
                                                                                       self.model, self.img_file,
                                                                                       self.map_file, self.lowe_ratio)
 
-        self.get_logger().debug('Calling NG-RANSAC script.')
+        self.get_logger().debug('Matching image to map.')
 
         try:
             os.system(cmd) #  Stores result as demo.png
         except Exception as e:
-            self.get_logger().warn('NG-RANSAC script call returned exception: {}'.format(e))
+            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
 
 def main(args=None):

@@ -25,9 +25,6 @@ class Matcher(Node):
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 100
 
-    # data_files locations (see setup.py)
-    package_name = 'wms_map_matching'
-
     def __init__(self):
         """Initializes the node."""
         super().__init__('matcher')

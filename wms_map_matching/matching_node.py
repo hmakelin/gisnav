@@ -12,7 +12,7 @@ import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
 
-from ng_ransac_wms_map_matching.geo import get_bbox
+from wms_map_matching.geo import get_bbox
 
 
 class Matcher(Node):
@@ -33,7 +33,7 @@ class Matcher(Node):
     lowe_ratio = 0.7
 
     # data_files locations (see setup.py)
-    package_name = 'ng_ransac_wms_map_matching'
+    package_name = 'wms_map_matching'
     ngransac_demo_script = get_package_share_directory(package_name) + '/ngransac/ngransac_demo.py'
     model = get_package_share_directory(package_name) + '/ngransac/models/weights_e2e_F_r0.80_kitti_inliers.net'  # weights_e2e_F_orb_r0.80_.net'
 

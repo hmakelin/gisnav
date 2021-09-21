@@ -16,11 +16,10 @@ from wms_map_matching.geo import get_bbox
 
 
 class Matcher(Node):
-    image_raw_topic = "image_raw"
-    camera_info_topic = "camera_info"
-
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
     vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
+    image_raw_topic = "image_raw"
+    camera_info_topic = "camera_info"
 
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 100

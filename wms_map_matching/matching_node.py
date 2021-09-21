@@ -1,6 +1,7 @@
 import rclpy
 import os
 import traceback
+import xml.etree.ElementTree as ET
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -11,9 +12,9 @@ from cv2 import VideoCapture, imwrite, imdecode
 import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
+from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.geo import get_bbox
-
 
 class Matcher(Node):
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
@@ -23,6 +24,15 @@ class Matcher(Node):
 
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 100
+
+    # SuperGlue config
+    package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
+    match_pairs_script = get_package_share_directory(package_name) + '/superglue/match_pairs.py'
+    input_pairs = get_package_share_directory(package_name) + '/images/input_pairs.txt'
+    input_dir = get_package_share_directory(package_name) + '/images/input/'
+    output_dir = get_package_share_directory(package_name) + '/images/output/'
+    img_file = input_dir + 'img.jpg'
+    map_file = input_dir + 'map.jpg'
 
     def __init__(self):
         """Initializes the node."""
@@ -104,6 +114,10 @@ class Matcher(Node):
 
     def _match(self):
         """Does matching on camera and map images."""
+        imwrite(self.img_file, self._cv_image)
+        imwrite(self.map_file, self._map)
+        cmd = 'match_pairs.py --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor'\
+            .format(self.input_pairs, self.input_dir, self.output_dir)
         pass
 
 

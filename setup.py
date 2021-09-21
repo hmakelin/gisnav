@@ -1,3 +1,5 @@
+import os
+from glob import glob
 from setuptools import setup
 import xml.etree.ElementTree as ET
 
@@ -16,9 +18,14 @@ setup(
     version=version,
     packages=[package_name],
     data_files=[
-        ('share/ament_index/resource_index/packages',
-            ['resource/' + package_name]),
+        ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'SuperGluePretrainedNetwork'),
+         glob('SuperGluePretrainedNetwork/models/**/*.py', recursive=True)),
+        (os.path.join('share', package_name, 'SuperGluePretrainedNetwork'),
+         glob('SuperGluePretrainedNetwork/models/**/*.pth', recursive=True)),
+        (os.path.join('share', package_name, 'SuperGluePretrainedNetwork'),
+         glob('SuperGluePretrainedNetwork/match_pairs.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

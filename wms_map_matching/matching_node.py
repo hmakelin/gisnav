@@ -107,22 +107,8 @@ class Matcher(Node):
         self._update_map()
 
     def _match(self):
-        """Does NG-RANSAC matching on camera and map images.
-
-        See https://github.com/vislearn/ngransac/blob/master/ngransac_demo.py.
-        """
-        imwrite(self.img_file, self._cv_image)
-        imwrite(self.map_file, self._map)
-        cmd = 'python {} -m {} -img1 {} -img2 {} -orb -nf -1 -r {} -fmat -t 1'.format(self.ngransac_demo_script,
-                                                                                      self.model, self.img_file,
-                                                                                      self.map_file, self.lowe_ratio)
-
-        self.get_logger().debug('Matching image to map.')
-
-        try:
-            os.system(cmd) #  Stores result as demo.png
-        except Exception as e:
-            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
+        """Does matching on camera and map images."""
+        pass
 
 
 def main(args=None):

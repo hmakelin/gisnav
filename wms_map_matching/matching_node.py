@@ -16,6 +16,14 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.geo import get_bbox
 
+# Add the share folder to Python path
+from ament_index_python.packages import get_package_share_directory
+package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
+share_dir = get_package_share_directory(package_name)
+superglue_dir = share_dir + '/SuperGluePretrainedNetwork'
+sys.path.append(os.path.abspath(ngransac_dir))  # need for importing from NG-RANSAC scripts (util, network) below
+
+
 class Matcher(Node):
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
     vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
@@ -26,11 +34,10 @@ class Matcher(Node):
     map_bbox_radius = 100
 
     # SuperGlue config
-    package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
-    match_pairs_script = get_package_share_directory(package_name) + '/superglue/match_pairs.py'
-    input_pairs = get_package_share_directory(package_name) + '/images/input_pairs.txt'
-    input_dir = get_package_share_directory(package_name) + '/images/input/'
-    output_dir = get_package_share_directory(package_name) + '/images/output/'
+    match_pairs_script = superglue_dir + '/match_pairs.py'
+    input_pairs = share_dir + '/images/input_pairs.txt'
+    input_dir = share_dir + '/images/input/'
+    output_dir = share_dir + '/images/output/'
     img_file = input_dir + 'img.jpg'
     map_file = input_dir + 'map.jpg'
 
@@ -125,9 +132,13 @@ class Matcher(Node):
         """Does matching on camera and map images."""
         imwrite(self.img_file, self._cv_image)
         imwrite(self.map_file, self._map)
-        cmd = 'match_pairs.py --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor'\
-            .format(self.input_pairs, self.input_dir, self.output_dir)
-        pass
+        cmd = '{} --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor'\
+            .format(self.match_pairs_script, self.input_pairs, self.input_dir, self.output_dir)
+        try:
+            self.get_logger().debug('Matching image to map.')
+            os.system(cmd)
+        except Exception as e:
+            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
 
 def main(args=None):

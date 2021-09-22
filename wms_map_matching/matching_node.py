@@ -36,11 +36,13 @@ class Matcher(Node):
 
     # SuperGlue config
     match_pairs_script = superglue_dir + '/match_pairs.py'
-    input_pairs = share_dir + '/images/input_pairs.txt'
-    input_dir = share_dir + '/images/input/'
-    output_dir = share_dir + '/images/output/'
-    img_file = input_dir + 'img.jpg'
-    map_file = input_dir + 'map.jpg'
+    images_dir = share_dir + '/images'
+    input_pairs = images_dir + '/input_pairs.txt'
+    input_dir = images_dir + '/input'
+    output_dir = images_dir + '/output'
+    img_file = input_dir + '/img.jpg'
+    map_file = input_dir + '/map.jpg'
+
 
     def __init__(self):
         """Initializes the node."""
@@ -57,6 +59,37 @@ class Matcher(Node):
         self._image_raw = None
         self._cv_image = None
         self._map = None
+
+        self._create_dirs()
+        self._create_input_pairs_file()
+
+    def _create_dirs(self):
+        """Creates required directories if they do not exist."""
+        for dir in [self.images_dir, self.input_dir, self.output_dir]:
+            if not os.path.exists(dir):
+                self.get_logger().debug('Creating missing directory {}'.format(dir))
+                try:
+                    os.mkdir(dir)
+                except Exception as e:
+                    self.get_logger().error('Could not create directory {} because of error: {}\n{}'\
+                                            .format(dir, e, traceback.print_exc()))
+                    raise e
+            else:
+                self.get_logger().debug('Directory {} already exists.'.format(dir))
+
+    def _create_input_pairs_file(self):
+        """Creates the input pairs file required by SuperGlue if it does not exist."""
+        if not os.path.exists(self.input_pairs):
+            self.get_logger().debug('Appending {} and {} to input_pairs.txt file.'.format(self.img_file, self.map_file))
+            try:
+                with open(self.input_pairs, 'w') as f:
+                    f.write(self.img_file + '\n')
+                    f.write(self.map_file + '\n')
+            except Exception as e:
+                self.get_logger().error('Could not write input pairs file: {}\n{}'.format(e, traceback.print_exc()))
+                raise e
+        else:
+            self.get_logger().debug('Skipping writing input pairs file since it already exists.')
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.

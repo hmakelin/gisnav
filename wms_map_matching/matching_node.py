@@ -22,7 +22,7 @@ from ament_index_python.packages import get_package_share_directory
 package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
 share_dir = get_package_share_directory(package_name)
 superglue_dir = share_dir + '/SuperGluePretrainedNetwork'
-sys.path.append(os.path.abspath(ngransac_dir))  # need for importing from NG-RANSAC scripts (util, network) below
+sys.path.append(os.path.abspath(superglue_dir))  # need for importing from NG-RANSAC scripts (util, network) below
 
 
 class Matcher(Node):

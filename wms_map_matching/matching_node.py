@@ -85,8 +85,7 @@ class Matcher(Node):
             self.get_logger().debug('Appending {} and {} to input_pairs.txt file.'.format(self.img_file, self.map_file))
             try:
                 with open(self.input_pairs, 'w') as f:
-                    f.write(self.img_file_name + '\n')
-                    f.write(self.map_file_name + '\n')
+                    f.write(self.img_file_name + ' ' + self.map_file_name + '\n')
             except Exception as e:
                 self.get_logger().error('Could not write input pairs file: {}\n{}'.format(e, traceback.print_exc()))
                 raise e

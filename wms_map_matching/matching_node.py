@@ -40,8 +40,10 @@ class Matcher(Node):
     input_pairs = images_dir + '/input_pairs.txt'
     input_dir = images_dir + '/input'
     output_dir = images_dir + '/output'
-    img_file = input_dir + '/img.jpg'
-    map_file = input_dir + '/map.jpg'
+    img_file_name = 'img.jpg'
+    map_file_name = 'map.jpg'
+    img_file = input_dir + '/' + img_file_name
+    map_file = input_dir + '/' + map_file_name
 
 
     def __init__(self):
@@ -83,8 +85,8 @@ class Matcher(Node):
             self.get_logger().debug('Appending {} and {} to input_pairs.txt file.'.format(self.img_file, self.map_file))
             try:
                 with open(self.input_pairs, 'w') as f:
-                    f.write(self.img_file + '\n')
-                    f.write(self.map_file + '\n')
+                    f.write(self.img_file_name + '\n')
+                    f.write(self.map_file_name + '\n')
             except Exception as e:
                 self.get_logger().error('Could not write input pairs file: {}\n{}'.format(e, traceback.print_exc()))
                 raise e

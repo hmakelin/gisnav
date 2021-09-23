@@ -32,7 +32,7 @@ class Matcher(Node):
     camera_info_topic = "camera_info"
 
     # Determines map size, radius of enclosed circle in meters
-    map_bbox_radius = 100
+    map_bbox_radius = 200
 
     # SuperGlue config
     match_pairs_script = superglue_dir + '/match_pairs.py'

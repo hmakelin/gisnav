@@ -167,7 +167,7 @@ class Matcher(Node):
         """Does matching on camera and map images."""
         imwrite(self.img_file, self._cv_image)
         imwrite(self.map_file, self._map)
-        cmd = '{} --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor'\
+        cmd = '{} --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor --viz'\
             .format(self.match_pairs_script, self.input_pairs, self.input_dir, self.output_dir)
         try:
             self.get_logger().debug('Matching image to map.')

@@ -14,6 +14,7 @@ import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
+from superglue_adapter import SuperGlue
 
 from wms_map_matching.geo import get_bbox
 
@@ -46,7 +47,7 @@ class Matcher(Node):
     map_file = input_dir + '/' + map_file_name
 
 
-    def __init__(self):
+    def __init__(self, use_script=False):
         """Initializes the node."""
         super().__init__('matcher')
         self._init_wms()
@@ -61,9 +62,13 @@ class Matcher(Node):
         self._image_raw = None
         self._cv_image = None
         self._map = None
+        self._superglue = None
 
-        self._create_dirs()
-        self._create_input_pairs_file()
+        if use_script:
+            self._create_dirs()
+            self._create_input_pairs_file()
+        else:
+            self._superglue = SuperGlue(self.get_logger())
 
     def _create_dirs(self):
         """Creates required directories if they do not exist."""
@@ -147,7 +152,10 @@ class Matcher(Node):
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):
-            self._match()
+            if use_script:
+                self._match_script()
+            else:
+                self._match()
         else:
             self.get_logger().debug('Map or image not available - not calling NG-RANSAC yet.')
 
@@ -163,8 +171,8 @@ class Matcher(Node):
         self._vehicle_local_position = msg
         self._update_map()
 
-    def _match(self):
-        """Does matching on camera and map images."""
+    def _match_script(self):
+        """Does matching on camera and map images using provided script."""
         imwrite(self.img_file, self._cv_image)
         imwrite(self.map_file, self._map)
         cmd = '{} --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor --viz'\
@@ -174,6 +182,15 @@ class Matcher(Node):
             os.system(cmd)
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
+
+    def _match(self):
+        """Does matching on camera and map images."""
+        try:
+            self.get_logger().debug('Matching image to map.')
+            self._superglue.match(self._cv_image, self._map)
+        except Exception as e:
+            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
+
 
 
 def main(args=None):

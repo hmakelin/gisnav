@@ -52,6 +52,7 @@ class Matcher(Node):
         """Initializes the node."""
         super().__init__('matcher')
         self._init_wms()
+        self._use_script = use_script
         self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 1)
         self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
                                                          1)
@@ -65,7 +66,7 @@ class Matcher(Node):
         self._map = None
         self._superglue = None
 
-        if use_script:
+        if self._use_script:
             self._create_dirs()
             self._create_input_pairs_file()
         else:
@@ -153,7 +154,7 @@ class Matcher(Node):
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):
-            if use_script:
+            if self._use_script:
                 self._match_script()
             else:
                 self._match()

@@ -46,6 +46,7 @@ class Matcher(Node):
     map_file_name = 'map.jpg'
     img_file = input_dir + '/' + img_file_name
     map_file = input_dir + '/' + map_file_name
+    output_file = output_dir + '/matches.jpg'
 
 
     def __init__(self, use_script=False):
@@ -70,7 +71,7 @@ class Matcher(Node):
             self._create_dirs()
             self._create_input_pairs_file()
         else:
-            self._superglue = SuperGlue(self.output_dir, self.get_logger())
+            self._superglue = SuperGlue(self.output_file, self.get_logger())
 
     def _create_dirs(self):
         """Creates required directories if they do not exist."""

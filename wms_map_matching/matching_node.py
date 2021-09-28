@@ -14,7 +14,6 @@ import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
-from superglue_adapter import SuperGlue
 
 from wms_map_matching.geo import get_bbox
 
@@ -25,6 +24,8 @@ share_dir = get_package_share_directory(package_name)
 superglue_dir = share_dir + '/SuperGluePretrainedNetwork'
 sys.path.append(os.path.abspath(superglue_dir))  # need for importing from NG-RANSAC scripts (util, network) below
 
+# Import this after superglue_dir has been added to path
+from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead

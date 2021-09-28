@@ -1,4 +1,7 @@
 """This module adapts the SuperGlue match_pairs.py demo code for this app."""
+import torch
+
+# Assumes models has been added to path (see import statements in matching_node.py)
 from models.matching import Matching
 from models.utils import estimate_pose, make_matching_plot
 
@@ -11,10 +14,10 @@ class SuperGlue():
 
         Args:
             logger - ROS2 node logger for logging messages."""
-        self._device = 'cuda' if torch.cuda.is_available() and not opt.force_cpu else 'cpu'
+        self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._logger = logger
         if self._logger is not None:
-            self._logger.debug('SuperGlue using device {}'.format(device))
+            self._logger.debug('SuperGlue using device {}'.format(self._device))
 
         # Recommended outdoor config from SuperGlue repo's README.md
         self._config = {
@@ -31,7 +34,7 @@ class SuperGlue():
         }
         if self._logger is not None:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
-        self._matching = Matching(config).eval().to(device)
+        self._matching = Matching(self._config).eval().to(self._device)
 
 
     def match(self, img, map):

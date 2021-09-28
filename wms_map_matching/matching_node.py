@@ -70,7 +70,7 @@ class Matcher(Node):
             self._create_dirs()
             self._create_input_pairs_file()
         else:
-            self._superglue = SuperGlue(self.get_logger())
+            self._superglue = SuperGlue(self.output_dir, self.get_logger())
 
     def _create_dirs(self):
         """Creates required directories if they do not exist."""
@@ -159,7 +159,8 @@ class Matcher(Node):
             else:
                 self._match()
         else:
-            self.get_logger().debug('Map or image not available - not calling NG-RANSAC yet.')
+            self.get_logger().debug('Map or image not available: map {}, img {} - not calling matching yet.'\
+                                    .format(self._map is not None, self._image_raw is not None))
 
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""

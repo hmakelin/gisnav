@@ -5,7 +5,7 @@ import matplotlib.cm as cm
 
 # Assumes models has been added to path (see import statements in matching_node.py)
 from models.matching import Matching
-from models.utils import estimate_pose, make_matching_plot, frame2tensor
+from models.utils import estimate_pose, make_matching_plot, frame2tensor, scale_intrinsics
 
 
 class SuperGlue():
@@ -42,8 +42,15 @@ class SuperGlue():
         self._matching = Matching(self._config).eval().to(self._device)
 
 
-    def match(self, img, map):
-        """Match img to map."""
+    def match(self, img, map, K, scale=(1,1)):
+        """Match img to map.
+
+        Arguments:
+            img - The image frame.
+            map - The map frame.
+            K - The camera intrinsic matrix as (3,3) np.array, also used as map intrinsic matrix.
+            scale - Scaling factor for intrinsic matrices (ratio of resized img to original resolution img) as tuple.
+        """
         if self._logger is not None:
             self._logger.debug('Pre-processing image and map to grayscale tensors.')
         img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -66,6 +73,19 @@ class SuperGlue():
         mkp_img = kp_img[valid]
         mkp_map= kp_map[matches[valid]]
         mconf = conf[valid]
+
+        if self._logger is not None:
+            self._logger.debug('Estimating pose.')
+        K_scaled = scale_intrinsics(K, scale)
+        thresh = 1.  # In pixels relative to resized image size.
+        ret = estimate_pose(mkp_img, mkp_map, K_scaled, K_scaled, thresh)
+        if ret is None:
+            if self._logger is not None:
+                self._logger.warn('Could not estimate pose.')
+        else:
+            R, t, inliers = ret
+        if self._logger is not None:
+            self._logger.debug('Pose estimated,\nR=\n{},\nt=\n{}.\n'.format(R, t))
 
         if self._logger is not None:
             self._logger.debug('Setting up visualization.')

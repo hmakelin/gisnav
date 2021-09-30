@@ -167,6 +167,7 @@ class Matcher(Node):
         """Handles reception of camera info."""
         self.get_logger().debug('Camera info callback triggered.')
         self._camera_info = msg
+        self.get_logger().debug('Camera info: {}.'.format(msg))
         self._camera_info_sub.destroy()  # TODO: check that info was indeed received before destroying subscription
 
     def _vehicle_local_position_callback(self, msg):
@@ -191,10 +192,9 @@ class Matcher(Node):
         """Does matching on camera and map images."""
         try:
             self.get_logger().debug('Matching image to map.')
-            self._superglue.match(self._cv_image, self._map)
+            self._superglue.match(self._cv_image, self._map, self._camera_info.k.reshape([3, 3]))
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
-
 
 
 def main(args=None):

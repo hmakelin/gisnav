@@ -8,6 +8,7 @@ from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from px4_msgs.msg import VehicleLocalPosition
 from sensor_msgs.msg import Image, CameraInfo
+from std_msgs.msg import Float64MultiArray
 from owslib.wms import WebMapService
 from cv2 import VideoCapture, imwrite, imdecode
 import numpy as np

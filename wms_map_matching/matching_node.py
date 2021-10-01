@@ -28,10 +28,17 @@ sys.path.append(os.path.abspath(superglue_dir))  # need for importing from NG-RA
 from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
+    # SUBSCRIBE topics
     # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
     vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
     image_raw_topic = "image_raw"
     camera_info_topic = "camera_info"
+
+    # PUBLISH topics
+    pub_essential_mat_topic = 'essential_matrix'
+    pub_fundamental_mat_topic = 'fundamental_matrix'
+    pub_homography_mat_topic = 'homography_matrix'
+    pub_pose_topic = 'pose'
 
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 200
@@ -60,6 +67,11 @@ class Matcher(Node):
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
                                                                     self.vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 1)
+        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 1) # TODO: array type correct?
+        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 1)
+        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 1)
+        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 1)
+
         self._cv_bridge = CvBridge()
         self._camera_info = None
         self._image_raw = None
@@ -189,10 +201,15 @@ class Matcher(Node):
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
     def _match(self):
-        """Does matching on camera and map images."""
+        """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""
         try:
             self.get_logger().debug('Matching image to map.')
-            self._superglue.match(self._cv_image, self._map, self._camera_info.k.reshape([3, 3]))
+            e, f, h, p = self._superglue.match(self._cv_image, self._map, self._camera_info.k.reshape([3, 3]))
+            self.get_logger().debug('Publishing e, f, h, and p.')
+            self._essential_mat_pub.publish(e)
+            self._fundamental_mat_pub.publish(f)
+            self._homography_mat_pub.publish(h)
+            self._pose_pub.publish(p)
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 

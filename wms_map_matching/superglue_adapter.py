@@ -119,3 +119,8 @@ class SuperGlue():
             self._logger.debug('Visualizing.')
         make_matching_plot(img_grayscale, map_grayscale, kp_img, kp_map, mkp_img, mkp_map, color, text,
                            self._output_dir, True, True, True, 'Matches', small_text)
+
+        if all(i is not None for i in (e, f, h, p)):
+            return e, f, h, p  # TODO: Move to the same section as the other related code, remove the old viz code
+        else:
+            return None, None, None, None

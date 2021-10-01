@@ -15,7 +15,7 @@ import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
-from wms_map_matching.geo import get_bbox
+from wms_map_matching.util import get_bbox
 
 # Add the share folder to Python path
 from ament_index_python.packages import get_package_share_directory

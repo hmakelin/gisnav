@@ -62,16 +62,16 @@ class Matcher(Node):
         super().__init__('matcher')
         self._init_wms()
         self._use_script = use_script
-        self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 1)
+        self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 10)
         self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
-                                                         1)
+                                                         10)
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
                                                                     self.vehicle_local_position_topic,
-                                                                    self._vehicle_local_position_callback, 1)
-        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 1) # TODO: array type correct?
-        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 1)
-        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 1)
-        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 1)
+                                                                    self._vehicle_local_position_callback, 10)
+        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 10) # TODO: array type correct?
+        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 10)
+        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 10)
+        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 10)
 
         self._cv_bridge = CvBridge()
         self._camera_info = None
@@ -163,7 +163,7 @@ class Matcher(Node):
         stamp = msg.header.stamp.sec
         now = self.get_clock().now().to_msg().sec
         if stamp + 1 < now:
-            self.get_logger().debug('Skipping frame older than 1 second ({} vs {})'.format(stamp, second))
+            self.get_logger().debug('Skipping frame older than 1 second ({} vs {})'.format(stamp, now))
             return
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')

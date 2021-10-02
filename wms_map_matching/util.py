@@ -53,7 +53,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
         logger.debug('Estimating essential matrix.')
     e, mask = cv2.findEssentialMat(mkp_img, mkp_map, np.eye(3), threshold=reproj_threshold, prob=prob, method=method)
     if logger is not None:
-        logger.debug('Recovering pose.')
+        logger.debug('Recovering pose from essential matrix e=\n{}'.format(e))
     p, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
     f = e  # TODO: fundamental matrix computation missing
     if logger is not None:

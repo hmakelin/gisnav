@@ -97,7 +97,7 @@ class SuperGlue():
             cv2.imshow("Source Image", map_grayscale)
             cv2.imshow("Destination Image", img_grayscale)
             cv2.imshow("Warped Source Image", map_out)
-            cv2.waitKey(0)
+            cv2.waitKey(1)
 
         if self._logger is not None:
             self._logger.debug('Setting up visualization.')

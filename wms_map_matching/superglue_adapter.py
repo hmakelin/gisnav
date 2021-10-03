@@ -79,7 +79,6 @@ class SuperGlue():
         if self._logger is not None:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
-        """
         K_scaled = scale_intrinsics(K, scale)
         thresh = 1.  # In pixels relative to resized image size.
         ret = estimate_pose(mkp_img, mkp_map, K_scaled, K_scaled, thresh)
@@ -90,7 +89,7 @@ class SuperGlue():
             R, t, inliers = ret
             if self._logger is not None:
                 self._logger.debug('Pose estimated,\nR=\n{},\nt=\n{}.\n'.format(R, t))
-        """
+
         # TODO: use new pose estimation from util.process_matches here.
         e, f, h, p = process_matches(mkp_img, mkp_map, K, logger=self._logger)
         if all(i is not None for i in (e, f, h, p)):
@@ -100,7 +99,6 @@ class SuperGlue():
             cv2.imshow("Warped Source Image", map_out)
             cv2.waitKey(1)
 
-        """
         if self._logger is not None:
             self._logger.debug('Setting up visualization.')
         color = cm.jet(mconf)
@@ -121,7 +119,6 @@ class SuperGlue():
             self._logger.debug('Visualizing.')
         make_matching_plot(img_grayscale, map_grayscale, kp_img, kp_map, mkp_img, mkp_map, color, text,
                            self._output_dir, True, True, True, 'Matches', small_text)
-        """
 
         if all(i is not None for i in (e, f, h, p)):
             return e, f, h, p  # TODO: Move to the same section as the other related code, remove the old viz code

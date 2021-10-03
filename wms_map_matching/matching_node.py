@@ -205,6 +205,7 @@ class Matcher(Node):
         """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""
         try:
             self.get_logger().debug('Matching image to map.')
+            self.get_logger().debug('Current heading: {}'.format(self._vehicle_local_position.heading))  # TODO: handle rotation of img based on heading
             e, f, h, p = self._superglue.match(self._cv_image, self._map, self._camera_info.k.reshape([3, 3]))
 
             if all(i is not None for i in (e, f, h, p)):

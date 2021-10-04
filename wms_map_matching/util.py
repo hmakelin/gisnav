@@ -5,6 +5,7 @@ import numpy as np
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
+from math import pi
 
 
 def get_bbox(latlon, radius_meters):
@@ -59,3 +60,18 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if logger is not None:
         logger.debug('Estimation complete,\ne=\n{},\nf=\n{},\nh=\n{},\np=\n{}.\n'.format(e, f, h, p))
     return e, f, h, p
+
+def get_nearest_cv2_rotation(radians):
+    """Finds the nearest 90 degree rotation multiple."""
+    deg45 = pi/2  # 45 degrees in radians
+    deg135 = 3*deg45
+    if -deg45 <= radians < deg45:
+        return 0
+    elif deg45 <= radians < deg135:
+        return cv2.ROTATE_90_CLOCKWISE
+    elif -deg135 <= radians < -deg45:
+        return cv2.ROTATE_90_COUNTERCLOCKWISE
+    elif radians < -deg135 or radians >= deg135:
+        return cv2.ROTATE_180
+    else:
+        raise ValueError('Unexpected input value: {}'.format(radians))  # this should not happen

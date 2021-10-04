@@ -63,7 +63,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""
-    deg45 = pi/2  # 45 degrees in radians
+    deg45 = pi/4  # 45 degrees in radians
     deg135 = 3*deg45
     if -deg45 <= radians < deg45:
         return 0

@@ -215,9 +215,12 @@ class Matcher(Node):
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
                                     .format(self._vehicle_local_position.heading, rot))
             map_rot = cv2.rotate(self._map, rot)
-            w, h = map_rot.width, map_rot.height
-            pad_x, pad_y = w/2, h/2
-            map_crop = map_rot[pad_x:(w-pad_x), pad_y:(h-pad_y)]
+            w_rot, h_rot, _ = map_rot.shape  # should be same
+            w, h, _ = self._map.shape
+            pad_x, pad_y = int((w_rot-w)/2), int((h_rot-h)/2)  # TODO: width and height difference must be dividable by 2! make assertion somewhere
+            self.get_logger().debug('Cropping rotated map (rot {}, shape {}, w {}, h {}, pad_x {}, pad_y {}).'\
+                                    .format(rot, map_rot.shape, w, h, pad_x, pad_y))
+            map_crop = map_rot[pad_x:(w-pad_x), pad_y:(h-pad_y), :]
 
             e, f, h, p = self._superglue.match(self._cv_image, map_crop, self._camera_info.k.reshape([3, 3]))  #self._map
 

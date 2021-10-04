@@ -16,7 +16,7 @@ import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
-from wms_map_matching.util import get_bbox
+from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation
 
 # Add the share folder to Python path
 from ament_index_python.packages import get_package_share_directory
@@ -139,7 +139,8 @@ class Matcher(Node):
                                   self.map_bbox_radius)
 
         if all(i is not None for i in [self._camera_info]):
-            img_size = self._camera_info.width, self._camera_info.height
+            max_dim = max(self._camera_info.width, self._camera_info.height)
+            img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
             layer_str = self.get_parameter('layer').get_parameter_value().string_value
             srs_str = self.get_parameter('srs').get_parameter_value().string_value
             self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
@@ -205,8 +206,20 @@ class Matcher(Node):
         """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""
         try:
             self.get_logger().debug('Matching image to map.')
-            self.get_logger().debug('Current heading: {}'.format(self._vehicle_local_position.heading))  # TODO: handle rotation of img based on heading
-            e, f, h, p = self._superglue.match(self._cv_image, self._map, self._camera_info.k.reshape([3, 3]))
+
+            # TODO: try to put this code somewhere into the SuperGlue adapter to keep this method cleaner
+            # Rotate map to adjust for SuperGlue's rotation non-invariance, then crop the map to match img dimensions
+            # Assumes map is square (so that dimensions do not change when rotation by multiples of 90 degrees)
+            # When transposing back to NED frame, must account for rotation and cropping in map keypoint coordinates
+            rot = get_nearest_cv2_rotation(self._vehicle_local_position.heading)
+            self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
+                                    .format(self._vehicle_local_position.heading, rot))
+            map_rot = cv2.rotate(self._map, rot)
+            w, h = map_rot.width, map_rot.height
+            pad_x, pad_y = w/2, h/2
+            map_crop = map_rot[pad_x:(w-pad_x), pad_y:(h-pad_y)]
+
+            e, f, h, p = self._superglue.match(self._cv_image, map_crop, self._camera_info.k.reshape([3, 3]))  #self._map
 
             if all(i is not None for i in (e, f, h, p)):
                 self.get_logger().debug('Publishing e, f, h, and p.')

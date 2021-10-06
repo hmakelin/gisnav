@@ -46,10 +46,10 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if len(mkp_img) < 5 or len(mkp_map) < 5:  # TODO: compute homography anyway if 4 keypoints?
         if logger is not None:
             logger.warn('Not enough keypoints for estimating essential matrix.')
-        return None, None, None, None
+        return None, None, None, None, None
     if logger is not None:
         logger.debug('Estimating homography.')
-    h, status = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
+    h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
     if logger is not None:
         logger.debug('Estimating essential matrix.')
     e, mask = cv2.findEssentialMat(mkp_img, mkp_map, np.eye(3), threshold=reproj_threshold, prob=prob, method=method)
@@ -59,7 +59,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     f = e  # TODO: fundamental matrix computation missing
     if logger is not None:
         logger.debug('Estimation complete,\ne=\n{},\nf=\n{},\nh=\n{},\np=\n{}.\n'.format(e, f, h, p))
-    return e, f, h, p
+    return e, f, h, p, h_mask
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""
@@ -75,3 +75,45 @@ def get_nearest_cv2_rotation(radians):
         return cv2.ROTATE_180
     else:
         raise ValueError('Unexpected input value: {}'.format(radians))  # this should not happen
+
+
+def _make_keypoint(pair, sz=1.0):
+    """Converts tuple to a cv2.KeyPoint.
+
+    Helper function used by visualize homography.
+    """
+    return cv2.KeyPoint(pair[0], pair[1], sz)
+
+
+def _make_match(x):
+    """Makes a cv2.DMatch from img and map indices.
+
+    Helper function used by visualize homography.
+    """
+    return cv2.DMatch(x[0], x[1])
+
+
+def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=None):
+    """Visualizes a homography including keypoint matches and field of view."""
+    h, w = img.shape
+
+    # Need cv2.KeyPoints for kps (assumed to be numpy arrays)
+    kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
+    kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
+
+    # Need cv2.DMatches
+    valid = matches > -1
+    zipped = zip(valid, matches[valid])  # zipped indices for img and map kps
+    matches = np.array(map(_make_match, zipped))
+    if logger is not None:
+        logger.debug('zipped=\n{},\nmatches=\n{}.'.format(zipped, matches))  # TODO: remove this
+
+    src_corners = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
+    dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
+    map_with_fov = cv2.polylines(map, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
+    draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
+    if logger is not None:
+        logger.debug('Drawing matches. kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))
+    out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, mask, **draw_params)
+    cv2.imshow(out, 'Matches and FoV')
+    cv2.waitKey(1)

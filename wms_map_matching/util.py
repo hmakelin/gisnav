@@ -85,28 +85,42 @@ def _make_keypoint(pair, sz=1.0):
     return cv2.KeyPoint(pair[0], pair[1], sz)
 
 
-def _make_match(x):
+def _make_match(x, img_idx=0):
     """Makes a cv2.DMatch from img and map indices.
 
     Helper function used by visualize homography.
     """
-    return cv2.DMatch(x[0], x[1])
+    return cv2.DMatch(x[0], x[1], img_idx)
 
 
+# TODO: Remove mas from args, it is no longer used
 def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=None):
     """Visualizes a homography including keypoint matches and field of view."""
     h, w = img.shape
+
+    # Make a list of matches
+    matches = []
+    for i in range(0, len(kp_img)):
+        matches.append(cv2.DMatch(i, i, 0))  # TODO: implement better, e.g. use _make_match helper
+    matches = np.array(matches)
 
     # Need cv2.KeyPoints for kps (assumed to be numpy arrays)
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
 
     # Need cv2.DMatches
-    valid = matches > -1
-    zipped = zip(valid, matches[valid])  # zipped indices for img and map kps
-    matches = np.array(map(_make_match, zipped))
+    #valid = matches > -1
+    #if logger is not None:
+    #    logger.debug('valid=\n{},\nmatches=\n{},\nmatches[valid]=\n{}.'.format(valid, matches, matches[valid]))  # TODO: remove this
+    #zipped = list(zip(valid, matches[valid]))  # zipped indices for img and map kps
+    #if logger is not None:
+    #    logger.debug('zipped=\n{}'.format(zipped))  # TODO: remove this
+    #matches = np.array(list(map(_make_match, zipped)))
+    #if logger is not None:
+    #    logger.debug('zipped=\n{},\nmatches=\n{}.'.format(zipped, matches))  # TODO: remove this
+
     if logger is not None:
-        logger.debug('zipped=\n{},\nmatches=\n{}.'.format(zipped, matches))  # TODO: remove this
+        logger.debug('kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))  # TODO: remove this
 
     src_corners = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
@@ -114,6 +128,6 @@ def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=
     draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
     if logger is not None:
         logger.debug('Drawing matches. kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))
-    out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, mask, **draw_params)
-    cv2.imshow(out, 'Matches and FoV')
+    out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
+    cv2.imshow('Matches and FoV', out)
     cv2.waitKey(1)

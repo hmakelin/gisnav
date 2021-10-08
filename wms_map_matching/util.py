@@ -33,7 +33,7 @@ def get_bbox(latlon, radius_meters=200):
     return min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1])  # left, bottom, right, top
 
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
-def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None):
+def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None, affine=False):
     """Processes matching keypoints from img and map and returns essential, fundamental, and homography matrices & pose.
 
     Arguments:
@@ -44,6 +44,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
         prob - Prob parameter for findEssentialMat (used by RANSAC and LMedS methods)
         method - Method to use for estimation.
         logger - Optional ROS2 logger for writing log output.
+        affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
     """
     if len(mkp_img) < 5 or len(mkp_map) < 5:  # TODO: compute homography anyway if 4 keypoints?
         if logger is not None:
@@ -51,7 +52,11 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
         return None, None, None, None, None
     if logger is not None:
         logger.debug('Estimating homography.')
-    h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
+    if not affine:
+        h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
+    else:
+        h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
+        h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
     if logger is not None:
         logger.debug('Estimating essential matrix.')
     e, mask = cv2.findEssentialMat(mkp_img, mkp_map, np.eye(3), threshold=reproj_threshold, prob=prob, method=method)

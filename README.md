@@ -58,13 +58,13 @@ In a new shell, navigate to the folder where you installed QGroundControl and la
 
 `$ ./QGroundControl.AppImage`
 
-### Launch gscam2
+### 6. Launch gscam2
 
 **TODO: example gscam_params file and camera_calibration file**
 
 `ros2 run gscam2 gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml -p preroll:=True -p sync_sinc:=False`
 
-### Launch the matching node
+### 7. Launch the matching node
 
 `~/px4_ros_com_ros2$ ros2 run wms_map_matching matching_node --ros-args --log-level debug`
 

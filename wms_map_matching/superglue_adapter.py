@@ -94,9 +94,6 @@ class SuperGlue():
         e, f, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger)
         if all(i is not None for i in (e, f, h, p, h_mask)):
             #map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))
-            #cv2.imshow("Source Image", map_grayscale)
-            #cv2.imshow("Destination Image", img_grayscale)
-            #cv2.imshow("Warped Source Image", map_out)
             visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, h_mask, self._logger)
             cv2.waitKey(1)
 

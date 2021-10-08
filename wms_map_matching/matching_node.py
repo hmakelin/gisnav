@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path
 
-# Add the share folder to Python path TODO: move this part of code to some method in superglue adapter and call it here?
+# Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
 
 # Import this after superglue_dir has been added to path

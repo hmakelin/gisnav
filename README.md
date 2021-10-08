@@ -1,4 +1,4 @@
-# WMS Map matching
+# WMS Map Matching
 
 ## Introduction
 

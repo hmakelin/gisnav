@@ -97,27 +97,6 @@ class SuperGlue():
             visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, h_mask, self._logger)
             cv2.waitKey(1)
 
-        if self._logger is not None:
-            self._logger.debug('Setting up visualization.')
-        color = cm.jet(mconf)
-        text = [
-            'SuperGlue',
-            'Keypoints: {}:{}'.format(len(kp_img), len(kp_map)),
-            'Matches: {}'.format(len(mkp_img)),
-        ]
-        k_thresh = self._matching.superpoint.config['keypoint_threshold']
-        m_thresh = self._matching.superglue.config['match_threshold']
-        small_text = [
-            'Keypoint Threshold: {:.4f}'.format(k_thresh),
-            'Match Threshold: {:.2f}'.format(m_thresh),
-            'Image Pair: {}:{}'.format('img', 'map'),
-        ]
-
-        if self._logger is not None:
-            self._logger.debug('Visualizing.')
-        make_matching_plot(img_grayscale, map_grayscale, kp_img, kp_map, mkp_img, mkp_map, color, text,
-                           self._output_dir, True, True, True, 'Matches', small_text)
-
         if all(i is not None for i in (e, f, h, p)):
             return e, f, h, p  # TODO: Move to the same section as the other related code, remove the old viz code
         else:

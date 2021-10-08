@@ -31,7 +31,8 @@ The `VehicleLocalPosition_PubSubTopic` is assumed to be provided by the
 ## Parameters
 
 The default parameters are defined in `config/config.yaml`. Some of the parameters are defined as read-only and cannot
-be changed at runtime.
+be changed at runtime. You can use e.g. [MapProxy](https://mapproxy.org/) to provide your own WMS endpoint serving
+either your own maps or proxying a 3rd party WMS/WMTS service.
 
 - `~url` (`string`, default: `http://localhost:8080/wms`, **read-only**)
 - `~version` (`string`, default: `1.1.1`, **read-only**)

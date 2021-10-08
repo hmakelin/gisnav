@@ -73,7 +73,7 @@ def get_nearest_cv2_rotation(radians):
     deg45 = pi/4  # 45 degrees in radians
     deg135 = 3*deg45
     if -deg45 <= radians < deg45:
-        return 0
+        return None
     elif deg45 <= radians < deg135:
         return cv2.ROTATE_90_COUNTERCLOCKWISE  # cv2.ROTATE_90_CLOCKWISE
     elif -deg135 <= radians < -deg45:

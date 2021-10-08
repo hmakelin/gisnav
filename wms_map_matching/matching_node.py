@@ -166,7 +166,10 @@ class Matcher(Node):
             rot = get_nearest_cv2_rotation(self._vehicle_local_position.heading)
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
                                     .format(self._vehicle_local_position.heading, rot))
-            map_rot = cv2.rotate(self._map, rot)
+            if rot is not None:
+                map_rot = cv2.rotate(self._map, rot)
+            else:
+                map_rot = self._map
 
             e, f, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 

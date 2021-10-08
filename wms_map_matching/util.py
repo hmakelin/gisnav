@@ -108,17 +108,6 @@ def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
 
-    # Need cv2.DMatches
-    #valid = matches > -1
-    #if logger is not None:
-    #    logger.debug('valid=\n{},\nmatches=\n{},\nmatches[valid]=\n{}.'.format(valid, matches, matches[valid]))  # TODO: remove this
-    #zipped = list(zip(valid, matches[valid]))  # zipped indices for img and map kps
-    #if logger is not None:
-    #    logger.debug('zipped=\n{}'.format(zipped))  # TODO: remove this
-    #matches = np.array(list(map(_make_match, zipped)))
-    #if logger is not None:
-    #    logger.debug('zipped=\n{},\nmatches=\n{}.'.format(zipped, matches))  # TODO: remove this
-
     if logger is not None:
         logger.debug('kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))  # TODO: remove this
 

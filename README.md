@@ -10,6 +10,65 @@ Current implementation retrieves a map raster from a Web Map Service (WMS) endpo
 location as determined by GNSS and then matches it to frame from the video stream using a graph neural network based 
 algorithm ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
 
+## Getting started
+
+These instructions provide an example for running this package in a PX4-Gazebo SITL simulation. They assume you are
+working on a Linux system. Running this package in another kind of setup is also possible but may require further
+integration work.
+
+### 1. Prerequisites
+
+You will need to setup the following items to get started:
+
+1. [Install ROS2](https://docs.ros.org/en/foxy/Installation.html)
+2. [Install PX4](https://docs.px4.io/master/en/dev_setup/dev_env.html) for the Gazebo SITL target
+3. [Install PX4-ROS2 bridge](https://docs.px4.io/master/en/ros/ros2_comm.html#installation-setup), including FastDDS
+4. [Install QGroundControl](https://docs.qgroundcontrol.com/master/en/index.html)
+5. [Install MapProxy](https://mapproxy.org/download)
+6. [Install gscam2](https://github.com/clydemcqueen/gscam2)
+
+### 2. Configure and launch MapProxy
+
+Make a YAML configuration file for your MapProxy server. You can use the following example of proxying a tiled endpoint
+as a WMS endpoint as a starting point. Many web services use a tiled endpoint instead of WMS because tiles can be
+cached.
+
+**TODO: provide example .yaml file**
+
+`$ mapproxy-util serve-develop worldimagery.yaml`
+
+### 3. Launch Gazebo simulation
+
+In the `PX4-Autopilot` installation folder, launch a simulation in the `ksql_airport` (San Carlos airport) world. The
+`typhoon_h480` option will enable video streaming (see
+[PX4 documentation here](https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming)). Note the double
+underscore between before the `ksql_airport` world suffix.
+
+`~/PX4-Autopilot$ make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport`
+
+### 4. Launch microRTPS agent
+
+Open a shell and type in the following command to launch the microRTPS agent:
+
+`$ micrortps_agent -t UDP`
+
+### 5. Launch QGroundControl
+
+In a new shell, navigate to the folder where you installed QGroundControl and launch the app:
+
+`$ ./QGroundControl.AppImage`
+
+### Launch gscam2
+
+**TODO: example gscam_params file and camera_calibration file**
+
+`ros2 run gscam2 gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml -p preroll:=True -p sync_sinc:=False`
+
+### Launch the matching node
+
+`~/px4_ros_com_ros2$ ros2 run wms_map_matching matching_node --ros-args --log-level debug`
+
+
 ## Published Topics
 
 - `~essential_matrix` (`float64[9]`)

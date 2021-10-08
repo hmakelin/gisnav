@@ -13,3 +13,12 @@ wms:
   version: '1.1.1'
   layer: 'WorldImagery'
   srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting
+superglue:  # Recommended outdoor config from SuperGlue repo's README.md
+  superpoint:
+    'nms_radius': 3
+    'keypoint_threshold': 0.005
+    'max_keypoints': 2048
+  superglue:
+    'weights': 'outdoor'
+    'sinkhorn_iterations': 20
+    'match_threshold': 0.2

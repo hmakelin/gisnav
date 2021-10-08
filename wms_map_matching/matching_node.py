@@ -50,11 +50,7 @@ class Matcher(Node):
 
     def _setup_superglue(self):
         """Sets up SuperGlue."""  # TODO: make all these private?
-        self.images_dir = os.path.join(self.share_dir, 'images')
-        self.output_dir = os.path.join(self.images_dir, 'output')
-        self.output_file = os.path.join(self.output_dir, 'matches.jpg')
-        self._create_superglue_dirs()
-        self._superglue = SuperGlue(self.output_file, self.get_logger())
+        self._superglue = SuperGlue(self._config['superglue'], self.get_logger())
 
     def _load_config(self, yaml_file):
         """Loads config from the provided YAML file."""
@@ -86,20 +82,6 @@ class Matcher(Node):
         self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self._pub_fundamental_mat_topic, 10)
         self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
         self._pose_pub = self.create_publisher(Float64MultiArray, self._pub_pose_topic, 10)
-
-    def _create_superglue_dirs(self):
-        """Creates required directories if they do not exist."""
-        for dir in [self.images_dir, self.output_dir]:
-            if not os.path.exists(dir):
-                self.get_logger().debug('Creating missing directory {}'.format(dir))
-                try:
-                    os.mkdir(dir)
-                except Exception as e:
-                    self.get_logger().error('Could not create directory {} because of error: {}\n{}'\
-                                            .format(dir, e, traceback.print_exc()))
-                    raise e
-            else:
-                self.get_logger().debug('Directory {} already exists.'.format(dir))
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.

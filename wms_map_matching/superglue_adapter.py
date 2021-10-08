@@ -13,31 +13,19 @@ from wms_map_matching.util import process_matches, visualize_homography
 class SuperGlue:
     """Matches img to map, adapts code from match_pairs.py so that do not have to write files to disk."""
 
-    def __init__(self, output_dir, logger=None):
+    def __init__(self, config, logger=None):
         """Init the SuperGlue matcher.
 
         Args:
+            config - Dict with SuperGlue config parameters.
             output_dir - Path to directory where to store output visualization.
             logger - ROS2 node logger for logging messages."""
-        self._output_dir = output_dir
+        self._config = config
         self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._logger = logger
         if self._logger is not None:
             self._logger.debug('SuperGlue using device {}'.format(self._device))
 
-        # Recommended outdoor config from SuperGlue repo's README.md
-        self._config = {
-            'superpoint': {
-                'nms_radius': 3,
-                'keypoint_threshold': 0.005,
-                'max_keypoints': 2048
-            },
-            'superglue': {
-                'weights': 'outdoor',
-                'sinkhorn_iterations': 20,
-                'match_threshold': 0.2
-            }
-        }
         if self._logger is not None:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)

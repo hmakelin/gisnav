@@ -1,6 +1,8 @@
 import pyproj
 import cv2
 import numpy as np
+import sys
+import os
 
 from functools import partial
 from shapely.ops import transform
@@ -120,3 +122,13 @@ def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=
     out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
     cv2.imshow('Matches and FoV', out)
     cv2.waitKey(1)
+
+def setup_sys_path():
+    """Adds the package share directory to the path so that SuperGlue can be imported."""
+    if 'get_package_share_directory' not in sys.modules:
+        from ament_index_python.packages import get_package_share_directory
+    package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
+    share_dir = get_package_share_directory(package_name)
+    superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
+    sys.path.append(os.path.abspath(superglue_dir))
+    return share_dir, superglue_dir

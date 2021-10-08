@@ -17,14 +17,10 @@ import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
-from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation
+from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path
 
 # Add the share folder to Python path TODO: move this part of code to some method in superglue adapter and call it here?
-from ament_index_python.packages import get_package_share_directory
-package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
-share_dir = get_package_share_directory(package_name)
-superglue_dir = share_dir + '/SuperGluePretrainedNetwork'
-sys.path.append(os.path.abspath(superglue_dir))  # need for importing from NG-RANSAC scripts (util, network) below
+share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
 
 # Import this after superglue_dir has been added to path
 from wms_map_matching.superglue_adapter import SuperGlue

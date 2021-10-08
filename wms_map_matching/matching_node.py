@@ -29,19 +29,6 @@ class Matcher(Node):
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 200
 
-    # SuperGlue config
-    match_pairs_script = superglue_dir + '/match_pairs.py'
-    images_dir = share_dir + '/images'
-    input_pairs = images_dir + '/input_pairs.txt'
-    input_dir = images_dir + '/input'
-    output_dir = images_dir + '/output'
-    img_file_name = 'img.jpg'
-    map_file_name = 'map.jpg'
-    img_file = input_dir + '/' + img_file_name
-    map_file = input_dir + '/' + map_file_name
-    output_file = output_dir + '/matches.jpg'
-
-
     def __init__(self, config='config.yml', use_script=False):
         """Initializes the node.
 
@@ -65,6 +52,16 @@ class Matcher(Node):
 
     def _setup_superglue(self):
         """Sets up SuperGlue."""
+        self.match_pairs_script = os.path.join(self.superglue_dir, 'match_pairs.py')
+        self.images_dir = os.path.join(share_dir, 'images')
+        self.input_pairs = os.path.join(images_dir, 'input_pairs.txt')
+        self.input_dir = os.path.join(images_dir, 'input')
+        self.output_dir = os.path.join(images_dir, 'output')
+        self.img_file_name = 'img.jpg'
+        self.map_file_name = 'map.jpg'
+        self.img_file = os.path.join(self.input_dir, self.img_file_name)
+        self.map_file = os.path.join(input_dir, self.map_file_name)
+        self.output_file = os.path.join(output_dir, 'matches.jpg')
         if self._use_script:
             self._create_superglue_dirs()
             self._create_superglue_input_pairs_file()

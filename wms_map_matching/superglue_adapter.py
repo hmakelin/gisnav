@@ -5,7 +5,7 @@ import matplotlib.cm as cm
 
 # Assumes models has been added to path (see import statements in matching_node.py)
 from models.matching import Matching
-from models.utils import estimate_pose, make_matching_plot, frame2tensor, scale_intrinsics
+from models.utils import frame2tensor
 
 from wms_map_matching.util import process_matches, visualize_homography
 
@@ -79,18 +79,7 @@ class SuperGlue():
         if self._logger is not None:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
-        K_scaled = scale_intrinsics(K, scale)
-        thresh = 1.  # In pixels relative to resized image size.
-        ret = estimate_pose(mkp_img, mkp_map, K_scaled, K_scaled, thresh)
-        if ret is None:
-            if self._logger is not None:
-                self._logger.warn('Could not estimate pose.')
-        else:
-            R, t, inliers = ret
-            if self._logger is not None:
-                self._logger.debug('Pose estimated,\nR=\n{},\nt=\n{}.\n'.format(R, t))
 
-        # TODO: use new pose estimation from util.process_matches here.
         e, f, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger)
         if all(i is not None for i in (e, f, h, p, h_mask)):
             #map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))

@@ -60,13 +60,16 @@ class Matcher(Node):
         self._cv_image = None
         self._map = None
         self._superglue = None
+        self._setup_superglue()
 
+
+    def _setup_superglue(self):
+        """Sets up SuperGlue."""
         if self._use_script:
-            self._create_dirs()
-            self._create_input_pairs_file()
+            self._create_superglue_dirs()
+            self._create_superglue_input_pairs_file()
         else:
             self._superglue = SuperGlue(self.output_file, self.get_logger())
-
 
     def _load_config(self, yaml_file):
         """Loads config from the provided YAML file."""
@@ -99,7 +102,7 @@ class Matcher(Node):
         self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 10)
         self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 10)
 
-    def _create_dirs(self):
+    def _create_superglue_dirs(self):
         """Creates required directories if they do not exist."""
         for dir in [self.images_dir, self.input_dir, self.output_dir]:
             if not os.path.exists(dir):
@@ -113,7 +116,7 @@ class Matcher(Node):
             else:
                 self.get_logger().debug('Directory {} already exists.'.format(dir))
 
-    def _create_input_pairs_file(self):
+    def _create_superglue_input_pairs_file(self):
         """Creates the input pairs file required by SuperGlue if it does not exist."""
         if not os.path.exists(self.input_pairs):
             self.get_logger().debug('Appending {} and {} to input_pairs.txt file.'.format(self.img_file, self.map_file))

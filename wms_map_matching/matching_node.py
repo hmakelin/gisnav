@@ -26,9 +26,6 @@ share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewh
 from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
-    # Determines map size, radius of enclosed circle in meters
-    map_bbox_radius = 200
-
     def __init__(self, share_dir, superglue_dir, config='config.yml', use_script=False):
         """Initializes the node.
 
@@ -149,8 +146,7 @@ class Matcher(Node):
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
-        self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon),
-                                  self.map_bbox_radius)
+        self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon))
 
         if all(i is not None for i in [self._camera_info]):
             max_dim = max(self._camera_info.width, self._camera_info.height)

@@ -10,7 +10,7 @@ from shapely.geometry import Point
 from math import pi
 
 
-def get_bbox(latlon, radius_meters):
+def get_bbox(latlon, radius_meters=200):
     """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
 
     Uses azimuthal equidistant projection. Based on Mike T's answer at

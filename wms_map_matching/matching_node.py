@@ -46,7 +46,6 @@ class Matcher(Node):
         self._image_raw = None
         self._cv_image = None
         self._map = None
-        self._superglue = None
         self._setup_superglue()
 
 

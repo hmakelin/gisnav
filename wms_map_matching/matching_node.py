@@ -29,14 +29,18 @@ class Matcher(Node):
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 200
 
-    def __init__(self, config='config.yml', use_script=False):
+    def __init__(self, share_dir, superglue_dir, config='config.yml', use_script=False):
         """Initializes the node.
 
         Arguments:
+            share_dir - String path of the share directory where configuration and other files are.
+            superglue_dir - String path of the directory where SuperGlue related files are.
             config - String path to the config file in the share folder.
             use_script - Boolean flag for whether to use match_pairs.py script from SuperGlue.
         """
         super().__init__('matcher')
+        self.share_dir = share_dir  # TODO: make private?
+        self.superglue_dir = superglue_dir  # TODO: move this to _setup_superglue? private _superglue_dir instead?
         self._load_config(config)
         self._use_script = use_script
         self._init_wms()
@@ -51,16 +55,16 @@ class Matcher(Node):
 
     def _setup_superglue(self):
         """Sets up SuperGlue."""
-        self.match_pairs_script = os.path.join(self.superglue_dir, 'match_pairs.py')
-        self.images_dir = os.path.join(share_dir, 'images')
-        self.input_pairs = os.path.join(images_dir, 'input_pairs.txt')
-        self.input_dir = os.path.join(images_dir, 'input')
-        self.output_dir = os.path.join(images_dir, 'output')
+        self.match_pairs_script = os.path.join(self.superglue_dir, 'match_pairs.py')  # TODO: make all these private?
+        self.images_dir = os.path.join(self.share_dir, 'images')
+        self.input_pairs = os.path.join(self.images_dir, 'input_pairs.txt')
+        self.input_dir = os.path.join(self.images_dir, 'input')
+        self.output_dir = os.path.join(self.images_dir, 'output')
         self.img_file_name = 'img.jpg'
         self.map_file_name = 'map.jpg'
         self.img_file = os.path.join(self.input_dir, self.img_file_name)
-        self.map_file = os.path.join(input_dir, self.map_file_name)
-        self.output_file = os.path.join(output_dir, 'matches.jpg')
+        self.map_file = os.path.join(self.input_dir, self.map_file_name)
+        self.output_file = os.path.join(self.output_dir, 'matches.jpg')
         if self._use_script:
             self._create_superglue_dirs()
             self._create_superglue_input_pairs_file()
@@ -79,24 +83,24 @@ class Matcher(Node):
 
     def _setup_topics(self):
         """Loads and sets up ROS2 publishers and subscribers from config file."""
-        sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
-        sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
-        sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
-        pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
-        pub_fundamental_mat_topic = self._config['ros2_topics']['pub']['fundamental_matrix']
-        pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
-        pub_pose_topic = self._config['ros2_topics']['pub']['pose']
+        self._sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
+        self._sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
+        self._sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
+        self._pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
+        self._pub_fundamental_mat_topic = self._config['ros2_topics']['pub']['fundamental_matrix']
+        self._pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
+        self._pub_pose_topic = self._config['ros2_topics']['pub']['pose']
 
-        self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 10)
-        self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
+        self._image_raw_sub = self.create_subscription(Image, self._sub_image_raw_topic, self._image_raw_callback, 10)
+        self._camera_info_sub = self.create_subscription(CameraInfo, self._sub_camera_info_topic, self._camera_info_callback,
                                                          10)
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
-                                                                    self.vehicle_local_position_topic,
+                                                                    self._sub_vehicle_local_position_topic,
                                                                     self._vehicle_local_position_callback, 10)
-        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 10)
-        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 10)
-        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 10)
-        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 10)
+        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self._pub_essential_mat_topic, 10)
+        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self._pub_fundamental_mat_topic, 10)
+        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
+        self._pose_pub = self.create_publisher(Float64MultiArray, self._pub_pose_topic, 10)
 
     def _create_superglue_dirs(self):
         """Creates required directories if they do not exist."""
@@ -242,7 +246,7 @@ class Matcher(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    matcher = Matcher()
+    matcher = Matcher(share_dir, superglue_dir)
     rclpy.spin(matcher)
     matcher.destroy_node()
     rclpy.shutdown()

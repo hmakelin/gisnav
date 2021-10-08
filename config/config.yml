@@ -1,6 +1,6 @@
 ros2_topics:
   sub:
-    vehicle_local_position: 'VehicleLocalPosition_PubSub'  # VehicleGlobalPosition not supported by microRTPS bridge
+    vehicle_local_position: 'VehicleLocalPosition_PubSubTopic'  # VehicleGlobalPosition not supported by microRTPS bridge
     camera_info: 'camera_info'
     image_raw: 'image_raw'
   pub:

@@ -26,20 +26,18 @@ share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewh
 from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
-    def __init__(self, share_dir, superglue_dir, config='config.yml', use_script=False):
+    def __init__(self, share_dir, superglue_dir, config='config.yml'):
         """Initializes the node.
 
         Arguments:
             share_dir - String path of the share directory where configuration and other files are.
             superglue_dir - String path of the directory where SuperGlue related files are.
             config - String path to the config file in the share folder.
-            use_script - Boolean flag for whether to use match_pairs.py script from SuperGlue.
         """
         super().__init__('matcher')
         self.share_dir = share_dir  # TODO: make private?
         self.superglue_dir = superglue_dir  # TODO: move this to _setup_superglue? private _superglue_dir instead?
         self._load_config(config)
-        self._use_script = use_script
         self._init_wms()
         self._setup_topics()
         self._cv_bridge = CvBridge()
@@ -51,22 +49,12 @@ class Matcher(Node):
 
 
     def _setup_superglue(self):
-        """Sets up SuperGlue."""
-        self.match_pairs_script = os.path.join(self.superglue_dir, 'match_pairs.py')  # TODO: make all these private?
+        """Sets up SuperGlue."""  # TODO: make all these private?
         self.images_dir = os.path.join(self.share_dir, 'images')
-        self.input_pairs = os.path.join(self.images_dir, 'input_pairs.txt')
-        self.input_dir = os.path.join(self.images_dir, 'input')
         self.output_dir = os.path.join(self.images_dir, 'output')
-        self.img_file_name = 'img.jpg'
-        self.map_file_name = 'map.jpg'
-        self.img_file = os.path.join(self.input_dir, self.img_file_name)
-        self.map_file = os.path.join(self.input_dir, self.map_file_name)
         self.output_file = os.path.join(self.output_dir, 'matches.jpg')
-        if self._use_script:
-            self._create_superglue_dirs()
-            self._create_superglue_input_pairs_file()
-        else:
-            self._superglue = SuperGlue(self.output_file, self.get_logger())
+        self._create_superglue_dirs()
+        self._superglue = SuperGlue(self.output_file, self.get_logger())
 
     def _load_config(self, yaml_file):
         """Loads config from the provided YAML file."""
@@ -101,7 +89,7 @@ class Matcher(Node):
 
     def _create_superglue_dirs(self):
         """Creates required directories if they do not exist."""
-        for dir in [self.images_dir, self.input_dir, self.output_dir]:
+        for dir in [self.images_dir, self.output_dir]:
             if not os.path.exists(dir):
                 self.get_logger().debug('Creating missing directory {}'.format(dir))
                 try:
@@ -112,19 +100,6 @@ class Matcher(Node):
                     raise e
             else:
                 self.get_logger().debug('Directory {} already exists.'.format(dir))
-
-    def _create_superglue_input_pairs_file(self):
-        """Creates the input pairs file required by SuperGlue if it does not exist."""
-        if not os.path.exists(self.input_pairs):
-            self.get_logger().debug('Appending {} and {} to input_pairs.txt file.'.format(self.img_file, self.map_file))
-            try:
-                with open(self.input_pairs, 'w') as f:
-                    f.write(self.img_file_name + ' ' + self.map_file_name + '\n')
-            except Exception as e:
-                self.get_logger().error('Could not write input pairs file: {}\n{}'.format(e, traceback.print_exc()))
-                raise e
-        else:
-            self.get_logger().debug('Skipping writing input pairs file since it already exists.')
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
@@ -179,10 +154,7 @@ class Matcher(Node):
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):
-            if self._use_script:
-                self._match_script()
-            else:
-                self._match()
+            self._match()
         else:
             self.get_logger().debug('Map or image not available: map {}, img {} - not calling matching yet.'\
                                     .format(self._map is not None, self._image_raw is not None))
@@ -199,18 +171,6 @@ class Matcher(Node):
         self.get_logger().debug('Vehicle local position callback triggered.')
         self._vehicle_local_position = msg
         self._update_map()
-
-    def _match_script(self):
-        """Does matching on camera and map images using provided script."""
-        imwrite(self.img_file, self._cv_image)
-        imwrite(self.map_file, self._map)
-        cmd = '{} --input_pairs {} --input_dir {} --output_dir {} --superglue outdoor --viz'\
-            .format(self.match_pairs_script, self.input_pairs, self.input_dir, self.output_dir)
-        try:
-            self.get_logger().debug('Matching image to map.')
-            os.system(cmd)
-        except Exception as e:
-            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
     def _match(self):
         """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""

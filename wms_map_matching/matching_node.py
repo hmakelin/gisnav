@@ -3,6 +3,7 @@ import sys
 import os
 import traceback
 import xml.etree.ElementTree as ET
+import yaml
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -18,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation
 
-# Add the share folder to Python path
+# Add the share folder to Python path TODO: move this part of code to some method in superglue adapter and call it here?
 from ament_index_python.packages import get_package_share_directory
 package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
 share_dir = get_package_share_directory(package_name)
@@ -29,18 +30,6 @@ sys.path.append(os.path.abspath(superglue_dir))  # need for importing from NG-RA
 from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
-    # SUBSCRIBE topics
-    # VehicleGlobalPosition not supported by microRTPS bridge - use VehicleLocalPosition instead
-    vehicle_local_position_topic = "VehicleLocalPosition_PubSubTopic"
-    image_raw_topic = "image_raw"
-    camera_info_topic = "camera_info"
-
-    # PUBLISH topics
-    pub_essential_mat_topic = 'essential_matrix'
-    pub_fundamental_mat_topic = 'fundamental_matrix'
-    pub_homography_mat_topic = 'homography_matrix'
-    pub_pose_topic = 'pose'
-
     # Determines map size, radius of enclosed circle in meters
     map_bbox_radius = 200
 
@@ -57,22 +46,18 @@ class Matcher(Node):
     output_file = output_dir + '/matches.jpg'
 
 
-    def __init__(self, use_script=False):
-        """Initializes the node."""
-        super().__init__('matcher')
-        self._init_wms()
-        self._use_script = use_script
-        self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 10)
-        self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
-                                                         10)
-        self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
-                                                                    self.vehicle_local_position_topic,
-                                                                    self._vehicle_local_position_callback, 10)
-        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 10) # TODO: array type correct?
-        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 10)
-        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 10)
-        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 10)
+    def __init__(self, config='config.yml', use_script=False):
+        """Initializes the node.
 
+        Arguments:
+            config - String path to the config file in the share folder.
+            use_script - Boolean flag for whether to use match_pairs.py script from SuperGlue.
+        """
+        super().__init__('matcher')
+        self._load_config(config)
+        self._use_script = use_script
+        self._init_wms()
+        self._setup_topics()
         self._cv_bridge = CvBridge()
         self._camera_info = None
         self._image_raw = None
@@ -85,6 +70,38 @@ class Matcher(Node):
             self._create_input_pairs_file()
         else:
             self._superglue = SuperGlue(self.output_file, self.get_logger())
+
+
+    def _load_config(self, yaml_file):
+        """Loads config from the provided YAML file."""
+        with open(os.path.join(share_dir, yaml_file), 'r') as f:
+            try:
+                self._config = yaml.safe_load(f)
+                self.get_logger().info('Loaded config:\n{}.'.format(self._config))
+            except Exception as e:
+                self.get_logger().error('Could not load config file {} because of exception: {}\n{}'\
+                                        .format(yaml_file, e, traceback.print_exc()))
+
+    def _setup_topics(self):
+        """Loads and sets up ROS2 publishers and subscribers from config file."""
+        sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
+        sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
+        sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
+        pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
+        pub_fundamental_mat_topic = self._config['ros2_topics']['pub']['fundamental_matrix']
+        pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
+        pub_pose_topic = self._config['ros2_topics']['pub']['pose']
+
+        self._image_raw_sub = self.create_subscription(Image, self.image_raw_topic, self._image_raw_callback, 10)
+        self._camera_info_sub = self.create_subscription(CameraInfo, self.camera_info_topic, self._camera_info_callback,
+                                                         10)
+        self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
+                                                                    self.vehicle_local_position_topic,
+                                                                    self._vehicle_local_position_callback, 10)
+        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self.pub_essential_mat_topic, 10)
+        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self.pub_fundamental_mat_topic, 10)
+        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self.pub_homography_mat_topic, 10)
+        self._pose_pub = self.create_publisher(Float64MultiArray, self.pub_pose_topic, 10)
 
     def _create_dirs(self):
         """Creates required directories if they do not exist."""
@@ -119,11 +136,10 @@ class Matcher(Node):
         The url and version parameters are required to initialize the WMS client and are therefore set to read only. The
         layer and srs parameters can be changed dynamically.
         """
-        # TODO: don't hardcode defaults here, get values from launch file
-        self.declare_parameter('url', 'http://localhost:8080/wms', ParameterDescriptor(read_only=True))
-        self.declare_parameter('version', '1.1.1', ParameterDescriptor(read_only=True))
-        self.declare_parameter('layer', 'WorldImagery')
-        self.declare_parameter('srs', 'EPSG:4326')  # TODO: get_bbox currently only supports EPSG:4326
+        self.declare_parameter('url', self._config['wms']['url'], ParameterDescriptor(read_only=True))
+        self.declare_parameter('version', self._config['wms']['version'], ParameterDescriptor(read_only=True))
+        self.declare_parameter('layer', self._config['wms']['layer'])
+        self.declare_parameter('srs', self._config['wms']['srs'])
 
         try:
             self._wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
@@ -134,7 +150,6 @@ class Matcher(Node):
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
-        # TODO: raster size? get bbox only supports EPSG:4326 although it might be configurable in the future
         self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon),
                                   self.map_bbox_radius)
 

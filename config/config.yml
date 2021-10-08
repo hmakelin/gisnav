@@ -1,0 +1,15 @@
+ros2_topics:
+  sub:
+    vehicle_local_position: 'VehicleLocalPosition_PubSub'  # VehicleGlobalPosition not supported by microRTPS bridge
+    camera_info: 'camera_info'
+    image_raw: 'image_raw'
+  pub:
+    essential_matrix: 'essential_matrix'
+    fundamental_matrix: 'fundamental_matrix'
+    homography_matrix: 'homography_matrix'
+    pose: 'pose'
+wms:
+  url: 'http://localhost:8080/wms'
+  version: '1.1.1'
+  layer: 'WorldImagery'
+  srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting

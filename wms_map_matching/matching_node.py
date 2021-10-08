@@ -22,7 +22,7 @@ from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
 
-# Import this after superglue_dir has been added to path
+# Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):

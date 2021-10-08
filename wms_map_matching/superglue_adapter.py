@@ -20,8 +20,7 @@ class SuperGlue():
             output_dir - Path to directory where to store output visualization.
             logger - ROS2 node logger for logging messages."""
         self._output_dir = output_dir
-        #self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self._device = 'cpu'  # TODO: remove this line and enable the one above
+        self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._logger = logger
         if self._logger is not None:
             self._logger.debug('SuperGlue using device {}'.format(self._device))

@@ -2,7 +2,9 @@
 
 ## Introduction
 
-This ROS2 package matches a nadir-facing video stream from an airborne drone's camera to a map of its location.
+This ROS2 package matches a nadir-facing video stream from an airborne drone's camera to a map of its location. This
+package is designed to be simulated software-in-the-loop (SITL) with [PX4](https://docs.px4.io/master/) in
+[Gazebo](https://gazebosim.org/).
 
 Current implementation retrieves a map raster from a Web Map Service (WMS) endpoint for the vehicle's approximate
 location as determined by GNSS and then matches it to frame from the video stream using a graph neural network based 
@@ -16,6 +18,11 @@ algorithm ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork))
 - `~pose` (`float64[12]`)
 
 ## Subscribed Topics
+
+The `camera_info` and `image_raw` topics are assumed to be provided by [gscam2](https://github.com/clydemcqueen/gscam2).
+The `VehicleLocalPosition_PubSubTopic` is assumed to be provided by the
+[PX4 microRTPS bridge](https://docs.px4.io/master/en/middleware/micrortps.html) and is therefore appended with the
+`_PubSubTopic` suffix.
 
 - `camera_info` (`sensor_msgs/CameraInfo`)
 - `image_raw` (`sensor_msgs/Image`)

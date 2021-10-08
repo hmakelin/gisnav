@@ -10,7 +10,7 @@ from models.utils import frame2tensor
 from wms_map_matching.util import process_matches, visualize_homography
 
 
-class SuperGlue():
+class SuperGlue:
     """Matches img to map, adapts code from match_pairs.py so that do not have to write files to disk."""
 
     def __init__(self, output_dir, logger=None):
@@ -42,8 +42,7 @@ class SuperGlue():
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-
-    def match(self, img, map, K, scale=(1,1)):
+    def match(self, img, map, K, scale=(1, 1)):
         """Match img to map.
 
         Arguments:
@@ -72,7 +71,7 @@ class SuperGlue():
         # Matching keypoints
         valid = matches > -1
         mkp_img = kp_img[valid]
-        mkp_map= kp_map[matches[valid]]
+        mkp_map = kp_map[matches[valid]]
         mconf = conf[valid]
 
         if self._logger is not None:
@@ -81,7 +80,7 @@ class SuperGlue():
 
         e, f, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger)
         if all(i is not None for i in (e, f, h, p, h_mask)):
-            #map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))
+            # map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))
             visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, h_mask, self._logger)
             cv2.waitKey(1)
 

@@ -1,5 +1,7 @@
 # WMS Map Matching
 
+![Map matching in PX4-Gazebo SITL simulation](./demo.jpg)
+
 ## Introduction
 
 This ROS2 package matches a nadir-facing video stream from an airborne drone's camera to a map of its location. This

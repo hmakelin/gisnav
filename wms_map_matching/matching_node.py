@@ -7,7 +7,7 @@ import yaml
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from px4_msgs.msg import VehicleLocalPosition
+from px4_msgs.msg import VehicleLocalPosition, GimbalDeviceInformation
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Float64MultiArray
 from owslib.wms import WebMapService
@@ -42,6 +42,8 @@ class Matcher(Node):
         self._setup_topics()
         self._cv_bridge = CvBridge()
         self._camera_info = None
+        self._vehicle_local_position = None  # TODO: remove the redundant initialization of these from constructor?
+        self._gimbal_device_information = None
         self._image_raw = None
         self._cv_image = None
         self._map = None
@@ -62,8 +64,17 @@ class Matcher(Node):
                 self.get_logger().error('Could not load config file {} because of exception: {}\n{}'\
                                         .format(yaml_file, e, traceback.print_exc()))
 
+    def _use_gimbal_projection(self):
+        """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
+        return self._config['misc']['gimbal_projection']
+
     def _setup_topics(self):
         """Loads and sets up ROS2 publishers and subscribers from config file."""
+        if self._use_gimbal_projection():
+            self._sub_gimbal_device_information_topic = self._config['ros2_topics']['sub']['gimbal_device_information']
+            self._gimbal_device_information_sub = self.create_subscription(GimbalDeviceInformation,
+                                                                           self._sub_gimbal_device_information_topic,
+                                                                           self._gimbal_device_information_callback, 10)
         self._sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
         self._sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
         self._sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
@@ -103,7 +114,10 @@ class Matcher(Node):
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
-        self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon))
+        if self._use_gimbal_projection():
+            raise NotImplementedError  # TODO
+        else:
+            self._map_bbox = get_bbox((self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon))
 
         if all(i is not None for i in [self._camera_info]):
             max_dim = max(self._camera_info.width, self._camera_info.height)
@@ -153,6 +167,11 @@ class Matcher(Node):
         self.get_logger().debug('Vehicle local position callback triggered.')
         self._vehicle_local_position = msg
         self._update_map()
+
+    def _gimbal_device_information_callback(self, msg):
+        """Handles reception of latest gimbal pose."""
+        self.get_logger().debug('Gimbal device information callback triggered.')
+        self._gimbal_device_information = msg
 
     def _match(self):
         """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""

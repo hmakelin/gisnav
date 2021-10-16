@@ -7,7 +7,7 @@ import yaml
 
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from px4_msgs.msg import VehicleGpsPosition, GimbalDeviceInformation
+from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceInformation
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Float64MultiArray
 from owslib.wms import WebMapService
@@ -42,7 +42,8 @@ class Matcher(Node):
         self._setup_topics()
         self._cv_bridge = CvBridge()
         self._camera_info = None
-        self._vehicle_gps_position = None  # TODO: remove the redundant initialization of these from constructor?
+        self._vehicle_local_position = None  # TODO: remove the redundant initialization of these from constructor?
+        self._vehicle_global_position = None
         self._gimbal_device_information = None
         self._image_raw = None
         self._cv_image = None
@@ -75,7 +76,8 @@ class Matcher(Node):
             self._gimbal_device_information_sub = self.create_subscription(GimbalDeviceInformation,
                                                                            self._sub_gimbal_device_information_topic,
                                                                            self._gimbal_device_information_callback, 10)
-        self._sub_vehicle_gps_position_topic = self._config['ros2_topics']['sub']['vehicle_gps_position']
+        self._sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
+        self._sub_vehicle_global_position_topic = self._config['ros2_topics']['sub']['vehicle_global_position']
         self._sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
         self._sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
         self._pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
@@ -86,9 +88,12 @@ class Matcher(Node):
         self._image_raw_sub = self.create_subscription(Image, self._sub_image_raw_topic, self._image_raw_callback, 10)
         self._camera_info_sub = self.create_subscription(CameraInfo, self._sub_camera_info_topic, self._camera_info_callback,
                                                          10)
-        self._vehicle_gps_position_sub = self.create_subscription(VehicleGpsPosition,
-                                                                  self._sub_vehicle_gps_position_topic,
-                                                                  self._vehicle_gps_position_callback, 10)
+        self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
+                                                                    self._sub_vehicle_local_position_topic,
+                                                                    self._vehicle_local_position_callback, 10)
+        self._vehicle_global_position_sub = self.create_subscription(VehicleGlobalPosition,
+                                                                     self._sub_vehicle_global_position_topic,
+                                                                     self._vehicle_global_position_callback, 10)
         self._essential_mat_pub = self.create_publisher(Float64MultiArray, self._pub_essential_mat_topic, 10)
         self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self._pub_fundamental_mat_topic, 10)
         self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
@@ -117,7 +122,7 @@ class Matcher(Node):
         if self._use_gimbal_projection():
             raise NotImplementedError  # TODO
         else:
-            self._map_bbox = get_bbox((self._vehicle_gps_position.lat/10000000, self._vehicle_gps_position.lon/10000000))
+            self._map_bbox = get_bbox((self._vehicle_global_position.lat, self._vehicle_global_position.lon))
 
         if all(i is not None for i in [self._camera_info]):
             max_dim = max(self._camera_info.width, self._camera_info.height)
@@ -162,10 +167,15 @@ class Matcher(Node):
         self.get_logger().debug('Camera info: {}.'.format(msg))
         self._camera_info_sub.destroy()  # TODO: check that info was indeed received before destroying subscription
 
-    def _vehicle_gps_position_callback(self, msg):
-        """Handles reception of latest GPS position estimate."""
-        self.get_logger().debug('Vehicle gps position callback triggered.')
-        self._vehicle_gps_position = msg
+    def _vehicle_local_position_callback(self, msg):
+        """Handles reception of latest local position estimate."""
+        self.get_logger().debug('Vehicle local position callback triggered.')
+        self._vehicle_local_position = msg
+
+    def _vehicle_global_position_callback(self, msg):
+        """Handles reception of latest global position estimate."""
+        self.get_logger().debug('Vehicle global position callback triggered.')
+        self._vehicle_global_position = msg
         self._update_map()
 
     def _gimbal_device_information_callback(self, msg):
@@ -182,9 +192,9 @@ class Matcher(Node):
             # Rotate map to adjust for SuperGlue's rotation non-invariance, then crop the map to match img dimensions
             # Assumes map is square (so that dimensions do not change when rotation by multiples of 90 degrees)
             # When transposing back to NED frame, must account for rotation and cropping in map keypoint coordinates
-            rot = get_nearest_cv2_rotation(self._vehicle_gps_position.heading)
+            rot = get_nearest_cv2_rotation(self._vehicle_local_position.heading)
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
-                                    .format(self._vehicle_gps_position.heading, rot))
+                                    .format(self._vehicle_local_position.heading, rot))
             if rot is not None:
                 map_rot = cv2.rotate(self._map, rot)
             else:

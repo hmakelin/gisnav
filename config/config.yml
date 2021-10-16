@@ -1,6 +1,7 @@
 ros2_topics:
   sub:
-    vehicle_local_position: 'VehicleLocalPosition_PubSubTopic'  # VehicleGlobalPosition not supported by microRTPS bridge
+    vehicle_local_position: 'VehicleLocalPosition_PubSubTopic'
+    vehicle_global_position: 'VehicleGlobalPosition_PubSubTopic'
     camera_info: 'camera_info'
     image_raw: 'image_raw'
   pub:
@@ -15,12 +16,13 @@ wms:
   srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting
 superglue:  # Recommended outdoor config from SuperGlue repo's README.md
   superpoint:
-    'nms_radius': 3
-    'keypoint_threshold': 0.005
-    'max_keypoints': 2048
+    nms_radius: 3
+    keypoint_threshold: 0.005
+    max_keypoints: 2048
   superglue:
-    'weights': 'outdoor'
-    'sinkhorn_iterations': 20
-    'match_threshold': 0.2
+    weights: 'outdoor'
+    sinkhorn_iterations: 20
+    match_threshold: 0.2
   misc:
-    'affine': True  # Consider setting to True if camera is known to be nadir-facing
+    affine: True  # Consider setting to True if camera is known to be nadir-facing
+    gimbal_projection: False

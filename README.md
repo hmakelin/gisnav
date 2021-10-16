@@ -32,7 +32,7 @@ You will need to setup the following items to get started:
 ### 2. Configure microRTPS bridge topics
 
 In the `PX4-Autopilot/msg/tools/` and `px4_ros_com_ros2/src/px4_ros_com/templates/` folders, edit the
-`uorb_rtps_message_ids.yaml` file by adding a `send: True` flag under the `VehicleGlobalPosition` and
+`uorb_rtps_message_ids.yaml` file by adding a `send: True` flag under the `VehicleGpsPosition` and
 `GimbalDeviceInformation` topics.
 
 Remember to build the `px4_msgs` and `px4_ros_com` packages in the `px4_ros_com_ros2` workspace after editing the YAML

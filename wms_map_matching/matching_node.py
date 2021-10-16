@@ -67,7 +67,7 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
-        return self._config['misc']['gimbal_projection']
+        return self._config['superglue']['misc']['gimbal_projection']
 
     def _setup_topics(self):
         """Loads and sets up ROS2 publishers and subscribers from config file."""

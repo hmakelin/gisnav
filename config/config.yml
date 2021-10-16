@@ -23,6 +23,6 @@ superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     weights: 'outdoor'
     sinkhorn_iterations: 20
     match_threshold: 0.2
-misc:
-  affine: True  # Consider setting to True if camera is known to be nadir-facing
-  gimbal_projection: False
+  misc:
+    affine: True  # Consider setting to True if camera is known to be nadir-facing
+    gimbal_projection: False

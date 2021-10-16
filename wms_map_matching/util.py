@@ -123,7 +123,7 @@ def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=
     map_with_fov = cv2.polylines(map, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
     draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
     if logger is not None:
-        logger.debug('Drawing matches. kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))
+        logger.debug('Drawing matches.')
     out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
     cv2.imshow('Matches and FoV', out)
     cv2.waitKey(1)

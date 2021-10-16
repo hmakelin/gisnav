@@ -29,7 +29,18 @@ You will need to setup the following items to get started:
 5. [Install MapProxy](https://mapproxy.org/download)
 6. [Install gscam2](https://github.com/clydemcqueen/gscam2)
 
-### 2. Configure and launch MapProxy
+### 2. Configure microRTPS bridge topics
+
+In the `PX4-Autopilot/msg/tools/` and `px4_ros_com_ros2/src/px4_ros_com/templates/` folders, edit the
+`uorb_rtps_message_ids.yaml` file by adding a `send: True` flag under the `VehicleGlobalPosition` and
+`GimbalDeviceInformation` topics.
+
+Remember to build the `px4_msgs` and `px4_ros_com` packages in the `px4_ros_com_ros2` workspace after editing the YAML
+file:
+
+`~/px4_ros_com_ros2$ colcon build packages-select px4_msgs px4_ros_com`
+
+### 3. Configure and launch MapProxy
 
 Make a YAML configuration file for your MapProxy server. You can use the following example of proxying a tiled endpoint
 as a WMS endpoint as a starting point. Many web services use a tiled endpoint instead of WMS because tiles can be
@@ -39,7 +50,7 @@ cached.
 
 `$ mapproxy-util serve-develop worldimagery.yaml`
 
-### 3. Launch Gazebo simulation
+### 4. Launch Gazebo simulation
 
 In the `PX4-Autopilot` installation folder, launch a simulation in the `ksql_airport` (San Carlos airport) world. The
 `typhoon_h480` option will enable video streaming (see
@@ -48,25 +59,25 @@ underscore between before the `ksql_airport` world suffix.
 
 `~/PX4-Autopilot$ make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport`
 
-### 4. Launch microRTPS agent
+### 5. Launch microRTPS agent
 
 Open a shell and type in the following command to launch the microRTPS agent:
 
 `$ micrortps_agent -t UDP`
 
-### 5. Launch QGroundControl
+### 6. Launch QGroundControl
 
 In a new shell, navigate to the folder where you installed QGroundControl and launch the app:
 
 `$ ./QGroundControl.AppImage`
 
-### 6. Launch gscam2
+### 7. Launch gscam2
 
 **TODO: example gscam_params file and camera_calibration file**
 
 `ros2 run gscam2 gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml -p preroll:=True -p sync_sinc:=False`
 
-### 7. Launch the matching node
+### 8. Launch the matching node
 
 `~/px4_ros_com_ros2$ ros2 run wms_map_matching matching_node --ros-args --log-level debug`
 

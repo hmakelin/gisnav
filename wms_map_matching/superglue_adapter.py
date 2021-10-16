@@ -66,11 +66,11 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
-        e, f, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
+        e, f, h, p, _ = process_matches(mkp_img, mkp_map, K, logger=self._logger,
                                              affine=self._config['misc']['affine'])
-        if all(i is not None for i in (e, f, h, p, h_mask)):
+        if all(i is not None for i in (e, f, h, p)):
             # map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))
-            visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, h_mask, self._logger)
+            visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, self._logger)
             cv2.waitKey(1)
 
         if all(i is not None for i in (e, f, h, p)):

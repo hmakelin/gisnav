@@ -100,8 +100,7 @@ def _make_match(x, img_idx=0):
     return cv2.DMatch(x[0], x[1], img_idx)
 
 
-# TODO: Remove mas from args, it is no longer used
-def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=None):
+def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, logger=None):
     """Visualizes a homography including keypoint matches and field of view."""
     h, w = img.shape
 
@@ -114,9 +113,6 @@ def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=
     # Need cv2.KeyPoints for kps (assumed to be numpy arrays)
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
-
-    if logger is not None:
-        logger.debug('kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))  # TODO: remove this
 
     src_corners = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)

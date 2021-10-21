@@ -70,6 +70,6 @@ class SuperGlue:
             cv2.waitKey(1)
 
         if all(i is not None for i in (e, h, p)):
-            return e, h, p  # TODO: Move to the same section as the other related code, remove the old viz code
+            return e, h, p
         else:
             return None, None, None

@@ -34,7 +34,7 @@ def get_bbox(latlon, radius_meters=200):
 
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
 def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None, affine=False):
-    """Processes matching keypoints from img and map and returns essential, fundamental, and homography matrices & pose.
+    """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
     Arguments:
         mkp_img - The matching keypoints from image.
@@ -46,10 +46,11 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
         logger - Optional ROS2 logger for writing log output.
         affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
     """
-    if len(mkp_img) < 5 or len(mkp_map) < 5:  # TODO: compute homography anyway if 4 keypoints?
+    min_points = 5
+    if len(mkp_img) < min_points or len(mkp_map) < min_points:
         if logger is not None:
             logger.warn('Not enough keypoints for estimating essential matrix.')
-        return None, None, None, None, None
+        return None, None, None, None
     if logger is not None:
         logger.debug('Estimating homography.')
     if not affine:
@@ -63,10 +64,9 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if logger is not None:
         logger.debug('Recovering pose from essential matrix e=\n{}'.format(e))
     p, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
-    f = e  # TODO: fundamental matrix computation missing
     if logger is not None:
-        logger.debug('Estimation complete,\ne=\n{},\nf=\n{},\nh=\n{},\np=\n{}.\n'.format(e, f, h, p))
-    return e, f, h, p, h_mask
+        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\np=\n{}.\n'.format(e, h, p))
+    return e, h, p, h_mask
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""
@@ -100,7 +100,7 @@ def _make_match(x, img_idx=0):
     return cv2.DMatch(x[0], x[1], img_idx)
 
 
-def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, logger=None):
+def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
     """Visualizes a homography including keypoint matches and field of view."""
     h, w = img.shape
 

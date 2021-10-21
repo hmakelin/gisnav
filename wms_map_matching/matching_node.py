@@ -81,7 +81,6 @@ class Matcher(Node):
         self._sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
         self._sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
         self._pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
-        self._pub_fundamental_mat_topic = self._config['ros2_topics']['pub']['fundamental_matrix']
         self._pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
         self._pub_pose_topic = self._config['ros2_topics']['pub']['pose']
 
@@ -95,7 +94,6 @@ class Matcher(Node):
                                                                      self._sub_vehicle_global_position_topic,
                                                                      self._vehicle_global_position_callback, 10)
         self._essential_mat_pub = self.create_publisher(Float64MultiArray, self._pub_essential_mat_topic, 10)
-        self._fundamental_mat_pub = self.create_publisher(Float64MultiArray, self._pub_fundamental_mat_topic, 10)
         self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
         self._pose_pub = self.create_publisher(Float64MultiArray, self._pub_pose_topic, 10)
 
@@ -195,12 +193,11 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, f, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
             if all(i is not None for i in (e, f, h, p)):
                 self.get_logger().debug('Publishing e, f, h, and p.')
                 self._essential_mat_pub.publish(e)
-                self._fundamental_mat_pub.publish(f)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)
             else:

@@ -36,8 +36,6 @@ class SuperGlue:
         Arguments:
             img - The image frame.
             map - The map frame.
-            K - The camera intrinsic matrix as (3,3) np.array, also used as map intrinsic matrix.
-            scale - Scaling factor for intrinsic matrices (ratio of resized img to original resolution img) as tuple.
         """
         if self._logger is not None:
             self._logger.debug('Pre-processing image and map to grayscale tensors.')

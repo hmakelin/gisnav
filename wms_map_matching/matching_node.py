@@ -196,12 +196,12 @@ class Matcher(Node):
             e, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
             if all(i is not None for i in (e, f, h, p)):
-                self.get_logger().debug('Publishing e, f, h, and p.')
+                self.get_logger().debug('Publishing e, h, and p.')
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)
             else:
-                self.get_logger().warn('Not publishing e, f, h, nor p since at least one of them was None.')
+                self.get_logger().warn('Not publishing e, h, nor p since at least one of them was None.')
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 

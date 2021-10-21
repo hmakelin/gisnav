@@ -60,7 +60,6 @@ class SuperGlue:
         valid = matches > -1
         mkp_img = kp_img[valid]
         mkp_map = kp_map[matches[valid]]
-        mconf = conf[valid]
 
         if self._logger is not None:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
@@ -70,7 +69,7 @@ class SuperGlue:
                                              affine=self._config['misc']['affine'])
         if all(i is not None for i in (e, f, h, p, h_mask)):
             # map_out = cv2.warpPerspective(map_grayscale, h, (img_grayscale.shape[1], img_grayscale.shape[0]))
-            visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, matches, h, h_mask, self._logger)
+            visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)
             cv2.waitKey(1)
 
         if all(i is not None for i in (e, f, h, p)):

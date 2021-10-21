@@ -101,7 +101,7 @@ def _make_match(x, img_idx=0):
 
 
 # TODO: Remove mas from args, it is no longer used
-def visualize_homography(img, map, kp_img, kp_map, matches, h_mat, mask, logger=None):
+def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
     """Visualizes a homography including keypoint matches and field of view."""
     h, w = img.shape
 

@@ -6,7 +6,6 @@ ros2_topics:
     image_raw: 'image_raw'
   pub:
     essential_matrix: 'essential_matrix'
-    fundamental_matrix: 'fundamental_matrix'
     homography_matrix: 'homography_matrix'
     pose: 'pose'
 wms:

@@ -65,13 +65,13 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
-        e, f, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
-                                             affine=self._config['misc']['affine'])
-        if all(i is not None for i in (e, f, h, p, h_mask)):
+        e, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
+                                          affine=self._config['misc']['affine'])
+        if all(i is not None for i in (e, h, p, h_mask)):
             visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)
             cv2.waitKey(1)
 
-        if all(i is not None for i in (e, f, h, p)):
-            return e, f, h, p  # TODO: Move to the same section as the other related code, remove the old viz code
+        if all(i is not None for i in (e, h, p)):
+            return e, h, p  # TODO: Move to the same section as the other related code, remove the old viz code
         else:
-            return None, None, None, None
+            return None, None, None

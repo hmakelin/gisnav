@@ -200,7 +200,7 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, f, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
             if all(i is not None for i in (e, f, h, p)):
                 self.get_logger().debug('Publishing e, f, h, and p.')

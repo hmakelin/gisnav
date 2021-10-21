@@ -147,11 +147,6 @@ class Matcher(Node):
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
-        stamp = msg.header.stamp.sec
-        now = self.get_clock().now().to_msg().sec
-        if stamp + 1 < now:
-            self.get_logger().debug('Skipping frame older than 1 second ({} vs {})'.format(stamp, now))
-            return
         self._image_raw = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
         if all(i is not None for i in [self._image_raw, self._map]):

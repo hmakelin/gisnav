@@ -114,9 +114,6 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
 
-    if logger is not None:
-        logger.debug('kp_img=\n{},\nkp_map=\n{},\nmatches=\n{}.'.format(kp_img, kp_map, matches))  # TODO: remove this
-
     src_corners = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
     map_with_fov = cv2.polylines(map, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)

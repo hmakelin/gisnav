@@ -46,7 +46,8 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
         logger - Optional ROS2 logger for writing log output.
         affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
     """
-    if len(mkp_img) < 5 or len(mkp_map) < 5:  # TODO: compute homography anyway if 4 keypoints?
+    min_points = 5
+    if len(mkp_img) < min_points or len(mkp_map) < min_points:
         if logger is not None:
             logger.warn('Not enough keypoints for estimating essential matrix.')
         return None, None, None, None

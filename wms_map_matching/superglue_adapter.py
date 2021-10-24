@@ -30,12 +30,13 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map):
+    def match(self, img, map, K):
         """Match img to map.
 
         Arguments:
             img - The image frame.
             map - The map frame.
+            K - The camera intrinsinc matrix.
         """
         if self._logger is not None:
             self._logger.debug('Pre-processing image and map to grayscale tensors.')
@@ -63,13 +64,13 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
-        e, h, p, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
+        e, h, r, t, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
                                           affine=self._config['misc']['affine'])
-        if all(i is not None for i in (e, h, p, h_mask)):
+        if all(i is not None for i in (e, h, r, t, h_mask)):
             visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)
             cv2.waitKey(1)
 
-        if all(i is not None for i in (e, h, p)):
-            return e, h, p
+        if all(i is not None for i in (e, h, r, t)):
+            return e, h, r, t
         else:
-            return None, None, None
+            return None, None, None, None

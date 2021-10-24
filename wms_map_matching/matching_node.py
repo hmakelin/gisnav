@@ -193,10 +193,12 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, h, p = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, r, t = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
-            if all(i is not None for i in (e, f, h, p)):
+            if all(i is not None for i in (e, h, r, t)):
                 self.get_logger().debug('Publishing e, h, and p.')
+                p = np.append(np.array(r), np.array(t), axis=1)
+                self.get_logger().debug('Pose p=\n{}.\n'.format(p))
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)

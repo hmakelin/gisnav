@@ -63,10 +63,10 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     e, mask = cv2.findEssentialMat(mkp_img, mkp_map, np.eye(3), threshold=reproj_threshold, prob=prob, method=method)
     if logger is not None:
         logger.debug('Recovering pose from essential matrix e=\n{}'.format(e))
-    p, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
+    inlier_count, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
     if logger is not None:
-        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\np=\n{}.\n'.format(e, h, p))
-    return e, h, p, h_mask
+        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
+    return e, h, r, t, h_mask
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""

@@ -4,13 +4,13 @@ import numpy as np
 import sys
 import os
 import math
+import geojson
 
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
 from math import pi
 from collections import namedtuple
-from geojson import Polygon
 
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -179,14 +179,12 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
 
 def rotate_point(degrees, pt):
     """Rotates point (x, y) around origin (0, 0) by given degrees."""
-    print("pt: " + str(pt)) # TODO: remove
     x = math.cos(degrees) * pt[0] - math.sin(degrees) * pt[1]
     y = math.sin(degrees) * pt[0] + math.cos(degrees) * pt[1]
     return x, y
 
 def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box."""
-    print("pt 2: " + str(pt)) # TODO: remove
     lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
     return lat, lon
@@ -195,4 +193,5 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 def write_fov_to_geojson(fov, filename='field_of_view.json'):
     """Writes the field of view into a geojson file."""
     with open(filename, 'w') as f:
-        geojson.dump(Polygon(fov), f)
+        polygon = geojson.Polygon([list(map(tuple, fov.squeeze()))])
+        geojson.dump(polygon, f)

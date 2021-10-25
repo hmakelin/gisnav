@@ -193,5 +193,5 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 def write_fov_to_geojson(fov, filename='field_of_view.json'):
     """Writes the field of view into a geojson file."""
     with open(filename, 'w') as f:
-        polygon = geojson.Polygon([list(map(tuple, fov.squeeze()))])
+        polygon = geojson.Polygon([list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)

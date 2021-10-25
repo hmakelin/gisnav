@@ -3,12 +3,17 @@ import cv2
 import numpy as np
 import sys
 import os
+import math
 
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
 from math import pi
+from collections import namedtuple
 
+BBox = namedtuple('BBox', 'left bottom right top')
+LatLon = namedtuple('LatLon', 'lat lon')
+Dimensions = namedtuple('Dimensions', 'width height')
 
 def get_bbox(latlon, radius_meters=200):
     """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
@@ -84,6 +89,17 @@ def get_nearest_cv2_rotation(radians):
         raise ValueError('Unexpected input value: {}'.format(radians))  # this should not happen
 
 
+def get_degrees_for_cv2_rotation(rot):
+    """Returns the nearest 90 degree multiple matching the cv2 rotation code."""
+    if rot == cv2.ROTATE_180:
+        return 180
+    elif rot == cv2.ROTATE_90_COUNTERCLOCKWISE:
+        return 270
+    elif rot == cv2.ROTATE_90_CLOCKWISE:
+        return 90
+    else:
+        return 0
+
 def _make_keypoint(pair, sz=1.0):
     """Converts tuple to a cv2.KeyPoint.
 
@@ -101,7 +117,10 @@ def _make_match(x, img_idx=0):
 
 
 def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
-    """Visualizes a homography including keypoint matches and field of view."""
+    """Visualizes a homography including keypoint matches and field of view.
+
+    Returns the field of view in pixel coordinates of the map raster.
+    """
     h, w = img.shape
 
     # Make a list of matches
@@ -124,6 +143,8 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
     cv2.imshow('Matches and FoV', out)
     cv2.waitKey(1)
 
+    return dst_corners
+
 def setup_sys_path():
     """Adds the package share directory to the path so that SuperGlue can be imported."""
     if 'get_package_share_directory' not in sys.modules:
@@ -133,3 +154,38 @@ def setup_sys_path():
     superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
     sys.path.append(os.path.abspath(superglue_dir))
     return share_dir, superglue_dir
+
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, map_raster_rotation=None, logger=None):
+    """Converts the field of view from pixel coordinates to WGS 84.
+
+    Arguments:
+        fov_in_pix - Numpy array of field of view corners in pixel coordinates of rotated map raster.
+        map_raster_size - Size of the map raster image.
+        map_raster_bbox - The WGS84 bounding box of the original unrotated map frame.
+        map_raster_rotation - The rotation that was applied to the map raster before matching.
+        logger - ROS2 logger (optional)
+    """
+    if map_raster_rotation is not None:
+        rotate = partial(rotate_point, -map_raster_rotation)
+        fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
+
+    convert = partial(convert_pix_to_wgs84, map_raster_size, map_raster_bbox)
+    if logger is not None:
+        logger.debug('FoV in pix:\n{}.\n'.format(fog_in_pix))
+    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix)
+
+    return fov_in_wgs84
+
+def rotate_point(degrees, pt):
+    """Rotates point (x, y) around origin (0, 0) by given degrees."""
+    print("pt: " + str(pt)) # TODO: remove
+    x = math.cos(degrees) * pt[0] - math.sin(degrees) * pt[1]
+    y = math.sin(degrees) * pt[0] + math.cos(degrees) * pt[1]
+    return x, y
+
+def convert_pix_to_wgs84(img_dim, bbox, pt):
+    """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box."""
+    print("pt 2: " + str(pt)) # TODO: remove
+    lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
+    return lat, lon

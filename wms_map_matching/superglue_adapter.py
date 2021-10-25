@@ -67,10 +67,10 @@ class SuperGlue:
         e, h, r, t, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
                                           affine=self._config['misc']['affine'])
         if all(i is not None for i in (e, h, r, t, h_mask)):
-            visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)
+            fov_pix = visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)  # TODO: put this viz stuff somewhere else - not matching related
             cv2.waitKey(1)
 
-        if all(i is not None for i in (e, h, r, t)):
-            return e, h, r, t
+        if all(i is not None for i in (e, h, r, t, fov_pix)):
+            return e, h, r, t, fov_pix
         else:
-            return None, None, None, None
+            return None, None, None, None, None

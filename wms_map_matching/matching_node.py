@@ -17,7 +17,8 @@ import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
-from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path
+from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path, convert_fov_from_pix_to_wgs84,\
+    get_degrees_for_cv2_rotation, BBox, Dimensions
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -83,6 +84,7 @@ class Matcher(Node):
         self._pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
         self._pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
         self._pub_pose_topic = self._config['ros2_topics']['pub']['pose']
+        self._pub_fov_topic = self._config['ros2_topics']['pub']['fov']
 
         self._image_raw_sub = self.create_subscription(Image, self._sub_image_raw_topic, self._image_raw_callback, 10)
         self._camera_info_sub = self.create_subscription(CameraInfo, self._sub_camera_info_topic, self._camera_info_callback,
@@ -96,6 +98,7 @@ class Matcher(Node):
         self._essential_mat_pub = self.create_publisher(Float64MultiArray, self._pub_essential_mat_topic, 10)
         self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
         self._pose_pub = self.create_publisher(Float64MultiArray, self._pub_pose_topic, 10)
+        self._fov_pub = self.create_publisher(Float64MultiArray, self._pub_fov_topic, 10)
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
@@ -115,6 +118,11 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
+    def _get_map_size(self):
+        max_dim = max(self._camera_info.width, self._camera_info.height)
+        img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
+        return img_size
+
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
         if self._use_gimbal_projection():
@@ -123,16 +131,14 @@ class Matcher(Node):
             self._map_bbox = get_bbox((self._vehicle_global_position.lat, self._vehicle_global_position.lon))
 
         if all(i is not None for i in [self._camera_info]):
-            max_dim = max(self._camera_info.width, self._camera_info.height)
-            img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
             layer_str = self.get_parameter('layer').get_parameter_value().string_value
             srs_str = self.get_parameter('srs').get_parameter_value().string_value
             self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
                                                                                                    layer_str, srs_str))
 
             try:
-                self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox, size=img_size,
-                                             format='image/png', transparent=True)
+                self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox,
+                                             size=self._get_map_size(), format='image/png', transparent=True)
             except Exception as e:
                 self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
                 return
@@ -193,17 +199,24 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, h, r, t = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, r, t, fov_pix = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
-            if all(i is not None for i in (e, h, r, t)):
-                self.get_logger().debug('Publishing e, h, and p.')
+            if all(i is not None for i in (e, h, r, t, fov_pix)):
+                # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
+                fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._get_map_size()), # TODO: used Dimensions named tuple earlier, do not initialize it here
+                                                          BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
+                                                          get_degrees_for_cv2_rotation(rot))
+
+                self.get_logger().debug('Publishing e, h, p and fov.')
                 p = np.append(np.array(r), np.array(t), axis=1)
                 self.get_logger().debug('Pose p=\n{}.\n'.format(p))
+                self.get_logger().debug('FoV in WGS84:\n{}.\n'.format(fov_wgs84))
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)
+                self._fov_pub.publish(fov_wgs84)
             else:
-                self.get_logger().warn('Not publishing e, h, nor p since at least one of them was None.')
+                self.get_logger().warn('Not publishing e, h, r, t, nor fov_pix since at least one of them was None.')
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 

@@ -10,6 +10,7 @@ from shapely.ops import transform
 from shapely.geometry import Point
 from math import pi
 from collections import namedtuple
+from geojson import Polygon
 
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -189,3 +190,9 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
     return lat, lon
+
+
+def write_fov_to_geojson(fov, filename='field_of_view.json'):
+    """Writes the field of view into a geojson file."""
+    with open(filename, 'w') as f:
+        geojson.dump(Polygon(fov), f)

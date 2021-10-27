@@ -18,8 +18,8 @@ from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path, convert_fov_from_pix_to_wgs84,\
-    get_degrees_for_cv2_rotation, write_fov_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
-    Dimensions, MAP_RADIUS_METERS_DEFAULT
+    get_degrees_for_cv2_rotation, write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
+    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -200,9 +200,9 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, h, r, t, fov_pix = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, r, t, fov_pix, translation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
 
-            if all(i is not None for i in (e, h, r, t, fov_pix)):
+            if all(i is not None for i in (e, h, r, t, fov_pix, translation_vector)):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
                 fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._get_map_size()), # TODO: used Dimensions named tuple earlier, do not initialize it here
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
@@ -213,11 +213,14 @@ class Matcher(Node):
                 self.get_logger().debug('Pose p=\n{}.\n'.format(p))
                 self.get_logger().debug('FoV in WGS84:\n{}.\n'.format(fov_wgs84))
                 self.get_logger().debug('Writing FoV to json file.')
-                self.get_logger().debug('Map camera apparent altitude: {}'.format(
-                    get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
-                self.get_logger().debug('Map camera lat lon: {}'.format(
-                    get_camera_apparent_altitude(get_camera_lat_lon(BBox(*self._map_bbox)))))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
-                write_fov_to_geojson(fov_wgs84)
+                apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
+                self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
+                map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
+                self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
+                # Handle translation vector for drone camera
+                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), MAP_RADIUS_METERS_DEFAULT, rot)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
+                self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
+                write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (np.expand_dims(np.array(map_lat), 0), np.expand_dims(np.array(map_lon), 0), np.expand_dims(np.array(apparent_alt), 0)))  #TODO: apparently lat lon alt are all numpy arrays so need  to do same to map_lcoation, fix this later!
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)

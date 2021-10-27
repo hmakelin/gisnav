@@ -58,7 +58,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if len(mkp_img) < min_points or len(mkp_map) < min_points:
         if logger is not None:
             logger.warn('Not enough keypoints for estimating essential matrix.')
-        return None, None, None, None
+        return None, None, None, None, None, None
     if logger is not None:
         logger.debug('Estimating homography.')
     if not affine:
@@ -87,7 +87,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
 
     if logger is not None:
         logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
-    return e, h, r, t, h_mask
+    return e, h, r, t, h_mask, translation_vector
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""
@@ -205,11 +205,32 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     return lat, lon
 
 
-def write_fov_to_geojson(fov, filename='field_of_view.json'):
-    """Writes the field of view into a geojson file."""
+def write_fov_and_camera_location_to_geojson(fov, location, map_location, filename='field_of_view.json',
+                                             filename_location='location.json'):
+    # TODO: write simulated drone location also!
+    """Writes the field of view and lat lon location of drone and center of map raster into a geojson file.
+
+    Arguments:
+        fov - Estimated camera field of view.
+        location - Estimated camera location.
+    """
     with open(filename, 'w') as f:
         polygon = geojson.Polygon([list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)
+
+    # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
+    with open(filename_location, 'w') as f2:
+        features = []
+        print(location)
+        print(map_location)
+        feature_collection = geojson.FeatureCollection(features)
+        latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), location[0:2]))])
+        map_latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), map_location[0:2]))])
+        features.append(latlon)
+        features.append(map_latlon)
+        geojson.dump(feature_collection, f2)
+
+
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):
@@ -224,6 +245,7 @@ def get_camera_apparent_altitude(map_radius, map_dimensions, K):
     """
     focal_length = K[0]
     width_pixels = map_dimensions[0]
+    print(str(map_radius) + ' ' + str(focal_length) + ' ' + str(width_pixels))
     return map_radius * focal_length / width_pixels
 
 
@@ -231,12 +253,31 @@ def get_camera_lat_lon(bbox):
     """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
     return bbox.bottom + (bbox.top-bbox.bottom)/2, bbox.left + (bbox.right-bbox.left)/2
 
-def get_camera_lat_lon(origin, relative_translation, map_dimensions, map_radius, camera_apparent_altitude):
-    """Returns camera lat-lon-alt given relative translation to camera whose origin is known."""
-    # TODO: figure out the rotation adjustment
-    # TODO: if this operation is still in pixel space, use map_dimensions first, then rotation adjustment, then lat-lon conversion
-    return origin[0] + relative_translation[0]*(map_bbox.right - map_bbox.left), \
-           origin[1] + relative_translation[1]*(map_bbox.top - map_bbox.bottom),\
-           camera_apparent_altitude + relative_translation[2]*camera_apparent_altitude
+
+#def get_camera_lat_lon(origin, relative_translation, map_dimensions, map_radius, camera_apparent_altitude):
+#    """Returns camera lat-lon-alt given relative translation to camera whose origin is known."""
+#    # TODO: figure out the rotation adjustment
+#    # TODO: if this operation is still in pixel space, use map_dimensions first, then rotation adjustment, then lat-lon conversion
+#    return origin[0] + relative_translation[0]*(map_bbox.right - map_bbox.left), \
+#           origin[1] + relative_translation[1]*(map_bbox.top - map_bbox.bottom),\
+#           camera_apparent_altitude + relative_translation[2]*camera_apparent_altitude
+
+def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MAP_RADIUS_METERS_DEFAULT, rot=None):
+    """Returns camera lat-lon coordinates in WGS84 and altitude in meters.
+
+    Arguments.
+        translation_vector - Translation vector computed by cv2.solvePnP.
+        bbox - The original map raster bbox (before the 90 degree rotation).
+        dimensions - Map raster dimensions.
+        radius_meters - The radius in meters of the circle enclosed by the map raster.
+        rot - The rotation done on the map raster (multiple of 90 degrees).
+
+    """
+    translation_rotated = rotate_point(-rot, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
+    lat = bbox.bottom + (bbox.top-bbox.bottom)*(translation_rotated[1]/dimensions.height)
+    lon = bbox.left + (bbox.left-bbox.right)*(translation_rotated[0]/dimensions.width)
+    alt = translation_vector[2]/(2*MAP_RADIUS_METERS_DEFAULT/dimensions.width)  # width and height should be same for map raster
+    return lat, lon, alt
+
 
 

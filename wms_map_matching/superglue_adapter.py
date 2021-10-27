@@ -64,13 +64,13 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
-        e, h, r, t, h_mask = process_matches(mkp_img, mkp_map, K, logger=self._logger,
+        e, h, r, t, h_mask, translation_vector = process_matches(mkp_img, mkp_map, K, logger=self._logger,
                                           affine=self._config['misc']['affine'])
         if all(i is not None for i in (e, h, r, t, h_mask)):
             fov_pix = visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)  # TODO: put this viz stuff somewhere else - not matching related
             cv2.waitKey(1)
 
         if all(i is not None for i in (e, h, r, t, fov_pix)):
-            return e, h, r, t, fov_pix
+            return e, h, r, t, fov_pix, translation_vector
         else:
-            return None, None, None, None, None
+            return None, None, None, None, None, None

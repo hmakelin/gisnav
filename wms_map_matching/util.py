@@ -221,16 +221,12 @@ def write_fov_and_camera_location_to_geojson(fov, location, map_location, filena
     # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
     with open(filename_location, 'w') as f2:
         features = []
-        print(location)
-        print(map_location)
         feature_collection = geojson.FeatureCollection(features)
         latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), location[0:2]))])
         map_latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), map_location[0:2]))])
         features.append(latlon)
         features.append(map_latlon)
         geojson.dump(feature_collection, f2)
-
-
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):
@@ -245,7 +241,6 @@ def get_camera_apparent_altitude(map_radius, map_dimensions, K):
     """
     focal_length = K[0]
     width_pixels = map_dimensions[0]
-    print(str(map_radius) + ' ' + str(focal_length) + ' ' + str(width_pixels))
     return map_radius * focal_length / width_pixels
 
 

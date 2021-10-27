@@ -106,15 +106,15 @@ def get_nearest_cv2_rotation(radians):
     else:
         raise ValueError('Unexpected input value: {}'.format(radians))  # this should not happen
 
-
+# TODO: make these match with get_nearest_cv2_rotation values, currently they do not match?
 def get_degrees_for_cv2_rotation(rot):
     """Returns the nearest 90 degree multiple matching the cv2 rotation code."""
     if rot == cv2.ROTATE_180:
         return 180
     elif rot == cv2.ROTATE_90_COUNTERCLOCKWISE:
-        return 270
+        return 90  # 270
     elif rot == cv2.ROTATE_90_CLOCKWISE:
-        return 90
+        return -90
     else:
         return 0
 
@@ -184,7 +184,7 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
         logger - ROS2 logger (optional)
     """
     if map_raster_rotation is not None:
-        rotate = partial(rotate_point, -map_raster_rotation)
+        rotate = partial(rotate_point, -map_raster_rotation, map_raster_size)
         fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
 
     convert = partial(convert_pix_to_wgs84, map_raster_size, map_raster_bbox)
@@ -194,15 +194,21 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
 
     return fov_in_wgs84
 
-def rotate_point(degrees, pt):
-    """Rotates point (x, y) around origin (0, 0) by given degrees."""
+def rotate_point(degrees, size, pt):
+    """Rotates point (x, y) around origin (0, y_max) by given degrees.
+
+    Assumes 'origin' at top left corner with y axis pointing down."""
+    #x = math.cos(degrees) * pt[0] - math.sin(degrees) * (pt[1] - size[1])
+    #y = math.sin(degrees) * pt[0] + math.cos(degrees) * (pt[1] - size[1])
     x = math.cos(degrees) * pt[0] - math.sin(degrees) * pt[1]
     y = math.sin(degrees) * pt[0] + math.cos(degrees) * pt[1]
     return x, y
 
 def convert_pix_to_wgs84(img_dim, bbox, pt):
-    """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box."""
-    lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
+
+    In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
+    lat = bbox.bottom + (bbox.top-bbox.bottom)*(img_dim.height-pt[1])/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
     return lat, lon
 
@@ -263,7 +269,7 @@ def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MA
         rot - The rotation done on the map raster (multiple of 90 degrees).
 
     """
-    translation_rotated = rotate_point(-rot, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
+    translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
     lat = bbox.bottom + (bbox.top-bbox.bottom)*(translation_rotated[1]/dimensions.height)
     lon = bbox.left + (bbox.left-bbox.right)*(translation_rotated[0]/dimensions.width)
     alt = translation_vector[2]/(2*MAP_RADIUS_METERS_DEFAULT/dimensions.width)  # width and height should be same for map raster

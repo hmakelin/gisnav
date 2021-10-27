@@ -254,14 +254,6 @@ def get_camera_lat_lon(bbox):
     return bbox.bottom + (bbox.top-bbox.bottom)/2, bbox.left + (bbox.right-bbox.left)/2
 
 
-#def get_camera_lat_lon(origin, relative_translation, map_dimensions, map_radius, camera_apparent_altitude):
-#    """Returns camera lat-lon-alt given relative translation to camera whose origin is known."""
-#    # TODO: figure out the rotation adjustment
-#    # TODO: if this operation is still in pixel space, use map_dimensions first, then rotation adjustment, then lat-lon conversion
-#    return origin[0] + relative_translation[0]*(map_bbox.right - map_bbox.left), \
-#           origin[1] + relative_translation[1]*(map_bbox.top - map_bbox.bottom),\
-#           camera_apparent_altitude + relative_translation[2]*camera_apparent_altitude
-
 def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MAP_RADIUS_METERS_DEFAULT, rot=None):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters.
 

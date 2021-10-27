@@ -208,11 +208,11 @@ class Matcher(Node):
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
                                                           get_degrees_for_cv2_rotation(rot))
 
-                self.get_logger().debug('Publishing e, h, p and fov.')
+                #self.get_logger().debug('Publishing e, h, p and fov.')
                 p = np.append(np.array(r), np.array(t), axis=1)
-                self.get_logger().debug('Pose p=\n{}.\n'.format(p))
-                self.get_logger().debug('FoV in WGS84:\n{}.\n'.format(fov_wgs84))
-                self.get_logger().debug('Writing FoV to json file.')
+                #self.get_logger().debug('Pose p=\n{}.\n'.format(p))
+                #self.get_logger().debug('FoV in WGS84:\n{}.\n'.format(fov_wgs84))
+                #self.get_logger().debug('Writing FoV to json file.')
                 apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
                 self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
                 map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))

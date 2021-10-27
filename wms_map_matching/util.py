@@ -86,7 +86,9 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     ###
 
     if logger is not None:
-        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
+    #    logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
+        logger.debug('Estimation complete,\nh=\n{}'.format(h))
+
     return e, h, r, t, h_mask, translation_vector
 
 def get_nearest_cv2_rotation(radians):

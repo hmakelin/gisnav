@@ -18,7 +18,8 @@ from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path, convert_fov_from_pix_to_wgs84,\
-    get_degrees_for_cv2_rotation, write_fov_to_geojson, BBox, Dimensions
+    get_degrees_for_cv2_rotation, write_fov_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
+    Dimensions, MAP_RADIUS_METERS_DEFAULT
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -212,6 +213,10 @@ class Matcher(Node):
                 self.get_logger().debug('Pose p=\n{}.\n'.format(p))
                 self.get_logger().debug('FoV in WGS84:\n{}.\n'.format(fov_wgs84))
                 self.get_logger().debug('Writing FoV to json file.')
+                self.get_logger().debug('Map camera apparent altitude: {}'.format(
+                    get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
+                self.get_logger().debug('Map camera lat lon: {}'.format(
+                    get_camera_apparent_altitude(get_camera_lat_lon(BBox(*self._map_bbox)))))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
                 write_fov_to_geojson(fov_wgs84)
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)

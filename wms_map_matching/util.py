@@ -16,7 +16,9 @@ BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
 Dimensions = namedtuple('Dimensions', 'width height')
 
-def get_bbox(latlon, radius_meters=200):
+MAP_RADIUS_METERS_DEFAULT = 200
+
+def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
 
     Uses azimuthal equidistant projection. Based on Mike T's answer at
@@ -70,6 +72,19 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if logger is not None:
         logger.debug('Recovering pose from essential matrix e=\n{}'.format(e))
     inlier_count, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
+
+    ### solvePnP section ###
+    # Notices that mkp_img and mkp_map order is reversed (mkp_map is '3D' points with altitude z=0)
+    mkp_map_3d = []
+    for pt in mkp_map:
+        mkp_map_3d.append([pt[0], pt[1], 0])
+    mkp_map_3d = np.array(mkp_map_3d)
+    _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, None, flags=0)
+    if logger is not None:
+        logger.debug('solvePnP rotation:\n{}.'.format(rotation_vector))
+        logger.debug('solvePnP translation:\n{}.'.format(translation_vector))
+    ###
+
     if logger is not None:
         logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
     return e, h, r, t, h_mask
@@ -195,3 +210,33 @@ def write_fov_to_geojson(fov, filename='field_of_view.json'):
     with open(filename, 'w') as f:
         polygon = geojson.Polygon([list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)
+
+
+def get_camera_apparent_altitude(map_radius, map_dimensions, K):
+    """Returns camera apparent altitude using the K of the drone's camera and the map's known ground truth size.
+
+    Assumes same K for the hypothetical camera that was used to take a picture of the (ortho-rectified) map raster.
+
+    Arguments:
+        map_radius - The radius in meters of the map raster (the raster should be a square enclosing a circle of radius)
+        map_dimensions - The image dimensions in pixels of the map raster.
+        K - Camera intrinsic matrix (assume same K for map raster as for drone camera).
+    """
+    focal_length = K[0]
+    width_pixels = map_dimensions[0]
+    return map_radius * focal_length / width_pixels
+
+
+def get_camera_lat_lon(bbox):
+    """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
+    return bbox.bottom + (bbox.top-bbox.bottom)/2, bbox.left + (bbox.right-bbox.left)/2
+
+def get_camera_lat_lon(origin, relative_translation, map_dimensions, map_radius, camera_apparent_altitude):
+    """Returns camera lat-lon-alt given relative translation to camera whose origin is known."""
+    # TODO: figure out the rotation adjustment
+    # TODO: if this operation is still in pixel space, use map_dimensions first, then rotation adjustment, then lat-lon conversion
+    return origin[0] + relative_translation[0]*(map_bbox.right - map_bbox.left), \
+           origin[1] + relative_translation[1]*(map_bbox.top - map_bbox.bottom),\
+           camera_apparent_altitude + relative_translation[2]*camera_apparent_altitude
+
+

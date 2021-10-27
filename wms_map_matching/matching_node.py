@@ -220,7 +220,7 @@ class Matcher(Node):
                 # Handle translation vector for drone camera
                 lat, lon, alt = get_camera_lat_lon_v2(translation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), MAP_RADIUS_METERS_DEFAULT, rot)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
                 self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
-                write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (np.expand_dims(np.array(map_lat), 0), np.expand_dims(np.array(map_lon), 0), np.expand_dims(np.array(apparent_alt), 0)))  #TODO: apparently lat lon alt are all numpy arrays so need  to do same to map_lcoation, fix this later!
+                write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (map_lat, map_lon, apparent_alt))
                 self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)
                 self._pose_pub.publish(p)

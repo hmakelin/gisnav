@@ -208,7 +208,7 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 
 
 def write_fov_and_camera_location_to_geojson(fov, location, map_location, filename='field_of_view.json',
-                                             filename_location='location.json'):
+                                             filename_location='estimated_location.json'):
     # TODO: write simulated drone location also!
     """Writes the field of view and lat lon location of drone and center of map raster into a geojson file.
 
@@ -222,13 +222,14 @@ def write_fov_and_camera_location_to_geojson(fov, location, map_location, filena
 
     # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
     with open(filename_location, 'w') as f2:
-        features = []
-        feature_collection = geojson.FeatureCollection(features)
-        latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), location[0:2]))])
-        map_latlon = geojson.Point([list(map(lambda x: tuple(reversed(x)), map_location[0:2]))])
-        features.append(latlon)
-        features.append(map_latlon)
-        geojson.dump(feature_collection, f2)
+        #features = []
+        #feature_collection = geojson.FeatureCollection(features)
+        latlon = geojson.Point(tuple(reversed(location[0:2])))
+        #map_latlon = geojson.Point(tuple(reversed(map_location[0:2])))
+        #features.append(latlon)
+        #features.append(map_latlon)
+        #geojson.dump(feature_collection, f2)
+        geojson.dump(latlon, f2)
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):
@@ -266,7 +267,7 @@ def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MA
     lat = bbox.bottom + (bbox.top-bbox.bottom)*(translation_rotated[1]/dimensions.height)
     lon = bbox.left + (bbox.left-bbox.right)*(translation_rotated[0]/dimensions.width)
     alt = translation_vector[2]/(2*MAP_RADIUS_METERS_DEFAULT/dimensions.width)  # width and height should be same for map raster
-    return lat, lon, alt
+    return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
 
 

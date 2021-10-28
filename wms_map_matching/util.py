@@ -214,8 +214,9 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
     #lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height
-    lat = bbox.bottom + (bbox.top-bbox.bottom)*(img_dim.height-pt[1])/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
-    lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
+    # inverted y axis
+    lat = bbox.bottom + (bbox.top-bbox.bottom) * (img_dim.height-pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    lon = bbox.left + (bbox.right-bbox.left) * pt[0] / img_dim.width
     return lat, lon
 
 
@@ -281,10 +282,17 @@ def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MA
         rot - The rotation done on the map raster (multiple of 90 degrees).
 
     """
-    translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
-    lat = bbox.bottom + (bbox.top-bbox.bottom)*(translation_rotated[1]/dimensions.height)
-    lon = bbox.left + (bbox.left-bbox.right)*(translation_rotated[0]/dimensions.width)
-    alt = translation_vector[2]/(2*MAP_RADIUS_METERS_DEFAULT/dimensions.width)  # width and height should be same for map raster
+    #translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
+    if rot is not None:
+        # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
+        rot = math.radians(rot)
+        translation_rotated = rotate_point(rot, dimensions, -translation_vector[0:2])  # Negate negative translation vector
+    else:
+        translation_rotated = -translation_vector[0:2]   # Negate negative translation vector
+    #lat = bbox.bottom + (bbox.top - bbox.bottom) * ((dimensions.height - translation_rotated[1]) / dimensions.height) # inverted y axis
+    #lon = bbox.left + (bbox.left - bbox.right) * (translation_rotated[0] / dimensions.width)
+    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
+    alt = translation_vector[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
 

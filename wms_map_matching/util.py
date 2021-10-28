@@ -219,14 +219,16 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     return lat, lon
 
 
-def write_fov_and_camera_location_to_geojson(fov, location, map_location, filename='field_of_view.json',
-                                             filename_location='estimated_location.json'):
+def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename='field_of_view.json',
+                                             filename_location='estimated_location.json',
+                                             filename_fov_center='fov_center.json'):
     # TODO: write simulated drone location also!
-    """Writes the field of view and lat lon location of drone and center of map raster into a geojson file.
+    """Writes the field of view and lat lon location of drone and center of fov into a geojson file.
 
     Arguments:
         fov - Estimated camera field of view.
         location - Estimated camera location.
+        map_location - Center of the FoV.
     """
     with open(filename, 'w') as f:
         polygon = geojson.Polygon([list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
@@ -242,6 +244,10 @@ def write_fov_and_camera_location_to_geojson(fov, location, map_location, filena
         #features.append(map_latlon)
         #geojson.dump(feature_collection, f2)
         geojson.dump(latlon, f2)
+
+    with open(filename_fov_center, 'w') as f3:
+        fov_latlon = geojson.Point(tuple(reversed(fov_center[0:2])))
+        geojson.dump(fov_latlon, f3)
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):

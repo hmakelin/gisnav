@@ -115,8 +115,11 @@ def get_degrees_for_cv2_rotation(rot):
         return 90  # 270
     elif rot == cv2.ROTATE_90_CLOCKWISE:
         return -90
-    else:
+    elif rot is None:
         return 0
+    else:
+        raise ValueError('Unexpected input value: {}'.format(rot))  # this should not happen
+
 
 def _make_keypoint(pair, sz=1.0):
     """Converts tuple to a cv2.KeyPoint.
@@ -184,7 +187,9 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
         logger - ROS2 logger (optional)
     """
     if map_raster_rotation is not None:
-        rotate = partial(rotate_point, -map_raster_rotation, map_raster_size)
+        # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
+        map_raster_rotation = math.radians(map_raster_rotation)
+        rotate = partial(rotate_point, map_raster_rotation, map_raster_size)
         fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
 
     convert = partial(convert_pix_to_wgs84, map_raster_size, map_raster_bbox)
@@ -194,20 +199,21 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
 
     return fov_in_wgs84
 
-def rotate_point(degrees, size, pt):
-    """Rotates point (x, y) around origin (0, y_max) by given degrees.
-
-    Assumes 'origin' at top left corner with y axis pointing down."""
-    #x = math.cos(degrees) * pt[0] - math.sin(degrees) * (pt[1] - size[1])
-    #y = math.sin(degrees) * pt[0] + math.cos(degrees) * (pt[1] - size[1])
-    x = math.cos(degrees) * pt[0] - math.sin(degrees) * pt[1]
-    y = math.sin(degrees) * pt[0] + math.cos(degrees) * pt[1]
+def rotate_point(radians, img_dim, pt):
+    """Rotates point around center of image by radians, counter-clockwise."""
+    cx = img_dim[0]/2
+    cy = img_dim[1]/2  # Should be same as cx (assuming image or map raster is square)
+    cos_rads = math.cos(radians)
+    sin_rads = math.sin(radians)
+    x = cx + cos_rads * (pt[0] - cx) - sin_rads * (pt[1] - cy)
+    y = cy + sin_rads * (pt[0] - cx) + cos_rads * (pt[1] - cy)
     return x, y
 
 def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
+    #lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height
     lat = bbox.bottom + (bbox.top-bbox.bottom)*(img_dim.height-pt[1])/img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right-bbox.left)*pt[0]/img_dim.width
     return lat, lon

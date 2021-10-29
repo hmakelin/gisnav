@@ -86,10 +86,10 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     ###
 
     if logger is not None:
-    #    logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
-        logger.debug('Estimation complete,\nh=\n{}'.format(h))
+        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
+        #logger.debug('Estimation complete,\nh=\n{}'.format(h))
 
-    return e, h, r, t, h_mask, translation_vector
+    return e, h, r, t, h_mask, translation_vector, rotation_vector
 
 def get_nearest_cv2_rotation(radians):
     """Finds the nearest 90 degree rotation multiple."""
@@ -271,11 +271,12 @@ def get_camera_lat_lon(bbox):
     return bbox.bottom + (bbox.top-bbox.bottom)/2, bbox.left + (bbox.right-bbox.left)/2
 
 
-def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MAP_RADIUS_METERS_DEFAULT, rot=None):
+def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions, radius_meters=MAP_RADIUS_METERS_DEFAULT, rot=None):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters.
 
     Arguments.
         translation_vector - Translation vector computed by cv2.solvePnP.
+        rotation_vector - Rortation vector from cv2.solvePnP.
         bbox - The original map raster bbox (before the 90 degree rotation).
         dimensions - Map raster dimensions.
         radius_meters - The radius in meters of the circle enclosed by the map raster.
@@ -283,16 +284,26 @@ def get_camera_lat_lon_v2(translation_vector, bbox, dimensions, radius_meters=MA
 
     """
     #translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
+    #if rot is not None:
+    #    # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
+    #    rot = math.radians(rot)
+    #    translation_rotated = rotate_point(rot, dimensions, -translation_vector[0:2])  # Negate negative translation vector
+    #else:
+    #    translation_rotated = -translation_vector[0:2]   # Negate negative translation vector
+    #lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
+    alt = translation_vector[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
+
+    # Alternative way - does not yet account for map rotation!
+    camera_position = -np.matrix(cv2.Rodrigues(rotation_vector)[0]).T * np.matrix(translation_vector)
+    print(camera_position)
     if rot is not None:
         # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
         rot = math.radians(rot)
-        translation_rotated = rotate_point(rot, dimensions, -translation_vector[0:2])  # Negate negative translation vector
+        translation_rotated = rotate_point(rot, dimensions, camera_position[0:2])
     else:
-        translation_rotated = -translation_vector[0:2]   # Negate negative translation vector
-    #lat = bbox.bottom + (bbox.top - bbox.bottom) * ((dimensions.height - translation_rotated[1]) / dimensions.height) # inverted y axis
-    #lon = bbox.left + (bbox.left - bbox.right) * (translation_rotated[0] / dimensions.width)
-    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
-    alt = translation_vector[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
+        translation_rotated = translation_vector[0:2]
+    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)  # camera_position[0:2]
+
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
 

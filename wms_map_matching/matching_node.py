@@ -124,6 +124,9 @@ class Matcher(Node):
         img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
         return img_size
 
+    def _get_img_size(self):
+        return self._camera_info.width, self._camera_info.height
+
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
         if self._use_gimbal_projection():
@@ -200,7 +203,7 @@ class Matcher(Node):
             else:
                 map_rot = self._map
 
-            e, h, r, t, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]))  #self._map
+            e, h, r, t, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())  #self._map
 
             if all(i is not None for i in (e, h, r, t, fov_pix, translation_vector)):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered

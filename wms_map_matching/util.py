@@ -41,13 +41,15 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     return min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1])  # left, bottom, right, top
 
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
-def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None, affine=False):
+def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
+                    affine=False):
     """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
     Arguments:
         mkp_img - The matching keypoints from image.
         mkp_map - The matching keypoints from map.
         k - The intrinsic camera matrix.
+        dimensions - Dimensions of the image frame.
         reproj_threshold - The RANSAC reprojection threshold for homography estimation.
         prob - Prob parameter for findEssentialMat (used by RANSAC and LMedS methods)
         method - Method to use for estimation.
@@ -58,7 +60,7 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     if len(mkp_img) < min_points or len(mkp_map) < min_points:
         if logger is not None:
             logger.warn('Not enough keypoints for estimating essential matrix.')
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, None
     if logger is not None:
         logger.debug('Estimating homography.')
     if not affine:
@@ -79,6 +81,13 @@ def process_matches(mkp_img, mkp_map, k, reproj_threshold=1.0, prob=0.999, metho
     for pt in mkp_map:
         mkp_map_3d.append([pt[0], pt[1], 0])
     mkp_map_3d = np.array(mkp_map_3d)
+    # TODO: this loop only tested with height>width, not with height<=width, make this implementation cleaner, very messy now
+    for i in range(0, len(mkp_img)):
+        # This loop adjusts for the aspect difference between img and map - solvePnP assumes same camera with same resolution, find a better solution later
+        max_dim = max(dimensions)
+        min_dim = min(dimensions)
+        min_dim_i = dimensions.index(min_dim)
+        mkp_img[i, min_dim_i] = mkp_img[i, min_dim_i]*(max_dim/min_dim)
     _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, None, flags=0)
     if logger is not None:
         logger.debug('solvePnP rotation:\n{}.'.format(rotation_vector))
@@ -276,12 +285,11 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
 
     Arguments.
         translation_vector - Translation vector computed by cv2.solvePnP.
-        rotation_vector - Rortation vector from cv2.solvePnP.
+        rotation_vector - Rotation vector from cv2.solvePnP.
         bbox - The original map raster bbox (before the 90 degree rotation).
         dimensions - Map raster dimensions.
         radius_meters - The radius in meters of the circle enclosed by the map raster.
-        rot - The rotation done on the map raster (multiple of 90 degrees).
-
+        rot - The rotation done on the map raster in degrees.
     """
     #translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
     #if rot is not None:
@@ -302,7 +310,7 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
         translation_rotated = rotate_point(rot, dimensions, camera_position[0:2])
     else:
         translation_rotated = translation_vector[0:2]
-    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)  # camera_position[0:2]
+    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
 
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 

@@ -16,7 +16,8 @@ BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
 Dimensions = namedtuple('Dimensions', 'width height')
 
-MAP_RADIUS_METERS_DEFAULT = 200
+MAP_RADIUS_METERS_DEFAULT = 300
+
 
 def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
@@ -40,6 +41,7 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     lons_lats = list(zip(*circle_transformed))
     return min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1])  # left, bottom, right, top
 
+
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
 def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
                     affine=False):
@@ -56,11 +58,8 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
         logger - Optional ROS2 logger for writing log output.
         affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
     """
-    min_points = 5
-    if len(mkp_img) < min_points or len(mkp_map) < min_points:
-        if logger is not None:
-            logger.warn('Not enough keypoints for estimating essential matrix.')
-        return None, None, None, None, None, None, None
+    min_points = 4
+    assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
     if logger is not None:
         logger.debug('Estimating homography.')
     if not affine:
@@ -68,12 +67,6 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
     else:
         h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
         h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
-    if logger is not None:
-        logger.debug('Estimating essential matrix.')
-    e, mask = cv2.findEssentialMat(mkp_img, mkp_map, np.eye(3), threshold=reproj_threshold, prob=prob, method=method)
-    if logger is not None:
-        logger.debug('Recovering pose from essential matrix e=\n{}'.format(e))
-    inlier_count, r, t, mask = cv2.recoverPose(e, mkp_img, mkp_map, k, mask)
 
     ### solvePnP section ###
     # Notices that mkp_img and mkp_map order is reversed (mkp_map is '3D' points with altitude z=0)
@@ -82,23 +75,20 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
         mkp_map_3d.append([pt[0], pt[1], 0])
     mkp_map_3d = np.array(mkp_map_3d)
     # TODO: this loop only tested with height>width, not with height<=width, make this implementation cleaner, very messy now
-    for i in range(0, len(mkp_img)):
-        # This loop adjusts for the aspect difference between img and map - solvePnP assumes same camera with same resolution, find a better solution later
-        max_dim = max(dimensions)
-        min_dim = min(dimensions)
-        min_dim_i = dimensions.index(min_dim)
-        mkp_img[i, min_dim_i] = mkp_img[i, min_dim_i]*(max_dim/min_dim)
+    # TODO: should not be needed now that map is same size as img - commented out
+    # for i in range(0, len(mkp_img)):
+    #    # This loop adjusts for the aspect difference between img and map - solvePnP assumes same camera with same resolution, find a better solution later
+    #    max_dim = max(dimensions)
+    #    min_dim = min(dimensions)
+    #    min_dim_i = dimensions.index(min_dim)
+    #    mkp_img[i, min_dim_i] = mkp_img[i, min_dim_i]*(max_dim/min_dim)
     _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, None, flags=0)
     if logger is not None:
         logger.debug('solvePnP rotation:\n{}.'.format(rotation_vector))
         logger.debug('solvePnP translation:\n{}.'.format(translation_vector))
     ###
 
-    if logger is not None:
-        logger.debug('Estimation complete,\ne=\n{},\nh=\n{},\nr=\n{},\nt=\n{}.\n'.format(e, h, r, t))
-        #logger.debug('Estimation complete,\nh=\n{}'.format(h))
-
-    return e, h, r, t, h_mask, translation_vector, rotation_vector
+    return h, h_mask, translation_vector, rotation_vector
 
 
 def _make_keypoint(pair, sz=1.0):
@@ -134,7 +124,7 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
 
-    src_corners = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
+    src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
     map_with_fov = cv2.polylines(map, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
     draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
@@ -146,6 +136,7 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
 
     return dst_corners
 
+
 def setup_sys_path():
     """Adds the package share directory to the path so that SuperGlue can be imported."""
     if 'get_package_share_directory' not in sys.modules:
@@ -156,20 +147,21 @@ def setup_sys_path():
     sys.path.append(os.path.abspath(superglue_dir))
     return share_dir, superglue_dir
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, map_raster_rotation=None, logger=None):
+
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, map_raster_rotation, logger=None):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
         fov_in_pix - Numpy array of field of view corners in pixel coordinates of rotated map raster.
         map_raster_size - Size of the map raster image.
         map_raster_bbox - The WGS84 bounding box of the original unrotated map frame.
-        map_raster_rotation - The rotation that was applied to the map raster before matching.
+        map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
         logger - ROS2 logger (optional)
     """
     if map_raster_rotation is not None:
         # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-        map_raster_rotation = math.radians(map_raster_rotation)
-        rotate = partial(rotate_point, map_raster_rotation, map_raster_size)
+        # Update: Negate map_raster_rotation here - the new map raster rotation angle is also counter-clockwise
+        rotate = partial(rotate_point, -map_raster_rotation, map_raster_size)
         fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
 
     convert = partial(convert_pix_to_wgs84, map_raster_size, map_raster_bbox)
@@ -179,23 +171,26 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
 
     return fov_in_wgs84
 
+
 def rotate_point(radians, img_dim, pt):
     """Rotates point around center of image by radians, counter-clockwise."""
-    cx = img_dim[0]/2
-    cy = img_dim[1]/2  # Should be same as cx (assuming image or map raster is square)
+    cx = img_dim[0] / 2
+    cy = img_dim[1] / 2  # Should be same as cx (assuming image or map raster is square)
     cos_rads = math.cos(radians)
     sin_rads = math.sin(radians)
     x = cx + cos_rads * (pt[0] - cx) - sin_rads * (pt[1] - cy)
     y = cy + sin_rads * (pt[0] - cx) + cos_rads * (pt[1] - cy)
     return x, y
 
+
 def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
     # inverted y axis
-    lat = bbox.bottom + (bbox.top-bbox.bottom) * (img_dim.height-pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
-    lon = bbox.left + (bbox.right-bbox.left) * pt[0] / img_dim.width
+    lat = bbox.bottom + (bbox.top - bbox.bottom) * (
+                img_dim.height - pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
     return lat, lon
 
 
@@ -211,7 +206,8 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename
         map_location - Center of the FoV.
     """
     with open(filename, 'w') as f:
-        polygon = geojson.Polygon([list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
+        polygon = geojson.Polygon(
+            [list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)
 
     # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
@@ -241,10 +237,11 @@ def get_camera_apparent_altitude(map_radius, map_dimensions, K):
 
 def get_camera_lat_lon(bbox):
     """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
-    return bbox.bottom + (bbox.top-bbox.bottom)/2, bbox.left + (bbox.right-bbox.left)/2
+    return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
 
 
-def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions, radius_meters=MAP_RADIUS_METERS_DEFAULT, rot=None):
+def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions, rot,
+                          radius_meters=MAP_RADIUS_METERS_DEFAULT):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters.
 
     Arguments.
@@ -253,17 +250,18 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
         bbox - The original map raster bbox (before the 90 degree rotation).
         dimensions - Map raster dimensions.
         radius_meters - The radius in meters of the circle enclosed by the map raster.
-        rot - The rotation done on the map raster in degrees.
+        rot - The rotation done on the map raster in radians.
     """
-    alt = translation_vector[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
+    alt = translation_vector[2] * (
+                2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
     # Alternative way - does not yet account for map rotation!
     camera_position = -np.matrix(cv2.Rodrigues(rotation_vector)[0]).T * np.matrix(translation_vector)
     print(camera_position)
     if rot is not None:
         # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-        rot = math.radians(rot)
-        translation_rotated = rotate_point(rot, dimensions, camera_position[0:2])
+        # UPDATE: map raster rotation now also uses counter-clockwise angle so made it -rot here
+        translation_rotated = rotate_point(-rot, dimensions, camera_position[0:2])
     else:
         translation_rotated = translation_vector[0:2]
     lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
@@ -272,27 +270,37 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
 
 
 def rotate_and_crop_map(map, radians, dimensions):
+    # TODO: only tested on width>height images.
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
-    assert map.size == get_padding_size_for_rotation(dimensions)
-    cx, cy = dimensions.width // 2, dimensions.height // 2
+    assert map.shape[0:2] == get_padding_size_for_rotation(dimensions)
+    cv2.imshow('Map', map)
+    cv2.waitKey(1)
+    cx, cy = tuple(np.array(map.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-    map_rotated = cv2.warpAffine(map, r, (dimensions.width, dimensions.height))
+    map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
+    cv2.imshow('Map rotated', map_rotated)
+    cv2.waitKey(1)
     map_cropped = crop_center(map_rotated, dimensions)
+    cv2.imshow('Map rotated and cropped', map_cropped)
+    cv2.waitKey(1)  # TODO: remove imshows from this function
     return map_cropped
 
 
 def crop_center(img, dimensions):
+    # TODO: only tested on width>height images.
     """Crops dimensions sized part from center."""
-    c = dimensions / 2
-    x = c[1] - w / 2
-    y = c[0] - h / 2
-    img_cropped = img[y:(y + h), x:(x + w)]
+    cx, cy = tuple(np.array(img.shape[0:2]) / 2)  # TODO: could be passed from rotate_and_crop_map instead of computing again
+    img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
+                      math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]   # TODO: use floor or smth else?
+    assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
+                                                                            'map raster. '
     return img_cropped
 
 
 def get_padding_size_for_rotation(dimensions):
-    diagonal = math.ceil(math.sqrt(dimensions.width**2 + dimensions.height**2))
+    # TODO: only tested on width>height images.
+    diagonal = math.ceil(math.sqrt(dimensions.width ** 2 + dimensions.height ** 2))
     return diagonal, diagonal

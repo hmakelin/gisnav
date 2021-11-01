@@ -212,13 +212,14 @@ class Matcher(Node):
                 self.get_logger().warn('Heading is unknown - skipping matching.')
                 return
 
-            e, h, r, t, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())
+            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())
 
-            if all(i is not None for i in (e, h, r, t, fov_pix, translation_vector)):
+            # TODO: this part should be a lot different now with the map rotation refactoring, lots to do!
+            if all(i is not None for i in (h, fov_pix, translation_vector)):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
                 fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._get_map_size()), # TODO: used Dimensions named tuple earlier, do not initialize it here
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
-                                                          get_degrees_for_cv2_rotation(rot))
+                                                          map_rot)
 
                 p = np.append(np.array(r), np.array(t), axis=1)
                 apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
@@ -226,12 +227,12 @@ class Matcher(Node):
                 map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
                 self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
                 # Handle translation vector for drone camera
-                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), MAP_RADIUS_METERS_DEFAULT, get_degrees_for_cv2_rotation(rot))  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
+                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), map_rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
                 self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
                 write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (map_lat, map_lon, apparent_alt))
-                self._essential_mat_pub.publish(e)
-                self._homography_mat_pub.publish(h)
-                self._pose_pub.publish(p)
+                #self._essential_mat_pub.publish(e)
+                self._homography_mat_pub.publish(h)  # TODO: should remove this too? only lat-lon-alt and fov is published?
+                #self._pose_pub.publish(p)
                 self._fov_pub.publish(fov_wgs84)
             else:
                 self.get_logger().warn('Not publishing e, h, r, t, nor fov_pix since at least one of them was None.')

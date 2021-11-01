@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path, convert_fov_from_pix_to_wgs84,\
     get_degrees_for_cv2_rotation, write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
-    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT
+    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -125,9 +125,7 @@ class Matcher(Node):
         return img_size
 
     def _get_map_size_with_padding(self):
-        diagonal = math.sqrt(self._camera_info.width**2 + self._camera_info.height**2)
-        img_size = diagonal, diagonal  # Cropping _get_map_size() rectangle can now be done at any rotation
-        return img_size
+        return get_padding_size_for_rotation(Dimensions(self._camera_info.width, self._camera_info.height))
 
     def _get_img_size(self):
         return self._camera_info.width, self._camera_info.height

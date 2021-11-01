@@ -304,6 +304,7 @@ def rotate_and_crop_map(map, radians, dimensions):
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
+    assert map.size == get_padding_size_for_rotation(dimensions)
     cx, cy = dimensions.width // 2, dimensions.height // 2
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
@@ -319,3 +320,8 @@ def crop_center(img, dimensions):
     y = c[0] - h / 2
     img_cropped = img[y:(y + h), x:(x + w)]
     return img_cropped
+
+
+def get_padding_size_for_rotation(dimensions):
+    diagonal = math.ceil(math.sqrt(dimensions.width**2 + dimensions.height**2))
+    return diagonal, diagonal

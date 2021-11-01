@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
-    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation
+    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation, rotate_and_crop_map
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -131,6 +131,9 @@ class Matcher(Node):
     def _get_img_size(self):
         return self._camera_info.width, self._camera_info.height
 
+    def _get_img_dimensions(self):
+        return Dimensions(*self._get_img_size())
+
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
         if self._use_gimbal_projection():
@@ -146,7 +149,8 @@ class Matcher(Node):
 
             try:
                 self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox,
-                                             size=self._get_map_size(), format='image/png', transparent=True)
+                                             size=self._get_map_size_with_padding(), format='image/png',
+                                             transparent=True)
             except Exception as e:
                 self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
                 return
@@ -199,15 +203,16 @@ class Matcher(Node):
             # Rotate map to adjust for SuperGlue's rotation non-invariance, then crop the map to match img dimensions
             # Assumes map is square (so that dimensions do not change when rotation by multiples of 90 degrees)
             # When transposing back to NED frame, must account for rotation and cropping in map keypoint coordinates
-            rot = get_nearest_cv2_rotation(self._vehicle_local_position.heading)
+            rot = self._vehicle_local_position.heading
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
                                     .format(self._vehicle_local_position.heading, rot))
             if rot is not None:
-                map_rot = cv2.rotate(self._map, rot)
+                map_rot = rotate_and_crop_map(self._map, rot, self._get_img_dimensions())
             else:
-                map_rot = self._map
+                self.get_logger().warn('Heading is unknown - skipping matching.')
+                return
 
-            e, h, r, t, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())  #self._map
+            e, h, r, t, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())
 
             if all(i is not None for i in (e, h, r, t, fov_pix, translation_vector)):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered

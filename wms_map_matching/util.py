@@ -222,7 +222,6 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
-    #lat = bbox.bottom + (bbox.top-bbox.bottom)*pt[1]/img_dim.height
     # inverted y axis
     lat = bbox.bottom + (bbox.top-bbox.bottom) * (img_dim.height-pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right-bbox.left) * pt[0] / img_dim.width
@@ -246,13 +245,7 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename
 
     # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
     with open(filename_location, 'w') as f2:
-        #features = []
-        #feature_collection = geojson.FeatureCollection(features)
         latlon = geojson.Point(tuple(reversed(location[0:2])))
-        #map_latlon = geojson.Point(tuple(reversed(map_location[0:2])))
-        #features.append(latlon)
-        #features.append(map_latlon)
-        #geojson.dump(feature_collection, f2)
         geojson.dump(latlon, f2)
 
     with open(filename_fov_center, 'w') as f3:
@@ -291,14 +284,6 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
         radius_meters - The radius in meters of the circle enclosed by the map raster.
         rot - The rotation done on the map raster in degrees.
     """
-    #translation_rotated = rotate_point(-rot, dimensions, translation_vector[0:2]) if rot is not None else translation_vector[0:2]
-    #if rot is not None:
-    #    # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-    #    rot = math.radians(rot)
-    #    translation_rotated = rotate_point(rot, dimensions, -translation_vector[0:2])  # Negate negative translation vector
-    #else:
-    #    translation_rotated = -translation_vector[0:2]   # Negate negative translation vector
-    #lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
     alt = translation_vector[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
     # Alternative way - does not yet account for map rotation!
@@ -315,4 +300,22 @@ def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions,
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
 
+def rotate_and_crop_map(map, radians, dimensions):
+    """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
+    Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
+    cx, cy = dimensions.width // 2, dimensions.height // 2
+    degrees = math.degrees(radians)
+    r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
+    map_rotated = cv2.warpAffine(map, r, (dimensions.width, dimensions.height))
+    map_cropped = crop_center(map_rotated, dimensions)
+    return map_cropped
+
+
+def crop_center(img, dimensions):
+    """Crops dimensions sized part from center."""
+    c = dimensions / 2
+    x = c[1] - w / 2
+    y = c[0] - h / 2
+    img_cropped = img[y:(y + h), x:(x + w)]
+    return img_cropped

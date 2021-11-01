@@ -100,35 +100,6 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
 
     return e, h, r, t, h_mask, translation_vector, rotation_vector
 
-def get_nearest_cv2_rotation(radians):
-    """Finds the nearest 90 degree rotation multiple."""
-    deg45 = pi/4  # 45 degrees in radians
-    deg135 = 3*deg45
-    if -deg45 <= radians < deg45:
-        return None
-    elif deg45 <= radians < deg135:
-        return cv2.ROTATE_90_COUNTERCLOCKWISE  # cv2.ROTATE_90_CLOCKWISE
-    elif -deg135 <= radians < -deg45:
-        return cv2.ROTATE_90_CLOCKWISE  # cv2.ROTATE_90_COUNTERCLOCKWISE
-    elif radians < -deg135 or radians >= deg135:
-        return cv2.ROTATE_180
-    else:
-        raise ValueError('Unexpected input value: {}'.format(radians))  # this should not happen
-
-# TODO: make these match with get_nearest_cv2_rotation values, currently they do not match?
-def get_degrees_for_cv2_rotation(rot):
-    """Returns the nearest 90 degree multiple matching the cv2 rotation code."""
-    if rot == cv2.ROTATE_180:
-        return 180
-    elif rot == cv2.ROTATE_90_COUNTERCLOCKWISE:
-        return 90  # 270
-    elif rot == cv2.ROTATE_90_CLOCKWISE:
-        return -90
-    elif rot is None:
-        return 0
-    else:
-        raise ValueError('Unexpected input value: {}'.format(rot))  # this should not happen
-
 
 def _make_keypoint(pair, sz=1.0):
     """Converts tuple to a cv2.KeyPoint.

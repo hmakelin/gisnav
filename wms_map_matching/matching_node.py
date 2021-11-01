@@ -17,8 +17,8 @@ import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
 
-from wms_map_matching.util import get_bbox, get_nearest_cv2_rotation, setup_sys_path, convert_fov_from_pix_to_wgs84,\
-    get_degrees_for_cv2_rotation, write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
+from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
+    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
     Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation
 
 # Add the share folder to Python path
@@ -27,8 +27,9 @@ share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewh
 # Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue_adapter import SuperGlue
 
+
 class Matcher(Node):
-    def __init__(self, share_dir, superglue_dir, config='config.yml'):
+    def __init__(self, share_directory, superglue_directory, config='config.yml'):
         """Initializes the node.
 
         Arguments:
@@ -37,8 +38,8 @@ class Matcher(Node):
             config - String path to the config file in the share folder.
         """
         super().__init__('matcher')
-        self.share_dir = share_dir  # TODO: make private?
-        self.superglue_dir = superglue_dir  # TODO: move this to _setup_superglue? private _superglue_dir instead?
+        self.share_dir = share_directory  # TODO: make private?
+        self.superglue_dir = superglue_directory  # TODO: move this to _setup_superglue? private _superglue_dir instead?
         self._load_config(config)
         self._init_wms()
         self._setup_topics()

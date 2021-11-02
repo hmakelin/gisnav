@@ -219,15 +219,15 @@ class Matcher(Node):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
                 fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._get_map_size()), # TODO: used Dimensions named tuple earlier, do not initialize it here
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
-                                                          map_rot)
+                                                          rot, self.get_logger())
 
-                p = np.append(np.array(r), np.array(t), axis=1)
+                #p = np.append(np.array(r), np.array(t), axis=1)
                 apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
                 self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
                 map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
                 self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
                 # Handle translation vector for drone camera
-                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), map_rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
+                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
                 self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
                 write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (map_lat, map_lon, apparent_alt))
                 #self._essential_mat_pub.publish(e)

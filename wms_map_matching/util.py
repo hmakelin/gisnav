@@ -148,7 +148,7 @@ def setup_sys_path():
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, map_raster_rotation, logger=None):
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, logger=None):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
@@ -158,15 +158,11 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_size, map_raster_bbox, 
         map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
         logger - ROS2 logger (optional)
     """
-    if map_raster_rotation is not None:
-        # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-        # Update: Negate map_raster_rotation here - the new map raster rotation angle is also counter-clockwise
-        rotate = partial(rotate_point, -map_raster_rotation, map_raster_size)
-        fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
-
-    convert = partial(convert_pix_to_wgs84, map_raster_size, map_raster_bbox)
+    rotate = partial(rotate_point, -map_raster_rotation, map_raster_dim)
+    fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
+    convert = partial(convert_pix_to_wgs84, map_raster_dim, map_raster_bbox)
     if logger is not None:
-        logger.debug('FoV in pix:\n{}.\n'.format(fog_in_pix))
+        logger.debug('FoV in pix:\n{}.\n'.format(fov_in_pix))
     fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix)
 
     return fov_in_wgs84

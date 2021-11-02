@@ -19,7 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
-    Dimensions, get_camera_lat_lon_v2, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation, rotate_and_crop_map
+    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation, rotate_and_crop_map
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -171,6 +171,10 @@ class Matcher(Node):
             self.get_logger().debug('Map or image not available: map {}, img {} - not calling matching yet.'\
                                     .format(self._map is not None, self._image_raw is not None))
 
+    def _get_camera_normal(self):
+        # TODO: get actual camera normal via RTPS bridge - currently assumes nadir facing camera
+        return np.array([0, 0, 1])
+
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""
         self.get_logger().debug('Camera info callback triggered.')
@@ -206,13 +210,13 @@ class Matcher(Node):
             rot = self._vehicle_local_position.heading
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
                                     .format(self._vehicle_local_position.heading, rot))
-            if rot is not None:
+            if rot is not None:  # TODO: what if it has not been initialized or is smth else than None? See assignemtn above - should be erplaces with some method call that warns/asserts
                 map_rot = rotate_and_crop_map(self._map, rot, self._get_img_dimensions())
             else:
                 self.get_logger().warn('Heading is unknown - skipping matching.')
                 return
 
-            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size())
+            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size(), self._get_camera_normal())
 
             # TODO: this part should be a lot different now with the map rotation refactoring, lots to do!
             if all(i is not None for i in (h, fov_pix, translation_vector)):
@@ -221,21 +225,25 @@ class Matcher(Node):
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
                                                           rot, self.get_logger())
 
-                #p = np.append(np.array(r), np.array(t), axis=1)
+                ### OLD STUFF - COMMENTING OUT - PLAN IS TO GET GET LAT, LON, ALT from HOMOGRAPHY DECOMPOSITION #####
                 apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
-                self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
+                #self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
                 map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
-                self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
-                # Handle translation vector for drone camera
-                lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
-                self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
-                write_fov_and_camera_location_to_geojson(fov_wgs84, (lat, lon, alt), (map_lat, map_lon, apparent_alt))
+                #self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
+                ## Handle translation vector for drone camera
+                #lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
+                #self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
+                ###########
+
+                camera_position = get_camera_lat_lon_alt(translation_vector, rotation_vector, self._get_img_dimensions(), BBox(*self._map_bbox), rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
+
+                write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
                 #self._essential_mat_pub.publish(e)
                 self._homography_mat_pub.publish(h)  # TODO: should remove this too? only lat-lon-alt and fov is published?
                 #self._pose_pub.publish(p)
                 self._fov_pub.publish(fov_wgs84)
             else:
-                self.get_logger().warn('Not publishing e, h, r, t, nor fov_pix since at least one of them was None.')
+                self.get_logger().warn('Not publishing h nor fov_pix since at least one of them was None.')
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 

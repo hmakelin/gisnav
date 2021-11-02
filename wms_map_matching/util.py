@@ -43,7 +43,7 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
 
 
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
-def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
+def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
                     affine=False):
     """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
@@ -52,6 +52,7 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
         mkp_map - The matching keypoints from map.
         k - The intrinsic camera matrix.
         dimensions - Dimensions of the image frame.
+        camera_normal - The camera normal unit vector.
         reproj_threshold - The RANSAC reprojection threshold for homography estimation.
         prob - Prob parameter for findEssentialMat (used by RANSAC and LMedS methods)
         method - Method to use for estimation.
@@ -68,25 +69,37 @@ def process_matches(mkp_img, mkp_map, k, dimensions, reproj_threshold=1.0, prob=
         h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
         h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
 
-    ### solvePnP section ###
+    ### solvePnP section ######
     # Notices that mkp_img and mkp_map order is reversed (mkp_map is '3D' points with altitude z=0)
     mkp_map_3d = []
     for pt in mkp_map:
         mkp_map_3d.append([pt[0], pt[1], 0])
     mkp_map_3d = np.array(mkp_map_3d)
-    # TODO: this loop only tested with height>width, not with height<=width, make this implementation cleaner, very messy now
-    # TODO: should not be needed now that map is same size as img - commented out
-    # for i in range(0, len(mkp_img)):
-    #    # This loop adjusts for the aspect difference between img and map - solvePnP assumes same camera with same resolution, find a better solution later
-    #    max_dim = max(dimensions)
-    #    min_dim = min(dimensions)
-    #    min_dim_i = dimensions.index(min_dim)
-    #    mkp_img[i, min_dim_i] = mkp_img[i, min_dim_i]*(max_dim/min_dim)
     _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, None, flags=0)
     if logger is not None:
         logger.debug('solvePnP rotation:\n{}.'.format(rotation_vector))
         logger.debug('solvePnP translation:\n{}.'.format(translation_vector))
-    ###
+    ##########################
+
+
+    #### Homography decomposition section
+    num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
+
+    # Get the one where angle between plane normal and inverse of camera normal is smallest
+    # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
+    get_angle_partial = partial(get_angle, -camera_normal)
+    angles = list(map(get_angle_partial, Ns))
+    index_of_smallest_angle = angles.index(min(angles))
+    rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
+
+    if logger is not None:
+        logger.debug('decomposition R:\n{}.'.format(rotation))
+        logger.debug('decomposition T:\n{}.'.format(translation))
+        logger.debug('decomposition N:\n{}.'.format(angles.index(min(angles))))
+    ####################################
+
+    print('New computed position:')
+    print(np.matmul(rotation, translation))
 
     return h, h_mask, translation_vector, rotation_vector
 
@@ -236,30 +249,15 @@ def get_camera_lat_lon(bbox):
     return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
 
 
-def get_camera_lat_lon_v2(translation_vector, rotation_vector, bbox, dimensions, rot,
-                          radius_meters=MAP_RADIUS_METERS_DEFAULT):
-    """Returns camera lat-lon coordinates in WGS84 and altitude in meters.
+def get_camera_lat_lon_alt(translation, rotation, dimensions, bbox, rot):
+    """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
+    alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
-    Arguments.
-        translation_vector - Translation vector computed by cv2.solvePnP.
-        rotation_vector - Rotation vector from cv2.solvePnP.
-        bbox - The original map raster bbox (before the 90 degree rotation).
-        dimensions - Map raster dimensions.
-        radius_meters - The radius in meters of the circle enclosed by the map raster.
-        rot - The rotation done on the map raster in radians.
-    """
-    alt = translation_vector[2] * (
-                2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
-
-    # Alternative way - does not yet account for map rotation!
-    camera_position = -np.matrix(cv2.Rodrigues(rotation_vector)[0]).T * np.matrix(translation_vector)
+    camera_position = -np.matrix(cv2.Rodrigues(rotation)[0]).T * np.matrix(translation)
     print(camera_position)
-    if rot is not None:
-        # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-        # UPDATE: map raster rotation now also uses counter-clockwise angle so made it -rot here
-        translation_rotated = rotate_point(-rot, dimensions, camera_position[0:2])
-    else:
-        translation_rotated = translation_vector[0:2]
+    # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
+    # UPDATE: map raster rotation now also uses counter-clockwise angle so made it -rot here
+    translation_rotated = rotate_point(-rot, dimensions, camera_position[0:2])
     lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
 
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
@@ -300,3 +298,14 @@ def get_padding_size_for_rotation(dimensions):
     # TODO: only tested on width>height images.
     diagonal = math.ceil(math.sqrt(dimensions.width ** 2 + dimensions.height ** 2))
     return diagonal, diagonal
+
+
+
+def get_angle(vec1, vec2, normalize=False):
+    """Returns angle in radians between two vectors."""
+    if normalize:
+        vec1 = vec1 / np.linalg.norm(vec1)
+        vec2 = vec2 / np.linalg.norm(vec1)
+    dot_product = np.dot(vec1, vec2)
+    angle = np.arccos(dot_product)
+    return angle

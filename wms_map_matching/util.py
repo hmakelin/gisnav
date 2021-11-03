@@ -14,7 +14,7 @@ from collections import namedtuple
 
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
-Dimensions = namedtuple('Dimensions', 'width height')
+Dimensions = namedtuple('Dimensions', 'height width')
 
 MAP_RADIUS_METERS_DEFAULT = 300
 
@@ -39,7 +39,7 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     circle = Point(0, 0).buffer(radius_meters)
     circle_transformed = transform(projection, circle).exterior.coords[:]
     lons_lats = list(zip(*circle_transformed))
-    return min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1])  # left, bottom, right, top
+    return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
 
 
 # TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
@@ -127,7 +127,7 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
 
     Returns the field of view in pixel coordinates of the map raster.
     """
-    h, w = img.shape
+    h, w, _ = img.shape
 
     # Make a list of matches
     matches = []
@@ -280,7 +280,7 @@ def rotate_and_crop_map(map, radians, dimensions):
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
-    assert map.shape[0:2] == get_padding_size_for_rotation(dimensions)
+    assert map.shape[0:2] == padded_map_size(dimensions)
     cv2.imshow('Map', map)
     cv2.waitKey(1)
     cx, cy = tuple(np.array(map.shape[0:2]) / 2)
@@ -313,7 +313,7 @@ def uncrop_pixel_coordinates(cropped_dimensions, dimensions, pt):
     return pt
 
 
-def get_padding_size_for_rotation(dimensions):
+def padded_map_size(dimensions):
     # TODO: only tested on width>height images.
     diagonal = math.ceil(math.sqrt(dimensions.width ** 2 + dimensions.height ** 2))
     return diagonal, diagonal

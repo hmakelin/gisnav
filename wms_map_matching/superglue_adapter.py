@@ -7,7 +7,7 @@ import matplotlib.cm as cm
 from models.matching import Matching
 from models.utils import frame2tensor
 
-from wms_map_matching.util import process_matches, visualize_homography, Dimensions
+from wms_map_matching.util import Dimensions
 
 
 class SuperGlue:
@@ -30,7 +30,7 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map, K, img_dim, camera_normal):
+    def match(self, img, map):
         """Match img to map.
 
         Arguments:
@@ -66,6 +66,10 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
+        return mkp_img, mkp_map
+
+
+        """
         h, h_mask, translation_vector, rotation_vector = process_matches(mkp_img, mkp_map, K, img_dim, camera_normal,
                                                                          logger=self._logger,
                                                                          affine=self._config['misc']['affine'])
@@ -77,3 +81,4 @@ class SuperGlue:
             return h, fov_pix, translation_vector, rotation_vector
         else:
             return None, None, None, None
+        """

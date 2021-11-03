@@ -5,6 +5,7 @@ import traceback
 import xml.etree.ElementTree as ET
 import yaml
 import importlib
+import math
 
 from enum import Enum
 from rclpy.node import Node
@@ -18,7 +19,8 @@ from ament_index_python.packages import get_package_share_directory
 
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
-    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, get_padding_size_for_rotation, rotate_and_crop_map
+    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
+    visualize_homography, process_matches
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -59,8 +61,9 @@ class Matcher(Node):
         self._cv_bridge = CvBridge()
         self._cv_image = None
 
-        # Store map raster received from WMS endpoint here
+        # Store map raster received from WMS endpoint here along with its bounding box
         self._map = None
+        self._map_bbox = None
 
         self._setup_superglue()
 
@@ -135,21 +138,20 @@ class Matcher(Node):
 
     def _map_size(self):
         max_dim = max(self._camera_info().width, self._camera_info().height)
-        img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
-        return img_size
+        return max_dim, max_dim
 
     def _camera_info(self):
         return self._topics_msgs.get('camera_info', None)
 
     def _map_size_with_padding(self):
-        return get_padding_size_for_rotation(self._img_dimensions())
+        return padded_map_size(self._img_dimensions())
 
     def _map_dimensions_with_padding(self):
         return Dimensions(*self._map_size_with_padding())
 
     def _img_size(self):
         camera_info = self._camera_info()
-        return camera_info.width, camera_info.height
+        return camera_info.height, camera_info.width  # numpy order: h, w, c --> height first
 
     def _img_dimensions(self):
         return Dimensions(*self._img_size())
@@ -159,7 +161,8 @@ class Matcher(Node):
         if self._use_gimbal_projection():
             raise NotImplementedError  # TODO
         else:
-            self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat, self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))
+            self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat,
+                                       self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))
 
         if self._camera_info() is not None:
             layer_str = self.get_parameter('layer').get_parameter_value().string_value
@@ -177,6 +180,7 @@ class Matcher(Node):
 
             self._map = np.frombuffer(self._map.read(), np.uint8)
             self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
+            assert self._map.shape[0:2] == self._map_size_with_padding(), 'Converted map is not the specified size.'
         else:
             self.get_logger().debug('Camera info not available - will not yet get map from WMS endpoint.')
 
@@ -185,12 +189,10 @@ class Matcher(Node):
         self.get_logger().debug('Camera image callback triggered.')
         self._topics_msgs['image_raw'] = msg
         self._cv_image = self._cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
-        if all(i is not None for i in [self._topics_msgs['image_raw'], self._map]):
-            self._match()
-        else:
-            self.get_logger().debug('Map or image not available: map {}, img {} - not calling matching yet.'\
-                                    .format(self._map is not None, self._cv_image is not None))
-
+        assert self._cv_image.shape[0:2] == self._img_size(), 'Converted _cv_image shape {} did not match declared ' \
+                                                              'image shape {}.'.format(self._cv_image.shape[0:2],
+                                                                                       self._img_size())
+        self._match()
 
     def _get_camera_normal(self):
         # TODO: get actual camera normal via RTPS bridge - currently assumes nadir facing camera
@@ -220,47 +222,53 @@ class Matcher(Node):
         self._topics_msgs['GimbalDeviceAttitudeStatus'] = msg
 
     def _match(self):
-        """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""
+        """Matches camera image to map image and computes camera position and field of view."""
         try:
             self.get_logger().debug('Matching image to map.')
 
-            rot = self._topics_msgs['VehicleLocalPosition_PubSubTopic'].heading
-            self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
-                                    .format(self._topics_msgs['VehicleLocalPosition_PubSubTopic'].heading, rot))
-            if rot is not None:  # TODO: what if it has not been initialized or is smth else than None? See assignemtn above - should be erplaces with some method call that warns/asserts
-                map_rot = rotate_and_crop_map(self._map, rot, self._img_dimensions())
-            else:
-                self.get_logger().warn('Heading is unknown - skipping matching.')
+            if self._map is None:
+                self.get_logger().warn('Map not yet available - skipping matching.')
                 return
 
-            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info().k.reshape([3, 3]), self._img_dimensions(), self._get_camera_normal())
+            local_position = self._topics_msgs.get('VehicleLocalPosition_PubSubTopic', None)
+            if local_position is None:
+                self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Skipping matching.')
+                return
 
-            # TODO: this part should be a lot different now with the map rotation refactoring, lots to do!
-            if all(i is not None for i in (h, fov_pix, translation_vector, rotation_vector)):
-                # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
-                fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._map_size()),  # TODO: used Dimensions named tuple earlier, do not initialize it here
-                                                          BBox(*self._map_bbox),  # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
+            assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message.'
+            rot = local_position.heading
+            assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + '([-pi, pi] expected).'
+            self.get_logger().debug('Current heading: ' + str(rot) + ' radians.')
+            map_rotated = rotate_and_crop_map(self._map, rot, self._img_dimensions())
+            assert map_rotated.shape[0:2] == self._img_size(), 'Rotated and cropped map did not match image shape.'
+
+            mkp_img, mkp_map = self._superglue.match(self._cv_image, map_rotated)
+
+            h, h_mask, translation_vector, rotation_vector = process_matches(mkp_img, mkp_map,
+                                                                             self._camera_info().k.reshape([3, 3]),
+                                                                             self._img_dimensions(),
+                                                                             self._get_camera_normal(),
+                                                                             logger=self._logger,
+                                                                             affine=self._config['superglue']['misc']['affine'])
+
+            #fov_pix = visualize_homography(self._cv_image, self._map, mkp_img, mkp_map, h, self._logger)
+            fov_pix = visualize_homography(self._cv_image, map_rotated, mkp_img, mkp_map, h, self._logger) # TODO: separate calculation of fov_pix from their visualization
+
+            # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
+            fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
                                                           rot, self._img_dimensions(), self.get_logger())
 
-                ### OLD STUFF - COMMENTING OUT - PLAN IS TO GET GET LAT, LON, ALT from HOMOGRAPHY DECOMPOSITION #####
-                apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
-                #self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
-                map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
-                #self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair
-                ## Handle translation vector for drone camera
-                #lat, lon, alt = get_camera_lat_lon_v2(translation_vector, rotation_vector, BBox(*self._map_bbox), Dimensions(*self._get_map_size()), rot, MAP_RADIUS_METERS_DEFAULT)  #TODO: do not use MAP_RADIUS_METERS_DEFAULT, use whaterver was actually used for getching the map raster
-                #self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
-                ###########
+            apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
+            map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
 
-                camera_position = get_camera_lat_lon_alt(translation_vector, rotation_vector, self._img_dimensions(), self._map_dimensions_with_padding(), BBox(*self._map_bbox), rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
+            camera_position = get_camera_lat_lon_alt(translation_vector, rotation_vector, self._img_dimensions(), self._map_dimensions_with_padding(), BBox(*self._map_bbox), rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
 
-                write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
-                #self._essential_mat_pub.publish(e)
-                self._homography_mat_pub.publish(h)  # TODO: should remove this too? only lat-lon-alt and fov is published?
-                #self._pose_pub.publish(p)
-                self._fov_pub.publish(fov_wgs84)
-            else:
-                self.get_logger().warn('Not publishing h nor fov_pix since at least one of them was None.')
+            write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
+            #self._essential_mat_pub.publish(e)
+            #self._homography_mat_pub.publish(h)
+            #self._pose_pub.publish(p)
+            self._fov_pub.publish(fov_wgs84)
+
         except Exception as e:
             self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 

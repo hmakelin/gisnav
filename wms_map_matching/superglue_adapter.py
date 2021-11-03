@@ -30,7 +30,7 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map, K, img_size, camera_normal):
+    def match(self, img, map, K, img_dim, camera_normal):
         """Match img to map.
 
         Arguments:
@@ -66,9 +66,8 @@ class SuperGlue:
             self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
                                                                                                 len(mkp_map)))
 
-        h, h_mask, translation_vector, rotation_vector = process_matches(mkp_img, mkp_map, K,
-                                                                         Dimensions(*img_size),   # TODO: Should be retued as DImensions already in the _get_img_size method.
-                                                                         camera_normal, logger=self._logger,
+        h, h_mask, translation_vector, rotation_vector = process_matches(mkp_img, mkp_map, K, img_dim, camera_normal,
+                                                                         logger=self._logger,
                                                                          affine=self._config['misc']['affine'])
         if all(i is not None for i in (h, h_mask)):
             fov_pix = visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)  # TODO: put this viz stuff somewhere else - not matching related

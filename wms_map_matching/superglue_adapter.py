@@ -37,9 +37,6 @@ class SuperGlue:
         Arguments:
             img - The image frame.
             map - The map frame.
-            K - The camera intrinsic matrix.
-            img_size - Dimensions of the image frame.
-            camera_normal - Camera normal unit vector.
         """
         img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         map_grayscale = cv2.cvtColor(map, cv2.COLOR_BGR2GRAY)

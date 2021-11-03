@@ -55,8 +55,11 @@ class Matcher(Node):
         # Dict for storing latest microRTPS messages
         self._topics_msgs = dict()
 
+        # Convert image_raw to cv2 compatible image and store it here
         self._cv_bridge = CvBridge()
         self._cv_image = None
+
+        # Store map raster received from WMS endpoint here
         self._map = None
 
         self._setup_superglue()

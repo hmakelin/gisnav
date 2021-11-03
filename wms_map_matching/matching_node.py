@@ -161,7 +161,7 @@ class Matcher(Node):
         else:
             self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat, self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))
 
-        if all(i is not None for i in [self._camera_info()]):
+        if self._camera_info() is not None:
             layer_str = self.get_parameter('layer').get_parameter_value().string_value
             srs_str = self.get_parameter('srs').get_parameter_value().string_value
             self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,

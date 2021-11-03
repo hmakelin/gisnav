@@ -163,7 +163,7 @@ def setup_sys_path():
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, img_dim, logger=None):
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, img_dim):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
@@ -171,19 +171,14 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, m
         map_raster_size - Size of the map raster image.
         map_raster_bbox - The WGS84 bounding box of the original unrotated map frame.
         map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
-        logger - ROS2 logger (optional)
     """
-
-    # NEW  --> Uncrop pixels coordinates before rotating.
     uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_dim)
     fov_in_pix = np.apply_along_axis(uncrop, 2, fov_in_pix)
-    ##
 
     rotate = partial(rotate_point, -map_raster_rotation, map_raster_dim)
     fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
+
     convert = partial(convert_pix_to_wgs84, map_raster_dim, map_raster_bbox)
-    if logger is not None:
-        logger.debug('FoV in pix:\n{}.\n'.format(fov_in_pix))
     fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix)
 
     return fov_in_wgs84
@@ -314,10 +309,8 @@ def uncrop_pixel_coordinates(cropped_dimensions, dimensions, pt):
 
 
 def padded_map_size(dimensions):
-    # TODO: only tested on width>height images.
     diagonal = math.ceil(math.sqrt(dimensions.width ** 2 + dimensions.height ** 2))
     return diagonal, diagonal
-
 
 
 def get_angle(vec1, vec2, normalize=False):

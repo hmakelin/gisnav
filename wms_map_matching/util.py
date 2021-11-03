@@ -98,10 +98,12 @@ def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_thres
         logger.debug('decomposition N:\n{}.'.format(angles.index(min(angles))))
     ####################################
 
-    print('New computed position:')
+    print('New computed rotation, translation, and pose:')  # TODO: remove these
+    print(rotation)
+    print(translation)
     print(np.matmul(rotation, translation))
 
-    return h, h_mask, translation_vector, rotation_vector
+    return h, h_mask, translation, rotation  # translation_vector, rotation_vector
 
 
 def _make_keypoint(pair, sz=1.0):
@@ -161,7 +163,7 @@ def setup_sys_path():
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, logger=None):
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, img_dim, logger=None):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
@@ -171,6 +173,12 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, m
         map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
         logger - ROS2 logger (optional)
     """
+
+    # NEW  --> Uncrop pixels coordinates before rotating.
+    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_dim)
+    fov_in_pix = np.apply_along_axis(uncrop, 2, fov_in_pix)
+    ##
+
     rotate = partial(rotate_point, -map_raster_rotation, map_raster_dim)
     fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
     convert = partial(convert_pix_to_wgs84, map_raster_dim, map_raster_bbox)
@@ -249,16 +257,20 @@ def get_camera_lat_lon(bbox):
     return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
 
 
-def get_camera_lat_lon_alt(translation, rotation, dimensions, bbox, rot):
+def get_camera_lat_lon_alt(translation, rotation, dimensions, dimensions_orig, bbox, rot):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
     alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
-    camera_position = -np.matrix(cv2.Rodrigues(rotation)[0]).T * np.matrix(translation)
+    #camera_position = -np.matrix(cv2.Rodrigues(rotation)[0]).T * np.matrix(translation)
+    camera_position = -np.matmul(rotation, translation)
     print(camera_position)
     # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
     # UPDATE: map raster rotation now also uses counter-clockwise angle so made it -rot here
+    camera_position = uncrop_pixel_coordinates(dimensions, dimensions_orig, camera_position)  # Pixel coordinates in original uncropped frame
+    print(camera_position)
     translation_rotated = rotate_point(-rot, dimensions, camera_position[0:2])
-    lat, lon = convert_pix_to_wgs84(dimensions, bbox, translation_rotated)
+    print('uncropped, unrotated: ' + str(translation_rotated))
+    lat, lon = convert_pix_to_wgs84(dimensions_orig, bbox, translation_rotated)  # dimensions --> dimensions_orig
 
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
@@ -292,6 +304,13 @@ def crop_center(img, dimensions):
     assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
                                                                             'map raster. '
     return img_cropped
+
+
+def uncrop_pixel_coordinates(cropped_dimensions, dimensions, pt):
+    """Adjusts the pt x and y coordinates for the original size provided by dimensions."""
+    pt[0] = pt[0] + (dimensions.width - cropped_dimensions.width)/2  # TODO: check that 0 -> width and index 1 -> height, could be other way around!
+    pt[1] = pt[1] + (dimensions.height - cropped_dimensions.height)/2
+    return pt
 
 
 def get_padding_size_for_rotation(dimensions):

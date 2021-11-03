@@ -128,6 +128,9 @@ class Matcher(Node):
     def _get_map_size_with_padding(self):
         return get_padding_size_for_rotation(Dimensions(self._camera_info.width, self._camera_info.height))
 
+    def _get_map_dimensions_with_padding(self):
+        return Dimensions(*get_padding_size_for_rotation(Dimensions(self._camera_info.width, self._camera_info.height)))  #TODO: getting really messy!
+
     def _get_img_size(self):
         return self._camera_info.width, self._camera_info.height
 
@@ -203,10 +206,6 @@ class Matcher(Node):
         try:
             self.get_logger().debug('Matching image to map.')
 
-            # TODO: try to put this code somewhere into the SuperGlue adapter to keep this method cleaner
-            # Rotate map to adjust for SuperGlue's rotation non-invariance, then crop the map to match img dimensions
-            # Assumes map is square (so that dimensions do not change when rotation by multiples of 90 degrees)
-            # When transposing back to NED frame, must account for rotation and cropping in map keypoint coordinates
             rot = self._vehicle_local_position.heading
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
                                     .format(self._vehicle_local_position.heading, rot))
@@ -219,11 +218,11 @@ class Matcher(Node):
             h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size(), self._get_camera_normal())
 
             # TODO: this part should be a lot different now with the map rotation refactoring, lots to do!
-            if all(i is not None for i in (h, fov_pix, translation_vector)):
+            if all(i is not None for i in (h, fov_pix, translation_vector, rotation_vector)):
                 # TODO: should somehow control that self._map_bbox for example has not changed since match call was triggered
                 fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, Dimensions(*self._get_map_size()), # TODO: used Dimensions named tuple earlier, do not initialize it here
                                                           BBox(*self._map_bbox), # TODO: convert to 'BBox' instance already much earlier, should already return this class for get_bbox function
-                                                          rot, self.get_logger())
+                                                          rot, self._get_img_dimensions(), self.get_logger())
 
                 ### OLD STUFF - COMMENTING OUT - PLAN IS TO GET GET LAT, LON, ALT from HOMOGRAPHY DECOMPOSITION #####
                 apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
@@ -235,7 +234,7 @@ class Matcher(Node):
                 #self.get_logger().debug('Drone lat lon alt: {} {} {}'.format(lat, lon, alt))
                 ###########
 
-                camera_position = get_camera_lat_lon_alt(translation_vector, rotation_vector, self._get_img_dimensions(), BBox(*self._map_bbox), rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
+                camera_position = get_camera_lat_lon_alt(translation_vector, rotation_vector, self._get_img_dimensions(),  self._get_map_dimensions_with_padding(), BBox(*self._map_bbox), rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
 
                 write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
                 #self._essential_mat_pub.publish(e)

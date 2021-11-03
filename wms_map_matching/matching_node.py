@@ -139,11 +139,10 @@ class Matcher(Node):
         return self._topics_msgs.get('camera_info', None)
 
     def _map_size_with_padding(self):
-        return get_padding_size_for_rotation(Dimensions(self._camera_info().width, self._camera_info().height))
+        return get_padding_size_for_rotation(self._img_dimensions())
 
     def _map_dimensions_with_padding(self):
-        camera_info = self._camera_info()
-        return Dimensions(*get_padding_size_for_rotation(Dimensions(camera_info.width, camera_info.height)))  #TODO: getting really messy!
+        return Dimensions(*self._map_size_with_padding())
 
     def _img_size(self):
         camera_info = self._camera_info()

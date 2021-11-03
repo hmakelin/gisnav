@@ -100,13 +100,11 @@ class Matcher(Node):
         for topic_name, msg_type in self._config['ros2_topics']['sub'].items():
             module_name, msg_type = msg_type.rsplit('.', 1)
             msg_class = self._import_class(msg_type, module_name)
-            #self._topics.update({self.TopicType.SUB: {topic_name: self._init_topic(topic_name, self.TopicType.SUB, msg_class)}})
             self._init_topic(topic_name, self.TopicType.SUB, msg_class)
 
         for topic_name, msg_type in self._config['ros2_topics']['pub'].items():
             module_name, msg_type = msg_type.rsplit('.', 1)
             msg_class = self._import_class(msg_type, module_name)
-            #self._topics.update({self.TopicType.PUB: {topic_name: self._init_topic(topic_name, self.TopicType.PUB, msg_class)}})
             self._init_topic(topic_name, self.TopicType.PUB, msg_class)
 
         self.get_logger().info('Topics setup complete with keys: ' + str(self._topics.keys()))

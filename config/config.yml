@@ -1,14 +1,15 @@
 ros2_topics:
   sub:
-    vehicle_local_position: 'VehicleLocalPosition_PubSubTopic'
-    vehicle_global_position: 'VehicleGlobalPosition_PubSubTopic'
-    camera_info: 'camera_info'
-    image_raw: 'image_raw'
+    'VehicleLocalPosition_PubSubTopic': 'px4_msgs.msg.VehicleLocalPosition'
+    'VehicleGlobalPosition_PubSubTopic': 'px4_msgs.msg.VehicleGlobalPosition'
+#    'GimbalDeviceAttitudeStatus_PubSubTopic': 'px4_msgs.msg.GimbalDeviceAttitudeStatus'
+    'camera_info': 'sensor_msgs.msg.CameraInfo'
+    'image_raw': 'sensor_msgs.msg.Image'
   pub:
-    essential_matrix: 'essential_matrix'
-    homography_matrix: 'homography_matrix'
-    pose: 'pose'
-    fov: 'fov'
+    'essential_matrix': 'std_msgs.msg.Float64MultiArray'
+    'homography_matrix': 'std_msgs.msg.Float64MultiArray'
+    'pose': 'std_msgs.msg.Float64MultiArray'
+    'fov': 'std_msgs.msg.Float64MultiArray'
 wms:
   url: 'http://localhost:8080/wms'
   version: '1.1.1'

@@ -4,12 +4,14 @@ import os
 import traceback
 import xml.etree.ElementTree as ET
 import yaml
+import importlib
 
+from enum import Enum
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceInformation
-from sensor_msgs.msg import Image, CameraInfo
-from std_msgs.msg import Float64MultiArray
+#from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus
+#from sensor_msgs.msg import Image, CameraInfo
+#from std_msgs.msg import Float64MultiArray
 from owslib.wms import WebMapService
 from cv2 import VideoCapture, imwrite, imdecode
 import numpy as np
@@ -29,6 +31,12 @@ from wms_map_matching.superglue_adapter import SuperGlue
 
 
 class Matcher(Node):
+
+    class TopicType(Enum):
+        """Enumerates microRTPS bridge topic types."""
+        PUB = 1
+        SUB = 2
+
     def __init__(self, share_directory, superglue_directory, config='config.yml'):
         """Initializes the node.
 
@@ -42,17 +50,18 @@ class Matcher(Node):
         self.superglue_dir = superglue_directory  # TODO: move this to _setup_superglue? private _superglue_dir instead?
         self._load_config(config)
         self._init_wms()
+
+        # Dict for storing all microRTPS bridge subscribers and publishers
+        self._topics = dict()
         self._setup_topics()
+
+        # Dict for storing latest microRTPS messages
+        self._topics_msgs = dict()
+
         self._cv_bridge = CvBridge()
-        self._camera_info = None
-        self._vehicle_local_position = None  # TODO: remove the redundant initialization of these from constructor?
-        self._vehicle_global_position = None
-        self._gimbal_device_information = None
-        self._image_raw = None
         self._cv_image = None
         self._map = None
         self._setup_superglue()
-
 
     def _setup_superglue(self):
         """Sets up SuperGlue."""  # TODO: make all these private?
@@ -72,35 +81,39 @@ class Matcher(Node):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
         return self._config['superglue']['misc']['gimbal_projection']
 
+    def _import_class(self, class_name, module_name):
+        """Imports class from module if not yet imported."""
+        if module_name not in sys.modules:
+            self.get_logger().info('Importing module ' + module_name + '.')
+            importlib.import_module(module_name)
+        imported_class = getattr(sys.modules[module_name], class_name, None)
+        assert imported_class is not None, class_name + ' was not found in module ' + module_name + '.'
+        return imported_class
+
     def _setup_topics(self):
         """Loads and sets up ROS2 publishers and subscribers from config file."""
-        if self._use_gimbal_projection():
-            self._sub_gimbal_device_information_topic = self._config['ros2_topics']['sub']['gimbal_device_information']
-            self._gimbal_device_information_sub = self.create_subscription(GimbalDeviceInformation,
-                                                                           self._sub_gimbal_device_information_topic,
-                                                                           self._gimbal_device_information_callback, 10)
-        self._sub_vehicle_local_position_topic = self._config['ros2_topics']['sub']['vehicle_local_position']
-        self._sub_vehicle_global_position_topic = self._config['ros2_topics']['sub']['vehicle_global_position']
-        self._sub_image_raw_topic = self._config['ros2_topics']['sub']['image_raw']
-        self._sub_camera_info_topic = self._config['ros2_topics']['sub']['camera_info']
-        self._pub_essential_mat_topic = self._config['ros2_topics']['pub']['essential_matrix']
-        self._pub_homography_mat_topic = self._config['ros2_topics']['pub']['homography_matrix']
-        self._pub_pose_topic = self._config['ros2_topics']['pub']['pose']
-        self._pub_fov_topic = self._config['ros2_topics']['pub']['fov']
+        for topic_name, msg_type in self._config['ros2_topics']['sub'].items():
+            module_name, msg_type = msg_type.rsplit('.', 1)
+            msg_class = self._import_class(msg_type, module_name)
+            self._topics.update({self.TopicType.SUB: {topic_name: self._init_topic(topic_name, self.TopicType.SUB, msg_class)}})
 
-        self._image_raw_sub = self.create_subscription(Image, self._sub_image_raw_topic, self._image_raw_callback, 10)
-        self._camera_info_sub = self.create_subscription(CameraInfo, self._sub_camera_info_topic, self._camera_info_callback,
-                                                         10)
-        self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
-                                                                    self._sub_vehicle_local_position_topic,
-                                                                    self._vehicle_local_position_callback, 10)
-        self._vehicle_global_position_sub = self.create_subscription(VehicleGlobalPosition,
-                                                                     self._sub_vehicle_global_position_topic,
-                                                                     self._vehicle_global_position_callback, 10)
-        self._essential_mat_pub = self.create_publisher(Float64MultiArray, self._pub_essential_mat_topic, 10)
-        self._homography_mat_pub = self.create_publisher(Float64MultiArray, self._pub_homography_mat_topic, 10)
-        self._pose_pub = self.create_publisher(Float64MultiArray, self._pub_pose_topic, 10)
-        self._fov_pub = self.create_publisher(Float64MultiArray, self._pub_fov_topic, 10)
+        for topic_name, msg_type in self._config['ros2_topics']['pub'].items():
+            module_name, msg_type = msg_type.rsplit('.', 1)
+            msg_class = self._import_class(msg_type, module_name)
+            #self._topics[self.TopicType.PUB][topic_name] = self._init_topic(topic_name, self.TopicType.PUB, msg_class)
+            self._topics.update({self.TopicType.PUB: {topic_name: self._init_topic(topic_name, self.TopicType.PUB, msg_class)}})
+
+    def _init_topic(self, topic_name, topic_type, msg_type):
+        """Sets up rclpy publishers and subscribers and dynamically loads message types from px4_msgs library."""
+        if topic_type is self.TopicType.PUB:
+            self._topics[topic_name] = self.create_publisher(msg_type, topic_name, 10)
+        elif topic_type is self.TopicType.SUB:
+            callback_name = '_' + topic_name.lower() + '_callback'
+            callback = getattr(self, callback_name, None)
+            assert callback is not None, 'Missing callback implementation: ' + callback_name
+            self._topics[topic_name] = self.create_subscription(msg_type, topic_name, callback, 10)
+        else:
+            raise TypeError('Unsupported topic type: {}'.format(topic_type))
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
@@ -121,18 +134,23 @@ class Matcher(Node):
             raise e
 
     def _get_map_size(self):
-        max_dim = max(self._camera_info.width, self._camera_info.height)
+        max_dim = max(self.camera_info().width, self.camera_info().height)
         img_size = (max_dim, max_dim)  # Map must be croppable to img dimensions when img is rotated 90 degrees
         return img_size
 
+    def camera_info(self):
+        return self._topics_msgs.get('camera_info', None)
+
     def _get_map_size_with_padding(self):
-        return get_padding_size_for_rotation(Dimensions(self._camera_info.width, self._camera_info.height))
+        return get_padding_size_for_rotation(Dimensions(self.camera_info().width, self.camera_info().height))
 
     def _get_map_dimensions_with_padding(self):
-        return Dimensions(*get_padding_size_for_rotation(Dimensions(self._camera_info.width, self._camera_info.height)))  #TODO: getting really messy!
+        camera_info = self.camera_info()
+        return Dimensions(*get_padding_size_for_rotation(Dimensions(camera_info.width, camera_info.height)))  #TODO: getting really messy!
 
     def _get_img_size(self):
-        return self._camera_info.width, self._camera_info.height
+        camera_info = self.camera_info()
+        return camera_info.width, camera_info.height
 
     def _get_img_dimensions(self):
         return Dimensions(*self._get_img_size())
@@ -142,9 +160,9 @@ class Matcher(Node):
         if self._use_gimbal_projection():
             raise NotImplementedError  # TODO
         else:
-            self._map_bbox = get_bbox((self._vehicle_global_position.lat, self._vehicle_global_position.lon))
+            self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat, self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))
 
-        if all(i is not None for i in [self._camera_info]):
+        if all(i is not None for i in [self.camera_info()]):
             layer_str = self.get_parameter('layer').get_parameter_value().string_value
             srs_str = self.get_parameter('srs').get_parameter_value().string_value
             self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
@@ -166,13 +184,14 @@ class Matcher(Node):
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
-        self._image_raw = msg
-        self._cv_image = self._cv_bridge.imgmsg_to_cv2(self._image_raw, 'bgr8')
-        if all(i is not None for i in [self._image_raw, self._map]):
+        self._topics_msgs['image_raw'] = msg
+        self._cv_image = self._cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
+        if all(i is not None for i in [self._topics_msgs['image_raw'], self._map]):
             self._match()
         else:
             self.get_logger().debug('Map or image not available: map {}, img {} - not calling matching yet.'\
-                                    .format(self._map is not None, self._image_raw is not None))
+                                    .format(self._map is not None, self._cv_image is not None))
+
 
     def _get_camera_normal(self):
         # TODO: get actual camera normal via RTPS bridge - currently assumes nadir facing camera
@@ -181,41 +200,41 @@ class Matcher(Node):
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""
         self.get_logger().debug('Camera info callback triggered.')
-        self._camera_info = msg
-        self.get_logger().debug('Camera info: {}.'.format(msg))
-        self._camera_info_sub.destroy()  # TODO: check that info was indeed received before destroying subscription
+        self._topics_msgs['camera_info'] = msg
+        self.get_logger().debug('Camera info: ' + str(msg))
+        self._topics['camera_info'].destroy()  # TODO: check that info was indeed received before destroying subscription
 
-    def _vehicle_local_position_callback(self, msg):
+    def _vehiclelocalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest local position estimate."""
         self.get_logger().debug('Vehicle local position callback triggered.')
-        self._vehicle_local_position = msg
+        self._topics_msgs['VehicleLocalPosition_PubSubTopic'] = msg
 
-    def _vehicle_global_position_callback(self, msg):
+    def _vehicleglobalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest global position estimate."""
         self.get_logger().debug('Vehicle global position callback triggered.')
-        self._vehicle_global_position = msg
+        self._topics_msgs['VehicleGlobalPosition_PubSubTopic'] = msg
         self._update_map()
 
-    def _gimbal_device_information_callback(self, msg):
+    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg):
         """Handles reception of latest gimbal pose."""
-        self.get_logger().debug('Gimbal device information callback triggered.')
-        self._gimbal_device_information = msg
+        self.get_logger().debug('Gimbal device attitude status callback triggered.')
+        self._topics_msgs['GimbalDeviceAttitudeStatus'] = msg
 
     def _match(self):
         """Does matching on camera and map images. Publishes estimated e, f, h, and p matrices."""
         try:
             self.get_logger().debug('Matching image to map.')
 
-            rot = self._vehicle_local_position.heading
+            rot = self._topics_msgs['VehicleLocalPosition_PubSubTopic'].heading
             self.get_logger().debug('Current heading: {} radians, rotating map by {}.'\
-                                    .format(self._vehicle_local_position.heading, rot))
+                                    .format(self._topics_msgs['VehicleLocalPosition_PubSubTopic'].heading, rot))
             if rot is not None:  # TODO: what if it has not been initialized or is smth else than None? See assignemtn above - should be erplaces with some method call that warns/asserts
                 map_rot = rotate_and_crop_map(self._map, rot, self._get_img_dimensions())
             else:
                 self.get_logger().warn('Heading is unknown - skipping matching.')
                 return
 
-            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self._camera_info.k.reshape([3, 3]), self._get_img_size(), self._get_camera_normal())
+            h, fov_pix, translation_vector, rotation_vector = self._superglue.match(self._cv_image, map_rot, self.camera_info().k.reshape([3, 3]), self._get_img_size(), self._get_camera_normal())
 
             # TODO: this part should be a lot different now with the map rotation refactoring, lots to do!
             if all(i is not None for i in (h, fov_pix, translation_vector, rotation_vector)):
@@ -225,7 +244,7 @@ class Matcher(Node):
                                                           rot, self._get_img_dimensions(), self.get_logger())
 
                 ### OLD STUFF - COMMENTING OUT - PLAN IS TO GET GET LAT, LON, ALT from HOMOGRAPHY DECOMPOSITION #####
-                apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self._camera_info.k)
+                apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._get_map_size(), self.camera_info().k)
                 #self.get_logger().debug('Map camera apparent altitude: {}'.format(apparent_alt))  # TODO: do not use default value, use the specific value that was used for the map raster (or remove default altogheter)
                 map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
                 #self.get_logger().debug('Map camera lat lon: {}'.format((map_lat, map_lon)))  # TODO: ensure that same bbox is used as for matching, should be immutable for a matching pair

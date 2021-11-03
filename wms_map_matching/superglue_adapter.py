@@ -67,18 +67,3 @@ class SuperGlue:
                                                                                                 len(mkp_map)))
 
         return mkp_img, mkp_map
-
-
-        """
-        h, h_mask, translation_vector, rotation_vector = process_matches(mkp_img, mkp_map, K, img_dim, camera_normal,
-                                                                         logger=self._logger,
-                                                                         affine=self._config['misc']['affine'])
-        if all(i is not None for i in (h, h_mask)):
-            fov_pix = visualize_homography(img_grayscale, map_grayscale, mkp_img, mkp_map, h, self._logger)  # TODO: put this viz stuff somewhere else - not matching related
-            cv2.waitKey(1)
-
-        if all(i is not None for i in (h, fov_pix)):
-            return h, fov_pix, translation_vector, rotation_vector
-        else:
-            return None, None, None, None
-        """

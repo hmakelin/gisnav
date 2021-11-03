@@ -19,7 +19,8 @@ class SuperGlue:
         Args:
             config - Dict with SuperGlue config parameters.
             output_dir - Path to directory where to store output visualization.
-            logger - ROS2 node logger for logging messages."""
+            logger - ROS2 node logger for logging messages.
+        """
         self._config = config
         self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self._logger = logger
@@ -40,19 +41,13 @@ class SuperGlue:
             img_size - Dimensions of the image frame.
             camera_normal - Camera normal unit vector.
         """
-        if self._logger is not None:
-            self._logger.debug('Pre-processing image and map to grayscale tensors.')
         img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         map_grayscale = cv2.cvtColor(map, cv2.COLOR_BGR2GRAY)
         img = frame2tensor(img_grayscale, self._device)
         map = frame2tensor(map_grayscale, self._device)
 
-        if self._logger is not None:
-            self._logger.debug('Tensor sizes: img {}, map {}. Doing matching.'.format(img.size(), map.size()))
         pred = self._matching({'image0': img, 'image1': map})  # TODO: check that img and map are formatted correctly
 
-        if self._logger is not None:
-            self._logger.debug('Extracting matches.')
         pred = {k: v[0].cpu().detach().numpy() for k, v in pred.items()}
         kp_img, kp_map = pred['keypoints0'], pred['keypoints1']
         matches, conf = pred['matches0'], pred['matching_scores0']
@@ -61,9 +56,5 @@ class SuperGlue:
         valid = matches > -1
         mkp_img = kp_img[valid]
         mkp_map = kp_map[matches[valid]]
-
-        if self._logger is not None:
-            self._logger.debug('Estimating pose. mkp_img length: {}, mkp_map length: {}'.format(len(mkp_img),
-                                                                                                len(mkp_map)))
 
         return mkp_img, mkp_map

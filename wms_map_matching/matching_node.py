@@ -270,7 +270,7 @@ class Matcher(Node):
             assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
                                                     + str(rotation_vector.shape) + '.'
 
-            fov_pix = visualize_homography(self._cv_image, map_rotated, mkp_img, mkp_map, h, self._logger) # TODO: separate calculation of fov_pix from their visualization
+            fov_pix = visualize_homography(self._cv_image, map_rotated, mkp_img, mkp_map, h) # TODO: separate calculation of fov_pix from their visualization?
 
             apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
             map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))

@@ -67,7 +67,6 @@ def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, me
         h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
         h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
 
-    #### Homography decomposition section
     num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
 
     # Get the one where angle between plane normal and inverse of camera normal is smallest
@@ -81,7 +80,6 @@ def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, me
         logger.debug('decomposition R:\n{}.'.format(rotation))
         logger.debug('decomposition T:\n{}.'.format(translation))
         logger.debug('decomposition N:\n{}.'.format(angles.index(min(angles))))
-    ####################################
 
     print('New computed rotation, translation, and pose:')  # TODO: remove these
     print(rotation)

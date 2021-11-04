@@ -14,6 +14,7 @@ from collections import namedtuple
 
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
+Pixel = namedtuple('Pixel', 'x y')
 Dimensions = namedtuple('Dimensions', 'height width')
 
 MAP_RADIUS_METERS_DEFAULT = 300
@@ -42,7 +43,6 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
 
 
-# TODO: method used for both findHomography and findEssentialMat - are the valid input arg spaces the same here or not?
 def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
                     affine=False):
     """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.

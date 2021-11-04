@@ -69,19 +69,6 @@ def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_thres
         h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
         h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
 
-    ### solvePnP section ######
-    # Notices that mkp_img and mkp_map order is reversed (mkp_map is '3D' points with altitude z=0)
-    mkp_map_3d = []
-    for pt in mkp_map:
-        mkp_map_3d.append([pt[0], pt[1], 0])
-    mkp_map_3d = np.array(mkp_map_3d)
-    _, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, None, flags=0)
-    if logger is not None:
-        logger.debug('solvePnP rotation:\n{}.'.format(rotation_vector))
-        logger.debug('solvePnP translation:\n{}.'.format(translation_vector))
-    ##########################
-
-
     #### Homography decomposition section
     num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
 
@@ -200,9 +187,6 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
-    # inverted y axis
-    #lat = bbox.bottom + (bbox.top - bbox.bottom) * (
-    #            img_dim.height - pt[1]) / img_dim.height
     lat = bbox.bottom + (bbox.top - bbox.bottom) * pt[1] / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
     return lat, lon
@@ -224,7 +208,7 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename
             [list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)
 
-    # Can only hav1 geometry per geoJSON - need to dump this Point stuff into another file
+    # Can only have 1 geometry per geoJSON - need to dump this Point stuff into another file
     with open(filename_location, 'w') as f2:
         latlon = geojson.Point(tuple(reversed(location[0:2])))
         geojson.dump(latlon, f2)
@@ -254,20 +238,17 @@ def get_camera_lat_lon(bbox):
     return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
 
 
-def get_camera_lat_lon_alt(translation, rotation, dimensions, dimensions_orig, bbox, rot):
+def get_camera_lat_lon_alt(translation, rotation, dimensions_img, dimensions_map_padded, bbox, rot):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
-    alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
+    alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions_img.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
-    #camera_position = -np.matrix(cv2.Rodrigues(rotation)[0]).T * np.matrix(translation)
     camera_position = -np.matmul(rotation, translation)
-    print(camera_position)
-    # rotate_point uses counter-clockwise angle so negative angle not needed here to reverse earlier rotation
-    # UPDATE: map raster rotation now also uses counter-clockwise angle so made it -rot here
-    camera_position = uncrop_pixel_coordinates(dimensions, dimensions_orig, camera_position)  # Pixel coordinates in original uncropped frame
-    print(camera_position)
-    translation_rotated = rotate_point(-rot, dimensions, camera_position[0:2])
+    print('translation:\n' + str(camera_position))
+    camera_position = uncrop_pixel_coordinates(dimensions_img, dimensions_map_padded, camera_position)  # Pixel coordinates in original uncropped frame
+    print('uncropped translation\n' + str(camera_position))
+    translation_rotated = rotate_point(-rot, dimensions_map_padded, camera_position[0:2])
     print('uncropped, unrotated: ' + str(translation_rotated))
-    lat, lon = convert_pix_to_wgs84(dimensions_orig, bbox, translation_rotated)  # dimensions --> dimensions_orig
+    lat, lon = convert_pix_to_wgs84(dimensions_map_padded, bbox, translation_rotated)  # dimensions --> dimensions_orig
 
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
 
@@ -278,17 +259,11 @@ def rotate_and_crop_map(map, radians, dimensions):
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
     assert map.shape[0:2] == padded_map_size(dimensions)
-    #cv2.imshow('Map', map)
-    #cv2.waitKey(1)
     cx, cy = tuple(np.array(map.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
     map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
-    #cv2.imshow('Map rotated', map_rotated)
-    #cv2.waitKey(1)
     map_cropped = crop_center(map_rotated, dimensions)
-    #cv2.imshow('Map rotated and cropped', map_cropped)
-    #cv2.waitKey(1)  # TODO: remove imshows from this function
     return map_cropped
 
 

@@ -163,22 +163,23 @@ def setup_sys_path():
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_dim, map_raster_bbox, map_raster_rotation, img_dim):
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
         fov_in_pix - Numpy array of field of view corners in pixel coordinates of rotated map raster.
-        map_raster_size - Size of the map raster image.
-        map_raster_bbox - The WGS84 bounding box of the original unrotated map frame.
+        map_raster_padded_dim - Size of the padded map raster image.
+        map_raster_bbox - The WGS84 bounding box of the padded map raster.
         map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
+        img_dim - Size of the image.
     """
-    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_dim)
+    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
     fov_in_pix = np.apply_along_axis(uncrop, 2, fov_in_pix)
 
-    rotate = partial(rotate_point, -map_raster_rotation, map_raster_dim)
+    rotate = partial(rotate_point, -map_raster_rotation, map_raster_padded_dim)
     fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
 
-    convert = partial(convert_pix_to_wgs84, map_raster_dim, map_raster_bbox)
+    convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
     fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix)
 
     return fov_in_wgs84
@@ -200,8 +201,9 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
     # inverted y axis
-    lat = bbox.bottom + (bbox.top - bbox.bottom) * (
-                img_dim.height - pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    #lat = bbox.bottom + (bbox.top - bbox.bottom) * (
+    #            img_dim.height - pt[1]) / img_dim.height
+    lat = bbox.bottom + (bbox.top - bbox.bottom) * pt[1] / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
     return lat, lon
 
@@ -276,17 +278,17 @@ def rotate_and_crop_map(map, radians, dimensions):
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
     assert map.shape[0:2] == padded_map_size(dimensions)
-    cv2.imshow('Map', map)
-    cv2.waitKey(1)
+    #cv2.imshow('Map', map)
+    #cv2.waitKey(1)
     cx, cy = tuple(np.array(map.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
     map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
-    cv2.imshow('Map rotated', map_rotated)
-    cv2.waitKey(1)
+    #cv2.imshow('Map rotated', map_rotated)
+    #cv2.waitKey(1)
     map_cropped = crop_center(map_rotated, dimensions)
-    cv2.imshow('Map rotated and cropped', map_cropped)
-    cv2.waitKey(1)  # TODO: remove imshows from this function
+    #cv2.imshow('Map rotated and cropped', map_cropped)
+    #cv2.waitKey(1)  # TODO: remove imshows from this function
     return map_cropped
 
 

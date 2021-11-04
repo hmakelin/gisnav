@@ -266,7 +266,7 @@ class Matcher(Node):
                                                                              affine=self._config['superglue']['misc']['affine'])
 
             assert h.shape == (3, 3), 'Homography matrix had unexpected shape: ' + str(h.shape) + '.'
-            assert translation_vector.shape == (3 , 1), 'Translation vector had unexpected shape: ' \
+            assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: ' \
                                                         + str(translation_vector.shape) + '.'
             assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
                                                     + str(rotation_vector.shape) + '.'

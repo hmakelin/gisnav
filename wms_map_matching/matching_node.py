@@ -268,7 +268,7 @@ class Matcher(Node):
             assert h.shape == (3, 3), 'Homography matrix had unexpected shape: ' + str(h.shape) + '.'
             assert translation_vector.shape == (3 , 1), 'Translation vector had unexpected shape: ' \
                                                         + str(translation_vector.shape) + '.'
-            assert rotation_matrix.shape == (3, 3), 'Rortation matrix had unexpected shape: ' \
+            assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
                                                     + str(rotation_vector.shape) + '.'
 
             fov_pix = visualize_homography(self._cv_image, map_rotated, mkp_img, mkp_map, h, self._logger) # TODO: separate calculation of fov_pix from their visualization

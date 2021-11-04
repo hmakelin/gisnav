@@ -43,7 +43,7 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
 
 
-def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_threshold=1.0, prob=0.999, method=cv2.RANSAC, logger=None,
+def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, method=cv2.RANSAC, logger=None,
                     affine=False):
     """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
@@ -51,10 +51,8 @@ def process_matches(mkp_img, mkp_map, k, dimensions, camera_normal, reproj_thres
         mkp_img - The matching keypoints from image.
         mkp_map - The matching keypoints from map.
         k - The intrinsic camera matrix.
-        dimensions - Dimensions of the image frame.
         camera_normal - The camera normal unit vector.
         reproj_threshold - The RANSAC reprojection threshold for homography estimation.
-        prob - Prob parameter for findEssentialMat (used by RANSAC and LMedS methods)
         method - Method to use for estimation.
         logger - Optional ROS2 logger for writing log output.
         affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation

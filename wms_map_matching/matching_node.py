@@ -260,7 +260,6 @@ class Matcher(Node):
 
             h, h_mask, translation_vector, rotation_matrix = process_matches(mkp_img, mkp_map,
                                                                              self._camera_info().k.reshape([3, 3]),
-                                                                             self._img_dimensions(),
                                                                              self._get_camera_normal(),
                                                                              logger=self._logger,
                                                                              affine=self._config['superglue']['misc']['affine'])

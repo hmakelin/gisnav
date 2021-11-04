@@ -97,26 +97,17 @@ def _make_keypoint(pair, sz=1.0):
     return cv2.KeyPoint(pair[0], pair[1], sz)
 
 
-def _make_match(x, img_idx=0):
-    """Makes a cv2.DMatch from img and map indices.
-
-    Helper function used by visualize homography.
-    """
-    return cv2.DMatch(x[0], x[1], img_idx)
-
-
-def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
+def visualize_homography(img_arr, map_arr, kp_img, kp_map, h_mat, logger=None):
     """Visualizes a homography including keypoint matches and field of view.
 
     Returns the field of view in pixel coordinates of the map raster.
     """
-    h, w, _ = img.shape
+    h, w, _ = img_arr.shape  # height before width in np.array shape
 
-    # Make a list of matches
-    matches = []
-    for i in range(0, len(kp_img)):
-        matches.append(cv2.DMatch(i, i, 0))  # TODO: implement better, e.g. use _make_match helper
-    matches = np.array(matches)
+    # Make a list of DMatches that match mkp_img and mkp_map one-to-one
+    kp_count = len(kp_img)
+    assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
+    matches = list(map(lambda i: cv2.DMatch(i, i, 0), range(0, kp_count)))
 
     # Need cv2.KeyPoints for kps (assumed to be numpy arrays)
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
@@ -124,11 +115,11 @@ def visualize_homography(img, map, kp_img, kp_map, h_mat, logger=None):
 
     src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
-    map_with_fov = cv2.polylines(map, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
+    map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
     draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
     if logger is not None:
         logger.debug('Drawing matches.')
-    out = cv2.drawMatches(img, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
+    out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
     cv2.imshow('Matches and FoV', out)
     cv2.waitKey(1)
 

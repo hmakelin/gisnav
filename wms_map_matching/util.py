@@ -143,15 +143,15 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
         img_dim - Size of the image.
     """
     uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
-    fov_in_pix = np.apply_along_axis(uncrop, 2, fov_in_pix)
+    fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, fov_in_pix)
 
     rotate = partial(rotate_point, -map_raster_rotation, map_raster_padded_dim)
-    fov_in_pix = np.apply_along_axis(rotate, 2, fov_in_pix)
+    fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
 
     convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
-    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix)
+    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
 
-    return fov_in_wgs84
+    return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
 
 
 def rotate_point(radians, img_dim, pt):
@@ -240,13 +240,19 @@ def rotate_and_crop_map(map, radians, dimensions):
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
+    cv2.imshow('padded', map)
+    cv2.waitKey(1)
     assert map.shape[0:2] == padded_map_size(dimensions)
     cx, cy = tuple(np.array(map.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
     map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
+    cv2.imshow('rotated', map_rotated)
+    cv2.waitKey(1)
     map_cropped = crop_center(map_rotated, dimensions)
-    return map_cropped
+    cv2.imshow('cropped', map_cropped)
+    cv2.waitKey(1)
+    return map_cropped, map_rotated  # TODO: return cropped only
 
 
 def crop_center(img, dimensions):
@@ -276,7 +282,7 @@ def get_angle(vec1, vec2, normalize=False):
     """Returns angle in radians between two vectors."""
     if normalize:
         vec1 = vec1 / np.linalg.norm(vec1)
-        vec2 = vec2 / np.linalg.norm(vec1)
+        vec2 = vec2 / np.linalg.norm(vec2)
     dot_product = np.dot(vec1, vec2)
     angle = np.arccos(dot_product)
     return angle

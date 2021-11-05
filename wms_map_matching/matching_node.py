@@ -248,10 +248,10 @@ class Matcher(Node):
             rot = local_position.heading
             assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + '([-pi, pi] expected).'
             self.get_logger().debug('Current heading: ' + str(rot) + ' radians.')
-            map_rotated = rotate_and_crop_map(self._map, rot, self._img_dimensions())
-            assert map_rotated.shape[0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
+            map_cropped, map_rotated = rotate_and_crop_map(self._map, rot, self._img_dimensions())  # TODO: return only rotated
+            assert map_cropped.shape[0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
 
-            mkp_img, mkp_map = self._superglue.match(self._cv_image, map_rotated)
+            mkp_img, mkp_map = self._superglue.match(self._cv_image, map_cropped)
 
             assert len(mkp_img) == len(mkp_map), 'Matched keypoint counts did not match.'
             if len(mkp_img) < 4:
@@ -270,13 +270,14 @@ class Matcher(Node):
             assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
                                                     + str(rotation_vector.shape) + '.'
 
-            fov_pix = visualize_homography(self._cv_image, map_rotated, mkp_img, mkp_map, h) # TODO: separate calculation of fov_pix from their visualization?
+            fov_pix = visualize_homography(self._cv_image, map_cropped, mkp_img, mkp_map, h) # TODO: separate calculation of fov_pix from their visualization!
 
             apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
             map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
 
-            fov_wgs84 = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
+            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
                                                       rot, self._img_dimensions())
+
             camera_position = get_camera_lat_lon_alt(translation_vector, rotation_matrix, self._img_dimensions(),
                                                      self._map_dimensions_with_padding(), self._map_bbox, rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
 

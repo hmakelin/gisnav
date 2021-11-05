@@ -146,7 +146,7 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
     uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
     fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, fov_in_pix)
 
-    rotate = partial(rotate_point, -map_raster_rotation, map_raster_padded_dim)
+    rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
     fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
 
     convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
@@ -170,7 +170,7 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
-    lat = bbox.bottom + (bbox.top - bbox.bottom) * pt[1] / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
+    lat = bbox.bottom + (bbox.top - bbox.bottom) * (img_dim.height - pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
     return lat, lon
 

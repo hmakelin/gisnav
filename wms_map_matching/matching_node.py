@@ -21,7 +21,7 @@ from ament_index_python.packages import get_package_share_directory
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
-    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov
+    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -284,14 +284,20 @@ class Matcher(Node):
             for i in range(0, len(mkp_map)):
                 mkp_map_uncropped.append(list(uncrop_pixel_coordinates(self._img_dimensions(), self._map_dimensions_with_padding(), mkp_map[i])))
             mkp_map_uncropped = np.array(mkp_map_uncropped)
-            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_uncropped,
+
+            mkp_map_unrotated = []
+            for i in range(0, len(mkp_map_uncropped)):
+                mkp_map_unrotated.append(list(rotate_point(rot, self._map_dimensions_with_padding(), mkp_map_uncropped[i])))
+            mkp_map_unrotated = np.array(mkp_map_unrotated)
+
+            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_unrotated, # mkp_map_uncropped,
                                                                              self._camera_info().k.reshape([3, 3]),
                                                                              self._get_camera_normal(),
                                                                              logger=self._logger,
                                                                              affine=self._config['superglue']['misc']['affine'])
 
             fov_pix_2 = get_fov(self._cv_image, h2)
-            visualize_homography('Uncropped', self._cv_image, map_rotated, mkp_img, mkp_map_uncropped, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
+            visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
             #### END ###
 
             camera_position = get_camera_lat_lon_alt(translation_vector, rotation_matrix, self._img_dimensions(),

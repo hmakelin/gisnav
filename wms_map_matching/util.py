@@ -94,13 +94,8 @@ def _make_keypoint(pt, sz=1.0):
     return cv2.KeyPoint(pt[0], pt[1], sz)
 
 
-def visualize_homography(img_arr, map_arr, kp_img, kp_map, h_mat):
-    """Visualizes a homography including keypoint matches and field of view.
-
-    Returns the field of view in pixel coordinates of the map raster.
-    """
-    h, w, _ = img_arr.shape  # height before width in np.array shape
-
+def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corners):
+    """Visualizes a homography including keypoint matches and field of view."""
     # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
     kp_count = len(kp_img)
     assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
@@ -110,14 +105,20 @@ def visualize_homography(img_arr, map_arr, kp_img, kp_map, h_mat):
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)
     kp_map = np.apply_along_axis(_make_keypoint, 1, kp_map)
 
-    src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-    dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
     map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
     draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
     out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
-    cv2.imshow('Matches and FoV', out)
+    cv2.imshow(figure_name, out)
     cv2.waitKey(1)
 
+    return out
+
+
+def get_fov(img_arr, h_mat):
+    """Calculates field of view (FoV) corners from homography and image shape."""
+    h, w, _ = img_arr.shape  # height before width in np.array shape
+    src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+    dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
     return dst_corners
 
 

@@ -21,7 +21,7 @@ from ament_index_python.packages import get_package_share_directory
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
-    visualize_homography, process_matches
+    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -268,15 +268,31 @@ class Matcher(Node):
             assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: '\
                                                        + str(translation_vector.shape) + '.'
             assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
-                                                    + str(rotation_vector.shape) + '.'
+                                                    + str(rotation_matrix.shape) + '.'
 
-            fov_pix = visualize_homography(self._cv_image, map_cropped, mkp_img, mkp_map, h) # TODO: separate calculation of fov_pix from their visualization!
+            fov_pix = get_fov(self._cv_image, h)
+            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix) # TODO: separate calculation of fov_pix from their visualization!
 
             apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
             map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
                                                       rot, self._img_dimensions())
+
+            #### TODO: remove this debugging section
+            mkp_map_uncropped = []
+            for i in range(0, len(mkp_map)):
+                mkp_map_uncropped.append(list(uncrop_pixel_coordinates(self._img_dimensions(), self._map_dimensions_with_padding(), mkp_map[i])))
+            mkp_map_uncropped = np.array(mkp_map_uncropped)
+            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_uncropped,
+                                                                             self._camera_info().k.reshape([3, 3]),
+                                                                             self._get_camera_normal(),
+                                                                             logger=self._logger,
+                                                                             affine=self._config['superglue']['misc']['affine'])
+
+            fov_pix_2 = get_fov(self._cv_image, h2)
+            visualize_homography('Uncropped', self._cv_image, map_rotated, mkp_img, mkp_map_uncropped, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
+            #### END ###
 
             camera_position = get_camera_lat_lon_alt(translation_vector, rotation_matrix, self._img_dimensions(),
                                                      self._map_dimensions_with_padding(), self._map_bbox, rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?

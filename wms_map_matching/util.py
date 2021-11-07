@@ -81,11 +81,6 @@ def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, me
         logger.debug('decomposition T:\n{}.'.format(translation))
         logger.debug('decomposition N:\n{}.'.format(angles.index(min(angles))))
 
-    print('New computed rotation, translation, and pose:')  # TODO: remove these
-    print(rotation)
-    print(translation)
-    print(np.matmul(rotation, translation))
-
     return h, h_mask, translation, rotation  # translation_vector, rotation_vector
 
 
@@ -212,8 +207,31 @@ def get_camera_apparent_altitude(map_radius, map_dimensions, K):
         K - Camera intrinsic matrix (assume same K for map raster as for drone camera).
     """
     focal_length = K[0]
-    width_pixels = map_dimensions[0]
+    width_pixels = map_dimensions.width  # [0]
     return map_radius * focal_length / width_pixels
+
+
+# TODO: use this to replace "get_camera_apparent_altitude"
+def get_camera_distance(focal_length, pixels, ground_truth):
+    """Calculates distance of camera to object whose ground truth widht is known."""
+    return ground_truth * focal_length / pixels
+
+
+def get_distance_of_fov_center(fov_wgs84):
+    """Calculate distance between middle of sides of FoV based on triangle similarity."""
+    midleft = ((fov_wgs84[0] + fov_wgs84[1])*0.5).squeeze()
+    midright = ((fov_wgs84[2] + fov_wgs84[3])*0.5).squeeze()
+    print(fov_wgs84)
+    print(midleft)
+    print(midleft[0])
+    g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
+    _, __, dist = g.inv(midleft[1], midleft[0], midright[1], midright[0])
+    return dist
+
+
+def altitude_from_gimbal_pitch(pitch_degrees, distance):
+    """Returns camera altitude if gimbal pitch and distance to center of FoV is known."""
+    return distance*math.sin(math.radians(pitch_degrees))
 
 
 def get_camera_lat_lon(bbox):
@@ -225,11 +243,13 @@ def get_camera_lat_lon_alt(translation, rotation, dimensions_img, dimensions_map
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
     alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions_img.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
 
-    camera_position = -np.matmul(rotation, translation)
+    camera_position = np.matmul(rotation, translation)
+    camera_position[0] = camera_position[0]*dimensions_img.width
+    camera_position[1] = camera_position[1]*dimensions_img.height
     print('translation:\n' + str(camera_position))
     camera_position = uncrop_pixel_coordinates(dimensions_img, dimensions_map_padded, camera_position)  # Pixel coordinates in original uncropped frame
     print('uncropped translation\n' + str(camera_position))
-    translation_rotated = rotate_point(-rot, dimensions_map_padded, camera_position[0:2])
+    translation_rotated = rotate_point(rot, dimensions_map_padded, camera_position[0:2])  # TODO: why/why not -rot?
     print('uncropped, unrotated: ' + str(translation_rotated))
     lat, lon = convert_pix_to_wgs84(dimensions_map_padded, bbox, translation_rotated)  # dimensions --> dimensions_orig
 

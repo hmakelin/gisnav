@@ -17,11 +17,13 @@ import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
 from ament_index_python.packages import get_package_share_directory
+from scipy.spatial.transform import Rotation
 
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
-    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point
+    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance,\
+    get_distance_of_fov_center, altitude_from_gimbal_pitch
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -205,6 +207,7 @@ class Matcher(Node):
 
     def _get_camera_normal(self):
         # TODO: get actual camera normal via RTPS bridge - currently assumes nadir facing camera
+        # np.array([[0, 0, 1]])  # TODO: hsould return this instead?
         return np.array([0, 0, 1])
 
     def _camera_info_callback(self, msg):
@@ -226,9 +229,40 @@ class Matcher(Node):
         self._update_map()
 
     def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg):
-        """Handles reception of latest gimbal pose."""
-        self.get_logger().debug('Gimbal device attitude status callback triggered.')
+        """Handles reception of GimbalDeviceAttitudeStatus messages."""
+        self.get_logger().debug('Gimbal device attitude status callback triggered: ' + str(msg) + '.')
         self._topics_msgs['GimbalDeviceAttitudeStatus'] = msg
+
+    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
+        """Handles reception of GimbalDeviceSetAttitude messages."""
+        self.get_logger().debug('Gimbal device set attitude callback triggered: ' + str(msg) + '.')
+        self._topics_msgs['GimbalDeviceSetAttitude'] = msg
+
+    def _vehicleattitude_pubsubtopic_callback(self, msg):
+        """Handles reception of VehicleAttitude messages."""
+        self.get_logger().debug('Vehicle attitude callback triggered: ' + str(msg) + '.')
+        self._topics_msgs['VehicleAttitude'] = msg
+
+    def _camera_pitch(self):
+        """Returns camera pitch in degrees from GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude message."""
+        #### Print vehicle attitude - is it included in GimbalSetAttitude etc.? so is gimbal attitude relative to NED or relative to vehicle body?####
+        #vehicle_attitude = self._topics_msgs.get('VehicleAttitude', None)
+        #print('vehicle attitude: ' + str(Rotation.from_quat(vehicle_attitude.q).as_euler('zxy', degrees=True)))
+        #######
+        attitude_status = self._topics_msgs.get('GimbalDeviceAttitudeStatus', None)
+        if attitude_status is None:
+            # Try alternative topic
+            self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
+            attitude_status = self._topics_msgs.get('GimbalDeviceSetAttitude', None)
+        if attitude_status is not None:
+            assert hasattr(attitude_status, 'q')
+            # TODO: need to add vehicle attitude to gimbal attitude to get attitude in NED frame? Warn if vehicleattitude not available and just use gimbal attitude alone instead.
+            euler_angles = Rotation.from_quat(attitude_status.q).as_euler('zxy', degrees=True)
+            assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
+            return 180+euler_angles[2]
+        else:
+            self.get_logger().warn('Camera pitch currently not available.')
+            return None
 
     def _match(self):
         """Matches camera image to map image and computes camera position and field of view."""
@@ -246,7 +280,7 @@ class Matcher(Node):
 
             assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message.'
             rot = local_position.heading
-            assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + '([-pi, pi] expected).'
+            assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + ' ([-pi, pi] expected).'
             self.get_logger().debug('Current heading: ' + str(rot) + ' radians.')
             map_cropped, map_rotated = rotate_and_crop_map(self._map, rot, self._img_dimensions())  # TODO: return only rotated
             assert map_cropped.shape[0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
@@ -273,11 +307,23 @@ class Matcher(Node):
             fov_pix = get_fov(self._cv_image, h)
             visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix) # TODO: separate calculation of fov_pix from their visualization!
 
-            apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_size(), self._camera_info().k)
-            map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))
+            #apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
+            map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
                                                       rot, self._img_dimensions())
+
+            # Compute camera altitude, and distance to principal point using triangle similarity
+            camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width, get_distance_of_fov_center(fov_wgs84))
+            camera_pitch = self._camera_pitch()
+            camera_altitude = None
+            if camera_pitch is None:
+                # TODO: Use some other method to estimate altitude if pitch not available?
+                self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
+            else:
+                camera_altitude = math.sin(math.radians(camera_pitch))*camera_distance
+            self.get_logger().debug('Camera pitch, distance to principal point, altitude: {} deg, {} m, {} m.'
+                                    .format(camera_pitch, camera_distance, camera_altitude))
 
             #### TODO: remove this debugging section
             mkp_map_uncropped = []
@@ -298,12 +344,14 @@ class Matcher(Node):
 
             fov_pix_2 = get_fov(self._cv_image, h2)
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
-            #### END ###
+            #### END DEBUG SECTION ###
 
+            # TODO: fix this calculation
             camera_position = get_camera_lat_lon_alt(translation_vector, rotation_matrix, self._img_dimensions(),
                                                      self._map_dimensions_with_padding(), self._map_bbox, rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
 
-            write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
+            #write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
+            write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, camera_distance))
             #self._essential_mat_pub.publish(e)
             #self._homography_mat_pub.publish(h)
             #self._pose_pub.publish(p)

@@ -2,7 +2,9 @@ ros2_topics:
   sub:
     'VehicleLocalPosition_PubSubTopic': 'px4_msgs.msg.VehicleLocalPosition'
     'VehicleGlobalPosition_PubSubTopic': 'px4_msgs.msg.VehicleGlobalPosition'
-#    'GimbalDeviceAttitudeStatus_PubSubTopic': 'px4_msgs.msg.GimbalDeviceAttitudeStatus'
+    'VehicleAttitude_PubSubTopic': 'px4_msgs.msg.VehicleAttitude'
+    'GimbalDeviceAttitudeStatus_PubSubTopic': 'px4_msgs.msg.GimbalDeviceAttitudeStatus'
+    'GimbalDeviceSetAttitude_PubSubTopic': 'px4_msgs.msg.GimbalDeviceSetAttitude'
     'camera_info': 'sensor_msgs.msg.CameraInfo'
     'image_raw': 'sensor_msgs.msg.Image'
   pub:

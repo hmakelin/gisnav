@@ -283,6 +283,7 @@ class Matcher(Node):
     def _get_camera_normal(self):
         # TODO: get actual camera normal from compound vehicle+gimbal attitude - currently assumes nadir facing camera
         # np.array([[0, 0, 1]])  # TODO: hsould return this instead?
+        #compound_attitude = self._compound_gimbal_attitude()
         return np.array([0, 0, 1])
 
     def _base_callback(self, msg_name, msg):
@@ -334,20 +335,10 @@ class Matcher(Node):
 
     def _camera_pitch(self):
         """Returns camera pitch in degrees relative to vehicle frame."""
-        # Do not use _compound_gimbal_attitude - in this case can neglect vehicle attitude if it is not available
-        vehicle_attitude = self._vehicle_attitude()
-        gimbal_attitude_status = self._gimbal_attitude_status()
-        if vehicle_attitude is None:
-            self.get_logger().warn('Vehicle attitude not available, computing camera pitch from gimbal attitude only.')
-            vehicle_attitude = np.array([0, 0, 0, 0])  # TODO: check that this is correct, need to be able to sum with gimbal attitude
-        if gimbal_attitude_status is None:
+        compound_attitude = self._compound_gimbal_attitude(vehicle_attitude_required=False)
+        if compound_attitude is None:
             self.get_logger().warn('Gimbal attitude not available, cannot compute camera pitch.')
-            return None
 
-        assert hasattr(gimbal_attitude_status, 'q'), 'Gimbal attitude quaternion not available - cannot compute camera pitch.'
-        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute camera pitch.'
-
-        compound_attitude = vehicle_attitude.q + gimbal_attitude_status.q
         euler_angles = Rotation.from_quat(compound_attitude).as_euler('zxy', degrees=True)
         assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
         return 180+euler_angles[2]  # TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
@@ -363,15 +354,22 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return attitude_status
 
-    def _compound_gimbal_attitude(self):
+    def _compound_gimbal_attitude(self, vehicle_attitude_required=True):
         """Returns gimbal attitude quaternion relative to NED frame."""
         vehicle_attitude = self._vehicle_attitude()
         attitude_status = self._gimbal_attitude_status()
         info = {'attitude_status': attitude_status, 'vehicle_attitude': vehicle_attitude}
         info_not_available = self._warn_if_none(info, 'Cannot compute gimbal attitude relative to NED frame.')
-        if info_not_available:
-            self.get_logger().warn('Compound gimbal attitude currently not available.')
+        if attitude_status is None:
+            self.get_logger().warn('Gimbal attitude not available, cannot return compound attitude.')
             return None
+        if vehicle_attitude is None:
+            if not vehicle_attitude_required:
+                self.get_logger().warn('Vehicle attitude not available, assuming zero quaternion since it is allowed.')
+                vehicle_attitude = {'q': np.array([0, 0, 0, 0])}  # TODO: check that this is correct, need to be able to sum with gimbal attitude
+            else:
+                self.get_logger().warn('Vehicle attitude not available, cannot return compound attitude.')
+                return None
 
         assert hasattr(attitude_status, 'q'), 'Gimbal attitude quaternion not available - cannot compute compound ' \
                                               'gimbal attitude. '

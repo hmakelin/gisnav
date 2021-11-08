@@ -128,7 +128,8 @@ def setup_sys_path():
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim):
+def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim,
+                                  uncrop=True):
     """Converts the field of view from pixel coordinates to WGS 84.
 
     Arguments:
@@ -137,9 +138,13 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
         map_raster_bbox - The WGS84 bounding box of the padded map raster.
         map_raster_rotation - The rotation that was applied to the map raster before matching in radians.
         img_dim - Size of the image.
+        uncrop - Flag to determine whether uncropping will be included.
     """
-    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
-    fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, fov_in_pix)
+    if uncrop:
+        uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
+        fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, fov_in_pix)
+    else:
+        fov_in_pix_uncropped = fov_in_pix
 
     rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
     fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
@@ -237,6 +242,13 @@ def altitude_from_gimbal_pitch(pitch_degrees, distance):
 def get_camera_lat_lon(bbox):
     """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
     return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
+
+
+def get_x_y(translation_vector, map_dim):
+    """Returns the pixel coordinates corresponding to the relative translation from map center."""
+    return map_dim.width/2 + translation_vector[0].squeeze()*map_dim.width,\
+           map_dim.height/2 + translation_vector[1].squeeze()*map_dim.height  # TODO: should not need squeeze
+
 
 
 def get_camera_lat_lon_alt(translation, rotation, dimensions_img, dimensions_map_padded, bbox, rot):

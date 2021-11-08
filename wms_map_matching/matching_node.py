@@ -23,7 +23,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
     visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance,\
-    get_distance_of_fov_center, altitude_from_gimbal_pitch
+    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -230,17 +230,17 @@ class Matcher(Node):
 
     def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceAttitudeStatus messages."""
-        self.get_logger().debug('Gimbal device attitude status callback triggered: ' + str(msg) + '.')
+        self.get_logger().debug('Gimbal device attitude status callback triggered.')
         self._topics_msgs['GimbalDeviceAttitudeStatus'] = msg
 
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceSetAttitude messages."""
-        self.get_logger().debug('Gimbal device set attitude callback triggered: ' + str(msg) + '.')
+        self.get_logger().debug('Gimbal device set attitude callback triggered.')
         self._topics_msgs['GimbalDeviceSetAttitude'] = msg
 
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
-        self.get_logger().debug('Vehicle attitude callback triggered: ' + str(msg) + '.')
+        self.get_logger().debug('Vehicle attitude callback triggered.')
         self._topics_msgs['VehicleAttitude'] = msg
 
     def _camera_pitch(self):
@@ -346,12 +346,19 @@ class Matcher(Node):
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
             #### END DEBUG SECTION ###
 
-            # TODO: fix this calculation
-            camera_position = get_camera_lat_lon_alt(translation_vector, rotation_matrix, self._img_dimensions(),
-                                                     self._map_dimensions_with_padding(), self._map_bbox, rot)  # TODO: the bbox is still for the old padded map, is that OK? should use get map dimensions?
+            # Convert translation vector to WGS84 coordinates
+            # Translate relative to top left corner, not principal point/center of map raster
+            translation_vector[0] = translation_vector[0] + self._img_dimensions().width/2
+            translation_vector[1] = translation_vector[1] + self._img_dimensions().height/2
+            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
+                np.array(translation_vector[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
+                self._map_bbox, rot, self._img_dimensions()) # , uncrop=False)
+
+            cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
+            print('campos: ' + str(cam_pos_wgs84))
 
             #write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
-            write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, camera_distance))
+            write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance))
             #self._essential_mat_pub.publish(e)
             #self._homography_mat_pub.publish(h)
             #self._pose_pub.publish(p)

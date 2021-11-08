@@ -123,7 +123,7 @@ def setup_sys_path():
         from ament_index_python.packages import get_package_share_directory
     package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
     share_dir = get_package_share_directory(package_name)
-    superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
+    superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')  # todo: set this stuff up in the superglue adapter module
     sys.path.append(os.path.abspath(superglue_dir))
     return share_dir, superglue_dir
 
@@ -175,9 +175,10 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
     return lat, lon
 
 
-def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename='field_of_view.json',
+def write_fov_and_camera_location_to_geojson(fov, location, fov_center, fov_gimbal, filename_fov='field_of_view.json',
                                              filename_location='estimated_location.json',
-                                             filename_fov_center='fov_center.json'):
+                                             filename_fov_center='fov_center.json',
+                                             filename_gimbal_fov='projected_field_of_view.json'):
     # TODO: write simulated drone location also!
     """Writes the field of view and lat lon location of drone and center of fov into a geojson file.
 
@@ -186,9 +187,14 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename
         location - Estimated camera location.
         map_location - Center of the FoV.
     """
-    with open(filename, 'w') as f:
+    with open(filename_fov, 'w') as f:
         polygon = geojson.Polygon(
             [list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
+        geojson.dump(polygon, f)
+
+    with open(filename_gimbal_fov, 'w') as f:
+        polygon = geojson.Polygon(
+            [list(map(lambda x: tuple(reversed(tuple(x))), fov_gimbal.squeeze()))])  # GeoJSON uses lon-lat
         geojson.dump(polygon, f)
 
     # Can only have 1 geometry per geoJSON - need to dump this Point stuff into another file
@@ -199,6 +205,8 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, filename
     with open(filename_fov_center, 'w') as f3:
         fov_latlon = geojson.Point(tuple(reversed(fov_center[0:2])))
         geojson.dump(fov_latlon, f3)
+
+    # TODO: write gimbal-projected FoV into its own file
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):

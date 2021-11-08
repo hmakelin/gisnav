@@ -86,6 +86,7 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
+        # TODO: get misc out of superglue and think this through better - there should be regular input validation here for whatever the users are typing in?
         return self._config['superglue']['misc']['gimbal_projection']
 
     def _import_class(self, class_name, module_name):
@@ -146,7 +147,15 @@ class Matcher(Node):
         return max_dim, max_dim
 
     def _camera_info(self):
-        return self._topics_msgs.get('camera_info', None)
+        """Returns camera info."""
+        return self._get_simple_info('camera_info')
+
+    def _get_simple_info(self, message_name):
+        """Returns message received via microRTPS bridge or None if message was not yet received."""
+        info = self._topics_msgs.get(message_name, None)
+        if info is None:
+            self.get_logger().warn(message_name + ' info not available.')
+        return info
 
     def _map_size_with_padding(self):
         return padded_map_size(self._img_dimensions())
@@ -157,6 +166,8 @@ class Matcher(Node):
     def _declared_img_size(self):
         camera_info = self._camera_info()
         if camera_info is not None:
+            assert hasattr(camera_info, 'height') and hasattr(camera_info, 'width'),\
+                'Height or width info was unexpectedly not included in CameraInfo message.'
             return camera_info.height, camera_info.width  # numpy order: h, w, c --> height first
         else:
             self.get_logger().warn('Camera info was not available - returning None as declared image size.')
@@ -165,10 +176,74 @@ class Matcher(Node):
     def _img_dimensions(self):
         return Dimensions(*self._declared_img_size())
 
+    def _vehicle_attitude(self):
+        """Returns vehicle attitude from VehicleAttitude message."""
+        return self._get_simple_info('VehicleAttitude')
+
+    def _warn_if_none(self, values_dict, custom_warning_suffix=None):
+        """Returns false if every value in given dictionary is not None, or logs a warning and returns True if not."""
+        out = False
+        for k, v in values_dict.items():
+            if v is None:
+                out = True
+                warning = k + ' not available.'
+                if custom_warning_suffix is not None:
+                    warning = warning + ' ' + custom_warning_suffix
+                self.get_logger().warn(warning)
+        return out
+
+    def _project_gimbal_fov(self):
+        """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
+        compound_attitude = self._compound_gimbal_attitude()
+        camera_info = self._camera_info()
+        info = {'camera_info': camera_info, 'compound_attitude': compound_attitude}
+        if self._warn_if_none(info, 'Cannot project FoV from gimbal attitude info.'):
+            return None
+
+        assert hasattr(camera_info, 'k'), 'Camera intrinsics matrix K not available - cannot project gimbal FoV.'
+
+        # Compute extrinsic matrix
+        r = Rotation.from_quat(compound_attitude).as_matrix()  # rotation matrix
+        e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
+        assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape)\
+                                  + ' - could not project gimbal FoV.'
+
+        # Intrinsic matrix
+        k = np.array(camera_info.k).reshape([3, 3])
+        assert k.shape == (3, 3), 'Intrinsic matrix had unexpected shape: ' + str(k.shape)\
+                                  + ' - could not project gimbal FoV.'
+
+        # Project image corners to z=0 plane (ground)
+        h, w = self._img_dimensions()
+        # TODO: currently using pixel coordinates - should use relative instead?
+        src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 2)  # TODO: This is used at least twice - make it a utility function  (-1, 1, 2)
+        projection_matrix = np.matmul(k, e)
+        #projection_matrix = projection_matrix * np.array((1, 1, 0, 1))  # Set z (3rd column) to zero
+        projection_matrix = np.delete(projection_matrix, 2, 1)  # Remove z-column, making the matrix square
+        projection_matrix_inv = np.linalg.inv(projection_matrix)
+        print('k:\n' + str(k))
+        print('e:\n' + str(e))
+        print('p:\n' + str(projection_matrix))
+        #print(projection_matrix_inv)
+        #print(src_corners.shape)
+        #print(src_corners)
+        print('p:\n' + str(projection_matrix))
+        np.apply_along_axis(lambda pt: print(pt), 1, src_corners)  # Extend point 'pt' to 3-vector
+        dst_corners = np.apply_along_axis(lambda pt: np.matmul(projection_matrix_inv,np.hstack((pt, np.array(1)))),
+                                          1, src_corners)  # Extend point 'pt' to 3-vector
+        dst_corners = np.delete(dst_corners, 2, 1)
+        print('dst corners:\n' + str(dst_corners))
+
+        # TODO: convert these relative coordinates to WGS84
+        return dst_corners
+
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
         if self._use_gimbal_projection():
-            raise NotImplementedError  # TODO
+            self._map_bbox = self._project_gimbal_fov()
+            if self._map_bbox is None:
+                self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat,
+                                           self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))  # TODO: remove this redundant call, design this better
         else:
             self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat,
                                        self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))
@@ -206,63 +281,106 @@ class Matcher(Node):
         self._match()
 
     def _get_camera_normal(self):
-        # TODO: get actual camera normal via RTPS bridge - currently assumes nadir facing camera
+        # TODO: get actual camera normal from compound vehicle+gimbal attitude - currently assumes nadir facing camera
         # np.array([[0, 0, 1]])  # TODO: hsould return this instead?
         return np.array([0, 0, 1])
 
+    def _base_callback(self, msg_name, msg):
+        """Stores message and prints out brief debug log message."""
+        self.get_logger().debug(msg_name + ' callback triggered.')
+        self._topics_msgs[msg_name] = msg
+
     def _camera_info_callback(self, msg):
         """Handles reception of camera info."""
-        self.get_logger().debug('Camera info callback triggered.')
-        self._topics_msgs['camera_info'] = msg
+        self._base_callback('camera_info', msg)
         self.get_logger().debug('Camera info: ' + str(msg))
         self._topics['camera_info'].destroy()  # TODO: check that info was indeed received before destroying subscription
 
     def _vehiclelocalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest local position estimate."""
-        self.get_logger().debug('Vehicle local position callback triggered.')
-        self._topics_msgs['VehicleLocalPosition_PubSubTopic'] = msg
+        self._base_callback('VehicleLocalPosition_PubSubTopic', msg)
 
     def _vehicleglobalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest global position estimate."""
-        self.get_logger().debug('Vehicle global position callback triggered.')
-        self._topics_msgs['VehicleGlobalPosition_PubSubTopic'] = msg
+        self._base_callback('VehicleGlobalPosition_PubSubTopic', msg)
         self._update_map()
 
     def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceAttitudeStatus messages."""
-        self.get_logger().debug('Gimbal device attitude status callback triggered.')
-        self._topics_msgs['GimbalDeviceAttitudeStatus'] = msg
+        self._base_callback('GimbalDeviceAttitudeStatus', msg)
 
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceSetAttitude messages."""
-        self.get_logger().debug('Gimbal device set attitude callback triggered.')
-        self._topics_msgs['GimbalDeviceSetAttitude'] = msg
+        self._base_callback('GimbalDeviceSetAttitude', msg)
 
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
-        self.get_logger().debug('Vehicle attitude callback triggered.')
-        self._topics_msgs['VehicleAttitude'] = msg
+        self._base_callback('VehicleAttitude', msg)
+
+    def _get_terrain_altitude(self):
+        """Returns terrain altitude from VehicleGlobalPosition message."""
+        global_position = self._topics_msgs.get('VehicleGlobalPosition', None)
+        if global_position is not None:
+            assert hasattr(global_position, 'terrain_alt') and hasattr(global_position, 'terrain_alt_valid'),\
+                'VehicleGlobalPosition was missing terrain_alt or terrain_alt_valid fields.'
+            if global_position.terrain_alt_valid:
+                return global_position.terrain_alt
+            else:
+                self.get_logger().warn('Terrain altitude not valid.')
+                return None
+        else:
+            self.get_logger().warn('Terrain altitude not available.')
+            return None
 
     def _camera_pitch(self):
-        """Returns camera pitch in degrees from GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude message."""
-        #### Print vehicle attitude - is it included in GimbalSetAttitude etc.? so is gimbal attitude relative to NED or relative to vehicle body?####
-        #vehicle_attitude = self._topics_msgs.get('VehicleAttitude', None)
-        #print('vehicle attitude: ' + str(Rotation.from_quat(vehicle_attitude.q).as_euler('zxy', degrees=True)))
-        #######
+        """Returns camera pitch in degrees relative to vehicle frame."""
+        # Do not use _compound_gimbal_attitude - in this case can neglect vehicle attitude if it is not available
+        vehicle_attitude = self._vehicle_attitude()
+        gimbal_attitude_status = self._gimbal_attitude_status()
+        if vehicle_attitude is None:
+            self.get_logger().warn('Vehicle attitude not available, computing camera pitch from gimbal attitude only.')
+            vehicle_attitude = np.array([0, 0, 0, 0])  # TODO: check that this is correct, need to be able to sum with gimbal attitude
+        if gimbal_attitude_status is None:
+            self.get_logger().warn('Gimbal attitude not available, cannot compute camera pitch.')
+            return None
+
+        assert hasattr(gimbal_attitude_status, 'q'), 'Gimbal attitude quaternion not available - cannot compute camera pitch.'
+        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute camera pitch.'
+
+        compound_attitude = vehicle_attitude.q + gimbal_attitude_status.q
+        euler_angles = Rotation.from_quat(compound_attitude).as_euler('zxy', degrees=True)
+        assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
+        return 180+euler_angles[2]  # TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+
+    def _gimbal_attitude_status(self):
+        """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
         attitude_status = self._topics_msgs.get('GimbalDeviceAttitudeStatus', None)
         if attitude_status is None:
             # Try alternative topic
             self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
             attitude_status = self._topics_msgs.get('GimbalDeviceSetAttitude', None)
-        if attitude_status is not None:
-            assert hasattr(attitude_status, 'q')
-            # TODO: need to add vehicle attitude to gimbal attitude to get attitude in NED frame? Warn if vehicleattitude not available and just use gimbal attitude alone instead.
-            euler_angles = Rotation.from_quat(attitude_status.q).as_euler('zxy', degrees=True)
-            assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
-            return 180+euler_angles[2]
-        else:
-            self.get_logger().warn('Camera pitch currently not available.')
+            if attitude_status is None:
+                self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
+        return attitude_status
+
+    def _compound_gimbal_attitude(self):
+        """Returns gimbal attitude quaternion relative to NED frame."""
+        vehicle_attitude = self._vehicle_attitude()
+        attitude_status = self._gimbal_attitude_status()
+        info = {'attitude_status': attitude_status, 'vehicle_attitude': vehicle_attitude}
+        info_not_available = self._warn_if_none(info, 'Cannot compute gimbal attitude relative to NED frame.')
+        if info_not_available:
+            self.get_logger().warn('Compound gimbal attitude currently not available.')
             return None
+
+        assert hasattr(attitude_status, 'q'), 'Gimbal attitude quaternion not available - cannot compute compound ' \
+                                              'gimbal attitude. '
+        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute compound ' \
+                                               'gimbal attitude. '
+
+        compound_attitude = vehicle_attitude.q + attitude_status.q
+
+        return compound_attitude
 
     def _match(self):
         """Matches camera image to map image and computes camera position and field of view."""
@@ -357,8 +475,10 @@ class Matcher(Node):
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
             print('campos: ' + str(cam_pos_wgs84))
 
+            fov_gimbal = fov_wgs84  # TODO: put gimbal projected field of view here
             #write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
-            write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance))
+            write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
+                                                     fov_gimbal)
             #self._essential_mat_pub.publish(e)
             #self._homography_mat_pub.publish(h)
             #self._pose_pub.publish(p)

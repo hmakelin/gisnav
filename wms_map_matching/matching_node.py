@@ -344,7 +344,7 @@ class Matcher(Node):
 
         euler_angles = Rotation.from_quat(compound_attitude).as_euler('zxy', degrees=True)
         assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
-        return 180+euler_angles[2]  # TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+        return 180 + euler_angles[2]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
 
     def _gimbal_attitude_status(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
@@ -393,8 +393,6 @@ class Matcher(Node):
         assert attitude_status.flags == 0, 'Unsupported configuration flags for gimbal device attitude, cannot ' \
                                            'determine compound attitude. '
 
-        #compound_attitude = vehicle_attitude.q * attitude_status.q  # TODO: this quaternion multiplication is wrong?
-
         # TODO: get rid of this manual hack somehow?
         # Testing suggests that the gimbal attitude pitch is relative to horizon, while roll and yaw are relative to
         # vehicle frame, which is in conflict with attitude_status.flags==0. Use euler angles below to manually compose
@@ -404,7 +402,9 @@ class Matcher(Node):
         compound_attitude_euler = np.array([vehicle_attitude[0], vehicle_attitude[1], gimbal_attitude[2]])
         compound_attitude = Rotation.from_euler(euler_sequence, compound_attitude_euler, degrees=True).as_quat()
 
-        print('manually composed compound attitude euler degrees: ' + str(compound_attitude_euler))
+        print('vehicle attitude euler degrees: ' + str(vehicle_attitude))
+        print('gimbal attitude euler degrees: ' + str(gimbal_attitude))
+        print('compound attitude euler degrees: ' + str(compound_attitude_euler))
 
         return compound_attitude
 

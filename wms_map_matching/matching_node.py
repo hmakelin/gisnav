@@ -241,7 +241,8 @@ class Matcher(Node):
         """Gets latest map from WMS server and returns it as numpy array."""
         if self._use_gimbal_projection():
             self._map_bbox = self._project_gimbal_fov()
-            if self._map_bbox is None:
+            if True:  # self._map_bbox is None:  # TODO: re-enable this check
+                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lat,
                                            self._topics_msgs['VehicleGlobalPosition_PubSubTopic'].lon))  # TODO: remove this redundant call, design this better
         else:
@@ -314,6 +315,7 @@ class Matcher(Node):
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceSetAttitude messages."""
         self._base_callback('GimbalDeviceSetAttitude', msg)
+        self.get_logger().debug('GimbalDeviceSetAttitude: ' + str(msg))  # TODO: remove this line?
 
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
@@ -355,17 +357,23 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return attitude_status
 
+    def _get_euler_angles(self):
+        """Returns a dict with the sequence of the euler angles used for scipy.spatial.transform.Rotation operations."""
+        angles = {'sequence': 'zxy', 'labels': {'x': 'yaw', 'y': 'pitch', 'z': 'roll'}}
+        return angles
+
     def _compound_gimbal_attitude(self, vehicle_attitude_required=True):
         """Returns gimbal attitude quaternion relative to NED frame."""
         vehicle_attitude = self._vehicle_attitude()
         attitude_status = self._gimbal_attitude_status()
         info = {'attitude_status': attitude_status, 'vehicle_attitude': vehicle_attitude}
-        info_not_available = self._warn_if_none(info, 'Cannot compute gimbal attitude relative to NED frame.')
+        info_not_available = self._warn_if_none(info, 'Cannot compute gimbal attitude relative to NED frame.')  # TODO: unused var assignment info_not_available
         if attitude_status is None:
             self.get_logger().warn('Gimbal attitude not available, cannot return compound attitude.')
             return None
         if vehicle_attitude is None:
             if not vehicle_attitude_required:
+                # TODO: this assumes gimbal attitude is relative to NED or we only care about pitch and that vehicle pitch is very low - maybe rename vehicle_attitude_required to ignore_missing_vehicle_attitude to be more specific?
                 self.get_logger().warn('Vehicle attitude not available, assuming zero quaternion since it is allowed.')
                 vehicle_attitude = {'q': np.array([0, 0, 0, 0])}  # TODO: check that this is correct, need to be able to sum with gimbal attitude
             else:
@@ -377,7 +385,26 @@ class Matcher(Node):
         assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute compound ' \
                                                'gimbal attitude. '
 
-        compound_attitude = vehicle_attitude.q + attitude_status.q
+        euler_sequence = self._get_euler_angles().get('sequence', None)
+        assert euler_sequence is not None, 'Could not retrieve sequence of euler angles - cannot return compound ' \
+                                           'gimbal attitude. '
+
+        # This implementation assumes that gimbal device attitude info is relative to drone frame:
+        assert attitude_status.flags == 0, 'Unsupported configuration flags for gimbal device attitude, cannot ' \
+                                           'determine compound attitude. '
+
+        #compound_attitude = vehicle_attitude.q * attitude_status.q  # TODO: this quaternion multiplication is wrong?
+
+        # TODO: get rid of this manual hack somehow?
+        # Testing suggests that the gimbal attitude pitch is relative to horizon, while roll and yaw are relative to
+        # vehicle frame, which is in conflict with attitude_status.flags==0. Use euler angles below to manually compose
+        # the compound attitude.
+        vehicle_attitude = Rotation.from_quat(vehicle_attitude.q).as_euler(euler_sequence, degrees=True)
+        gimbal_attitude = Rotation.from_quat(attitude_status.q).as_euler(euler_sequence, degrees=True)
+        compound_attitude_euler = np.array([vehicle_attitude[0], vehicle_attitude[1], gimbal_attitude[2]])
+        compound_attitude = Rotation.from_euler(euler_sequence, compound_attitude_euler, degrees=True).as_quat()
+
+        print('manually composed compound attitude euler degrees: ' + str(compound_attitude_euler))
 
         return compound_attitude
 
@@ -484,7 +511,7 @@ class Matcher(Node):
             self._topics['fov'].publish(fov_wgs84)
 
         except Exception as e:
-            self.get_logger().warn('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
+            self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
 
 def main(args=None):

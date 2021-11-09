@@ -281,10 +281,11 @@ class Matcher(Node):
         self._match()
 
     def _get_camera_normal(self):
-        # TODO: get actual camera normal from compound vehicle+gimbal attitude - currently assumes nadir facing camera
-        # np.array([[0, 0, 1]])  # TODO: hsould return this instead?
-        #compound_attitude = self._compound_gimbal_attitude()
-        return np.array([0, 0, 1])
+        compound_attitude = self._compound_gimbal_attitude(vehicle_attitude_required=False)
+        camera_normal = Rotation.from_quat(compound_attitude).as_rotvec()
+        print('camera normal: ' + str(camera_normal))  # TODO: check that this is correct and remove this line
+        #return np.array([0, 0, 1])
+        return camera_normal
 
     def _base_callback(self, msg_name, msg):
         """Stores message and prints out brief debug log message."""

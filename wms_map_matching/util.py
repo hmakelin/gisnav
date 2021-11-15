@@ -17,7 +17,7 @@ LatLon = namedtuple('LatLon', 'lat lon')
 Pixel = namedtuple('Pixel', 'x y')
 Dimensions = namedtuple('Dimensions', 'height width')
 
-MAP_RADIUS_METERS_DEFAULT = 300
+MAP_RADIUS_METERS_DEFAULT = 400
 
 
 def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
@@ -41,6 +41,17 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     circle_transformed = transform(projection, circle).exterior.coords[:]
     lons_lats = list(zip(*circle_transformed))
     return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
+
+
+def fov_to_bbox(fov_wgs84):
+    """Returns BBox for WGS84 field of view."""
+    left, bottom, right, top = 180, 90, -180, -90
+    for pt in fov_wgs84:
+        right = pt[1] if pt[1] >= right else right
+        left = pt[1] if pt[1] <= left else left
+        top = pt[0] if pt[0] >= top else top
+        bottom = pt[0] if pt[0] <= bottom else bottom
+    return BBox(left, bottom, right, top)
 
 
 def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, method=cv2.RANSAC, logger=None,
@@ -108,6 +119,30 @@ def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corn
 
     return out
 
+def wgs84(latlon, scaling, xy):
+    """Converts x and y to wgs84 coordinates based on origin and scaling factor to meters."""
+    x0, y0 = pyproj.transform('epsg:4326', 'epsg:3857', latlon.lat, latlon.lon)
+    print(x0, y0)
+    print(xy)
+    x1, y1 = x0 + scaling*xy[:, 0], y0 + scaling*xy[:, 1]
+    print(x1, y1)
+    lat, lon = pyproj.transform('epsg:3857', 'epsg:4326', x1, y1)
+    print(f'latlon:\n{lat}, {lon}')
+    #return LatLon(lat, lon)
+    #return lat, lon
+    out = np.concatenate((lat.reshape(-1, 1), lon.reshape(-1, 1)), axis=1)
+    print(f'out\n{out}')
+    return out
+
+def wgs84_old(latlon, scaling, xy):
+    """Converts x and y to wgs84 coordinates based on origin and scaling factor to meters."""
+    x0, y0 = pyproj.transform('epsg:4326', 'epsg:3857', latlon.lat, latlon.lon)
+    print(x0, y0)
+    x1, y1 = x0 + scaling*xy[0], y0 + scaling*xy[1]
+    print(x1, y1)
+    lat, lon = pyproj.transform('epsg:3857', 'epsg:4326', x1, y1)
+    print(lat, lon)
+    return LatLon(lat, lon)
 
 def get_fov(img_arr, h_mat):
     """Calculates field of view (FoV) corners from homography and image shape."""
@@ -153,6 +188,23 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
     fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
 
     return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
+
+
+# TODO: refactor this function so that there is no redudnant logic betwee v1 and v2 (decompoes them into modular parts)
+#def convert_fov_from_pix_to_wgs84_v2(fov_in_pix, latlon, yaw, k, img_dim):
+    """Converts the field of view from pixel coordinates to WGS 84. Used for the gimbal FoV."""
+    """
+    scaling =
+
+    rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
+    fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
+
+    convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
+    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
+
+    return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
+    """
+    raise NotImplementedError
 
 
 def rotate_point(radians, img_dim, pt):

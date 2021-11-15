@@ -20,7 +20,7 @@ from ament_index_python.packages import get_package_share_directory
 from scipy.spatial.transform import Rotation
 from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
-    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_camera_lat_lon, BBox,\
+    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox,\
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
     visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance,\
     get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox
@@ -290,9 +290,8 @@ class Matcher(Node):
 
             assert gimbal_fov_pix is not None, 'Gimbal fov pix is missing.'
             ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
-            print(self._gimbal_fov_wgs84)
-            self._map_bbox = fov_to_bbox(self._gimbal_fov_wgs84)  # TODO: this should not be stored in an attribute, just temporarily passing stuff between _update_map and _match functions.
-            print(self._map_bbox)
+            projected_fov_center = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
+            self._map_bbox = get_bbox(projected_fov_center)  # TODO: this should not be stored in an attribute, just temporarily passing stuff between _update_map and _match functions.
         else:
             self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
                                        self._topics_msgs['VehicleGlobalPosition'].lon))
@@ -531,7 +530,7 @@ class Matcher(Node):
             visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix) # TODO: separate calculation of fov_pix from their visualization!
 
             #apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
-            map_lat, map_lon = get_camera_lat_lon(BBox(*self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
+            map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
                                                       rot, self._img_dimensions())

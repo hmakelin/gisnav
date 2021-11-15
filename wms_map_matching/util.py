@@ -299,8 +299,9 @@ def altitude_from_gimbal_pitch(pitch_degrees, distance):
     return distance*math.sin(math.radians(pitch_degrees))
 
 
-def get_camera_lat_lon(bbox):
+def get_bbox_center(bbox):
     """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
+    # TODO: renamed to get_bbox_center - revisit every place where this is used
     return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
 
 

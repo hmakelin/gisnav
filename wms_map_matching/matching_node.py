@@ -91,7 +91,7 @@ class Matcher(Node):
     def _use_gimbal_projection(self):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
         # TODO: get misc out of superglue and think this through better - there should be regular input validation here for whatever the users are typing in?
-        return self._config['superglue']['misc']['gimbal_projection']
+        return self._config['misc']['gimbal_projection']
 
     def _import_class(self, class_name, module_name):
         """Imports class from module if not yet imported."""
@@ -526,8 +526,7 @@ class Matcher(Node):
             h, h_mask, translation_vector, rotation_matrix = self._process_matches(mkp_img, mkp_map,
                                                                              self._camera_info().k.reshape([3, 3]),
                                                                              cam_normal,
-                                                                             affine=self._config['superglue']['misc'][
-                                                                                 'affine'])
+                                                                             affine=self._config['misc']['affine'])
 
             assert h.shape == (3, 3), 'Homography matrix had unexpected shape: ' + str(h.shape) + '.'
             assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: ' \

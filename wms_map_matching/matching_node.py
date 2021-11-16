@@ -23,7 +23,8 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox, \
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map, \
     visualize_homography, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance, \
-    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox, get_angle
+    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox, get_angle,\
+    create_src_corners
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -194,8 +195,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy,  # TODO: NEed to revert euler sequence so that ::-1 not needed here?
-                                degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
                                   + ' - could not project gimbal FoV.'
@@ -215,8 +215,7 @@ class Matcher(Node):
 
         # Project image corners to z=0 plane (ground)
         # TODO: currently using pixel coordinates - should scale using camera distance instead?
-        src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1,
-                                                                                           2)  # TODO: This is used at least twice - make it a utility function  (-1, 1, 2), e.g. in util.get_fov?
+        src_corners = create_src_corners()
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         hm = np.matmul(k, e)  # TODO: call this p for projection matrix instead?
@@ -242,8 +241,7 @@ class Matcher(Node):
             assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'), 'Global position message did ' \
                                                                                         'not include lat or lon ' \
                                                                                         'fields. '
-            assert hasattr(global_position,
-                           'alt'), 'Global position message did not include alt field.'  # TODO: use terrain_alt and terrain_alt_valid fields?
+            assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'  # TODO: use terrain_alt and terrain_alt_valid fields?
             lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
             cam_info = self._camera_info()
             if cam_info is None:
@@ -350,7 +348,7 @@ class Matcher(Node):
         gimbal_yaw = gimbal_euler[yaw_index]
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
-        yaw = heading + gimbal_yaw  # TODO: need to test with gimbal yaw set to something else besides 0
+        yaw = heading + gimbal_yaw
         pitch = -(90 + gimbal_euler[pitch_index])
         roll = 0
         rpy = [roll, pitch, yaw]
@@ -364,7 +362,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
             return None
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)  # TODO: this is also inverted in _project_gimbal_fov --> invert self.EULER_SEQUENCE?
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)
         camera_normal = r.apply(nadir)
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
@@ -409,7 +407,6 @@ class Matcher(Node):
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
         """Handles reception of GimbalDeviceSetAttitude messages."""
         self._base_callback('GimbalDeviceSetAttitude', msg)
-        self.get_logger().debug('GimbalDeviceSetAttitude: ' + str(msg))  # TODO: remove this line?
 
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
@@ -440,7 +437,7 @@ class Matcher(Node):
         pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        return rpy[pitch_index]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+        return rpy[pitch_index]
 
     def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
@@ -519,7 +516,6 @@ class Matcher(Node):
                 self.get_logger().warn('Did not find enough matches. Skipping current matches.')
                 return
 
-            # TODO: camear normal must be rotated by -yaw so that it can be compared to the ones from decomposeHomography, otherwise the selection only works when flying north
             cam_normal = self._get_camera_normal()  # Currently retursn rotvec, not camera normal
             h, h_mask, translation_vector, rotation_matrix = self._process_matches(mkp_img, mkp_map,
                                                                              self._camera_info().k.reshape([3, 3]),
@@ -533,8 +529,7 @@ class Matcher(Node):
                                                     + str(rotation_matrix.shape) + '.'
 
             fov_pix = get_fov(self._cv_image, h)
-            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map,
-                                 fov_pix)  # TODO: separate calculation of fov_pix from their visualization!
+            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix)
 
             # apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
             map_lat, map_lon = get_bbox_center(BBox(
@@ -599,7 +594,6 @@ class Matcher(Node):
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
 
             fov_gimbal = self._gimbal_fov_wgs84  # TODO: put gimbal projected field of view here
-            # write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
                                                      # TODO: fix height estimate
                                                      fov_gimbal)

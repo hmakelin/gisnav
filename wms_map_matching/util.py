@@ -106,9 +106,13 @@ def wgs84_old(latlon, scaling, xy):
 def get_fov(img_arr, h_mat):
     """Calculates field of view (FoV) corners from homography and image shape."""
     h, w, _ = img_arr.shape  # height before width in np.array shape
-    src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+    src_corners = create_src_corners(h, w)
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
     return dst_corners
+
+
+def create_src_corners(h, w):
+    return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
 
 
 def setup_sys_path():

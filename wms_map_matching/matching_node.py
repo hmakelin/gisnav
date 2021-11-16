@@ -20,9 +20,9 @@ from ament_index_python.packages import get_package_share_directory
 from scipy.spatial.transform import Rotation
 from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
-    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox,\
-    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map,\
-    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance,\
+    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox, \
+    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map, \
+    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance, \
     get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox
 
 # Add the share folder to Python path
@@ -33,6 +33,8 @@ from wms_map_matching.superglue_adapter import SuperGlue
 
 
 class Matcher(Node):
+    # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
+    EULER_SEQUENCE = 'zxy'
 
     class TopicType(Enum):
         """Enumerates microRTPS bridge topic types."""
@@ -83,7 +85,7 @@ class Matcher(Node):
                 self._config = yaml.safe_load(f)
                 self.get_logger().info('Loaded config:\n{}.'.format(self._config))
             except Exception as e:
-                self.get_logger().error('Could not load config file {} because of exception: {}\n{}'\
+                self.get_logger().error('Could not load config file {} because of exception: {}\n{}' \
                                         .format(yaml_file, e, traceback.print_exc()))
 
     def _use_gimbal_projection(self):
@@ -171,7 +173,7 @@ class Matcher(Node):
     def _declared_img_size(self):
         camera_info = self._camera_info()
         if camera_info is not None:
-            assert hasattr(camera_info, 'height') and hasattr(camera_info, 'width'),\
+            assert hasattr(camera_info, 'height') and hasattr(camera_info, 'width'), \
                 'Height or width info was unexpectedly not included in CameraInfo message.'
             return camera_info.height, camera_info.width  # numpy order: h, w, c --> height first
         else:
@@ -185,75 +187,50 @@ class Matcher(Node):
         """Returns vehicle attitude from VehicleAttitude message."""
         return self._get_simple_info('VehicleAttitude')
 
-    def _warn_if_none(self, values_dict, custom_warning_suffix=None):
-        """Returns false if every value in given dictionary is not None, or logs a warning and returns True if not."""
-        out = False
-        for k, v in values_dict.items():
-            if v is None:
-                out = True
-                warning = k + ' not available.'
-                if custom_warning_suffix is not None:
-                    warning = warning + ' ' + custom_warning_suffix
-                self.get_logger().warn(warning)
-        return out
-
     def _project_gimbal_fov(self):
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
-        compound_attitude = self._compound_gimbal_attitude()
-        camera_info = self._camera_info()
-        info = {'camera_info': camera_info, 'compound_attitude': compound_attitude}
-        if self._warn_if_none(info, 'Cannot project FoV from gimbal attitude info.'):
-            return None  # TODO: added yaw temporarily to returns so there's two NOne's here
+        rpy = list(self._get_camera_rpy())
+        if rpy is None:
+            self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
+            return
 
+        print(f'_project_gimbal_fov: Euler RPY {rpy}')
+
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],
+                                degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
+        e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
+        assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
+                                  + ' - could not project gimbal FoV.'
+
+        camera_info = self._camera_info()
+        if camera_info is None:
+            self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
+            return
         assert hasattr(camera_info, 'k'), 'Camera intrinsics matrix K not available - cannot project gimbal FoV.'
         h, w = self._img_dimensions()
         # TODO: assert h w not none and integers? and divisible by 2?
 
-        # Compute extrinsic matrix
-        local_position = self._topics_msgs.get('VehicleLocalPosition', None)
-        if local_position is None:
-            self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Skipping matching.')
-            return
-
-        assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message.'
-        heading = math.degrees(local_position.heading)
-
-        #‘X’, ‘Y’, ‘Z’ for intrinsic rotations, or {‘x’, ‘y’, ‘z’} for extrinsic rotations
-        yaw = heading # + 90
-        pitch = 0
-        roll = 20  # 90 + compound_attitude[1]  # TODO: Hard coded value/index here - fix this so that it gets the pitch always
-        eulr = [yaw, pitch, roll]
-        print(f'eulr yaw pitch roll {eulr}')
-        r = Rotation.from_euler('zyx', eulr, degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
-
-        e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
-        assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape)\
-                                  + ' - could not project gimbal FoV.'
-
         # Intrinsic matrix
         k = np.array(camera_info.k).reshape([3, 3])
-        assert k.shape == (3, 3), 'Intrinsic matrix had unexpected shape: ' + str(k.shape)\
+        assert k.shape == (3, 3), 'Intrinsic matrix had unexpected shape: ' + str(k.shape) \
                                   + ' - could not project gimbal FoV.'
 
         # Project image corners to z=0 plane (ground)
-        # TODO: currently using pixel coordinates - should use relative instead?
-        #src_corners = np.float32([[0, 0], [0, w - 1], [h - 1, w - 1], [h - 1, 0]]).reshape(-1, 1, 2)  # TODO: This is used at least twice - make it a utility function  (-1, 1, 2), e.g. in util.get_fov?
-        src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)  # TODO: This is used at least twice - make it a utility function  (-1, 1, 2), e.g. in util.get_fov?
-
-        print('e before removal of z:\n' + str(e))
+        # TODO: currently using pixel coordinates - should scale using camera distance instead?
+        src_corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1,
+                                                                                           2)  # TODO: This is used at least twice - make it a utility function  (-1, 1, 2), e.g. in util.get_fov?
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
-        hm = np.matmul(k, e)   # TODO: call this p for projection matrix instead?
+        hm = np.matmul(k, e)  # TODO: call this p for projection matrix instead?
         hm_inv = np.linalg.inv(hm)
 
         dst_corners = cv2.perspectiveTransform(src_corners, hm_inv)  # TODO: use util.get_fov here?
 
         dst_corners = dst_corners.squeeze()  # See get_fov usage elsewhere -where to do squeeze if at all?
 
-        print('dst corners scaled:\n' + str(dst_corners))
+        print('dst corners:\n' + str(dst_corners))
 
-        # TODO: convert these relative coordinates to WGS84
-        return dst_corners  # TODO: yaw needed in _match so return it here - make a better interface so this does not have to get passed around
+        return dst_corners
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
@@ -262,13 +239,15 @@ class Matcher(Node):
             # TODO: should this section of stuff be somewhere else - make more modular?
             global_position = self._global_position()
             if global_position is None:
-                self.get_logger().warn('Could not get vehicle global position. Cannot update map based on projected FoV.')
+                self.get_logger().warn(
+                    'Could not get vehicle global position. Cannot update map based on projected FoV.')
                 return
 
             assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'), 'Global position message did ' \
                                                                                         'not include lat or lon ' \
                                                                                         'fields. '
-            assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'  # TODO: use terrain_alt and terrain_alt_valid fields?
+            assert hasattr(global_position,
+                           'alt'), 'Global position message did not include alt field.'  # TODO: use terrain_alt and terrain_alt_valid fields?
             lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
             cam_info = self._camera_info()
             if cam_info is None:
@@ -280,7 +259,8 @@ class Matcher(Node):
             print(f'altitude: {alt}')
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
                 print(lat, lon, gimbal_fov_pix)
-                self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), alt, gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
+                self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), alt,
+                                               gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
                 print(f'gimbal fov wgs84:\n{gimbal_fov_pix}')
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
@@ -288,10 +268,15 @@ class Matcher(Node):
                                            self._topics_msgs[
                                                'VehicleGlobalPosition'].lon))  # TODO: remove this redundant call, design this better
 
-            assert gimbal_fov_pix is not None, 'Gimbal fov pix is missing.'
+            # assert gimbal_fov_pix is not None, 'Gimbal fov pix is missing.'
+            if gimbal_fov_pix is None:
+                self.get_logger().warn('Gimbal fov pix is missing. Cannot project gimbal fov.')
+                return None
+
             ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
             projected_fov_center = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
-            self._map_bbox = get_bbox(projected_fov_center)  # TODO: this should not be stored in an attribute, just temporarily passing stuff between _update_map and _match functions.
+            self._map_bbox = get_bbox(
+                projected_fov_center)  # TODO: this should not be stored in an attribute, just temporarily passing stuff between _update_map and _match functions.
         else:
             self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
                                        self._topics_msgs['VehicleGlobalPosition'].lon))
@@ -324,15 +309,66 @@ class Matcher(Node):
         img_size = self._declared_img_size()
         if img_size is not None:
             assert self._cv_image.shape[0:2] == self._declared_img_size(), 'Converted _cv_image shape {} did not match ' \
-                                                                  'declared image shape {}.'.format(
+                                                                           'declared image shape {}.'.format(
                 self._cv_image.shape[0:2], self._declared_img_size())
         self._match()
 
+    def _get_camera_rpy(self):
+        """Returns roll-pitch-yaw euler vector."""
+        gimbal_attitude = self._gimbal_attitude()
+        if gimbal_attitude is None:
+            self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
+            return None
+        assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
+        gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
+
+        local_position = self._topics_msgs.get('VehicleLocalPosition', None)
+        if local_position is None:
+            self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
+            return None
+        assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message. ' \
+                                                   'Cannot compute RPY. '
+
+        pitch_index = self.EULER_SEQUENCE.find('y')
+        assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
+
+        yaw_index = self.EULER_SEQUENCE.find('z')
+        assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
+
+        self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
+        self.get_logger().warn('Assuming zero roll for camera RPY.')
+
+        heading = local_position.heading
+        assert -math.pi <= heading <= math.pi, 'Unexpected heading value: ' + str(
+            heading) + '([-pi, pi] expected). Cannot compute RPY.'
+        heading = math.degrees(heading)
+
+        print(f'gimbal attitude {gimbal_euler}')
+        gimbal_yaw = gimbal_euler[yaw_index]
+        assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
+            heading) + '([-180, 180] expected). Cannot compute RPY. '
+        yaw = heading + gimbal_yaw  # TODO: need to test with gimbal yaw set to something else besides 0
+        pitch = 90 + gimbal_euler[pitch_index]
+        roll = 0
+        rpy = [roll, pitch, yaw]
+
+        return rpy
+
     def _get_camera_normal(self):
-        compound_attitude = self._compound_gimbal_attitude(vehicle_attitude_required=False)
-        camera_normal = Rotation.from_quat(compound_attitude).as_rotvec()
-        print('camera normal: ' + str(camera_normal))  # TODO: check that this is correct and remove this line
-        #return np.array([0, 0, 1])
+        nadir = np.array([0, 0, 1])
+        rpy = self._get_camera_rpy()
+        if rpy is None:
+            self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
+            return None
+
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)
+        camera_normal = r.apply(nadir)
+
+        self.get_logger().debug(f'Camera normal: {camera_normal}')
+
+        assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
+        assert np.linalg.norm(camera_normal) == 1, f'Unexpected camera normal length {np.linalg.norm(camera_normal)}.'
+
         return camera_normal
 
     def _base_callback(self, msg_name, msg):
@@ -344,7 +380,8 @@ class Matcher(Node):
         """Handles reception of camera info."""
         self._base_callback('camera_info', msg)
         self.get_logger().debug('Camera info: ' + str(msg))
-        self._topics['camera_info'].destroy()  # TODO: check that info was indeed received before destroying subscription
+        self._topics[
+            'camera_info'].destroy()  # TODO: check that info was indeed received before destroying subscription
 
     def _vehiclelocalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest local position estimate."""
@@ -372,7 +409,7 @@ class Matcher(Node):
         """Returns terrain altitude from VehicleGlobalPosition message."""
         global_position = self._topics_msgs.get('VehicleGlobalPosition', None)
         if global_position is not None:
-            assert hasattr(global_position, 'terrain_alt') and hasattr(global_position, 'terrain_alt_valid'),\
+            assert hasattr(global_position, 'terrain_alt') and hasattr(global_position, 'terrain_alt_valid'), \
                 'VehicleGlobalPosition was missing terrain_alt or terrain_alt_valid fields.'
             if global_position.terrain_alt_valid:
                 return global_position.terrain_alt
@@ -385,63 +422,31 @@ class Matcher(Node):
 
     def _camera_pitch(self):
         """Returns camera pitch in degrees relative to vehicle frame."""
-        compound_attitude = self._compound_gimbal_attitude(vehicle_attitude_required=False)
-        if compound_attitude is None:
-            self.get_logger().warn('Gimbal attitude not available, cannot compute camera pitch.')
+        rpy = self._get_camera_rpy()
+        if rpy is None:
+            self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
-        euler_angles = Rotation.from_quat(compound_attitude).as_euler('zxy', degrees=True)  # TODO: does not use _get_euler_angles! Fix later after gimbal projection works
-        assert len(euler_angles) == 3, 'Unexpected length of euler angles vector: ' + str(len(euler_angles))
-        return 180 + euler_angles[2]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+        assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
+        print(f'camera pitch euler angles: {rpy}.')
+        pitch_index = self.EULER_SEQUENCE.find('x')
+        assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-    def _gimbal_attitude_status(self):
+        return 180 + rpy[pitch_index]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+
+    def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
-        attitude_status = self._topics_msgs.get('GimbalDeviceAttitudeStatus', None)
-        if attitude_status is None:
+        gimbal_attitude = self._topics_msgs.get('GimbalDeviceAttitudeStatus', None)
+        if gimbal_attitude is None:
             # Try alternative topic
             self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
-            attitude_status = self._topics_msgs.get('GimbalDeviceSetAttitude', None)
-            if attitude_status is None:
+            gimbal_attitude = self._topics_msgs.get('GimbalDeviceSetAttitude', None)
+            if gimbal_attitude is None:
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
-        return attitude_status
+        return gimbal_attitude
 
-    def _get_euler_angles(self):
-        """Returns a dict with the sequence of the euler angles used for scipy.spatial.transform.Rotation operations."""
-        angles = {'sequence': 'ZYX', 'labels': {'x': 'yaw', 'y': 'pitch', 'z': 'roll'}}  # Use intrinsic rotations
-        return angles
-
-    def _get_euler_index(self, label):
-        # TODO: lots of overlapping logic with _log_euler_angles
-        angles = self._get_euler_angles()
-        seq_str = angles.get('sequence', None)
-        labels = angles.get('labels', None)
-        assert labels is not None, f'Could not retrieve labels for euler angle sequence from: {angles}.'
-        assert angles is not None and seq_str is not None and len(seq_str) == 3, f'Could not retrieve euler angle ' \
-                                                                                 f'sequence from: {angles}. '
-
-        for i in range(0, len(seq_str)):
-            char = seq_str[i]
-            lbl = labels.get(char.lower())
-            if lbl == label:
-                return i
-
-        return None
-
-    def _log_euler_angles(self, sequence):
-        angles = self._get_euler_angles()
-        seq_str = angles.get('sequence', None)
-        labels = angles.get('labels', None)
-        assert labels is not None, f'Could not retrieve labels for euler angle sequence from: {əngles}.'
-        assert angles is not None and seq_str is not None and len(seq_str) == 3, f'Could not retrieve euler angle ' \
-                                                                                 f'sequence from: {angles}. '
-        out = ''
-        for i in range(0, len(seq_str)):
-            char = seq_str[i]
-            label = labels.get(char.lower())
-            out = out + f'{label}: {sequence[i]} '
-        self.get_logger().debug(out)
-
-    def _compound_gimbal_attitude(self, vehicle_attitude_required=True):
-        """Returns gimbal attitude quaternion relative to NED frame."""
+    # def _compound_gimbal_attitude(self, vehicle_attitude_required=True):
+    #    """Returns gimbal attitude quaternion relative to NED frame."""
+    """
         vehicle_attitude = self._vehicle_attitude()
         attitude_status = self._gimbal_attitude_status()
         info = {'attitude_status': attitude_status, 'vehicle_attitude': vehicle_attitude}
@@ -485,6 +490,7 @@ class Matcher(Node):
         print('compound attitude euler degrees: ' + str(compound_attitude_euler))
 
         return compound_attitude
+    """
 
     def _match(self):
         """Matches camera image to map image and computes camera position and field of view."""
@@ -504,8 +510,10 @@ class Matcher(Node):
             rot = local_position.heading
             assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + ' ([-pi, pi] expected).'
             self.get_logger().debug('Current heading: ' + str(rot) + ' radians.')
-            map_cropped, map_rotated = rotate_and_crop_map(self._map, rot, self._img_dimensions())  # TODO: return only rotated
-            assert map_cropped.shape[0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
+            map_cropped, map_rotated = rotate_and_crop_map(self._map, rot,
+                                                           self._img_dimensions())  # TODO: return only rotated
+            assert map_cropped.shape[
+                   0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
 
             mkp_img, mkp_map = self._superglue.match(self._cv_image, map_cropped)
 
@@ -514,78 +522,94 @@ class Matcher(Node):
                 self.get_logger().warn('Did not find enough matches. Skipping current matches.')
                 return
 
+            # TODO: camear normal must be rotated by -yaw so that it can be compared to the ones from decomposeHomography, otherwise the selection only works when flying north
+            cam_normal = self._get_camera_normal()  # Currently retursn rotvec, not camera normal
             h, h_mask, translation_vector, rotation_matrix = process_matches(mkp_img, mkp_map,
                                                                              self._camera_info().k.reshape([3, 3]),
-                                                                             self._get_camera_normal(),
+                                                                             cam_normal,
                                                                              logger=self._logger,
-                                                                             affine=self._config['superglue']['misc']['affine'])
+                                                                             affine=self._config['superglue']['misc'][
+                                                                                 'affine'])
 
             assert h.shape == (3, 3), 'Homography matrix had unexpected shape: ' + str(h.shape) + '.'
-            assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: '\
+            assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: ' \
                                                        + str(translation_vector.shape) + '.'
-            assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: '\
+            assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: ' \
                                                     + str(rotation_matrix.shape) + '.'
 
             fov_pix = get_fov(self._cv_image, h)
-            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix) # TODO: separate calculation of fov_pix from their visualization!
+            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map,
+                                 fov_pix)  # TODO: separate calculation of fov_pix from their visualization!
 
-            #apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
-            map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
+            # apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
+            map_lat, map_lon = get_bbox_center(BBox(
+                *self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
 
-            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix, self._map_dimensions_with_padding(), self._map_bbox,
-                                                      rot, self._img_dimensions())
+            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix,
+                                                                                    self._map_dimensions_with_padding(),
+                                                                                    self._map_bbox,
+                                                                                    rot, self._img_dimensions())
 
             # Compute camera altitude, and distance to principal point using triangle similarity
-            camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width, get_distance_of_fov_center(fov_wgs84))
+            camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width,
+                                                  get_distance_of_fov_center(fov_wgs84))
             camera_pitch = self._camera_pitch()
             camera_altitude = None
             if camera_pitch is None:
                 # TODO: Use some other method to estimate altitude if pitch not available?
                 self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
             else:
-                camera_altitude = math.sin(math.radians(camera_pitch))*camera_distance
+                camera_altitude = math.sin(math.radians(camera_pitch)) * camera_distance
             self.get_logger().debug('Camera pitch, distance to principal point, altitude: {} deg, {} m, {} m.'
                                     .format(camera_pitch, camera_distance, camera_altitude))
 
             #### TODO: remove this debugging section
             mkp_map_uncropped = []
             for i in range(0, len(mkp_map)):
-                mkp_map_uncropped.append(list(uncrop_pixel_coordinates(self._img_dimensions(), self._map_dimensions_with_padding(), mkp_map[i])))
+                mkp_map_uncropped.append(list(
+                    uncrop_pixel_coordinates(self._img_dimensions(), self._map_dimensions_with_padding(), mkp_map[i])))
             mkp_map_uncropped = np.array(mkp_map_uncropped)
 
             mkp_map_unrotated = []
             for i in range(0, len(mkp_map_uncropped)):
-                mkp_map_unrotated.append(list(rotate_point(rot, self._map_dimensions_with_padding(), mkp_map_uncropped[i])))
+                mkp_map_unrotated.append(
+                    list(rotate_point(rot, self._map_dimensions_with_padding(), mkp_map_uncropped[i])))
             mkp_map_unrotated = np.array(mkp_map_unrotated)
 
-            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_unrotated, # mkp_map_uncropped,
-                                                                             self._camera_info().k.reshape([3, 3]),
-                                                                             self._get_camera_normal(),
-                                                                             logger=self._logger,
-                                                                             affine=self._config['superglue']['misc']['affine'])
+            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_unrotated,
+                                                                                 # mkp_map_uncropped,
+                                                                                 self._camera_info().k.reshape([3, 3]),
+                                                                                 cam_normal,
+                                                                                 # self._get_camera_normal(),
+                                                                                 logger=self._logger,
+                                                                                 affine=
+                                                                                 self._config['superglue']['misc'][
+                                                                                     'affine'])
 
             fov_pix_2 = get_fov(self._cv_image, h2)
-            visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated, fov_pix_2) # TODO: separate calculation of fov_pix from their visualization!
+            visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
+                                 fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
             #### END DEBUG SECTION ###
 
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster
-            translation_vector[0] = translation_vector[0] + self._img_dimensions().width/2
-            translation_vector[1] = translation_vector[1] + self._img_dimensions().height/2
+            translation_vector[0] = (1 - translation_vector[0]) * self._img_dimensions().width / 2
+            translation_vector[1] = (1 - translation_vector[1]) * self._img_dimensions().height / 2
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
                 np.array(translation_vector[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
-                self._map_bbox, rot, self._img_dimensions()) # , uncrop=False)
+                self._map_bbox, rot, self._img_dimensions())  # , uncrop=False)
 
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
             print('campos: ' + str(cam_pos_wgs84))
 
             fov_gimbal = self._gimbal_fov_wgs84  # TODO: put gimbal projected field of view here
-            #write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
+            # write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
+                                                     # TODO: fix height estimate
                                                      fov_gimbal)
-            #self._essential_mat_pub.publish(e)
-            #self._homography_mat_pub.publish(h)
-            #self._pose_pub.publish(p)
+            # self._essential_mat_pub.publish(e)
+            # self._homography_mat_pub.publish(h)
+            # self._pose_pub.publish(p)
             self._topics['fov'].publish(fov_wgs84)
 
         except Exception as e:

@@ -22,8 +22,8 @@ from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox, \
     Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map, \
-    visualize_homography, process_matches, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance, \
-    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox
+    visualize_homography, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance, \
+    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox, get_angle
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -189,7 +189,7 @@ class Matcher(Node):
 
     def _project_gimbal_fov(self):
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
-        rpy = list(self._get_camera_rpy())
+        rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
@@ -454,6 +454,44 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
+    def _process_matches(self, mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, method=cv2.RANSAC, affine=False):
+        """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
+
+        Arguments:
+            mkp_img - The matching keypoints from image.
+            mkp_map - The matching keypoints from map.
+            k - The intrinsic camera matrix.
+            camera_normal - The camera normal unit vector.
+            reproj_threshold - The RANSAC reprojection threshold for homography estimation.
+            method - Method to use for estimation.
+            affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
+        """
+        min_points = 4
+        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
+        if not affine:
+            h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
+        else:
+            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
+            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
+
+        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
+
+        # Get the one where angle between plane normal and inverse of camera normal is smallest
+        # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
+        get_angle_partial = partial(get_angle, -camera_normal)
+        angles = list(map(get_angle_partial, Ns))
+        index_of_smallest_angle = angles.index(min(angles))
+        rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
+
+        self.get_logger().debug('decomposition R:\n{}.'.format(rotation))
+        self.get_logger().debug('decomposition T:\n{}.'.format(translation))
+        self.get_logger().debug('decomposition Ns:\n{}.'.format(Ns))
+        self.get_logger().debug('decomposition Ns angles:\n{}.'.format(angles))
+        self.get_logger().debug('decomposition smallest angle index:\n{}.'.format(index_of_smallest_angle))
+        self.get_logger().debug('decomposition smallest angle:\n{}.'.format(min(angles)))
+
+        return h, h_mask, translation, rotation
+
     def _match(self):
         """Matches camera image to map image and computes camera position and field of view."""
         try:
@@ -485,10 +523,9 @@ class Matcher(Node):
 
             # TODO: camear normal must be rotated by -yaw so that it can be compared to the ones from decomposeHomography, otherwise the selection only works when flying north
             cam_normal = self._get_camera_normal()  # Currently retursn rotvec, not camera normal
-            h, h_mask, translation_vector, rotation_matrix = process_matches(mkp_img, mkp_map,
+            h, h_mask, translation_vector, rotation_matrix = self._process_matches(mkp_img, mkp_map,
                                                                              self._camera_info().k.reshape([3, 3]),
                                                                              cam_normal,
-                                                                             logger=self._logger,
                                                                              affine=self._config['superglue']['misc'][
                                                                                  'affine'])
 

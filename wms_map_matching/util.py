@@ -54,47 +54,6 @@ def fov_to_bbox(fov_wgs84):
     return BBox(left, bottom, right, top)
 
 
-def process_matches(mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, method=cv2.RANSAC, logger=None,
-                    affine=False):
-    """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
-
-    Arguments:
-        mkp_img - The matching keypoints from image.
-        mkp_map - The matching keypoints from map.
-        k - The intrinsic camera matrix.
-        camera_normal - The camera normal unit vector.
-        reproj_threshold - The RANSAC reprojection threshold for homography estimation.
-        method - Method to use for estimation.
-        logger - Optional ROS2 logger for writing log output.
-        affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
-    """
-    min_points = 4
-    assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
-    if logger is not None:
-        logger.debug('Estimating homography.')
-    if not affine:
-        h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
-    else:
-        h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
-        h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
-
-    num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
-
-    # Get the one where angle between plane normal and inverse of camera normal is smallest
-    # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
-    get_angle_partial = partial(get_angle, -camera_normal)
-    angles = list(map(get_angle_partial, Ns))
-    index_of_smallest_angle = angles.index(min(angles))
-    rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
-
-    if logger is not None:
-        logger.debug('decomposition R:\n{}.'.format(rotation))
-        logger.debug('decomposition T:\n{}.'.format(translation))
-        logger.debug('decomposition N:\n{}.'.format(angles.index(min(angles))))
-
-    return h, h_mask, translation, rotation  # translation_vector, rotation_vector
-
-
 def _make_keypoint(pt, sz=1.0):
     """Converts tuple to a cv2.KeyPoint."""
     return cv2.KeyPoint(pt[0], pt[1], sz)

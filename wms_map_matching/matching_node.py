@@ -196,6 +196,7 @@ class Matcher(Node):
 
         print(f'_project_gimbal_fov: Euler RPY {rpy}')
 
+        #rpy[2] = -rpy[2]  # Flip yaw # TODO: why is this needed after commit [compute_lat_lon_alt_7 214fad1] ?
         r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],
                                 degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
         e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
@@ -363,7 +364,7 @@ class Matcher(Node):
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
         yaw = heading + gimbal_yaw  # TODO: need to test with gimbal yaw set to something else besides 0
-        pitch = 90 + gimbal_euler[pitch_index]
+        pitch = -(90 + gimbal_euler[pitch_index])
         roll = 0
         rpy = [roll, pitch, yaw]
 

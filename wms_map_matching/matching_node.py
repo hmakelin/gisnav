@@ -313,6 +313,18 @@ class Matcher(Node):
                 self._cv_image.shape[0:2], self._declared_img_size())
         self._match()
 
+    def _camera_yaw(self):
+        """Returns camera yaw in degrees."""
+        rpy = self._get_camera_rpy()
+
+        assert rpy is not None, 'RPY is None, cannot retrieve camera yaw.'
+        assert len(rpy) == 3, f'Unexpected length for RPY: {len(rpy)}.'
+
+        camera_yaw = rpy[2]
+        print(f'camera yaw {camera_yaw}')
+
+        return camera_yaw
+
     def _get_camera_rpy(self):
         """Returns roll-pitch-yaw euler vector."""
         gimbal_attitude = self._gimbal_attitude()
@@ -332,7 +344,7 @@ class Matcher(Node):
         pitch_index = self.EULER_SEQUENCE.find('y')
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        yaw_index = self.EULER_SEQUENCE.find('z')
+        yaw_index = self.EULER_SEQUENCE.find('x')
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
@@ -344,7 +356,10 @@ class Matcher(Node):
         heading = math.degrees(heading)
 
         print(f'gimbal attitude {gimbal_euler}')
+        print(f'heading attitude {heading}')
         gimbal_yaw = gimbal_euler[yaw_index]
+        print(f'gimbal yaw {gimbal_yaw}')
+
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
         yaw = heading + gimbal_yaw  # TODO: need to test with gimbal yaw set to something else besides 0
@@ -367,7 +382,8 @@ class Matcher(Node):
         self.get_logger().debug(f'Camera normal: {camera_normal}')
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
-        assert np.linalg.norm(camera_normal) == 1, f'Unexpected camera normal length {np.linalg.norm(camera_normal)}.'
+        assert abs(np.linalg.norm(camera_normal)-1) <= 0.001,\
+            f'Unexpected camera normal length {np.linalg.norm(camera_normal)}.'
 
         return camera_normal
 
@@ -501,15 +517,19 @@ class Matcher(Node):
                 self.get_logger().warn('Map not yet available - skipping matching.')
                 return
 
-            local_position = self._topics_msgs.get('VehicleLocalPosition', None)
-            if local_position is None:
-                self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Skipping matching.')
-                return
+            #local_position = self._topics_msgs.get('VehicleLocalPosition', None)
+            #if local_position is None:
+            #    self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Skipping matching.')
+            #    return
 
-            assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message.'
-            rot = local_position.heading
-            assert -math.pi <= rot <= math.pi, 'Unexpected heading value: ' + str(rot) + ' ([-pi, pi] expected).'
-            self.get_logger().debug('Current heading: ' + str(rot) + ' radians.')
+            yaw = self._camera_yaw()
+            if yaw is None:
+                self.get_logger().warn('Could not get camera yaw. Skipping matching.')
+                return
+            print(f'yaw {yaw}')
+            rot = math.radians(yaw)
+            assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: ' + str(rot) + ' ([-pi, pi] expected).'
+            self.get_logger().debug('Current camera yaw: ' + str(rot) + ' radians.')
             map_cropped, map_rotated = rotate_and_crop_map(self._map, rot,
                                                            self._img_dimensions())  # TODO: return only rotated
             assert map_cropped.shape[

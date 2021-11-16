@@ -333,10 +333,10 @@ class Matcher(Node):
         assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message. ' \
                                                    'Cannot compute RPY. '
 
-        pitch_index = self.EULER_SEQUENCE.lower().find('y')  # TODO: this line is done in two places - can the logic also be put in one place?
+        pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        yaw_index = self.EULER_SEQUENCE.lower().find('x')
+        yaw_index = self._yaw_index()
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
@@ -372,6 +372,12 @@ class Matcher(Node):
             f'Unexpected camera normal length {np.linalg.norm(camera_normal)}.'
 
         return camera_normal
+
+    def _pitch_index(self):
+        return self.EULER_SEQUENCE.lower().find('y')
+
+    def _yaw_index(self):
+        return self.EULER_SEQUENCE.lower().find('x')
 
     def _base_callback(self, msg_name, msg):
         """Stores message and prints out brief debug log message."""
@@ -429,7 +435,7 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        pitch_index = self.EULER_SEQUENCE.lower().find('y')
+        pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
         return rpy[pitch_index]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?

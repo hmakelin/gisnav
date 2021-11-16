@@ -34,7 +34,7 @@ from wms_map_matching.superglue_adapter import SuperGlue
 
 class Matcher(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
-    EULER_SEQUENCE = 'zxy'
+    EULER_SEQUENCE = 'YXZ'
 
     class TopicType(Enum):
         """Enumerates microRTPS bridge topic types."""
@@ -194,7 +194,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],  # TODO: NEed to revert euler sequence so that ::-1 not needed here?
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy,  # TODO: NEed to revert euler sequence so that ::-1 not needed here?
                                 degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
         e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
@@ -333,10 +333,10 @@ class Matcher(Node):
         assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message. ' \
                                                    'Cannot compute RPY. '
 
-        pitch_index = self.EULER_SEQUENCE.find('y')
+        pitch_index = self.EULER_SEQUENCE.lower().find('y')  # TODO: this line is done in two places - can the logic also be put in one place?
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        yaw_index = self.EULER_SEQUENCE.find('x')
+        yaw_index = self.EULER_SEQUENCE.lower().find('x')
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
@@ -348,7 +348,6 @@ class Matcher(Node):
         heading = math.degrees(heading)
 
         gimbal_yaw = gimbal_euler[yaw_index]
-
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
         yaw = heading + gimbal_yaw  # TODO: need to test with gimbal yaw set to something else besides 0
@@ -365,7 +364,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
             return None
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1], degrees=True)  # TODO: this is also inverted in _project_gimbal_fov --> invert self.EULER_SEQUENCE?
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)  # TODO: this is also inverted in _project_gimbal_fov --> invert self.EULER_SEQUENCE?
         camera_normal = r.apply(nadir)
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
@@ -430,10 +429,10 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        pitch_index = self.EULER_SEQUENCE.find('x')
+        pitch_index = self.EULER_SEQUENCE.lower().find('y')
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        return 180 + rpy[pitch_index]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
+        return rpy[pitch_index]  # TODO: UPDATE: Added vehicle attitude, removed the +180 here TODO: is 180 needed here after adding vehicle attitude? Is compound attitude calculation correct?
 
     def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""

@@ -388,8 +388,10 @@ class Matcher(Node):
         """Handles reception of camera info."""
         self._base_callback('camera_info', msg)
         self.get_logger().debug('Camera info: ' + str(msg))
-        self._topics[
-            'camera_info'].destroy()  # TODO: check that info was indeed received before destroying subscription
+
+        # Check that key fields are present in received msg, then destroy subscription which is no longer needed
+        if msg is not None and hasattr(msg, 'K') and hasattr(msg, 'width') and hasattr(msg, 'height'):
+            self._topics['camera_info'].destroy()
 
     def _vehiclelocalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest local position estimate."""

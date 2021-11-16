@@ -194,9 +194,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
-        print(f'_project_gimbal_fov: Euler RPY {rpy}')
-
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],  # TODO: NEed to revert euler sequence so that ::-1 not needed here?
                                 degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
         e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
@@ -228,8 +226,6 @@ class Matcher(Node):
 
         dst_corners = dst_corners.squeeze()  # See get_fov usage elsewhere -where to do squeeze if at all?
 
-        print('dst corners:\n' + str(dst_corners))
-
         return dst_corners
 
     def _update_map(self):
@@ -257,7 +253,6 @@ class Matcher(Node):
                                            'compute gimbal FoV WGS84 coordinates. '
             gimbal_fov_pix = self._project_gimbal_fov()
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
-                print(lat, lon, gimbal_fov_pix)
                 self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), alt,
                                                gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
             else:
@@ -370,10 +365,8 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
             return None
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)
+        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1], degrees=True)  # TODO: this is also inverted in _project_gimbal_fov --> invert self.EULER_SEQUENCE?
         camera_normal = r.apply(nadir)
-
-        self.get_logger().debug(f'Camera normal: {camera_normal}')
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
         assert abs(np.linalg.norm(camera_normal)-1) <= 0.001,\
@@ -437,7 +430,6 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        print(f'camera pitch euler angles: {rpy}.')
         pitch_index = self.EULER_SEQUENCE.find('x')
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
@@ -505,7 +497,6 @@ class Matcher(Node):
             if yaw is None:
                 self.get_logger().warn('Could not get camera yaw. Skipping matching.')
                 return
-            print(f'yaw {yaw}')
             rot = math.radians(yaw)
             assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: ' + str(rot) + ' ([-pi, pi] expected).'
             self.get_logger().debug('Current camera yaw: ' + str(rot) + ' radians.')
@@ -599,7 +590,6 @@ class Matcher(Node):
                 self._map_bbox, rot, self._img_dimensions())  # , uncrop=False)
 
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
-            print('campos: ' + str(cam_pos_wgs84))
 
             fov_gimbal = self._gimbal_fov_wgs84  # TODO: put gimbal projected field of view here
             # write_fov_and_camera_location_to_geojson(fov_wgs84, camera_position, (map_lat, map_lon, apparent_alt))

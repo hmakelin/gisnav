@@ -196,7 +196,6 @@ class Matcher(Node):
 
         print(f'_project_gimbal_fov: Euler RPY {rpy}')
 
-        #rpy[2] = -rpy[2]  # Flip yaw # TODO: why is this needed after commit [compute_lat_lon_alt_7 214fad1] ?
         r = Rotation.from_euler(self.EULER_SEQUENCE, rpy[::-1],
                                 degrees=True).as_matrix()  # TODO: should be using intrinsic rotations - the extrinsic pitch after yaw messes up the FoV?
         e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
@@ -257,12 +256,10 @@ class Matcher(Node):
             assert hasattr(cam_info, 'k'), 'Could not retrieve camera intrinsics matrix from CameraInfo, cannot ' \
                                            'compute gimbal FoV WGS84 coordinates. '
             gimbal_fov_pix = self._project_gimbal_fov()
-            print(f'altitude: {alt}')
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
                 print(lat, lon, gimbal_fov_pix)
                 self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), alt,
                                                gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
-                print(f'gimbal fov wgs84:\n{gimbal_fov_pix}')
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
@@ -322,7 +319,6 @@ class Matcher(Node):
         assert len(rpy) == 3, f'Unexpected length for RPY: {len(rpy)}.'
 
         camera_yaw = rpy[2]
-        print(f'camera yaw {camera_yaw}')
 
         return camera_yaw
 
@@ -356,10 +352,7 @@ class Matcher(Node):
             heading) + '([-pi, pi] expected). Cannot compute RPY.'
         heading = math.degrees(heading)
 
-        print(f'gimbal attitude {gimbal_euler}')
-        print(f'heading attitude {heading}')
         gimbal_yaw = gimbal_euler[yaw_index]
-        print(f'gimbal yaw {gimbal_yaw}')
 
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
@@ -461,54 +454,6 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    # def _compound_gimbal_attitude(self, vehicle_attitude_required=True):
-    #    """Returns gimbal attitude quaternion relative to NED frame."""
-    """
-        vehicle_attitude = self._vehicle_attitude()
-        attitude_status = self._gimbal_attitude_status()
-        info = {'attitude_status': attitude_status, 'vehicle_attitude': vehicle_attitude}
-        info_not_available = self._warn_if_none(info, 'Cannot compute gimbal attitude relative to NED frame.')  # TODO: unused var assignment info_not_available
-        if attitude_status is None:
-            self.get_logger().warn('Gimbal attitude not available, cannot return compound attitude.')
-            return None
-        if vehicle_attitude is None:
-            if not vehicle_attitude_required:
-                # TODO: this assumes gimbal attitude is relative to NED or we only care about pitch and that vehicle pitch is very low - maybe rename vehicle_attitude_required to ignore_missing_vehicle_attitude to be more specific?
-                self.get_logger().warn('Vehicle attitude not available, assuming zero quaternion since it is allowed.')
-                vehicle_attitude = {'q': np.array([0, 0, 0, 0])}  # TODO: check that this is correct, need to be able to sum with gimbal attitude
-            else:
-                self.get_logger().warn('Vehicle attitude not available, cannot return compound attitude.')
-                return None
-
-        assert hasattr(attitude_status, 'q'), 'Gimbal attitude quaternion not available - cannot compute compound ' \
-                                              'gimbal attitude. '
-        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute compound ' \
-                                               'gimbal attitude. '
-
-        euler_sequence = self._get_euler_angles().get('sequence', None)
-        assert euler_sequence is not None, 'Could not retrieve sequence of euler angles - cannot return compound ' \
-                                           'gimbal attitude. '
-
-        # This implementation assumes that gimbal device attitude info is relative to drone frame:
-        assert attitude_status.flags == 0, 'Unsupported configuration flags for gimbal device attitude, cannot ' \
-                                           'determine compound attitude. '
-
-        # TODO: get rid of this manual hack somehow?
-        # Testing suggests that the gimbal attitude pitch is relative to horizon, while roll and yaw are relative to
-        # vehicle frame, which is in conflict with attitude_status.flags==0. Use euler angles below to manually compose
-        # the compound attitude.
-        vehicle_attitude = Rotation.from_quat(vehicle_attitude.q).as_euler('zyx', degrees=True)
-        gimbal_attitude = Rotation.from_quat(attitude_status.q).as_euler('zyx', degrees=True)
-        compound_attitude_euler = np.array([vehicle_attitude[0], gimbal_attitude[1], vehicle_attitude[2]])  # TODO: should vehicle roll lbe included if gimbal is stabilized? Include only yaw from vehicle?
-        compound_attitude = Rotation.from_euler('zyx', compound_attitude_euler, degrees=True).as_quat()
-
-        print('vehicle attitude euler degrees: ' + str(vehicle_attitude))
-        print('gimbal attitude euler degrees: ' + str(gimbal_attitude))
-        print('compound attitude euler degrees: ' + str(compound_attitude_euler))
-
-        return compound_attitude
-    """
-
     def _match(self):
         """Matches camera image to map image and computes camera position and field of view."""
         try:
@@ -517,11 +462,6 @@ class Matcher(Node):
             if self._map is None:
                 self.get_logger().warn('Map not yet available - skipping matching.')
                 return
-
-            #local_position = self._topics_msgs.get('VehicleLocalPosition', None)
-            #if local_position is None:
-            #    self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Skipping matching.')
-            #    return
 
             yaw = self._camera_yaw()
             if yaw is None:
@@ -585,6 +525,7 @@ class Matcher(Node):
                                     .format(camera_pitch, camera_distance, camera_altitude))
 
             #### TODO: remove this debugging section
+            """
             mkp_map_uncropped = []
             for i in range(0, len(mkp_map)):
                 mkp_map_uncropped.append(list(
@@ -610,6 +551,7 @@ class Matcher(Node):
             fov_pix_2 = get_fov(self._cv_image, h2)
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
                                  fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
+            """
             #### END DEBUG SECTION ###
 
             # Convert translation vector to WGS84 coordinates

@@ -9,7 +9,6 @@ import geojson
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
-from math import pi
 from collections import namedtuple
 
 BBox = namedtuple('BBox', 'left bottom right top')

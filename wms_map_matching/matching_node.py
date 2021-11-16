@@ -2,11 +2,9 @@ import rclpy
 import sys
 import os
 import traceback
-import xml.etree.ElementTree as ET
 import yaml
 import importlib
 import math
-import json
 
 from enum import Enum
 from rclpy.node import Node
@@ -16,15 +14,12 @@ from cv2 import VideoCapture, imwrite, imdecode
 import numpy as np
 import cv2  # TODO: remove
 from cv_bridge import CvBridge
-from ament_index_python.packages import get_package_share_directory
 from scipy.spatial.transform import Rotation
 from functools import partial
-from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
-    write_fov_and_camera_location_to_geojson, get_camera_apparent_altitude, get_bbox_center, BBox, \
-    Dimensions, get_camera_lat_lon_alt, MAP_RADIUS_METERS_DEFAULT, padded_map_size, rotate_and_crop_map, \
-    visualize_homography, uncrop_pixel_coordinates, get_fov, rotate_point, get_camera_distance, \
-    get_distance_of_fov_center, altitude_from_gimbal_pitch, get_x_y, wgs84, LatLon, fov_to_bbox, get_angle,\
-    create_src_corners
+from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
+    write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, padded_map_size, rotate_and_crop_map, \
+    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, wgs84, LatLon, fov_to_bbox,\
+    get_angle, create_src_corners
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -215,7 +210,7 @@ class Matcher(Node):
 
         # Project image corners to z=0 plane (ground)
         # TODO: currently using pixel coordinates - should scale using camera distance instead?
-        src_corners = create_src_corners()
+        src_corners = create_src_corners(h, w)
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         hm = np.matmul(k, e)  # TODO: call this p for projection matrix instead?

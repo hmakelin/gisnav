@@ -152,23 +152,6 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
     return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
 
 
-# TODO: refactor this function so that there is no redudnant logic betwee v1 and v2 (decompoes them into modular parts)
-#def convert_fov_from_pix_to_wgs84_v2(fov_in_pix, latlon, yaw, k, img_dim):
-    """Converts the field of view from pixel coordinates to WGS 84. Used for the gimbal FoV."""
-    """
-    scaling =
-
-    rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
-    fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
-
-    convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
-    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
-
-    return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
-    """
-    raise NotImplementedError
-
-
 def rotate_point(radians, img_dim, pt):
     """Rotates point around center of image by radians, counter-clockwise."""
     cx = img_dim[0] / 2
@@ -248,9 +231,6 @@ def get_distance_of_fov_center(fov_wgs84):
     """Calculate distance between middle of sides of FoV based on triangle similarity."""
     midleft = ((fov_wgs84[0] + fov_wgs84[1])*0.5).squeeze()
     midright = ((fov_wgs84[2] + fov_wgs84[3])*0.5).squeeze()
-    print(fov_wgs84)
-    print(midleft)
-    print(midleft[0])
     g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
     _, __, dist = g.inv(midleft[1], midleft[0], midright[1], midright[0])
     return dist

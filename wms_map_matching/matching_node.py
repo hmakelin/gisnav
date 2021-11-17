@@ -246,7 +246,16 @@ class Matcher(Node):
                                            'compute gimbal FoV WGS84 coordinates. '
             gimbal_fov_pix = self._project_gimbal_fov()
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
-                self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), alt,
+                pitch = self._camera_pitch()
+                if pitch is None:
+                    self.get_logger().warn('Could not get camera pitch. Cannot update map based on projected FoV.')
+                    return
+                print(f'pitch for scaling {pitch}')
+                scaling = alt / math.cos(math.radians(pitch))  # TODO: distance to projection of principal point on ground
+                print(f'scaling {scaling}')
+                multiplier = 1/ math.cos(math.radians(pitch))
+                print(f'scaling multiplier {multiplier}')
+                self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), scaling, # alt,
                                                gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
@@ -429,10 +438,12 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        pitch_index = self._pitch_index()
-        assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
+        #pitch_index = self._pitch_index()
+        #assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
-        return rpy[pitch_index]
+        #print(f'rpy {rpy}, index {pitch_index}')
+
+        return rpy[2]
 
     def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""

@@ -251,7 +251,7 @@ class Matcher(Node):
                     self.get_logger().warn('Could not get camera pitch. Cannot update map based on projected FoV.')
                     return
                 print(f'pitch for scaling {pitch}')
-                scaling = alt / math.cos(math.radians(pitch))  # TODO: distance to projection of principal point on ground
+                scaling = abs(alt / math.cos(math.radians(pitch)))  # TODO: distance to projection of principal point on ground
                 print(f'scaling {scaling}')
                 multiplier = 1/ math.cos(math.radians(pitch))
                 print(f'scaling multiplier {multiplier}')

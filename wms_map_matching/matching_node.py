@@ -19,7 +19,7 @@ from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, padded_map_size, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, wgs84, LatLon, fov_to_bbox,\
-    get_angle, create_src_corners
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -211,14 +211,26 @@ class Matcher(Node):
         # Project image corners to z=0 plane (ground)
         # TODO: currently using pixel coordinates - should scale using camera distance instead?
         src_corners = create_src_corners(h, w)
+        #src_corners = np.float32([[-w/2, -h/2], [-w/2, h/2], [w/2, h/2], [w/2, -h/2]]).reshape(-1, 1, 2)
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         hm = np.matmul(k, e)  # TODO: call this p for projection matrix instead?
         hm_inv = np.linalg.inv(hm)
 
         dst_corners = cv2.perspectiveTransform(src_corners, hm_inv)  # TODO: use util.get_fov here?
-
         dst_corners = dst_corners.squeeze()  # See get_fov usage elsewhere -where to do squeeze if at all?
+
+        # Adjust for camera center / principal point
+        # TODO: bake this into the previous matrices
+        #c = np.array((0.5, 0.5))
+        #rc = np.matmul(r[:-1, :-1], c)
+        #print(f'rc {rc}')
+        #print(f'fov pix 1 : {dst_corners}')
+        #for i in range(0, len(dst_corners)):
+        #    dst_corners[i][0] = dst_corners[i][0] + rc[0]
+        #    dst_corners[i][1] = dst_corners[i][1] + rc[1]
+        #print(f'fov pix 2 : {dst_corners}')
+
 
         return dst_corners
 
@@ -245,6 +257,7 @@ class Matcher(Node):
             assert hasattr(cam_info, 'k'), 'Could not retrieve camera intrinsics matrix from CameraInfo, cannot ' \
                                            'compute gimbal FoV WGS84 coordinates. '
             gimbal_fov_pix = self._project_gimbal_fov()
+
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
                 pitch = self._camera_pitch()
                 if pitch is None:
@@ -443,7 +456,7 @@ class Matcher(Node):
 
         #print(f'rpy {rpy}, index {pitch_index}')
 
-        return rpy[2]
+        return rpy[1]
 
     def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
@@ -547,6 +560,7 @@ class Matcher(Node):
                                                                                     rot, self._img_dimensions())
 
             # Compute camera altitude, and distance to principal point using triangle similarity
+            # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
             camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width,
                                                   get_distance_of_fov_center(fov_wgs84))
             camera_pitch = self._camera_pitch()
@@ -555,12 +569,12 @@ class Matcher(Node):
                 # TODO: Use some other method to estimate altitude if pitch not available?
                 self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
             else:
-                camera_altitude = math.sin(math.radians(camera_pitch)) * camera_distance
+                camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
             self.get_logger().debug('Camera pitch, distance to principal point, altitude: {} deg, {} m, {} m.'
                                     .format(camera_pitch, camera_distance, camera_altitude))
 
             #### TODO: remove this debugging section
-            """
+
             mkp_map_uncropped = []
             for i in range(0, len(mkp_map)):
                 mkp_map_uncropped.append(list(
@@ -573,20 +587,17 @@ class Matcher(Node):
                     list(rotate_point(rot, self._map_dimensions_with_padding(), mkp_map_uncropped[i])))
             mkp_map_unrotated = np.array(mkp_map_unrotated)
 
-            h2, h_mask2, translation_vector2, rotation_matrix2 = process_matches(mkp_img, mkp_map_unrotated,
+            h2, h_mask2, translation_vector2, rotation_matrix2 = self._process_matches(mkp_img, mkp_map_unrotated,
                                                                                  # mkp_map_uncropped,
                                                                                  self._camera_info().k.reshape([3, 3]),
                                                                                  cam_normal,
-                                                                                 # self._get_camera_normal(),
-                                                                                 logger=self._logger,
                                                                                  affine=
-                                                                                 self._config['superglue']['misc'][
-                                                                                     'affine'])
+                                                                                 self._config['misc']['affine'])
 
             fov_pix_2 = get_fov(self._cv_image, h2)
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
                                  fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
-            """
+
             #### END DEBUG SECTION ###
 
             # Convert translation vector to WGS84 coordinates

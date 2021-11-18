@@ -574,7 +574,7 @@ class Matcher(Node):
                                     .format(camera_pitch, camera_distance, camera_altitude))
 
             #### TODO: remove this debugging section
-
+            """
             mkp_map_uncropped = []
             for i in range(0, len(mkp_map)):
                 mkp_map_uncropped.append(list(
@@ -597,7 +597,7 @@ class Matcher(Node):
             fov_pix_2 = get_fov(self._cv_image, h2)
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
                                  fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
-
+            """
             #### END DEBUG SECTION ###
 
             # Convert translation vector to WGS84 coordinates

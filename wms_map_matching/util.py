@@ -77,19 +77,6 @@ def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corn
 
     return out
 
-def haversine(latlon1, latlon2):
-    """Distance between two latlons in meters using Haversine formula."""
-    earth_radius = 6371e3  # meters
-    phi1 = latlon1.lat * math.pi / 180  # radians
-    phi2 = latlon2.lat * math.pi / 180
-    delta_phi = (latlon2.lat - latlon1.lat) * math.pi / 180
-    delta_lambda = (latlon2.lon - latlon1.lon) * math.pi / 180
-    a = math.sin(delta_phi / 2) * math.sin(delta_phi / 2) + math.cos(phi1) * math.cos(phi2)\
-        * math.sin(delta_lambda / 2) * math.sin(delta_lambda / 2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    d = earth_radius * c
-    return d
-
 
 def move_distance(latlon, azmth_dist):
     """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""

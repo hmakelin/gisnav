@@ -77,30 +77,27 @@ def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corn
 
     return out
 
-def wgs84(latlon, scaling, xy):
-    """Converts x and y to wgs84 coordinates based on origin and scaling factor to meters."""
-    x0, y0 = pyproj.transform('epsg:4326', 'epsg:3857', latlon.lat, latlon.lon)
-    print(x0, y0)
-    print(xy)
-    x1, y1 = x0 + scaling*xy[:, 0], y0 + scaling*xy[:, 1]
-    print(x1, y1)
-    lat, lon = pyproj.transform('epsg:3857', 'epsg:4326', x1, y1)
-    print(f'latlon:\n{lat}, {lon}')
-    #return LatLon(lat, lon)
-    #return lat, lon
-    out = np.concatenate((lat.reshape(-1, 1), lon.reshape(-1, 1)), axis=1)
-    print(f'out\n{out}')
-    return out
+def haversine(latlon1, latlon2):
+    """Distance between two latlons in meters using Haversine formula."""
+    earth_radius = 6371e3  # meters
+    phi1 = latlon1.lat * math.pi / 180  # radians
+    phi2 = latlon2.lat * math.pi / 180
+    delta_phi = (latlon2.lat - latlon1.lat) * math.pi / 180
+    delta_lambda = (latlon2.lon - latlon1.lon) * math.pi / 180
+    a = math.sin(delta_phi / 2) * math.sin(delta_phi / 2) + math.cos(phi1) * math.cos(phi2)\
+        * math.sin(delta_lambda / 2) * math.sin(delta_lambda / 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    d = earth_radius * c
+    return d
 
-def wgs84_old(latlon, scaling, xy):
-    """Converts x and y to wgs84 coordinates based on origin and scaling factor to meters."""
-    x0, y0 = pyproj.transform('epsg:4326', 'epsg:3857', latlon.lat, latlon.lon)
-    print(x0, y0)
-    x1, y1 = x0 + scaling*xy[0], y0 + scaling*xy[1]
-    print(x1, y1)
-    lat, lon = pyproj.transform('epsg:3857', 'epsg:4326', x1, y1)
-    print(lat, lon)
+
+def move_distance(latlon, azmth_dist):
+    """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
+    azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
+    g = pyproj.Geod(ellps='WGS84')
+    lon, lat, azmth = g.fwd(latlon.lon, latlon.lat, azmth, dist)
     return LatLon(lat, lon)
+
 
 def get_fov(img_arr, h_mat):
     """Calculates field of view (FoV) corners from homography and image shape."""

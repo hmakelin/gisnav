@@ -18,8 +18,8 @@ from scipy.spatial.transform import Rotation
 from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, padded_map_size, rotate_and_crop_map, \
-    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, wgs84, LatLon, fov_to_bbox,\
-    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point
+    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -183,15 +183,17 @@ class Matcher(Node):
         """Returns vehicle attitude from VehicleAttitude message."""
         return self._get_simple_info('VehicleAttitude')
 
-    def _project_gimbal_fov(self):
+    def _project_gimbal_fov(self, altitude_meters):
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
+        print(f'RPY should be all zero: {rpy}')
+
         r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True).as_matrix()
-        e = np.hstack((r, np.expand_dims(np.array([0, 0, 1]), axis=1)))  # extrinsic matrix
+        e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))  # extrinsic matrix  # [0, 0, 1]
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
                                   + ' - could not project gimbal FoV.'
 
@@ -209,28 +211,14 @@ class Matcher(Node):
                                   + ' - could not project gimbal FoV.'
 
         # Project image corners to z=0 plane (ground)
-        # TODO: currently using pixel coordinates - should scale using camera distance instead?
         src_corners = create_src_corners(h, w)
-        #src_corners = np.float32([[-w/2, -h/2], [-w/2, h/2], [w/2, h/2], [w/2, -h/2]]).reshape(-1, 1, 2)
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
-        hm = np.matmul(k, e)  # TODO: call this p for projection matrix instead?
-        hm_inv = np.linalg.inv(hm)
+        p = np.matmul(k, e)
+        p_inv = np.linalg.inv(p)
 
-        dst_corners = cv2.perspectiveTransform(src_corners, hm_inv)  # TODO: use util.get_fov here?
+        dst_corners = cv2.perspectiveTransform(src_corners, p_inv)  # TODO: use util.get_fov here?
         dst_corners = dst_corners.squeeze()  # See get_fov usage elsewhere -where to do squeeze if at all?
-
-        # Adjust for camera center / principal point
-        # TODO: bake this into the previous matrices
-        #c = np.array((0.5, 0.5))
-        #rc = np.matmul(r[:-1, :-1], c)
-        #print(f'rc {rc}')
-        #print(f'fov pix 1 : {dst_corners}')
-        #for i in range(0, len(dst_corners)):
-        #    dst_corners[i][0] = dst_corners[i][0] + rc[0]
-        #    dst_corners[i][1] = dst_corners[i][1] + rc[1]
-        #print(f'fov pix 2 : {dst_corners}')
-
 
         return dst_corners
 
@@ -256,20 +244,15 @@ class Matcher(Node):
                 return
             assert hasattr(cam_info, 'k'), 'Could not retrieve camera intrinsics matrix from CameraInfo, cannot ' \
                                            'compute gimbal FoV WGS84 coordinates. '
-            gimbal_fov_pix = self._project_gimbal_fov()
+            gimbal_fov_pix = self._project_gimbal_fov(alt)  # self._project_gimbal_fov()
 
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
-                pitch = self._camera_pitch()
-                if pitch is None:
-                    self.get_logger().warn('Could not get camera pitch. Cannot update map based on projected FoV.')
-                    return
-                print(f'pitch for scaling {pitch}')
-                scaling = abs(alt / math.cos(math.radians(pitch)))  # TODO: distance to projection of principal point on ground
-                print(f'scaling {scaling}')
-                multiplier = 1/ math.cos(math.radians(pitch))
-                print(f'scaling multiplier {multiplier}')
-                self._gimbal_fov_wgs84 = wgs84(LatLon(lat, lon), scaling, # alt,
-                                               gimbal_fov_pix)  # TODO: get rid of this attribute, do this in some other way
+                azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
+                distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))  # TODO: in nadir facing case these distances are all the same
+                zipped = list(zip(azimuths, distances))
+                to_wgs84 = partial(move_distance, LatLon(lat, lon))
+                self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
+                #assert self._gimbal_fov_wgs84.shape == gimbal_fov_pix.shape, f'wrong shape for gimbal fov: {self._gimbal_fov_wgs84.shape} vs {gimbal_fov_pix.shape}'
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
@@ -561,15 +544,17 @@ class Matcher(Node):
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
+            fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
             camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width,
-                                                  get_distance_of_fov_center(fov_wgs84))
+                                                  fov_center_line_length)
+            print(f'fov_center_line_length {fov_center_line_length}')
             camera_pitch = self._camera_pitch()
             camera_altitude = None
             if camera_pitch is None:
                 # TODO: Use some other method to estimate altitude if pitch not available?
                 self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
             else:
-                camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
+                camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
             self.get_logger().debug('Camera pitch, distance to principal point, altitude: {} deg, {} m, {} m.'
                                     .format(camera_pitch, camera_distance, camera_altitude))
 
@@ -604,7 +589,7 @@ class Matcher(Node):
             # Translate relative to top left corner, not principal point/center of map raster
             translation_vector[0] = (1 - translation_vector[0]) * self._img_dimensions().width / 2
             translation_vector[1] = (1 - translation_vector[1]) * self._img_dimensions().height / 2
-            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
+            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
                 np.array(translation_vector[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
                 self._map_bbox, rot, self._img_dimensions())  # , uncrop=False)
 

@@ -159,7 +159,8 @@ def convert_pix_to_wgs84(img_dim, bbox, pt):
 def write_fov_and_camera_location_to_geojson(fov, location, fov_center, fov_gimbal, filename_fov='field_of_view.json',
                                              filename_location='estimated_location.json',
                                              filename_fov_center='fov_center.json',
-                                             filename_gimbal_fov='projected_field_of_view.json'):
+                                             filename_gimbal_fov='projected_field_of_view.json',
+                                             filename_gimbal_fov_upper_left='projected_field_of_view_ul.json'):
     # TODO: write simulated drone location also!
     """Writes the field of view and lat lon location of drone and center of fov into a geojson file.
 
@@ -186,6 +187,10 @@ def write_fov_and_camera_location_to_geojson(fov, location, fov_center, fov_gimb
     with open(filename_fov_center, 'w') as f3:
         fov_latlon = geojson.Point(tuple(reversed(fov_center[0:2])))
         geojson.dump(fov_latlon, f3)
+
+    with open(filename_gimbal_fov_upper_left, 'w') as f4:
+        ul = geojson.Point(tuple(reversed(fov_gimbal.squeeze()[0])))
+        geojson.dump(ul, f4)
 
     # TODO: write gimbal-projected FoV into its own file
 

@@ -25,7 +25,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
 
 # Import this after util.setup_sys_path has been called
-from wms_map_matching.superglue_adapter import SuperGlue
+from wms_map_matching.superglue import SuperGlue
 
 
 class Matcher(Node):

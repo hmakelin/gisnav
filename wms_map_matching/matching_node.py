@@ -190,8 +190,6 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
-        print(f'RPY should be all zero: {rpy}')
-
         r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))  # extrinsic matrix  # [0, 0, 1]
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
@@ -252,17 +250,11 @@ class Matcher(Node):
                 zipped = list(zip(azimuths, distances))
                 to_wgs84 = partial(move_distance, LatLon(lat, lon))
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
-                #assert self._gimbal_fov_wgs84.shape == gimbal_fov_pix.shape, f'wrong shape for gimbal fov: {self._gimbal_fov_wgs84.shape} vs {gimbal_fov_pix.shape}'
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
                                            self._topics_msgs[
                                                'VehicleGlobalPosition'].lon))  # TODO: remove this redundant call, design this better
-
-            # assert gimbal_fov_pix is not None, 'Gimbal fov pix is missing.'
-            if gimbal_fov_pix is None:
-                self.get_logger().warn('Gimbal fov pix is missing. Cannot project gimbal fov.')
-                return None
 
             ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
             projected_fov_center = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
@@ -434,10 +426,6 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        #pitch_index = self._pitch_index()
-        #assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
-
-        #print(f'rpy {rpy}, index {pitch_index}')
 
         return rpy[1]
 

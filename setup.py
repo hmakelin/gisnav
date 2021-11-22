@@ -37,7 +37,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'matching_node = wms_map_matching.matching_node:main'
+            'matcher = wms_map_matching.matcher:main'
         ],
     },
 )

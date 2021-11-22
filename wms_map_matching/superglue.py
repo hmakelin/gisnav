@@ -3,7 +3,7 @@ import torch
 import cv2
 import matplotlib.cm as cm
 
-# Assumes models has been added to path (see import statements in matching_node.py)
+# Assumes models has been added to path (see import statements in matcher.py)
 from models.matching import Matching
 from models.utils import frame2tensor
 

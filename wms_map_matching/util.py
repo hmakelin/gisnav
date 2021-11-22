@@ -15,6 +15,7 @@ BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
 Pixel = namedtuple('Pixel', 'x y')
 Dimensions = namedtuple('Dimensions', 'height width')
+RPY = namedtuple('RPY', 'roll pitch yaw')
 
 MAP_RADIUS_METERS_DEFAULT = 400
 

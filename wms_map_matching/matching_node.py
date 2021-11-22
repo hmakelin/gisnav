@@ -19,7 +19,7 @@ from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, padded_map_size, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
-    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
@@ -190,7 +190,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True).as_matrix()
+        r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))  # extrinsic matrix  # [0, 0, 1]
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
                                   + ' - could not project gimbal FoV.'
@@ -302,8 +302,9 @@ class Matcher(Node):
 
         assert rpy is not None, 'RPY is None, cannot retrieve camera yaw.'
         assert len(rpy) == 3, f'Unexpected length for RPY: {len(rpy)}.'
+        assert hasattr(rpy, 'yaw'), f'No yaw attribute found for named tuple: {rpy}.'
 
-        camera_yaw = rpy[2]
+        camera_yaw = rpy.yaw
 
         return camera_yaw
 
@@ -343,7 +344,7 @@ class Matcher(Node):
         yaw = heading + gimbal_yaw
         pitch = -(90 + gimbal_euler[pitch_index])
         roll = 0
-        rpy = [roll, pitch, yaw]
+        rpy = RPY(roll, pitch, yaw)
 
         return rpy
 
@@ -354,7 +355,7 @@ class Matcher(Node):
             self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
             return None
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, rpy, degrees=True)
+        r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True)
         camera_normal = r.apply(nadir)
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
@@ -426,8 +427,9 @@ class Matcher(Node):
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
 
         assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
+        assert hasattr(rpy, 'pitch'), f'Pitch attribute not found in named tuple {rpy}.'
 
-        return rpy[1]
+        return rpy.pitch
 
     def _gimbal_attitude(self):
         """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""

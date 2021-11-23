@@ -226,24 +226,27 @@ class Matcher(Node):
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
+
+        # Global position needed for getting map for approximate location
         global_position = self._global_position()
         if global_position is None:
             self.get_logger().warn(
                 'Could not get vehicle global position. Cannot update map based on projected FoV.')
             return
-
         assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'),\
             'Global position message did not include lat or lon fields.'
         assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'
 
+        lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
+        global_position_latlon = LatLon(lat, lon)
+
         if self._use_gimbal_projection():
-            lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
-            cam_info = self._camera_info()
-            if cam_info is None:
-                self.get_logger().warn('Could not get camera info. Cannot update map based on projected FoV.')
+            camera_info = self._camera_info()
+            if camera_info is None:
+                self.get_logger().debug('Camera info not available - cannot project gimbal FoV.')
                 return
-            assert hasattr(cam_info, 'k'), 'Could not retrieve camera intrinsics matrix from CameraInfo, cannot ' \
-                                           'compute gimbal FoV WGS84 coordinates. '
+            assert hasattr(camera_info, 'k'), 'CameraInfo does not have k, cannot compute gimbal FoV WGS84 coordinates.'
+
             gimbal_fov_pix = self._project_gimbal_fov(alt)  # self._project_gimbal_fov()
 
             if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
@@ -254,35 +257,31 @@ class Matcher(Node):
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
-                self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
-                                           self._topics_msgs[
-                                               'VehicleGlobalPosition'].lon))  # TODO: remove this redundant call, design this better
+                self._map_bbox = get_bbox(global_position_latlon)  # TODO: remove this redundant call, design this better
 
             ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
-            projected_fov_center = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
-            self._map_bbox = get_bbox(projected_fov_center)
+            projected_fov_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
+            self._map_bbox = get_bbox(projected_fov_center_latlon)
         else:
-            self._map_bbox = get_bbox((global_position.lat, global_position.lon))
+            self._map_bbox = get_bbox(global_position_latlon)
 
-        if self._camera_info() is not None:
-            layer_str = self.get_parameter('layer').get_parameter_value().string_value
-            srs_str = self.get_parameter('srs').get_parameter_value().string_value
-            self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
+        layer_str = self.get_parameter('layer').get_parameter_value().string_value
+        srs_str = self.get_parameter('srs').get_parameter_value().string_value
+        self.get_logger().debug('Getting map for bounding box: {}, layer: {}, srs: {}.'.format(self._map_bbox,
                                                                                                    layer_str, srs_str))
 
-            try:
-                self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox,
-                                             size=self._map_size_with_padding(), format='image/png',
-                                             transparent=True)
-            except Exception as e:
-                self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
-                return
+        try:
+            self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox,
+                                         size=self._map_size_with_padding(), format='image/png',
+                                         transparent=True)
+        except Exception as e:
+            self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
+            return
 
-            self._map = np.frombuffer(self._map.read(), np.uint8)
-            self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
-            assert self._map.shape[0:2] == self._map_size_with_padding(), 'Converted map is not the specified size.'
-        else:
-            self.get_logger().debug('Camera info not available - will not yet get map from WMS endpoint.')
+        self._map = np.frombuffer(self._map.read(), np.uint8)
+        self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
+        assert self._map.shape[0:2] == self._map_size_with_padding(), 'Converted map is not the specified size.'
+
 
     def _image_raw_callback(self, msg):
         """Handles reception of latest image frame from camera."""

@@ -35,7 +35,7 @@ def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
     """
     proj_str = '+proj=aeqd +lat_0={lat} +lon_0={lon} +x_0=0 +y_0=0'
     projection = partial(pyproj.transform,
-                         pyproj.Proj(proj_str.format(lat=latlon[0], lon=latlon[1])),
+                         pyproj.Proj(proj_str.format(lat=latlon.lat, lon=latlon.lon)),
                          pyproj.Proj('+proj=longlat +datum=WGS84'))
     circle = Point(0, 0).buffer(radius_meters)
     circle_transformed = transform(projection, circle).exterior.coords[:]
@@ -233,8 +233,7 @@ def altitude_from_gimbal_pitch(pitch_degrees, distance):
 
 def get_bbox_center(bbox):
     """Returns camera lat-lon location assuming it is in the middle of given bbox (nadir facing camera)."""
-    # TODO: renamed to get_bbox_center - revisit every place where this is used
-    return bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2
+    return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
 def get_x_y(translation_vector, map_dim):

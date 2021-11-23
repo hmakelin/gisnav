@@ -17,7 +17,7 @@ if os.path.isfile(package_file):
     maintainer_email = root.find('maintainer').attrib.get('email', '')
     license_name = root.find('license').text
 else:
-    raise FileNotFoundError(f'Could not find requirements file at {package_file}.')
+    raise FileNotFoundError(f'Could not find package file at {package_file}.')
 
 # Read requirements file
 requirements_file = os.path.join(folder, 'requirements.txt')

@@ -86,8 +86,12 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
-        # TODO: get misc out of superglue and think this through better - there should be regular input validation here for whatever the users are typing in?
-        return self._config['misc']['gimbal_projection']
+        gimbal_projection_flag = self.get('misc', {}).get('gimbal_projection', False)
+        if type(gimbal_projection_flag) is bool:
+            return gimbal_projection_flag
+        else:
+            self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
+            return False
 
     def _import_class(self, class_name, module_name):
         """Imports class from module if not yet imported."""
@@ -222,19 +226,17 @@ class Matcher(Node):
 
     def _update_map(self):
         """Gets latest map from WMS server and returns it as numpy array."""
+        global_position = self._global_position()
+        if global_position is None:
+            self.get_logger().warn(
+                'Could not get vehicle global position. Cannot update map based on projected FoV.')
+            return
+
+        assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'),\
+            'Global position message did not include lat or lon fields.'
+        assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'
+
         if self._use_gimbal_projection():
-
-            # TODO: should this section of stuff be somewhere else - make more modular?
-            global_position = self._global_position()
-            if global_position is None:
-                self.get_logger().warn(
-                    'Could not get vehicle global position. Cannot update map based on projected FoV.')
-                return
-
-            assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'), 'Global position message did ' \
-                                                                                        'not include lat or lon ' \
-                                                                                        'fields. '
-            assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'  # TODO: use terrain_alt and terrain_alt_valid fields?
             lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
             cam_info = self._camera_info()
             if cam_info is None:
@@ -258,11 +260,9 @@ class Matcher(Node):
 
             ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
             projected_fov_center = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
-            self._map_bbox = get_bbox(
-                projected_fov_center)  # TODO: this should not be stored in an attribute, just temporarily passing stuff between _update_map and _match functions.
+            self._map_bbox = get_bbox(projected_fov_center)
         else:
-            self._map_bbox = get_bbox((self._topics_msgs['VehicleGlobalPosition'].lat,
-                                       self._topics_msgs['VehicleGlobalPosition'].lon))
+            self._map_bbox = get_bbox((global_position.lat, global_position.lon))
 
         if self._camera_info() is not None:
             layer_str = self.get_parameter('layer').get_parameter_value().string_value

@@ -340,7 +340,6 @@ class Matcher(Node):
         assert hasattr(rpy, 'yaw'), f'No yaw attribute found for named tuple: {rpy}.'
 
         camera_yaw = rpy.yaw
-        print(f'yaw {camera_yaw}')  # TODO: remove this line
         return camera_yaw
 
     def _get_camera_rpy(self):
@@ -376,7 +375,6 @@ class Matcher(Node):
         gimbal_yaw = gimbal_euler[yaw_index]
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
-        print(f'gimbal yaw {gimbal_yaw} headin {heading}')  # TODO: remove this line
         yaw = heading + gimbal_yaw
         pitch = -(90 + gimbal_euler[pitch_index])
         roll = 0

@@ -17,7 +17,7 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
-    write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, padded_map_size, rotate_and_crop_map, \
+    write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt
 
@@ -177,10 +177,21 @@ class Matcher(Node):
         return self._get_simple_info('VehicleGlobalPosition')
 
     def _map_size_with_padding(self):
-        return padded_map_size(self._img_dimensions())
+        dim = self._img_dimensions()
+        if type(dim) is not Dimensions:
+            self.get_logger().warn(f'Dimensions not available - returning None as map size.')
+            return None
+        assert hasattr(dim, 'width') and hasattr(dim, 'height'), 'Dimensions did not have expected attributes.'
+        diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
+        return diagonal, diagonal
 
     def _map_dimensions_with_padding(self):
-        return Dimensions(*self._map_size_with_padding())
+        map_size = self._map_size_with_padding()
+        if map_size is None:
+            self.get_logger().warn(f'Map size with padding not available - returning None as map dimensions.')
+            return None
+        assert len(map_size) == 2, f'Map size was unexpected length {len(map_size)}, 2 expected.'
+        return Dimensions(*map_size)
 
     def _declared_img_size(self):
         camera_info = self._camera_info()
@@ -193,7 +204,12 @@ class Matcher(Node):
             return None
 
     def _img_dimensions(self):
-        return Dimensions(*self._declared_img_size())
+        declared_size = self._declared_img_size()
+        if declared_size is None:
+            self.get_logger().warn('CDeclared size not available - returning None as image dimensions.')
+            return None
+        else:
+            return Dimensions(*declared_size)
 
     def _vehicle_attitude(self):
         """Returns vehicle attitude from VehicleAttitude message."""
@@ -324,7 +340,7 @@ class Matcher(Node):
         assert hasattr(rpy, 'yaw'), f'No yaw attribute found for named tuple: {rpy}.'
 
         camera_yaw = rpy.yaw
-
+        print(f'yaw {camera_yaw}')  # TODO: remove this line
         return camera_yaw
 
     def _get_camera_rpy(self):
@@ -360,6 +376,7 @@ class Matcher(Node):
         gimbal_yaw = gimbal_euler[yaw_index]
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
             heading) + '([-180, 180] expected). Cannot compute RPY. '
+        print(f'gimbal yaw {gimbal_yaw} headin {heading}')  # TODO: remove this line
         yaw = heading + gimbal_yaw
         pitch = -(90 + gimbal_euler[pitch_index])
         roll = 0
@@ -537,14 +554,26 @@ class Matcher(Node):
 
             map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))
 
+            map_dims_with_padding = self._map_dimensions_with_padding()
+            if map_dims_with_padding is None:
+                self.get_logger().warn('Could not get map dimensions info. Skipping matching.')
+                return
+
+            img_dimensions = self._img_dimensions()
+            if map_dims_with_padding is None:
+                self.get_logger().warn('Could not get img dimensions info. Skipping matching.')
+                return
+
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
-                fov_pix, self._map_dimensions_with_padding(), self._map_bbox, rot, self._img_dimensions())
+                fov_pix, map_dims_with_padding, self._map_bbox, rot, img_dimensions)
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
             focal_length = k[0]
-            camera_distance = get_camera_distance(focal_length, self._img_dimensions().width, fov_center_line_length)
+            assert hasattr(img_dimensions, 'width') and hasattr(img_dimensions, 'height'), \
+                'Img dimensions did not have expected attributes.'
+            camera_distance = get_camera_distance(focal_length, img_dimensions.width, fov_center_line_length)
             camera_pitch = self._camera_pitch()
             camera_altitude = None
             if camera_pitch is None:
@@ -584,12 +613,12 @@ class Matcher(Node):
 
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster
-            h, w = self._img_dimensions()
+            h, w = img_dimensions
             t[0] = (1 - t[0]) * w / 2
             t[1] = (1 - t[1]) * h / 2
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
-                np.array(t[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
-                self._map_bbox, rot, self._img_dimensions())
+                np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
+                self._map_bbox, rot, img_dimensions)
 
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
 

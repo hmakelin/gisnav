@@ -236,36 +236,23 @@ def get_bbox_center(bbox):
     return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
-def get_camera_lat_lon_alt(translation, rotation, dimensions_img, dimensions_map_padded, bbox, rot):
-    """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
-    alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions_img.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
-    camera_position = np.matmul(rotation, translation)
-    camera_position[0] = camera_position[0]*dimensions_img.width
-    camera_position[1] = camera_position[1]*dimensions_img.height
-    camera_position = uncrop_pixel_coordinates(dimensions_img, dimensions_map_padded, camera_position)  # Pixel coordinates in original uncropped frame
-    translation_rotated = rotate_point(rot, dimensions_map_padded, camera_position[0:2])  # TODO: why/why not -rot?
-    lat, lon = convert_pix_to_wgs84(dimensions_map_padded, bbox, translation_rotated)  # dimensions --> dimensions_orig
-
-    return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above
-
-
-def rotate_and_crop_map(map, radians, dimensions):
+def rotate_and_crop_map(map, radians, dimensions, visualize=False):
     # TODO: only tested on width>height images.
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map."""
-    cv2.imshow('padded', map)
-    cv2.waitKey(1)
-    assert map.shape[0:2] == padded_map_size(dimensions)
     cx, cy = tuple(np.array(map.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
     map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
-    cv2.imshow('rotated', map_rotated)
-    cv2.waitKey(1)
     map_cropped = crop_center(map_rotated, dimensions)
-    cv2.imshow('cropped', map_cropped)
-    cv2.waitKey(1)
+    if visualize:
+        cv2.imshow('padded', map)
+        cv2.waitKey(1)
+        cv2.imshow('rotated', map_rotated)
+        cv2.waitKey(1)
+        cv2.imshow('cropped', map_cropped)
+        cv2.waitKey(1)
     return map_cropped
 
 
@@ -285,11 +272,6 @@ def uncrop_pixel_coordinates(cropped_dimensions, dimensions, pt):
     pt[0] = pt[0] + (dimensions.width - cropped_dimensions.width)/2  # TODO: check that 0 -> width and index 1 -> height, could be other way around!
     pt[1] = pt[1] + (dimensions.height - cropped_dimensions.height)/2
     return pt
-
-
-def padded_map_size(dimensions):
-    diagonal = math.ceil(math.sqrt(dimensions.width ** 2 + dimensions.height ** 2))
-    return diagonal, diagonal
 
 
 def get_angle(vec1, vec2, normalize=False):

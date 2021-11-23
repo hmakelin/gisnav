@@ -242,9 +242,10 @@ class Matcher(Node):
         if global_position_latlonalt is None:
             self.get_logger().warn('Could not get vehicle global position latlonalt. Cannot update map.')
             return None
+
+        # Use these coordinates for fetching map from server
         map_center_latlon = LatLon(global_position_latlonalt.lat, global_position_latlonalt.lon)
 
-        # TODO: try to project - if it does not work default back to using GPS location
         if self._use_gimbal_projection():
             camera_info = self._camera_info()
             if camera_info is not None:
@@ -252,13 +253,17 @@ class Matcher(Node):
                                                   'coordinates. '
 
                 gimbal_fov_pix = self._project_gimbal_fov(global_position_latlonalt.alt)
-                if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
+
+                # Convert gimbal field of view from pixels to WGS84 coordinates
+                if gimbal_fov_pix is not None:
                     azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
                     distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
                     zipped = list(zip(azimuths, distances))
                     to_wgs84 = partial(move_distance, map_center_latlon)
-                    self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
-                    ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
+                    self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
+                    ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
+
+                    # Use projected field of view center instead of global position as map center
                     map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
                 else:
                     self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing '
@@ -406,21 +411,6 @@ class Matcher(Node):
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
         self._base_callback('VehicleAttitude', msg)
-
-    def _get_terrain_altitude(self):
-        """Returns terrain altitude from VehicleGlobalPosition message."""
-        global_position = self._topics_msgs.get('VehicleGlobalPosition', None)
-        if global_position is not None:
-            assert hasattr(global_position, 'terrain_alt') and hasattr(global_position, 'terrain_alt_valid'), \
-                'VehicleGlobalPosition was missing terrain_alt or terrain_alt_valid fields.'
-            if global_position.terrain_alt_valid:
-                return global_position.terrain_alt
-            else:
-                self.get_logger().warn('Terrain altitude not valid.')
-                return None
-        else:
-            self.get_logger().warn('Terrain altitude not available.')
-            return None
 
     def _camera_pitch(self):
         """Returns camera pitch in degrees relative to vehicle frame."""

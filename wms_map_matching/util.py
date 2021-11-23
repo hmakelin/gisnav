@@ -14,7 +14,6 @@ from collections import namedtuple
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
-Pixel = namedtuple('Pixel', 'x y')
 Dimensions = namedtuple('Dimensions', 'height width')
 RPY = namedtuple('RPY', 'roll pitch yaw')
 
@@ -237,25 +236,14 @@ def get_bbox_center(bbox):
     return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
-def get_x_y(translation_vector, map_dim):
-    """Returns the pixel coordinates corresponding to the relative translation from map center."""
-    return map_dim.width/2 + translation_vector[0].squeeze()*map_dim.width,\
-           map_dim.height/2 + translation_vector[1].squeeze()*map_dim.height  # TODO: should not need squeeze
-
-
-
 def get_camera_lat_lon_alt(translation, rotation, dimensions_img, dimensions_map_padded, bbox, rot):
     """Returns camera lat-lon coordinates in WGS84 and altitude in meters."""
     alt = translation[2] * (2 * MAP_RADIUS_METERS_DEFAULT / dimensions_img.width)  # width and height should be same for map raster # TODO: Use actual radius, not default radius
-
     camera_position = np.matmul(rotation, translation)
     camera_position[0] = camera_position[0]*dimensions_img.width
     camera_position[1] = camera_position[1]*dimensions_img.height
-    print('translation:\n' + str(camera_position))
     camera_position = uncrop_pixel_coordinates(dimensions_img, dimensions_map_padded, camera_position)  # Pixel coordinates in original uncropped frame
-    print('uncropped translation\n' + str(camera_position))
     translation_rotated = rotate_point(rot, dimensions_map_padded, camera_position[0:2])  # TODO: why/why not -rot?
-    print('uncropped, unrotated: ' + str(translation_rotated))
     lat, lon = convert_pix_to_wgs84(dimensions_map_padded, bbox, translation_rotated)  # dimensions --> dimensions_orig
 
     return float(lat), float(lon), float(alt)  # TODO: get rid of floats here and do it properly above

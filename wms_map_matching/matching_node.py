@@ -242,33 +242,32 @@ class Matcher(Node):
         if global_position_latlonalt is None:
             self.get_logger().warn('Could not get vehicle global position latlonalt. Cannot update map.')
             return None
-        global_position_latlon = LatLon(global_position_latlonalt.lat, global_position_latlonalt.lon)
+        map_center_latlon = LatLon(global_position_latlonalt.lat, global_position_latlonalt.lon)
 
         # TODO: try to project - if it does not work default back to using GPS location
         if self._use_gimbal_projection():
             camera_info = self._camera_info()
-            if camera_info is None:
-                self.get_logger().debug('Camera info not available - cannot project gimbal FoV.')
-                return  # TODO: do not return - default to using global position instead of FoV
-            assert hasattr(camera_info, 'k'), 'CameraInfo does not have k, cannot compute gimbal FoV WGS84 coordinates.'
+            if camera_info is not None:
+                assert hasattr(camera_info, 'k'), 'CameraInfo does not have k, cannot compute gimbal FoV WGS84 ' \
+                                                  'coordinates. '
 
-            gimbal_fov_pix = self._project_gimbal_fov(global_position_latlonalt.alt)  # self._project_gimbal_fov()
-
-            if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
-                azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
-                distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))  # TODO: in nadir facing case these distances are all the same
-                zipped = list(zip(azimuths, distances))
-                to_wgs84 = partial(move_distance, global_position_latlon)
-                self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
+                gimbal_fov_pix = self._project_gimbal_fov(global_position_latlonalt.alt)
+                if gimbal_fov_pix is not None:  # self._gimbal_fov_wgs84 and
+                    azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
+                    distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
+                    zipped = list(zip(azimuths, distances))
+                    to_wgs84 = partial(move_distance, map_center_latlon)
+                    self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped))) # TODO: get rid of this attribute, do this in some other way  # scaling---> 1,
+                    ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
+                    map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
+                else:
+                    self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing '
+                                           'camera.')
             else:
-                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
-                self._map_bbox = get_bbox(global_position_latlon)  # TODO: remove this redundant call, design this better
+                self.get_logger().debug('Camera info not available, cannot project gimbal FoV, defaulting to global '
+                                        'position.')
 
-            ### TODO: add some sort of checkt hat projected FoV is contained in size and makes sense
-            projected_fov_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
-            self._map_bbox = get_bbox(projected_fov_center_latlon)
-        else:
-            self._map_bbox = get_bbox(global_position_latlon)
+        self._map_bbox = get_bbox(map_center_latlon)
 
         # Build and send WMS request
         layer_str = self.get_parameter('layer').get_parameter_value().string_value

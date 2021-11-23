@@ -89,7 +89,7 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self):
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
-        gimbal_projection_flag = self.get('misc', {}).get('gimbal_projection', False)
+        gimbal_projection_flag = self._config.get('misc', {}).get('gimbal_projection', False)
         if type(gimbal_projection_flag) is bool:
             return gimbal_projection_flag
         else:
@@ -98,7 +98,7 @@ class Matcher(Node):
 
     def _restrict_affine(self):
         """Returns True if homography matrix should be restricted to an affine transformation (nadir facing camera)."""
-        restrict_affine_flag = self.get('misc', {}).get('affine', False)
+        restrict_affine_flag = self._config.get('misc', {}).get('affine', False)
         if type(restrict_affine_flag) is bool:
             return restrict_affine_flag
         else:
@@ -509,7 +509,7 @@ class Matcher(Node):
 
             match_count_img = len(mkp_img)
             assert match_count_img == len(mkp_map), 'Matched keypoint counts did not match.'
-            if match_count_img < self.MIN_MATCHES:
+            if match_count_img < self.MINIMUM_MATCHES:
                 self.get_logger().warn(f'Found {match_count_img} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
                 return
 

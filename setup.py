@@ -11,7 +11,17 @@ version = root.find('version').text
 description = root.find('description').text
 maintainer = root.find('maintainer').text
 maintainer_email = root.find('maintainer').attrib.get('email', '')
-license = root.find('license').text
+license_name = root.find('license').text
+
+# Read requirements file
+folder = os.path.dirname(os.path.realpath(__file__))
+requirements_file = os.path.join(folder, 'requirements.txt')
+install_requires = []
+if os.path.isfile(requirements_file):
+    with open(requirements_file) as f:
+        install_requires = f.read().splitlines()
+else:
+    raise FileNotFoundError(f'Could not find requirements file at {requirements_file}.')
 
 setup(
     name=package_name,
@@ -28,12 +38,12 @@ setup(
         (os.path.join('share', package_name, 'SuperGluePretrainedNetwork'),
          glob('SuperGluePretrainedNetwork/match_pairs.py')),
     ],
-    install_requires=['setuptools'],
+    install_requires=install_requires,
     zip_safe=True,
     maintainer=maintainer,
     maintainer_email=maintainer_email,
     description=description,
-    license=license,
+    license=license_name,
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

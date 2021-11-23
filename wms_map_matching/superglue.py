@@ -1,13 +1,10 @@
 """This module adapts the SuperGlue match_pairs.py demo code for this app."""
 import torch
 import cv2
-import matplotlib.cm as cm
 
 # Assumes models has been added to path (see import statements in matching_node.py)
 from models.matching import Matching
 from models.utils import frame2tensor
-
-from wms_map_matching.util import Dimensions
 
 
 class SuperGlue:

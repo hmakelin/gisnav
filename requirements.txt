@@ -1,0 +1,10 @@
+setuptools
+numpy
+opencv-python
+torch
+scipy
+OWSLib
+pyyaml
+pyproj
+geojson
+shapely

@@ -32,6 +32,9 @@ class Matcher(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'
 
+    # Minimum matches for homography estimation, should be at least 4
+    MINIMUM_MATCHES = 4
+
     class TopicType(Enum):
         """Enumerates microRTPS bridge topic types."""
         PUB = 1
@@ -91,6 +94,15 @@ class Matcher(Node):
             return gimbal_projection_flag
         else:
             self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
+            return False
+
+    def _restrict_affine(self):
+        """Returns True if homography matrix should be restricted to an affine transformation (nadir facing camera)."""
+        restrict_affine_flag = self.get('misc', {}).get('affine', False)
+        if type(restrict_affine_flag) is bool:
+            return restrict_affine_flag
+        else:
+            self.get_logger().warn(f'Could not read affine restriction flag: {restrict_affine_flag}. Assume False.')
             return False
 
     def _import_class(self, class_name, module_name):
@@ -489,48 +501,50 @@ class Matcher(Node):
             rot = math.radians(yaw)
             assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: ' + str(rot) + ' ([-pi, pi] expected).'
             self.get_logger().debug('Current camera yaw: ' + str(rot) + ' radians.')
-            map_cropped, map_rotated = rotate_and_crop_map(self._map, rot,
-                                                           self._img_dimensions())  # TODO: return only rotated
-            assert map_cropped.shape[
-                   0:2] == self._declared_img_size(), 'Rotated and cropped map did not match image shape.'
+
+            map_cropped = rotate_and_crop_map(self._map, rot, self._img_dimensions())
+            assert map_cropped.shape[0:2] == self._declared_img_size(), 'Cropped map did not match declared shape.'
 
             mkp_img, mkp_map = self._superglue.match(self._cv_image, map_cropped)
 
-            assert len(mkp_img) == len(mkp_map), 'Matched keypoint counts did not match.'
-            if len(mkp_img) < 4:
-                self.get_logger().warn('Did not find enough matches. Skipping current matches.')
+            match_count_img = len(mkp_img)
+            assert match_count_img == len(mkp_map), 'Matched keypoint counts did not match.'
+            if match_count_img < self.MIN_MATCHES:
+                self.get_logger().warn(f'Found {match_count_img} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
                 return
 
-            cam_normal = self._get_camera_normal()  # Currently retursn rotvec, not camera normal
-            h, h_mask, translation_vector, rotation_matrix = self._process_matches(mkp_img, mkp_map,
-                                                                             self._camera_info().k.reshape([3, 3]),
-                                                                             cam_normal,
-                                                                             affine=self._config['misc']['affine'])
+            camera_normal = self._get_camera_normal()
+            if camera_normal is None:
+                self.get_logger().warn('Could not get camera normal. Skipping matching.')
+                return
 
-            assert h.shape == (3, 3), 'Homography matrix had unexpected shape: ' + str(h.shape) + '.'
-            assert translation_vector.shape == (3, 1), 'Translation vector had unexpected shape: ' \
-                                                       + str(translation_vector.shape) + '.'
-            assert rotation_matrix.shape == (3, 3), 'Rotation matrix had unexpected shape: ' \
-                                                    + str(rotation_matrix.shape) + '.'
+            camera_info = self._camera_info()
+            if camera_info is None:
+                self.get_logger().warn('Could not get camera info. Skipping matching.')
+                return
+            assert hasattr(camera_info, 'k'), 'Camera info did not have k - cannot match.'
+            assert len(camera_info.k) == 9, 'K had unexpected length.'
+            k = camera_info.k.reshape([3, 3])
+
+            h, h_mask, t, r = self._process_matches(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
+
+            assert h.shape == (3, 3), f'Homography matrix had unexpected shape: {h.shape}.'
+            assert t.shape == (3, 1), f'Translation vector had unexpected shape: {t.shape}.'
+            assert r.shape == (3, 3), f'Rotation matrix had unexpected shape: {r.shape}.'
 
             fov_pix = get_fov(self._cv_image, h)
             visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix)
 
-            # apparent_alt = get_camera_apparent_altitude(MAP_RADIUS_METERS_DEFAULT, self._map_dimensions_with_padding(), self._camera_info().k)
-            map_lat, map_lon = get_bbox_center(BBox(
-                *self._map_bbox))  # TODO: this is just the center of the map which is GPS location with current implementation - need to fix get_camera_lat_lon implementation
+            map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))
 
-            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(fov_pix,
-                                                                                    self._map_dimensions_with_padding(),
-                                                                                    self._map_bbox,
-                                                                                    rot, self._img_dimensions())
+            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
+                fov_pix, self._map_dimensions_with_padding(), self._map_bbox, rot, self._img_dimensions())
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
-            camera_distance = get_camera_distance(self._camera_info().k[0], self._img_dimensions().width,
-                                                  fov_center_line_length)
-            print(f'fov_center_line_length {fov_center_line_length}')
+            focal_length = k[0]
+            camera_distance = get_camera_distance(focal_length, self._img_dimensions().width, fov_center_line_length)
             camera_pitch = self._camera_pitch()
             camera_altitude = None
             if camera_pitch is None:
@@ -538,8 +552,8 @@ class Matcher(Node):
                 self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
             else:
                 camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-            self.get_logger().debug('Camera pitch, distance to principal point, altitude: {} deg, {} m, {} m.'
-                                    .format(camera_pitch, camera_distance, camera_altitude))
+            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, distance to principal point {camera_distance} m,'
+                                    f' altitude {camera_altitude} m.')
 
             #### TODO: remove this debugging section
             """
@@ -570,17 +584,17 @@ class Matcher(Node):
 
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster
-            translation_vector[0] = (1 - translation_vector[0]) * self._img_dimensions().width / 2
-            translation_vector[1] = (1 - translation_vector[1]) * self._img_dimensions().height / 2
+            h, w = self._img_dimensions()
+            t[0] = (1 - t[0]) * w / 2
+            t[1] = (1 - t[1]) * h / 2
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
-                np.array(translation_vector[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
-                self._map_bbox, rot, self._img_dimensions())  # , uncrop=False)
+                np.array(t[0:2].reshape((1, 1, 2))), self._map_dimensions_with_padding(),
+                self._map_bbox, rot, self._img_dimensions())
 
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
 
-            fov_gimbal = self._gimbal_fov_wgs84  # TODO: put gimbal projected field of view here
+            fov_gimbal = self._gimbal_fov_wgs84
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
-                                                     # TODO: fix height estimate
                                                      fov_gimbal)
             # self._essential_mat_pub.publish(e)
             # self._homography_mat_pub.publish(h)

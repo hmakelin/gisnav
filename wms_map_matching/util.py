@@ -278,7 +278,7 @@ def rotate_and_crop_map(map, radians, dimensions):
     map_cropped = crop_center(map_rotated, dimensions)
     cv2.imshow('cropped', map_cropped)
     cv2.waitKey(1)
-    return map_cropped, map_rotated  # TODO: return cropped only
+    return map_cropped
 
 
 def crop_center(img, dimensions):

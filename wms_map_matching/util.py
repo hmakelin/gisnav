@@ -13,6 +13,7 @@ from collections import namedtuple
 
 BBox = namedtuple('BBox', 'left bottom right top')
 LatLon = namedtuple('LatLon', 'lat lon')
+LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Pixel = namedtuple('Pixel', 'x y')
 Dimensions = namedtuple('Dimensions', 'height width')
 RPY = namedtuple('RPY', 'roll pitch yaw')

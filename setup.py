@@ -3,18 +3,23 @@ from glob import glob
 from setuptools import setup
 import xml.etree.ElementTree as ET
 
+folder = os.path.dirname(os.path.realpath(__file__))
+
 # Parse info from package.xml
-tree = ET.parse('package.xml')
-root = tree.getroot()
-package_name = root.find('name').text
-version = root.find('version').text
-description = root.find('description').text
-maintainer = root.find('maintainer').text
-maintainer_email = root.find('maintainer').attrib.get('email', '')
-license_name = root.find('license').text
+package_file = os.path.join(folder, 'package.xml')
+if os.path.isfile(package_file):
+    tree = ET.parse(package_file)
+    root = tree.getroot()
+    package_name = root.find('name').text
+    version = root.find('version').text
+    description = root.find('description').text
+    maintainer = root.find('maintainer').text
+    maintainer_email = root.find('maintainer').attrib.get('email', '')
+    license_name = root.find('license').text
+else:
+    raise FileNotFoundError(f'Could not find requirements file at {package_file}.')
 
 # Read requirements file
-folder = os.path.dirname(os.path.realpath(__file__))
 requirements_file = os.path.join(folder, 'requirements.txt')
 install_requires = []
 if os.path.isfile(requirements_file):

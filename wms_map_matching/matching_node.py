@@ -366,8 +366,9 @@ class Matcher(Node):
         camera_normal = r.apply(nadir)
 
         assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
-        assert abs(np.linalg.norm(camera_normal)-1) <= 0.001,\
-            f'Unexpected camera normal length {np.linalg.norm(camera_normal)}.'
+        # TODO: this assertion is arbitrary? how to handle unexpected camera normal length?
+        camera_normal_length = np.linalg.norm(camera_normal)
+        assert abs(camera_normal_length-1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
 
         return camera_normal
 

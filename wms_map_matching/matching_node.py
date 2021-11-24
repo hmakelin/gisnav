@@ -12,7 +12,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
 from cv2 import VideoCapture, imwrite, imdecode
 import numpy as np
-import cv2  # TODO: remove
+import cv2
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
@@ -22,7 +22,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt
 
 # Add the share folder to Python path
-share_dir, superglue_dir = setup_sys_path()  # TODO: Define superglue_dir elsewhere? just use this to get share_dir
+share_dir, superglue_dir = setup_sys_path()
 
 # Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue import SuperGlue
@@ -582,7 +582,6 @@ class Matcher(Node):
             self.get_logger().debug(f'Camera pitch {camera_pitch} deg, distance to principal point {camera_distance} m,'
                                     f' altitude {camera_altitude} m.')
 
-            #### TODO: remove this debugging section
             """
             mkp_map_uncropped = []
             for i in range(0, len(mkp_map)):
@@ -607,7 +606,6 @@ class Matcher(Node):
             visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
                                  fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
             """
-            #### END DEBUG SECTION ###
 
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster

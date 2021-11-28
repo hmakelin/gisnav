@@ -429,9 +429,9 @@ class Matcher(Node):
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
-                azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
-                distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
-                zipped = list(zip(azimuths, distances))
+                azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
+                dists = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
+                zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(move_distance, origin)
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
@@ -439,12 +439,10 @@ class Matcher(Node):
                 # Use projected field of view center instead of global position as map center
                 map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
             else:
-                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing '
-                                           'camera.')
+                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 return None
         else:
-            self.get_logger().debug('Camera info not available, cannot project gimbal FoV, defaulting to global '
-                                        'position.')
+            self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None
 
         return map_center_latlon
@@ -624,7 +622,6 @@ class Matcher(Node):
         https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
         module_name = 'px4_msgs.msg'   #TODO: get ffrom config file
         class_name = 'VehicleVisualOdometry'  # TODO: get from config file or look at _import_class stuff in this file
-        #VehicleVisualOdometry = getattr(sys.modules[module_name], class_name, None)
         assert VehicleVisualOdometry is not None, f'{class_name} was not found in module {module_name}.'
         msg = VehicleVisualOdometry()
 
@@ -682,7 +679,6 @@ class Matcher(Node):
         """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available."""
         gimbal_attitude = self.gimbal_device_attitude_status
         if gimbal_attitude is None:
-            # Try alternative topic
             self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
             gimbal_attitude = self.gimbal_device_set_attitude
             if gimbal_attitude is None:
@@ -690,9 +686,10 @@ class Matcher(Node):
         return gimbal_attitude
 
     @staticmethod
-    def _find_and_decompose_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
-                                       reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
-            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _find_and_decompose_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray,
+                                       camera_normal: np.ndarray, reproj_threshold: float = 1.0,
+                                       method: int = cv2.RANSAC, affine: bool = False) -> Tuple[np.ndarray, np.ndarray,
+                                                                                                np.ndarray, np.ndarray]:
         """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
         Arguments:
@@ -728,13 +725,6 @@ class Matcher(Node):
         angles = list(map(get_angle_partial, Ns))
         index_of_smallest_angle = angles.index(min(angles))
         rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
-
-        #self.get_logger().debug('decomposition R:\n{}.'.format(rotation))
-        #self.get_logger().debug('decomposition T:\n{}.'.format(translation))
-        #self.get_logger().debug('decomposition Ns:\n{}.'.format(Ns))
-        #self.get_logger().debug('decomposition Ns angles:\n{}.'.format(angles))
-        #self.get_logger().debug('decomposition smallest angle index:\n{}.'.format(index_of_smallest_angle))
-        #self.get_logger().debug('decomposition smallest angle:\n{}.'.format(min(angles)))
 
         return h, h_mask, translation, rotation
 
@@ -857,7 +847,6 @@ class Matcher(Node):
                 np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
                 self.map_frame.bbox, rot, img_dimensions)
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
-            # TODO: turn cam_pos_wgs84 into a LatLonAlt
             # TODO: something is wrong with camera_altitude - should be a scalar but is array
             lalt = LatLonAlt(*(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
             image_frame.position = lalt
@@ -876,7 +865,6 @@ class Matcher(Node):
                 self.get_logger().debug(f'Could not get local frame origin - will not compute local position.')
 
             velocity = None
-            # TODO: Make it so that previous global position can be fetched without risk of mixing the order of these operations (e.g. use timestamps and/or frame_id or something).
             if self.previous_image_frame is not None:
                 assert self.previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
                 assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
@@ -907,7 +895,7 @@ class Matcher(Node):
 
             self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
             self.get_logger().debug(f'Local frame origin: {self._vehicle_local_position_ref_latlonalt()}.')
-            self._publish_vehicle_visual_odometry(local_position, velocity)  # TODO: enable
+            self._publish_vehicle_visual_odometry(local_position, velocity)
 
             self.previous_image_frame = image_frame
 

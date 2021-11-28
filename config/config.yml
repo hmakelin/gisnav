@@ -1,15 +1,3 @@
-ros2_topics:
-  # ROS2 / microRTPS bridge topic format: 'topic name': 'px4_msgs message definition'
-  sub:
-    'VehicleLocalPosition_PubSubTopic': 'px4_msgs.msg.VehicleLocalPosition'
-    'VehicleGlobalPosition_PubSubTopic': 'px4_msgs.msg.VehicleGlobalPosition'
-    'VehicleAttitude_PubSubTopic': 'px4_msgs.msg.VehicleAttitude'
-    'GimbalDeviceAttitudeStatus_PubSubTopic': 'px4_msgs.msg.GimbalDeviceAttitudeStatus'
-    'GimbalDeviceSetAttitude_PubSubTopic': 'px4_msgs.msg.GimbalDeviceSetAttitude'
-    'camera_info': 'sensor_msgs.msg.CameraInfo'
-    'image_raw': 'sensor_msgs.msg.Image'
-  pub:
-    'VehicleVisualOdometry_PubSubTopic': 'px4_msgs.msg.VehicleVisualOdometry'
 wms:
   url: 'http://localhost:8080/wms'
   version: '1.1.1'

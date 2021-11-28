@@ -6,8 +6,10 @@ import yaml
 import importlib
 import math
 import time
+import warnings
 
 from enum import Enum
+from typing import Any, Optional, Union
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
@@ -23,12 +25,15 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
     ImageFrame, distance
 
+from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition,\
+    GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
+from sensor_msgs.msg import CameraInfo, Image
+
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()
 
 # Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue import SuperGlue
-
 
 class Matcher(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
@@ -43,10 +48,54 @@ class Matcher(Node):
     # Local frame reference for px4_msgs.msg.VehicleVisualOdometry messages
     LOCAL_FRAME_NED = 0
 
-    class TopicType(Enum):
-        """Enumerates microRTPS bridge topic types."""
-        PUB = 1
-        SUB = 2
+    # Maps properties to microRTPS bridge topics and message definitions
+    # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
+    TOPIC_NAME_KEY = 'topic_name'
+    CLASS_KEY = 'class'
+    SUBSCRIBE_KEY = 'subscribe'  # Used as key in both Matcher.TOPICS and Matcher._topics
+    PUBLISH_KEY = 'publish'  # Used as key in both Matcher.TOPICS and Matcher._topics
+    TOPICS = [
+        {
+            TOPIC_NAME_KEY: 'VehicleLocalPosition_PubSubTopic',
+            CLASS_KEY: VehicleLocalPosition,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'VehicleGlobalPosition_PubSubTopic',
+            CLASS_KEY: VehicleGlobalPosition,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'VehicleAttitude_PubSubTopic',
+            CLASS_KEY: VehicleAttitude,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'GimbalDeviceAttitudeStatus_PubSubTopic',
+            CLASS_KEY: GimbalDeviceAttitudeStatus,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'GimbalDeviceSetAttitude_PubSubTopic',
+            CLASS_KEY: GimbalDeviceSetAttitude,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'camera_info',
+            CLASS_KEY: CameraInfo,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'image_raw',
+            CLASS_KEY: Image,
+            SUBSCRIBE_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: 'VehicleVisualOdometry_PubSubTopic',
+            CLASS_KEY: VehicleVisualOdometry,
+            PUBLISH_KEY: True
+        }
+    ]
 
     def __init__(self, share_directory, superglue_directory, config='config.yml'):
         """Initializes the node.
@@ -67,7 +116,7 @@ class Matcher(Node):
         self._setup_topics()
 
         # Dict for storing latest microRTPS messages
-        self._topics_msgs = dict()
+        #self._topics_msgs = dict()
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
@@ -80,11 +129,86 @@ class Matcher(Node):
 
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
 
-        # Store previous image frame information for computing velocity in local frame
-        self._previous_image_frame_stamp = None
-
         # To be used for pyproj transformations
         #self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
+
+        self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
+
+        # Properties that are mapped to microRTPS topics
+        self._camera_info = None
+        self._vehicle_local_position = None
+        self._vehicle_global_position = None
+        self._vehicle_attitude = None
+        self._gimbal_device_attitude_status = None
+        self._gimbal_device_set_attitude = None
+
+    @staticmethod
+    def _assert_same_type(type_: Any, value: object) -> None:
+        """Asserts that inputs are of same type."""
+        assert isinstance(value, type_), f'Type {type(value)} provided when {type_} was expected.'
+
+    @property
+    def previous_image_frame(self) -> ImageFrame:
+        return self._previous_image_frame
+
+    @previous_image_frame.setter
+    def previous_image_frame(self, value: ImageFrame) -> None:
+        self._assert_same_type(ImageFrame, value)
+        self._previous_image_frame = value
+
+    @property
+    def camera_info(self) -> CameraInfo:
+        return self._camera_info
+
+    @camera_info.setter
+    def camera_info(self, value: CameraInfo) -> None:
+        self._assert_same_type(CameraInfo, value)
+        self._camera_info = value
+
+    @property
+    def vehicle_local_position(self) -> VehicleLocalPosition:
+        return self._vehicle_local_position
+
+    @vehicle_local_position.setter
+    def vehicle_local_position(self, value: VehicleLocalPosition) -> None:
+        self._assert_same_type(VehicleLocalPosition, value)
+        self._vehicle_local_position = value
+
+    @property
+    def vehicle_global_position(self) -> VehicleGlobalPosition:
+        return self._vehicle_global_position
+
+    @vehicle_global_position.setter
+    def vehicle_global_position(self, value: VehicleGlobalPosition) -> None:
+        self._assert_same_type(VehicleGlobalPosition, value)
+        self._vehicle_global_position = value
+
+    @property
+    def vehicle_attitude(self) -> VehicleAttitude:
+        return self._vehicle_attitude
+
+    @vehicle_attitude.setter
+    def vehicle_attitude(self, value: VehicleAttitude) -> None:
+        self._assert_same_type(VehicleAttitude, value)
+        self._vehicle_attitude = value
+
+    @property
+    def gimbal_device_attitude_status(self) -> GimbalDeviceAttitudeStatus:
+        return self._gimbal_device_attitude_status
+
+    @gimbal_device_attitude_status.setter
+    def gimbal_device_attitude_status(self, value: GimbalDeviceAttitudeStatus) -> None:
+        self._assert_same_type(GimbalDeviceAttitudeStatus, value)
+        self._gimbal_device_attitude_status = value
+
+    @property
+    def gimbal_device_set_attitude(self) -> GimbalDeviceSetAttitude:
+        return self._gimbal_device_set_attitude
+
+    @gimbal_device_set_attitude.setter
+    def gimbal_device_set_attitude(self, value: GimbalDeviceSetAttitude) -> None:
+        self._assert_same_type(GimbalDeviceSetAttitude, value)
+        self._gimbal_device_set_attitude = value
 
     def _setup_superglue(self):
         """Sets up SuperGlue."""  # TODO: make all these private?
@@ -131,31 +255,36 @@ class Matcher(Node):
         assert imported_class is not None, class_name + ' was not found in module ' + module_name + '.'
         return imported_class
 
-    def _setup_topics(self):
-        """Loads and sets up ROS2 publishers and subscribers from config file."""
-        for topic_name, msg_type in self._config['ros2_topics']['sub'].items():
-            module_name, msg_type = msg_type.rsplit('.', 1)
-            msg_class = self._import_class(msg_type, module_name)
-            self._init_topic(topic_name, self.TopicType.SUB, msg_class)
+    def _setup_topics(self) -> None:
+        """Creates publishers and subscribers for microRTPS bridge topics."""
+        for topic in self.TOPICS:
+            topic_name = topic.get(self.TOPIC_NAME_KEY, None)
+            class_ = topic.get(self.CLASS_KEY, None)
+            assert topic_name is not None, f'Topic name not provided in topic: {topic}.'
+            assert class_ is not None, f'Class not provided in topic: {topic}.'
 
-        for topic_name, msg_type in self._config['ros2_topics']['pub'].items():
-            module_name, msg_type = msg_type.rsplit('.', 1)
-            msg_class = self._import_class(msg_type, module_name)
-            self._init_topic(topic_name, self.TopicType.PUB, msg_class)
+            publish = topic.get(self.PUBLISH_KEY, None)
+            if publish is not None:
+                assert isinstance(publish, bool), f'Type {type(publish)} provided when bool was expected.'
+                self._topics.update({self.PUBLISH_KEY: {topic_name: self._create_publisher(topic_name, class_)}})
 
-        self.get_logger().info('Topics setup complete with keys: ' + str(self._topics.keys()))
+            subscribe = topic.get(self.SUBSCRIBE_KEY, None)
+            if subscribe is not None:
+                assert isinstance(subscribe, bool), f'Type {type(subscribe)} provided when bool was expected.'
+                self._topics.update({self.SUBSCRIBE_KEY: {topic_name: self._create_subscriber(topic_name, class_)}})
 
-    def _init_topic(self, topic_name, topic_type, msg_type):
-        """Sets up rclpy publishers and subscribers and dynamically loads message types from px4_msgs library."""
-        if topic_type is self.TopicType.PUB:
-            self._topics[topic_name] = self.create_publisher(msg_type, topic_name, 10)
-        elif topic_type is self.TopicType.SUB:
-            callback_name = '_' + topic_name.lower() + '_callback'
-            callback = getattr(self, callback_name, None)
-            assert callback is not None, 'Missing callback implementation: ' + callback_name
-            self._topics[topic_name] = self.create_subscription(msg_type, topic_name, callback, 10)
-        else:
-            raise TypeError('Unsupported topic type: {}'.format(topic_type))
+        self.get_logger().info('Topics setup complete.')
+
+    def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
+        """Sets up an rclpy publisher."""
+        return self.create_publisher(class_, topic_name, 10)
+
+    def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
+        """Sets up an rclpy subscriber."""
+        callback_name = '_' + topic_name.lower() + '_callback'
+        callback = getattr(self, callback_name, None)
+        assert callback is not None, f'Missing callback implementation for {callback_name}.'
+        return self.create_subscription(class_, topic_name, callback, 10)
 
     def _init_wms(self):
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
@@ -175,26 +304,15 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
-    def _map_size(self):
-        max_dim = max(self._camera_info().width, self._camera_info().height)
-        return max_dim, max_dim
-
-    def _camera_info(self):
-        """Returns camera info."""
-        return self._get_simple_info('camera_info')
-
-    def _get_simple_info(self, message_name):
-        """Returns message received via microRTPS bridge or None if message was not yet received."""
-        info = self._topics_msgs.get(message_name, None)
-        if info is None:
-            self.get_logger().warn(message_name + ' info not available.')
-        return info
-
-    def _global_position(self):
-        return self._get_simple_info('VehicleGlobalPosition')
-
-    def _local_position(self):
-        return self._get_simple_info('VehicleLocalPosition')
+    def _map_dim(self) -> Optional[tuple]:
+        # TODO: docstring after this thing returns a Dimensions tuple and not a regular tuple
+        camera_info = self.camera_info
+        if camera_info is not None:
+            max_dim = max(self.camera_info.width, self.camera_info.height)
+            return max_dim, max_dim  # TODO: return a Dimensions tuple, not a regular tuple
+        else:
+            self.get_logger().warn('Camera info not available, returning None for map dim.')
+            return None
 
     def _map_size_with_padding(self):
         dim = self._img_dimensions()
@@ -213,12 +331,10 @@ class Matcher(Node):
         assert len(map_size) == 2, f'Map size was unexpected length {len(map_size)}, 2 expected.'
         return Dimensions(*map_size)
 
-    def _declared_img_size(self):
-        camera_info = self._camera_info()
-        if camera_info is not None:
-            assert hasattr(camera_info, 'height') and hasattr(camera_info, 'width'), \
-                'Height or width info was unexpectedly not included in CameraInfo message.'
-            return camera_info.height, camera_info.width  # numpy order: h, w, c --> height first
+    def _declared_img_size(self) -> Optional[tuple]:
+        """Returns image resolution size as it is declared in the latest CameraInfo message."""
+        if self.camera_info is not None:
+            return self.camera_info.height, self.camera_info.width  # numpy order: h, w, c --> height first
         else:
             self.get_logger().warn('Camera info was not available - returning None as declared image size.')
             return None
@@ -231,11 +347,7 @@ class Matcher(Node):
         else:
             return Dimensions(*declared_size)
 
-    def _vehicle_attitude(self):
-        """Returns vehicle attitude from VehicleAttitude message."""
-        return self._get_simple_info('VehicleAttitude')
-
-    def _project_gimbal_fov(self, altitude_meters):
+    def _project_gimbal_fov(self, altitude_meters: float) -> Optional[np.ndarray]:
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
         rpy = self._get_camera_rpy()
         if rpy is None:
@@ -247,18 +359,14 @@ class Matcher(Node):
         assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
                                   + ' - could not project gimbal FoV.'
 
-        camera_info = self._camera_info()
-        if camera_info is None:
+        if self.camera_info is None:
             self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
             return
-        assert hasattr(camera_info, 'k'), 'Camera intrinsics matrix K not available - cannot project gimbal FoV.'
         h, w = self._img_dimensions()
         # TODO: assert h w not none and integers? and divisible by 2?
 
         # Intrinsic matrix
-        k = np.array(camera_info.k).reshape([3, 3])
-        assert k.shape == (3, 3), 'Intrinsic matrix had unexpected shape: ' + str(k.shape) \
-                                  + ' - could not project gimbal FoV.'
+        k = np.array(self.camera_info.k).reshape([3, 3])
 
         # Project image corners to z=0 plane (ground)
         src_corners = create_src_corners(h, w)
@@ -272,41 +380,31 @@ class Matcher(Node):
 
         return dst_corners
 
-    def _get_global_position_latlonalt(self):
-        """Returns lat, lon in WGS84 and altitude in meters from vehicle global position."""
-        global_position = self._global_position()
-        if global_position is None:
+    def _vehicle_global_position_latlonalt(self) -> Optional[LatLonAlt]:
+        """Returns vehicle global position as a LatLonAlt tuple."""
+        if self.vehicle_global_position is None:
             self.get_logger().warn('Could not get vehicle global position - returning None.')
             return None
-        assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'),\
-            'Global position message did not include lat or lon fields.'
-        assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'
-        lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
-        return LatLonAlt(lat, lon, alt)
+        return LatLonAlt(self.vehicle_global_position.lat, self.vehicle_global_position.lon,
+                         self.vehicle_global_position.alt)
 
-    def _get_local_position_ref_latlonalt(self):
-        """Returns reference lat, lon in WGS84 and altitude in meters from vehicle local position."""
-        local_position = self._local_position()
-        if local_position is None:
+    def _vehicle_local_position_ref_latlonalt(self) -> Optional[LatLonAlt]:
+        """Returns vehicle local frame origin as LatLonAlt tuple."""
+        if self.vehicle_local_position is None:
             self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
             return None
 
-        # TODO: z may not be needed - make a separate _ref_latlon method!
-        required_attrs = ['xy_global', 'z_global', 'ref_lat', 'ref_lon', 'ref_alt']
-        assert all(hasattr(local_position, attr) for attr in required_attrs), \
-            f'Required attributes {required_attrs} were not all found in local position message: {local_position}.'
-
-        if local_position.xy_global is True and local_position.z_global is True:
-            lat, lon, alt = local_position.ref_lat, local_position.ref_lon, local_position.ref_alt
-            return LatLonAlt(lat, lon, alt)
+        if self.vehicle_local_position.xy_global is True and self.vehicle_local_position.z_global is True:
+            return LatLonAlt(self.vehicle_local_position.ref_lat, self.vehicle_local_position.ref_lon,
+                             self.vehicle_local_position.ref_alt)
         else:
             # TODO: z may not be needed - make a separate _ref_latlon method!
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
             return None
 
-    def _update_map(self):
+    def _update_map(self) -> None:
         """Gets latest map from WMS server and saves it."""
-        global_position_latlonalt = self._get_global_position_latlonalt()
+        global_position_latlonalt = self._vehicle_global_position_latlonalt()
         if global_position_latlonalt is None:
             self.get_logger().warn('Could not get vehicle global position latlonalt. Cannot update map.')
             return None
@@ -315,11 +413,7 @@ class Matcher(Node):
         map_center_latlon = LatLon(global_position_latlonalt.lat, global_position_latlonalt.lon)
 
         if self._use_gimbal_projection():
-            camera_info = self._camera_info()
-            if camera_info is not None:
-                assert hasattr(camera_info, 'k'), 'CameraInfo does not have k, cannot compute gimbal FoV WGS84 ' \
-                                                  'coordinates. '
-
+            if self.camera_info is not None:
                 gimbal_fov_pix = self._project_gimbal_fov(global_position_latlonalt.alt)
 
                 # Convert gimbal field of view from pixels to WGS84 coordinates
@@ -360,9 +454,9 @@ class Matcher(Node):
         assert self._map.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not the specified size.'
 
     def _image_raw_callback(self, msg):
-        """Handles reception of latest image frame from camera."""
+        """Handles latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
-        self._topics_msgs['image_raw'] = msg
+        #self._topics_msgs['image_raw'] = msg
 
         # Get image data
         assert hasattr(msg, 'data'), f'No data present in received image message.'
@@ -406,7 +500,7 @@ class Matcher(Node):
         camera_yaw = rpy.yaw
         return camera_yaw
 
-    def _get_camera_rpy(self):
+    def _get_camera_rpy(self) -> RPY:
         """Returns roll-pitch-yaw euler vector."""
         gimbal_attitude = self._gimbal_attitude()
         if gimbal_attitude is None:
@@ -415,12 +509,9 @@ class Matcher(Node):
         assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
         gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
 
-        local_position = self._topics_msgs.get('VehicleLocalPosition', None)
-        if local_position is None:
+        if self.vehicle_local_position is None:
             self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
             return None
-        assert hasattr(local_position, 'heading'), 'Heading information missing from VehicleLocalPosition message. ' \
-                                                   'Cannot compute RPY. '
 
         pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
@@ -431,7 +522,7 @@ class Matcher(Node):
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
-        heading = local_position.heading
+        heading = self.vehicle_local_position.heading
         assert -math.pi <= heading <= math.pi, 'Unexpected heading value: ' + str(
             heading) + '([-pi, pi] expected). Cannot compute RPY.'
         heading = math.degrees(heading)
@@ -448,9 +539,6 @@ class Matcher(Node):
         rpy = RPY(roll, pitch, yaw)
 
         return rpy
-
-    def _store_previous_image_frame_stamp(self, image_frame):
-        self._previous_image_frame_stamp = image_frame
 
     def _get_camera_normal(self):
         nadir = np.array([0, 0, 1])
@@ -475,54 +563,42 @@ class Matcher(Node):
     def _yaw_index(self):
         return self.EULER_SEQUENCE.lower().find('x')
 
-    def _base_callback(self, msg_name, msg):
-        """Stores message and prints out brief debug log message."""
-        self.get_logger().debug(msg_name + ' callback triggered.')
-        self._topics_msgs[msg_name] = msg
+    def _camera_info_callback(self, msg: CameraInfo) -> None:
+        """Handles latest camera info message."""
+        self.get_logger().debug(f'Camera info received:\n{msg}.')
+        self.camera_info = msg
+        camera_info_topic = self._topics.get(self.SUBSCRIBE_KEY, {}).get('camera_info', None)
+        if camera_info_topic is not None:
+            self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
+            camera_info_topic.destroy()
 
-    def _camera_info_callback(self, msg):
-        """Handles reception of camera info."""
-        self._base_callback('camera_info', msg)
-        self.get_logger().debug('Camera info: ' + str(msg))
+    def _vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
+        """Handles latest VehicleLocalPosition message."""
+        self.vehicle_local_position = msg
 
-        # Check that key fields are present in received msg, then destroy subscription which is no longer needed
-        required_attrs = ['k', 'width', 'height']
-        if msg is not None and all(hasattr(msg, attr) for attr in required_attrs):
-            # TODO: assume camera_info is dynamic, do not destroy subscription?
-            # TODO: check that frame_id is always the same (give frame_id as configuration param?)
-            self.get_logger().warn('Assuming camera_info is static - destroying the topic.')
-            self._topics['camera_info'].destroy()
-        else:
-            self.get_logger().warn(f'Did not yet receive all required attributes {required_attrs} in camera info '
-                                   f'message. Will not destroy subscription yet.')
-
-    def _vehiclelocalposition_pubsubtopic_callback(self, msg):
-        """Handles reception of latest local position estimate."""
-        self._base_callback('VehicleLocalPosition', msg)
-
-    def _vehicleglobalposition_pubsubtopic_callback(self, msg):
-        """Handles reception of latest global position estimate."""
-        self._base_callback('VehicleGlobalPosition', msg)
+    def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
+        """Handles latest VehicleGlobalPosition message."""
+        self.vehicle_global_position = msg
         self._update_map()
 
-    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg):
-        """Handles reception of GimbalDeviceAttitudeStatus messages."""
-        self._base_callback('GimbalDeviceAttitudeStatus', msg)
+    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
+        """Handles latest GimbalDeviceAttitudeStatus message."""
+        self.gimbal_device_attitude_status = msg
 
-    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg):
-        """Handles reception of GimbalDeviceSetAttitude messages."""
-        self._base_callback('GimbalDeviceSetAttitude', msg)
+    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
+        """Handles latest GimbalDeviceSetAttitude message."""
+        self.gimbal_device_set_attitude = msg
 
-    def _vehicleattitude_pubsubtopic_callback(self, msg):
-        """Handles reception of VehicleAttitude messages."""
-        self._base_callback('VehicleAttitude', msg)
+    def _vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
+        """Handles latest VehicleAttitude message."""
+        self.vehicle_attitude = msg
 
-    def _publish_vehicle_visual_odometry(self, position, velocity):
+    def _publish_vehicle_visual_odometry(self, position: tuple, velocity: tuple) -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
         https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
         module_name = 'px4_msgs.msg'   #TODO: get ffrom config file
         class_name = 'VehicleVisualOdometry'  # TODO: get from config file or look at _import_class stuff in this file
-        VehicleVisualOdometry = getattr(sys.modules[module_name], class_name, None)
+        #VehicleVisualOdometry = getattr(sys.modules[module_name], class_name, None)
         assert VehicleVisualOdometry is not None, f'{class_name} was not found in module {module_name}.'
         msg = VehicleVisualOdometry()
 
@@ -579,13 +655,13 @@ class Matcher(Node):
 
         return rpy.pitch
 
-    def _gimbal_attitude(self):
-        """Returns GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude if it is not available."""
-        gimbal_attitude = self._topics_msgs.get('GimbalDeviceAttitudeStatus', None)
+    def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
+        """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available."""
+        gimbal_attitude = self.gimbal_device_attitude_status
         if gimbal_attitude is None:
             # Try alternative topic
             self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
-            gimbal_attitude = self._topics_msgs.get('GimbalDeviceSetAttitude', None)
+            gimbal_attitude = self.gimbal_device_set_attitude
             if gimbal_attitude is None:
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
@@ -628,7 +704,7 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
-    def _match(self, image_frame):
+    def _match(self, image_frame) -> None:
         """Matches camera image to map image and computes camera position and field of view."""
         try:
             self.get_logger().debug('Matching image to map.')
@@ -661,13 +737,10 @@ class Matcher(Node):
                 self.get_logger().warn('Could not get camera normal. Skipping matching.')
                 return
 
-            camera_info = self._camera_info()
-            if camera_info is None:
+            if self.camera_info is None:
                 self.get_logger().warn('Could not get camera info. Skipping matching.')
                 return
-            assert hasattr(camera_info, 'k'), 'Camera info did not have k - cannot match.'
-            assert len(camera_info.k) == 9, 'K had unexpected length.'
-            k = camera_info.k.reshape([3, 3])
+            k = self.camera_info.k.reshape([3, 3])
 
             h, h_mask, t, r = self._process_matches(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
 
@@ -756,7 +829,7 @@ class Matcher(Node):
 
             # Compute position (meters) and velocity (meters/second) in local frame
             local_position = None
-            local_frame_origin_latlonalt = self._get_local_position_ref_latlonalt()
+            local_frame_origin_latlonalt = self._vehicle_local_position_ref_latlonalt()
             if local_frame_origin_latlonalt is not None:
                 local_position = distances(local_frame_origin_latlonalt, LatLon(*tuple(cam_pos_wgs84))) \
                                  + (camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
@@ -765,28 +838,28 @@ class Matcher(Node):
 
             velocity = None
             # TODO: Make it so that previous global position can be fetched without risk of mixing the order of these operations (e.g. use timestamps and/or frame_id or something).
-            if self._previous_image_frame_stamp is not None:
-                assert self._previous_image_frame_stamp.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+            if self.previous_image_frame is not None:
+                assert self.previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
                 assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-                assert hasattr(self._previous_image_frame_stamp, 'stamp'),\
-                    'Previous image frame timstamp not found.'
+                assert hasattr(self.previous_image_frame, 'stamp'),\
+                    'Previous image frame timstamp not found.'  # TODO: is this assertion needed?
 
                 # TODO: refactor this assertion so that it's more compact
-                if self._previous_image_frame_stamp.stamp.sec == image_frame.stamp.sec:
-                    assert self._previous_image_frame_stamp.stamp.nanonsec < image_frame.stamp.nanosec, \
-                        f'Previous image frame timestamp {self._previous_image_frame_stamp.stamp} was >= than ' \
+                if self.previous_image_frame.stamp.sec == image_frame.stamp.sec:
+                    assert self.previous_image_frame.stamp.nanosec < image_frame.stamp.nanosec, \
+                        f'Previous image frame timestamp {self.previous_image_frame.stamp} was >= than ' \
                         f'current image frame timestamp {image_frame.stamp}.'
                 else:
-                    assert self._previous_image_frame_stamp.stamp.sec < image_frame.stamp.sec,\
-                        f'Previous image frame timestamp {self._previous_image_frame_stamp.stamp} was >= than ' \
+                    assert self.previous_image_frame.stamp.sec < image_frame.stamp.sec,\
+                        f'Previous image frame timestamp {self.previous_image_frame.stamp} was >= than ' \
                         f'current image frame timestamp {image_frame.stamp}.'
-                time_difference = image_frame.stamp.sec - self._previous_image_frame_stamp.stamp.sec
+                time_difference = image_frame.stamp.sec - self.previous_image_frame.stamp.sec
                 if time_difference == 0:
                     time_difference = (image_frame.stamp.nanosec -
-                                       self._previous_image_frame_stamp.stamp.nanosec) / 1e9
+                                       self.previous_image_frame.stamp.nanosec) / 1e9
                 assert time_difference > 0, f'Time difference between frames was 0.'
-                x_dist, y_dist = distances(image_frame.position, self._previous_image_frame_stamp.position)  # TODO: compute x,y,z components separately!
-                z_dist = image_frame.position.alt - self._previous_image_frame_stamp.position.alt
+                x_dist, y_dist = distances(image_frame.position, self.previous_image_frame.position)  # TODO: compute x,y,z components separately!
+                z_dist = image_frame.position.alt - self.previous_image_frame.position.alt
                 dist = (x_dist, y_dist, z_dist)
                 assert all(isinstance(x, float) for x in dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
                 velocity = tuple(x / time_difference for x in dist)
@@ -794,10 +867,10 @@ class Matcher(Node):
                 self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
 
             self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
-            self.get_logger().debug(f'Local frame origin: {self._get_local_position_ref_latlonalt()}.')
+            self.get_logger().debug(f'Local frame origin: {self._vehicle_local_position_ref_latlonalt()}.')
             self._publish_vehicle_visual_odometry(local_position, velocity)  # TODO: enable
 
-            self._store_previous_image_frame_stamp(image_frame)  # Store previous position along with previous frame_id and timestamp
+            self.previous_image_frame = image_frame
 
         except Exception as e:
             self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))

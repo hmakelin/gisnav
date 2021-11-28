@@ -689,7 +689,8 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
+    @staticmethod
+    def _process_matches(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
                          reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
             -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.

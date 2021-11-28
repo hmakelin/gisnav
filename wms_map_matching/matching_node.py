@@ -690,8 +690,8 @@ class Matcher(Node):
         return gimbal_attitude
 
     @staticmethod
-    def _process_matches(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
-                         reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
+    def _find_and_decompose_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
+                                       reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
             -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
@@ -781,7 +781,7 @@ class Matcher(Node):
                 return
             k = self.camera_info.k.reshape([3, 3])
 
-            h, h_mask, t, r = self._process_matches(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
+            h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
 
             assert_shape(h, (3, 3))
             assert_shape(t, (3, 1))

@@ -6,7 +6,7 @@ import os
 import math
 import geojson
 
-from typing import Any, Union
+from typing import Any, Union, Tuple
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
@@ -193,27 +193,40 @@ def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corn
     return out
 
 
-def move_distance(latlon, azmth_dist):
+def move_distance(latlon: LatLonAlt, azmth_dist: Tuple[float, float]) -> LatLon:
     """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
+    assert_type(tuple, azmth_dist)
+    assert_type(LatLonAlt, latlon)  # TODO: accept both LatLon and LatLonAlt
     azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
+    assert_type(float, azmth)
+    assert_type(float, dist)
     g = pyproj.Geod(ellps='WGS84')
     lon, lat, azmth = g.fwd(latlon.lon, latlon.lat, azmth, dist)
     return LatLon(lat, lon)
 
 
-def get_fov(img_arr, h_mat):
+def get_fov(img_arr: np.ndarray, h_mat: np.ndarray) -> np.ndarray:
     """Calculates field of view (FoV) corners from homography and image shape."""
+    assert_type(np.ndarray, img_arr)
+    assert_type(np.ndarray, h_mat)
     h, w, _ = img_arr.shape  # height before width in np.array shape
     src_corners = create_src_corners(h, w)
+    assert_shape(h_mat, (3, 3))
+    assert_ndim(src_corners, 3)  # TODO: this is currently not assumed to be squeezed
     dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
+    assert_shape(src_corners, dst_corners.shape)
     return dst_corners
 
 
-def create_src_corners(h, w):
+def create_src_corners(h: int, w: int) -> np.ndarray:
+    """Returns image corner pixel coordinates in a numpy array."""
+    assert_type(int, h)
+    assert_type(int, w)
+    assert h > 0 and w > 0, f'Height {h} and width {w} are both expected to be positive.'
     return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
 
 
-def setup_sys_path():
+def setup_sys_path() -> Tuple[str, str]:
     """Adds the package share directory to the path so that SuperGlue can be imported."""
     if 'get_package_share_directory' not in sys.modules:
         from ament_index_python.packages import get_package_share_directory

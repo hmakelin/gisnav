@@ -257,7 +257,7 @@ class Matcher(Node):
         with open(os.path.join(self.share_dir, yaml_file), 'r') as f:
             try:
                 self.config = yaml.safe_load(f)
-                self.get_logger().info('Loaded config:\n{config}.')
+                self.get_logger().info(f'Loaded config:\n{self.config}.')
             except Exception as e:
                 self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
                                         f'\n{e}\n{traceback.print_exc()}')

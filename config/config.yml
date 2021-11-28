@@ -1,4 +1,5 @@
 ros2_topics:
+  # ROS2 / microRTPS bridge topic format: 'topic name': 'px4_msgs message definition'
   sub:
     'VehicleLocalPosition_PubSubTopic': 'px4_msgs.msg.VehicleLocalPosition'
     'VehicleGlobalPosition_PubSubTopic': 'px4_msgs.msg.VehicleGlobalPosition'
@@ -8,10 +9,7 @@ ros2_topics:
     'camera_info': 'sensor_msgs.msg.CameraInfo'
     'image_raw': 'sensor_msgs.msg.Image'
   pub:
-    'essential_matrix': 'std_msgs.msg.Float64MultiArray'
-    'homography_matrix': 'std_msgs.msg.Float64MultiArray'
-    'pose': 'std_msgs.msg.Float64MultiArray'
-    'fov': 'std_msgs.msg.Float64MultiArray'
+    'VehicleVisualOdometry_PubSubTopic': 'px4_msgs.msg.VehicleVisualOdometry'
 wms:
   url: 'http://localhost:8080/wms'
   version: '1.1.1'
@@ -27,5 +25,5 @@ superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     sinkhorn_iterations: 20
     match_threshold: 0.2
 misc:
-  affine: False  # Consider setting to True if camera is known to be nadir-facing
+  affine: True  # Consider setting to True if camera is known to be nadir-facing
   gimbal_projection: True

@@ -29,7 +29,7 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map, confidence=0.8):
+    def match(self, img, map, confidence=0.7):
         """Match img to map.
 
         Arguments:

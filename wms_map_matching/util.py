@@ -11,11 +11,50 @@ from shapely.ops import transform
 from shapely.geometry import Point
 from collections import namedtuple
 
-BBox = namedtuple('BBox', 'left bottom right top')
+BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
-Dimensions = namedtuple('Dimensions', 'height width')
+Dimensions = namedtuple('Dimensions', 'height width')  # TODO: Rename this HeightWidth so that order between Height and widht does not accidentally get mixed up?
 RPY = namedtuple('RPY', 'roll pitch yaw')
+#ImageFrameStamp = namedtuple('ImageFrameStamp', 'image frame_id timestamp')
+
+
+class ImageFrameStamp:
+
+    def __init__(self, image, frame_id, timestamp):
+        self.image = image
+        self.frame_id = frame_id
+        self.timestamp = timestamp
+
+        # To be set later when known using setter methods
+        self._estimated_fov = None
+        self._estimated_camera_position = None  # LatLonAlt
+
+    def set_estimated_fov(self, fov):
+        """Sets the fov attribute and returns True if it was set, or False it was already set."""
+        assert isinstance(fov, np.ndarray), f'Invalid argument type: {type(fov)}, np.array expected.'
+        assert fov.shape == (4, 1, 2), f'Unexpected FoV arg shape provided: {fov.shape}, (4, 1, 2) expected.'
+        if self._estimated_fov is None:
+            self._estimated_fov = fov
+            return True
+        else:
+            return False
+
+    def get_estimated_fov(self):
+        return self._estimated_fov
+
+    def set_estimated_camera_position(self, latlonalt):
+        """Sets the camera position attribute and returns True if it was set, or False it was already set."""
+        assert isinstance(latlonalt, LatLonAlt), f'Invalid argument type: {type(latlonalt)}, LatLonAlt expected.'
+        if self._estimated_camera_position is None:
+            self._estimated_camera_position = latlonalt
+            return True
+        else:
+            return False
+
+    def get_estimated_camera_position(self):
+        return self._estimated_camera_position
+
 
 MAP_RADIUS_METERS_DEFAULT = 400
 
@@ -222,9 +261,27 @@ def get_distance_of_fov_center(fov_wgs84):
     midleft = ((fov_wgs84[0] + fov_wgs84[1])*0.5).squeeze()
     midright = ((fov_wgs84[2] + fov_wgs84[3])*0.5).squeeze()
     g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
-    _, __, dist = g.inv(midleft[1], midleft[0], midright[1], midright[0])
+    _, __, dist = g.inv(midleft[1], midleft[0], midright[1], midright[0]) # TODO: use distance method here
     return dist
 
+
+def distances(latlon1, latlon2):
+    """Calculate distance in meters in x and y dimensions of two LatLons."""
+    g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
+    lats1 = (latlon1.lat, latlon1.lat)
+    lons1 = (latlon1.lon, latlon1.lon)
+    lats2 = (latlon1.lat, latlon2.lat)  # Lon difference for first, lat difference for second --> first: y, second: x
+    lons2 = (latlon2.lon, latlon1.lon)
+    _, __, dist = g.inv(lons1, lats1, lons2, lats2)
+    dist = (-dist[1], dist[0])  # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions, invert X axis so that it points north
+    return dist
+
+
+def distance(latlon1, latlon2):
+    """Calculate distance in meters between two latlons."""
+    g = pyproj.Geod(ellps='clrk66')
+    _, __, dist = g.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
+    return dist
 
 def altitude_from_gimbal_pitch(pitch_degrees, distance):
     """Returns camera altitude if gimbal pitch and distance to center of FoV is known."""

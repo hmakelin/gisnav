@@ -5,6 +5,7 @@ import traceback
 import yaml
 import importlib
 import math
+import time
 
 from enum import Enum
 from rclpy.node import Node
@@ -19,7 +20,8 @@ from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
-    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
+    ImageFrameStamp, distance
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()
@@ -34,6 +36,12 @@ class Matcher(Node):
 
     # Minimum matches for homography estimation, should be at least 4
     MINIMUM_MATCHES = 4
+
+    # Encoding of input video (input to CvBridge)
+    IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
+
+    # Local frame reference for px4_msgs.msg.VehicleVisualOdometry messages
+    LOCAL_FRAME_NED = 0
 
     class TopicType(Enum):
         """Enumerates microRTPS bridge topic types."""
@@ -61,21 +69,30 @@ class Matcher(Node):
         # Dict for storing latest microRTPS messages
         self._topics_msgs = dict()
 
-        # Convert image_raw to cv2 compatible image and store it here
+        # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
-        self._cv_image = None
 
         # Store map raster received from WMS endpoint here along with its bounding box
-        self._map = None
+        self._map = None  # TODO: put these together in a MapBBox structure to make them 'more atomic' (e.g. ImageFrameStamp named tuple)
         self._map_bbox = None
 
         self._setup_superglue()
 
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
 
+        # Store previous image frame information for computing velocity in local frame
+        self._previous_image_frame_stamp = None
+
+        # To be used for pyproj transformations
+        #self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
+
     def _setup_superglue(self):
         """Sets up SuperGlue."""  # TODO: make all these private?
         self._superglue = SuperGlue(self._config['superglue'], self.get_logger())
+
+    def _get_previous_global_position(self):
+        """Returns previous global position (WGS84)."""
+        raise NotImplementedError
 
     def _load_config(self, yaml_file):
         """Loads config from the provided YAML file."""
@@ -176,6 +193,9 @@ class Matcher(Node):
     def _global_position(self):
         return self._get_simple_info('VehicleGlobalPosition')
 
+    def _local_position(self):
+        return self._get_simple_info('VehicleLocalPosition')
+
     def _map_size_with_padding(self):
         dim = self._img_dimensions()
         if type(dim) is not Dimensions:
@@ -256,13 +276,33 @@ class Matcher(Node):
         """Returns lat, lon in WGS84 and altitude in meters from vehicle global position."""
         global_position = self._global_position()
         if global_position is None:
-            self.get_logger().warn('Could not get vehicle global position.')
+            self.get_logger().warn('Could not get vehicle global position - returning None.')
             return None
         assert hasattr(global_position, 'lat') and hasattr(global_position, 'lon'),\
             'Global position message did not include lat or lon fields.'
         assert hasattr(global_position, 'alt'), 'Global position message did not include alt field.'
         lat, lon, alt = global_position.lat, global_position.lon, global_position.alt
         return LatLonAlt(lat, lon, alt)
+
+    def _get_local_position_ref_latlonalt(self):
+        """Returns reference lat, lon in WGS84 and altitude in meters from vehicle local position."""
+        local_position = self._local_position()
+        if local_position is None:
+            self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
+            return None
+
+        # TODO: z may not be needed - make a separate _ref_latlon method!
+        required_attrs = ['xy_global', 'z_global', 'ref_lat', 'ref_lon', 'ref_alt']
+        assert all(hasattr(local_position, attr) for attr in required_attrs), \
+            f'Required attributes {required_attrs} were not all found in local position message: {local_position}.'
+
+        if local_position.xy_global is True and local_position.z_global is True:
+            lat, lon, alt = local_position.ref_lat, local_position.ref_lon, local_position.ref_alt
+            return LatLonAlt(lat, lon, alt)
+        else:
+            # TODO: z may not be needed - make a separate _ref_latlon method!
+            self.get_logger().warn('No valid global reference for local frame origin - returning None.')
+            return None
 
     def _update_map(self):
         """Gets latest map from WMS server and saves it."""
@@ -323,13 +363,37 @@ class Matcher(Node):
         """Handles reception of latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         self._topics_msgs['image_raw'] = msg
-        self._cv_image = self._cv_bridge.imgmsg_to_cv2(msg, 'bgr8')
+
+        # Get image data
+        assert hasattr(msg, 'data'), f'No data present in received image message.'
+        if msg.data is None:  # TODO: do an explicit type check here?
+            self.get_logger().warn('No data present in received image message - cannot process image.')
+            return
+
+        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
+
         img_size = self._declared_img_size()
         if img_size is not None:
-            assert self._cv_image.shape[0:2] == self._declared_img_size(), 'Converted _cv_image shape {} did not match ' \
-                                                                           'declared image shape {}.'.format(
-                self._cv_image.shape[0:2], self._declared_img_size())
-        self._match()
+            cv_img_shape = cv_image.shape[0:2]
+            declared_shape = self._declared_img_size()
+            assert cv_img_shape == declared_shape, f'Converted cv_image shape {cv_img_shape} did not match declared ' \
+                                                   f'image shape {declared_shape}.'
+
+        # Get image frame_id and stamp from message header
+        assert hasattr(msg, 'header'), f'No header present in received image message.'
+        if msg.header is None:  # TODO: do an explicit type check here?
+            self.get_logger().warn('No header present in received image message - cannot process image.')
+            return
+        assert hasattr(msg.header, 'frame_id'), f'No frame_id present in received image header.'
+        assert hasattr(msg.header, 'stamp'), f'No stamp present in received image header.'
+        frame_id = msg.header.frame_id
+        timestamp = msg.header.stamp
+        if frame_id is None or timestamp is None:  # TODO: do an explicit type check here?
+            self.get_logger().warn(f'No frame_id or stamp in received header: {msg.header}, cannot process image.')
+            return
+        image_frame = ImageFrameStamp(cv_image, frame_id, timestamp)  # Use nano-seconds only from stamp
+
+        self._match(image_frame)
 
     def _camera_yaw(self):
         """Returns camera yaw in degrees."""
@@ -365,7 +429,7 @@ class Matcher(Node):
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
-        self.get_logger().warn('Assuming zero roll for camera RPY.')
+        self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
         heading = local_position.heading
         assert -math.pi <= heading <= math.pi, 'Unexpected heading value: ' + str(
@@ -374,13 +438,19 @@ class Matcher(Node):
 
         gimbal_yaw = gimbal_euler[yaw_index]
         assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
-            heading) + '([-180, 180] expected). Cannot compute RPY. '
-        yaw = heading + gimbal_yaw
-        pitch = -(90 + gimbal_euler[pitch_index])
-        roll = 0
+            heading) + '([-180, 180] expected). Cannot compute RPY.'
+        yaw = heading + gimbal_yaw  # TODO: if over 180, make it negative instead
+        assert abs(yaw) <= 360, f'Yaw was unexpectedly large: {abs(yaw)}, max 360 expected.'
+        if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
+            yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
+        pitch = -(90 + gimbal_euler[pitch_index])  # TODO: ensure abs(pitch) <= 90?
+        roll = 0  # TODO remove zero roll assumption
         rpy = RPY(roll, pitch, yaw)
 
         return rpy
+
+    def _store_previous_image_frame_stamp(self, image_frame):
+        self._previous_image_frame_stamp = image_frame
 
     def _get_camera_normal(self):
         nadir = np.array([0, 0, 1])
@@ -416,8 +486,15 @@ class Matcher(Node):
         self.get_logger().debug('Camera info: ' + str(msg))
 
         # Check that key fields are present in received msg, then destroy subscription which is no longer needed
-        if msg is not None and hasattr(msg, 'K') and hasattr(msg, 'width') and hasattr(msg, 'height'):
+        required_attrs = ['k', 'width', 'height']
+        if msg is not None and all(hasattr(msg, attr) for attr in required_attrs):
+            # TODO: assume camera_info is dynamic, do not destroy subscription?
+            # TODO: check that frame_id is always the same (give frame_id as configuration param?)
+            self.get_logger().warn('Assuming camera_info is static - destroying the topic.')
             self._topics['camera_info'].destroy()
+        else:
+            self.get_logger().warn(f'Did not yet receive all required attributes {required_attrs} in camera info '
+                                   f'message. Will not destroy subscription yet.')
 
     def _vehiclelocalposition_pubsubtopic_callback(self, msg):
         """Handles reception of latest local position estimate."""
@@ -439,6 +516,57 @@ class Matcher(Node):
     def _vehicleattitude_pubsubtopic_callback(self, msg):
         """Handles reception of VehicleAttitude messages."""
         self._base_callback('VehicleAttitude', msg)
+
+    def _publish_vehicle_visual_odometry(self, position, velocity):
+        """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
+        https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
+        module_name = 'px4_msgs.msg'   #TODO: get ffrom config file
+        class_name = 'VehicleVisualOdometry'  # TODO: get from config file or look at _import_class stuff in this file
+        VehicleVisualOdometry = getattr(sys.modules[module_name], class_name, None)
+        assert VehicleVisualOdometry is not None, f'{class_name} was not found in module {module_name}.'
+        msg = VehicleVisualOdometry()
+
+        # TODO: could throw a warning if position and velocity BOTH are None - would publish a message full of NaN
+
+        # Timestamp
+        now = int(time.time() * 1e6)  # uint64 time in microseconds  # TODO: should be time since system start?
+        msg.timestamp = now
+        msg.timestamp_sample = now  # uint64 TODO: what's this?
+
+        # Position and linear velocity local frame of reference
+        msg.local_frame = self.LOCAL_FRAME_NED  # uint8
+
+        # Position
+        if position is not None:
+            assert len(position) == 3, f'Unexpected length for position estimate: {len(position)} (3 expected).'  # TODO: can also be length 2 if altitude is not published, handle that
+            assert all(isinstance(x, float) for x in position), f'Position contained non-float elements.'
+            # TODO: check for np.float32?
+            msg.x, msg.y, msg.z = position  # float32 North, East, Down
+        else:
+            self.get_logger().warn('Position tuple was None - publishing NaN as position.')
+            msg.x, msg.y, msg.z = (float('nan'), ) * 3  # float32 North, East, Down
+
+        # Attitude quaternions - not used
+        msg.q = (float('nan'), ) * 4  # float32
+        msg.q_offset = (float('nan'), ) * 4
+        msg.pose_covariance = (float('nan'), ) * 21
+
+        # Velocity frame of reference
+        msg.velocity_frame = self.LOCAL_FRAME_NED  # uint8
+
+        # Velocity
+        if velocity is not None:
+            assert len(velocity) == 3, f'Unexpected length for velocity estimate: {len(velocity)} (3 expected).'
+            assert all(isinstance(x, float) for x in velocity), f'Velocity contained non-float elements.'
+            # TODO: check for np.float32?
+            msg.vx, msg.vy, msg.vz = velocity  # float32 North, East, Down
+        else:
+            self.get_logger().warn('Velocity tuple was None - publishing NaN as velocity.')
+            msg.vx, msg.vy, msg.vz = (float('nan'), ) * 3  # float32 North, East, Down
+
+        # Angular velocity - not used
+        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'), ) * 3  # float32 TODO: remove redundant np.float32?
+        msg.velocity_covariance = (float('nan'), ) * 21  # float32 North, East, Down
 
     def _camera_pitch(self):
         """Returns camera pitch in degrees relative to vehicle frame."""
@@ -500,7 +628,7 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
-    def _match(self):
+    def _match(self, image_frame):
         """Matches camera image to map image and computes camera position and field of view."""
         try:
             self.get_logger().debug('Matching image to map.')
@@ -520,7 +648,7 @@ class Matcher(Node):
             map_cropped = rotate_and_crop_map(self._map, rot, self._img_dimensions())
             assert map_cropped.shape[0:2] == self._declared_img_size(), 'Cropped map did not match declared shape.'
 
-            mkp_img, mkp_map = self._superglue.match(self._cv_image, map_cropped)
+            mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
 
             match_count_img = len(mkp_img)
             assert match_count_img == len(mkp_map), 'Matched keypoint counts did not match.'
@@ -547,8 +675,8 @@ class Matcher(Node):
             assert t.shape == (3, 1), f'Translation vector had unexpected shape: {t.shape}.'
             assert r.shape == (3, 3), f'Rotation matrix had unexpected shape: {r.shape}.'
 
-            fov_pix = get_fov(self._cv_image, h)
-            visualize_homography('Matches and FoV', self._cv_image, map_cropped, mkp_img, mkp_map, fov_pix)
+            fov_pix = get_fov(image_frame.image, h)
+            visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
 
             map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))
 
@@ -564,11 +692,13 @@ class Matcher(Node):
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
                 fov_pix, map_dims_with_padding, self._map_bbox, rot, img_dimensions)
+            fov_set = image_frame.set_estimated_fov(fov_wgs84)  # Store field of view in frame
+            assert fov_set is True, f'Something went wrong - field of view was already set earlier.'
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
-            focal_length = k[0]
+            focal_length = k[0][0]
             assert hasattr(img_dimensions, 'width') and hasattr(img_dimensions, 'height'), \
                 'Img dimensions did not have expected attributes.'
             camera_distance = get_camera_distance(focal_length, img_dimensions.width, fov_center_line_length)
@@ -615,16 +745,64 @@ class Matcher(Node):
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
                 np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
                 self._map_bbox, rot, img_dimensions)
-
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
+            # TODO: turn cam_pos_wgs84 into a LatLonAlt
+            # TODO: something is wrong with camera_altitude - should be a scalar but is array
+            lalt = LatLonAlt(*(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
+            cam_pos_set = image_frame.set_estimated_camera_position(lalt)  # Store the camera position in the frame (should not return False)
+            assert cam_pos_set is True, f'Something went wrong - camera position was already set earlier.'
+
 
             fov_gimbal = self._gimbal_fov_wgs84
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
                                                      fov_gimbal)
-            # self._essential_mat_pub.publish(e)
-            # self._homography_mat_pub.publish(h)
-            # self._pose_pub.publish(p)
-            self._topics['fov'].publish(fov_wgs84)
+
+            # Compute position (meters) and velocity (meters/second) in local frame
+            local_position = None
+            local_frame_origin_latlonalt = self._get_local_position_ref_latlonalt()
+            if local_frame_origin_latlonalt is not None:
+                local_position = distances(local_frame_origin_latlonalt, LatLon(*tuple(cam_pos_wgs84))) \
+                                 + (camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
+            else:
+                self.get_logger().debug(f'Could not get local frame origin - will not compute local position.')
+
+            velocity = None
+            # TODO: Make it so that previous global position can be fetched without risk of mixing the order of these operations (e.g. use timestamps and/or frame_id or something).
+            if self._previous_image_frame_stamp is not None:
+                previous_camera_global_position = self._previous_image_frame_stamp.get_estimated_camera_position()
+                assert previous_camera_global_position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+                current_camera_global_position = image_frame.get_estimated_camera_position() # TODO: # Could use cam_pos_wgs84 directly but its somewhere up there - should break _match down into smaller units
+                assert current_camera_global_position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+                assert hasattr(self._previous_image_frame_stamp, 'timestamp'),\
+                    'Previous image frame timstamp not found.'
+
+                # TODO: refactor this assertion so that it's more compact
+                if self._previous_image_frame_stamp.timestamp.sec == image_frame.timestamp.sec:
+                    assert self._previous_image_frame_stamp.timestamp.nanonsec < image_frame.timestamp.nanosec, \
+                        f'Previous image frame timestamp {self._previous_image_frame_stamp.timestamp} was >= than ' \
+                        f'current image frame timestamp {image_frame.timestamp}.'
+                else:
+                    assert self._previous_image_frame_stamp.timestamp.sec < image_frame.timestamp.sec,\
+                        f'Previous image frame timestamp {self._previous_image_frame_stamp.timestamp} was >= than ' \
+                        f'current image frame timestamp {image_frame.timestamp}.'
+                time_difference = image_frame.timestamp.sec - self._previous_image_frame_stamp.timestamp.sec
+                if time_difference == 0:
+                    time_difference = (image_frame.timestamp.nanosec -
+                                       self._previous_image_frame_stamp.timestamp.nanosec) / 1e9
+                assert time_difference > 0, f'Time difference between frames was 0.'
+                x_dist, y_dist = distances(current_camera_global_position, previous_camera_global_position)  # TODO: compute x,y,z components separately!
+                z_dist = current_camera_global_position.alt - previous_camera_global_position.alt
+                dist = (x_dist, y_dist, z_dist)
+                assert all(isinstance(x, float) for x in dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
+                velocity = tuple(x / time_difference for x in dist)
+            else:
+                self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
+
+            self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
+            self.get_logger().debug(f'Local frame origin: {self._get_local_position_ref_latlonalt()}.')
+            self._publish_vehicle_visual_odometry(local_position, velocity)  # TODO: enable
+
+            self._store_previous_image_frame_stamp(image_frame)  # Store previous position along with previous frame_id and timestamp
 
         except Exception as e:
             self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))

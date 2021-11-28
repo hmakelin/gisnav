@@ -115,9 +115,6 @@ class Matcher(Node):
         self._topics = dict()
         self._setup_topics()
 
-        # Dict for storing latest microRTPS messages
-        #self._topics_msgs = dict()
-
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 

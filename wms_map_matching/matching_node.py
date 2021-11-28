@@ -162,7 +162,9 @@ class Matcher(Node):
 
     @wms.setter
     def wms(self, value: WebMapService) -> None:
-        assert_type(WebMapService, value)
+        #assert_type(WebMapService, value)
+        # TODO: check that this is correct type - needs a bit more work than above,
+        #  example: <owslib.map.wms111.WebMapService_1_1_1 object at 0x7f3e7e4e3e50>
         self._wms = value
 
     @property
@@ -511,7 +513,6 @@ class Matcher(Node):
         if gimbal_attitude is None:
             self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
             return None
-        assert_type(gimbal_attitude, Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude])
         assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
 
         pitch_index = self._pitch_index()
@@ -688,7 +689,7 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _process_matches(self, mkp_img: list, mkp_map: list, k: np.ndarray, camera_normal: np.ndarray,
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray, camera_normal: np.ndarray,
                          reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
             -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
@@ -703,8 +704,8 @@ class Matcher(Node):
             affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
         """
         min_points = 4
-        assert_type(list, mkp_img)
-        assert_type(list, mkp_map)
+        assert_type(np.ndarray, mkp_img)
+        assert_type(np.ndarray, mkp_map)
         assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
 
         assert_type(bool, affine)

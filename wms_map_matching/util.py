@@ -12,7 +12,7 @@ from shapely.ops import transform
 from shapely.geometry import Point
 from collections import namedtuple
 
-from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame
+from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame  # TODO: get rid of this
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -112,14 +112,6 @@ class MapFrame(object):
     @property
     def image(self) -> np.ndarray:
         return self._image
-
-    #@image.setter
-    #def image(self, value: np.ndarray) -> None:
-    #    if self._image is not None:
-    #        raise AttributeError("Modification of property not allowed.")
-    #    assert_type(np.ndarray, value)
-    #    assert_ndim(value, 2)
-    #    self._image = value
 
 
 MAP_RADIUS_METERS_DEFAULT = 400

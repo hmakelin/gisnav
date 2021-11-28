@@ -33,6 +33,7 @@ share_dir, superglue_dir = setup_sys_path()
 # Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue import SuperGlue
 
+
 class Matcher(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'

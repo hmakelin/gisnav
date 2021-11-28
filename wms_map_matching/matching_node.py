@@ -783,9 +783,9 @@ class Matcher(Node):
 
             h, h_mask, t, r = self._process_matches(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
 
-            assert h.shape == (3, 3), f'Homography matrix had unexpected shape: {h.shape}.'
-            assert t.shape == (3, 1), f'Translation vector had unexpected shape: {t.shape}.'
-            assert r.shape == (3, 3), f'Rotation matrix had unexpected shape: {r.shape}.'
+            assert_shape(h, (3, 3))
+            assert_shape(t, (3, 1))
+            assert_shape(r, (3, 3))
 
             fov_pix = get_fov(image_frame.image, h)
             visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)

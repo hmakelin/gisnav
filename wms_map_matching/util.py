@@ -6,11 +6,11 @@ import os
 import math
 import geojson
 
-from typing import Any
+from typing import Any, Union
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
-from collections import namedtuple
+from collections import namedtuple, Sequence, Collection
 
 from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame  # TODO: get rid of this
 
@@ -29,6 +29,23 @@ def assert_type(type_: Any, value: object) -> None:
 def assert_ndim(value: np.ndarray, ndim: int) -> None:
     """Asserts a specific number of dimensions for a numpy array."""
     assert value.ndim == ndim, f'Unexpected number of dimensions: {value.ndim} ({ndim} expected).'
+
+
+def assert_len(value: Union[Sequence, Collection], len_: int):
+    """Asserts a specific length for a sequence or a collection (e.g. a list)."""
+    assert len(value), f'Unexpected length: {len(value)} ({len_} expected).'
+
+
+def assert_shape(value: np.ndarray, shape: tuple):
+    """Asserts a specific shape for np.ndarray."""
+    assert len(value), f'Unexpected shape: {value.shape} ({shape} expected).'
+
+
+#def assert_same_resolution(img1: np.ndarray, img2: np.ndarray):
+#    """Asserts that images have same resolution (but may have different number of channels)."""
+#    assert img1.shape[0:2] == img2.shape[0:2], f'Resoultions did not match: img1 {img1.shape} vs. img2 {img2.shape}.'
+
+# assert len(map_size) == 2, f'Map size was unexpected length {len(map_size)}, 2 expected.'
 
 
 class ImageFrame(object):
@@ -68,7 +85,7 @@ class ImageFrame(object):
         if self._fov is not None:
             raise AttributeError("Modification of property not allowed.")
         assert_type(np.ndarray, value)
-        assert value.shape == (4, 1, 2), f'Unexpected array shape: {value.shape}, (4, 1, 2) expected.'
+        assert_shape(value, (4, 1, 2))
         self._fov = value
 
     @property

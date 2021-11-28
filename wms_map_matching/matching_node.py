@@ -7,7 +7,7 @@ import importlib
 import math
 import time
 
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
@@ -21,7 +21,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
-    ImageFrame, distance, assert_type, assert_ndim, MapFrame, MAP_RADIUS_METERS_DEFAULT
+    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, MapFrame, MAP_RADIUS_METERS_DEFAULT
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition,\
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -99,7 +99,7 @@ class Matcher(Node):
         }
     ]
 
-    def __init__(self, share_directory, superglue_directory, config='config.yml'):
+    def __init__(self, share_directory: str, superglue_directory: str, config: str = 'config.yml') -> None:
         """Initializes the node.
 
         Arguments:
@@ -108,9 +108,18 @@ class Matcher(Node):
             config - String path to the config file in the share folder.
         """
         super().__init__('matcher')
-        self.share_dir = share_directory  # TODO: make private?
-        self.superglue_dir = superglue_directory  # TODO: move this to _setup_superglue? private _superglue_dir instead?
+        assert_type(str, share_directory)
+        assert_type(str, superglue_directory)
+        assert_type(str, config)
+        self._share_dir = share_directory
+        self._superglue_dir = superglue_directory
+
+        # Setup config
+        self._config = None
         self._load_config(config)
+
+        # Setup WMS server
+        self._wms = None
         self._init_wms()
 
         # Dict for storing all microRTPS bridge subscribers and publishers
@@ -137,6 +146,32 @@ class Matcher(Node):
         self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
+
+    @property
+    def config(self) -> dict:
+        return self._config
+
+    @config.setter
+    def config(self, value: dict) -> None:
+        assert_type(dict, value)
+        self._config = value
+
+    @property
+    def wms(self) -> WebMapService:
+        return self._wms
+
+    @wms.setter
+    def wms(self, value: WebMapService) -> None:
+        assert_type(WebMapService, value)
+        self._wms = value
+
+    @property
+    def share_dir(self) -> str:
+        return self._share_dir
+
+    @property
+    def superglue_dir(self) -> str:
+        return self._superglue_dir
 
     @property
     def map_frame(self) -> MapFrame:
@@ -210,25 +245,22 @@ class Matcher(Node):
         assert_type(GimbalDeviceSetAttitude, value)
         self._gimbal_device_set_attitude = value
 
-    def _setup_superglue(self):
+    def _setup_superglue(self) -> None:
         """Sets up SuperGlue."""  # TODO: make all these private?
         self._superglue = SuperGlue(self._config['superglue'], self.get_logger())
 
-    def _get_previous_global_position(self):
-        """Returns previous global position (WGS84)."""
-        raise NotImplementedError
-
-    def _load_config(self, yaml_file):
+    def _load_config(self, yaml_file: str) -> None:
         """Loads config from the provided YAML file."""
-        with open(os.path.join(share_dir, yaml_file), 'r') as f:
+        assert_type(str, yaml_file)
+        with open(os.path.join(self.share_dir, yaml_file), 'r') as f:
             try:
-                self._config = yaml.safe_load(f)
-                self.get_logger().info('Loaded config:\n{}.'.format(self._config))
+                self.config = yaml.safe_load(f)
+                self.get_logger().info('Loaded config:\n{config}.')
             except Exception as e:
-                self.get_logger().error('Could not load config file {} because of exception: {}\n{}' \
-                                        .format(yaml_file, e, traceback.print_exc()))
+                self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
+                                        f'\n{e}\n{traceback.print_exc()}')
 
-    def _use_gimbal_projection(self):
+    def _use_gimbal_projection(self) -> bool:
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
         gimbal_projection_flag = self._config.get('misc', {}).get('gimbal_projection', False)
         if type(gimbal_projection_flag) is bool:
@@ -237,7 +269,7 @@ class Matcher(Node):
             self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
             return False
 
-    def _restrict_affine(self):
+    def _restrict_affine(self) -> bool:
         """Returns True if homography matrix should be restricted to an affine transformation (nadir facing camera)."""
         restrict_affine_flag = self._config.get('misc', {}).get('affine', False)
         if type(restrict_affine_flag) is bool:
@@ -245,15 +277,6 @@ class Matcher(Node):
         else:
             self.get_logger().warn(f'Could not read affine restriction flag: {restrict_affine_flag}. Assume False.')
             return False
-
-    def _import_class(self, class_name, module_name):
-        """Imports class from module if not yet imported."""
-        if module_name not in sys.modules:
-            self.get_logger().info('Importing module ' + module_name + '.')
-            importlib.import_module(module_name)
-        imported_class = getattr(sys.modules[module_name], class_name, None)
-        assert imported_class is not None, class_name + ' was not found in module ' + module_name + '.'
-        return imported_class
 
     def _setup_topics(self) -> None:
         """Creates publishers and subscribers for microRTPS bridge topics."""
@@ -286,7 +309,7 @@ class Matcher(Node):
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)
 
-    def _init_wms(self):
+    def _init_wms(self) -> None:
         """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
 
         The url and version parameters are required to initialize the WMS client and are therefore set to read only. The
@@ -298,30 +321,32 @@ class Matcher(Node):
         self.declare_parameter('srs', self._config['wms']['srs'])
 
         try:
-            self._wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
-                                      version=self.get_parameter('version').get_parameter_value().string_value)
+            self.wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
+                                     version=self.get_parameter('version').get_parameter_value().string_value)
         except Exception as e:
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
-    def _map_size_with_padding(self):
+    def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         dim = self._img_dimensions()
-        if type(dim) is not Dimensions:
+        if dim is None:
             self.get_logger().warn(f'Dimensions not available - returning None as map size.')
             return None
-        assert hasattr(dim, 'width') and hasattr(dim, 'height'), 'Dimensions did not have expected attributes.'
+        assert_type(Dimensions, dim)
         diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
+        assert_type(int, diagonal)  # TODO: What if this is float?
         return diagonal, diagonal
 
-    def _map_dimensions_with_padding(self):
+    def _map_dimensions_with_padding(self) -> Optional[Dimensions]:
         map_size = self._map_size_with_padding()
         if map_size is None:
             self.get_logger().warn(f'Map size with padding not available - returning None as map dimensions.')
             return None
-        assert len(map_size) == 2, f'Map size was unexpected length {len(map_size)}, 2 expected.'
+        assert_type(tuple, map_size)
+        assert_len(map_size, 2)
         return Dimensions(*map_size)
 
-    def _declared_img_size(self) -> Optional[tuple]:
+    def _declared_img_size(self) -> Optional[Tuple[int, int]]:
         """Returns image resolution size as it is declared in the latest CameraInfo message."""
         if self.camera_info is not None:
             return self.camera_info.height, self.camera_info.width  # numpy order: h, w, c --> height first
@@ -329,29 +354,29 @@ class Matcher(Node):
             self.get_logger().warn('Camera info was not available - returning None as declared image size.')
             return None
 
-    def _img_dimensions(self):
+    def _img_dimensions(self) -> Optional[Dimensions]:
         declared_size = self._declared_img_size()
         if declared_size is None:
             self.get_logger().warn('CDeclared size not available - returning None as image dimensions.')
             return None
-        else:
-            return Dimensions(*declared_size)
+        assert_type(tuple, declared_size)
+        assert_len(declared_size, 2)
+        return Dimensions(*declared_size)
 
     def _project_gimbal_fov(self, altitude_meters: float) -> Optional[np.ndarray]:
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
-            return
+            return None
 
         r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True).as_matrix()
-        e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))  # extrinsic matrix  # [0, 0, 1]
-        assert e.shape == (3, 4), 'Extrinsic matrix had unexpected shape: ' + str(e.shape) \
-                                  + ' - could not project gimbal FoV.'
+        e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))
+        assert_shape(e, (3, 4))
 
         if self.camera_info is None:
             self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
-            return
+            return None
         h, w = self._img_dimensions()
         # TODO: assert h w not none and integers? and divisible by 2?
 
@@ -360,12 +385,15 @@ class Matcher(Node):
 
         # Project image corners to z=0 plane (ground)
         src_corners = create_src_corners(h, w)
+        assert_shape(src_corners, (4, 1, 2))
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         p = np.matmul(k, e)
         p_inv = np.linalg.inv(p)
+        assert_shape(p_inv, (3, 3))
 
         dst_corners = cv2.perspectiveTransform(src_corners, p_inv)  # TODO: use util.get_fov here?
+        assert_shape(dst_corners, src_corners.shape)
         dst_corners = dst_corners.squeeze()  # See get_fov usage elsewhere -where to do squeeze if at all?
 
         return dst_corners
@@ -450,64 +478,41 @@ class Matcher(Node):
         assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(),\
             'Decoded map is not the specified size.'
 
-    def _image_raw_callback(self, msg):
+    def _image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
-
-        # Get image data
-        assert hasattr(msg, 'data'), f'No data present in received image message.'
-        if msg.data is None:  # TODO: do an explicit type check here?
-            self.get_logger().warn('No data present in received image message - cannot process image.')
-            return
+        assert_type(Image, msg)
 
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
 
         img_size = self._declared_img_size()
         if img_size is not None:
             cv_img_shape = cv_image.shape[0:2]
-            declared_shape = self._declared_img_size()
-            assert cv_img_shape == declared_shape, f'Converted cv_image shape {cv_img_shape} did not match declared ' \
-                                                   f'image shape {declared_shape}.'
+            assert cv_img_shape == img_size, f'Converted cv_image shape {cv_img_shape} did not match declared image ' \
+                                             f'shape {img_size}.'
 
-        # Get image frame_id and stamp from message header
-        assert hasattr(msg, 'header'), f'No header present in received image message.'
-        if msg.header is None:  # TODO: do an explicit type check here?
-            self.get_logger().warn('No header present in received image message - cannot process image.')
-            return
-        assert hasattr(msg.header, 'frame_id'), f'No frame_id present in received image header.'
-        assert hasattr(msg.header, 'stamp'), f'No stamp present in received image header.'
-        frame_id = msg.header.frame_id
-        timestamp = msg.header.stamp
-        if frame_id is None or timestamp is None:  # TODO: do an explicit type check here?
-            self.get_logger().warn(f'No frame_id or stamp in received header: {msg.header}, cannot process image.')
-            return
-        image_frame = ImageFrame(cv_image, frame_id, timestamp)
-
+        image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
         self._match(image_frame)
 
-    def _camera_yaw(self):
+    def _camera_yaw(self) -> Optional[int]:
         """Returns camera yaw in degrees."""
         rpy = self._get_camera_rpy()
+        if rpy is None:
+            self.get_logger().warn(f'Could not get camera RPY - cannot return yaw.')
+            return None
 
-        assert rpy is not None, 'RPY is None, cannot retrieve camera yaw.'
-        assert len(rpy) == 3, f'Unexpected length for RPY: {len(rpy)}.'
-        assert hasattr(rpy, 'yaw'), f'No yaw attribute found for named tuple: {rpy}.'
-
+        assert_type(RPY, rpy)
         camera_yaw = rpy.yaw
         return camera_yaw
 
-    def _get_camera_rpy(self) -> RPY:
+    def _get_camera_rpy(self) -> Optional[RPY]:
         """Returns roll-pitch-yaw euler vector."""
         gimbal_attitude = self._gimbal_attitude()
         if gimbal_attitude is None:
             self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
             return None
+        assert_type(gimbal_attitude, Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude])
         assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
-        gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
-
-        if self.vehicle_local_position is None:
-            self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
-            return None
 
         pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
@@ -515,17 +520,20 @@ class Matcher(Node):
         yaw_index = self._yaw_index()
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
+        gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
+        if self.vehicle_local_position is None:
+            self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
+            return None
+
+        heading = self.vehicle_local_position.heading
+        heading = math.degrees(heading)
+        assert -180 <= heading <= 180, f'Unexpected heading value: {heading} degrees ([-180, 180] expected).'
+        gimbal_yaw = gimbal_euler[yaw_index]
+        assert -180 <= gimbal_yaw <= 180, f'Unexpected gimbal yaw value: {gimbal_yaw} ([-180, 180] expected).'
+
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
-        heading = self.vehicle_local_position.heading
-        assert -math.pi <= heading <= math.pi, 'Unexpected heading value: ' + str(
-            heading) + '([-pi, pi] expected). Cannot compute RPY.'
-        heading = math.degrees(heading)
-
-        gimbal_yaw = gimbal_euler[yaw_index]
-        assert -180 <= gimbal_yaw <= 180, 'Unexpected gimbal yaw value: ' + str(
-            heading) + '([-180, 180] expected). Cannot compute RPY.'
         yaw = heading + gimbal_yaw  # TODO: if over 180, make it negative instead
         assert abs(yaw) <= 360, f'Yaw was unexpectedly large: {abs(yaw)}, max 360 expected.'
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
@@ -536,27 +544,30 @@ class Matcher(Node):
 
         return rpy
 
-    def _get_camera_normal(self):
+    def _get_camera_normal(self) -> Optional[np.ndarray]:
         nadir = np.array([0, 0, 1])
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
             return None
+        assert_type(RPY, rpy)
 
         r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True)
         camera_normal = r.apply(nadir)
 
-        assert camera_normal.shape == nadir.shape, f'Unexpected camera normal shape {camera_normal.shape}.'
+        assert_shape(camera_normal, nadir.shape)
+
         # TODO: this assertion is arbitrary? how to handle unexpected camera normal length?
+        # TODO: may have to raise error here - dont know what to do, this assertion could trigger an error
         camera_normal_length = np.linalg.norm(camera_normal)
         assert abs(camera_normal_length-1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
 
         return camera_normal
 
-    def _pitch_index(self):
+    def _pitch_index(self) -> int:
         return self.EULER_SEQUENCE.lower().find('y')
 
-    def _yaw_index(self):
+    def _yaw_index(self) -> int:
         return self.EULER_SEQUENCE.lower().find('x')
 
     def _camera_info_callback(self, msg: CameraInfo) -> None:
@@ -572,7 +583,7 @@ class Matcher(Node):
         """Handles latest VehicleLocalPosition message."""
         self.vehicle_local_position = msg
 
-    def _get_dynamic_map_radius(self):
+    def _get_dynamic_map_radius(self) -> int:
         """Returns map radius that determines map size for WMS map requests."""
         return MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
 
@@ -658,15 +669,12 @@ class Matcher(Node):
         msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'), ) * 3  # float32 TODO: remove redundant np.float32?
         msg.velocity_covariance = (float('nan'), ) * 21  # float32 North, East, Down
 
-    def _camera_pitch(self):
+    def _camera_pitch(self) -> int:
         """Returns camera pitch in degrees relative to vehicle frame."""
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
-
-        assert len(rpy) == 3, 'Unexpected length of euler angles vector: ' + str(len(rpy))
-        assert hasattr(rpy, 'pitch'), f'Pitch attribute not found in named tuple {rpy}.'
-
+        assert_type(RPY, rpy)
         return rpy.pitch
 
     def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
@@ -680,7 +688,9 @@ class Matcher(Node):
                 self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _process_matches(self, mkp_img, mkp_map, k, camera_normal, reproj_threshold=1.0, method=cv2.RANSAC, affine=False):
+    def _process_matches(self, mkp_img: list, mkp_map: list, k: np.ndarray, camera_normal: np.ndarray,
+                         reproj_threshold: float = 1.0, method: int = cv2.RANSAC, affine: bool = False)\
+            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Processes matching keypoints from img and map and returns essential, and homography matrices & pose.
 
         Arguments:
@@ -693,13 +703,21 @@ class Matcher(Node):
             affine - Boolean flag indicating that transformation should be restricted to 2D affine transformation
         """
         min_points = 4
+        assert_type(list, mkp_img)
+        assert_type(list, mkp_map)
         assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
+
+        assert_type(bool, affine)
+        assert_type(int, method)
+        assert_type(float, reproj_threshold)
         if not affine:
             h, h_mask = cv2.findHomography(mkp_img, mkp_map, method, reproj_threshold)
         else:
             h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
             h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
 
+        assert_type(np.ndarray, k)
+        assert_shape(k, (3, 3))
         num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
 
         # Get the one where angle between plane normal and inverse of camera normal is smallest
@@ -709,12 +727,12 @@ class Matcher(Node):
         index_of_smallest_angle = angles.index(min(angles))
         rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
 
-        self.get_logger().debug('decomposition R:\n{}.'.format(rotation))
-        self.get_logger().debug('decomposition T:\n{}.'.format(translation))
-        self.get_logger().debug('decomposition Ns:\n{}.'.format(Ns))
-        self.get_logger().debug('decomposition Ns angles:\n{}.'.format(angles))
-        self.get_logger().debug('decomposition smallest angle index:\n{}.'.format(index_of_smallest_angle))
-        self.get_logger().debug('decomposition smallest angle:\n{}.'.format(min(angles)))
+        #self.get_logger().debug('decomposition R:\n{}.'.format(rotation))
+        #self.get_logger().debug('decomposition T:\n{}.'.format(translation))
+        #self.get_logger().debug('decomposition Ns:\n{}.'.format(Ns))
+        #self.get_logger().debug('decomposition Ns angles:\n{}.'.format(angles))
+        #self.get_logger().debug('decomposition smallest angle index:\n{}.'.format(index_of_smallest_angle))
+        #self.get_logger().debug('decomposition smallest angle:\n{}.'.format(min(angles)))
 
         return h, h_mask, translation, rotation
 

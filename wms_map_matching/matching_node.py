@@ -6,10 +6,8 @@ import yaml
 import importlib
 import math
 import time
-import warnings
 
-from enum import Enum
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
@@ -23,7 +21,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
-    ImageFrame, distance
+    ImageFrame, distance, assert_type, assert_ndim, MapFrame, MAP_RADIUS_METERS_DEFAULT
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition,\
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -47,6 +45,9 @@ class Matcher(Node):
 
     # Local frame reference for px4_msgs.msg.VehicleVisualOdometry messages
     LOCAL_FRAME_NED = 0
+
+    # Maximum radius for map requests (in meters)
+    MAX_MAP_RADIUS = 1000  # TODO: put default into config.yaml, make a ROS param so it can be changed on the fly
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
@@ -118,10 +119,6 @@ class Matcher(Node):
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # Store map raster received from WMS endpoint here along with its bounding box
-        self._map = None  # TODO: put these together in a MapBBox structure to make them 'more atomic' (e.g. ImageFrameStamp named tuple)
-        self._map_bbox = None
-
         self._setup_superglue()
 
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
@@ -130,6 +127,7 @@ class Matcher(Node):
         #self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
 
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
+        self._map_frame = None  # Map raster received from WMS endpoint here along with its bounding box
 
         # Properties that are mapped to microRTPS topics
         self._camera_info = None
@@ -139,10 +137,14 @@ class Matcher(Node):
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 
-    @staticmethod
-    def _assert_same_type(type_: Any, value: object) -> None:
-        """Asserts that inputs are of same type."""
-        assert isinstance(value, type_), f'Type {type(value)} provided when {type_} was expected.'
+    @property
+    def map_frame(self) -> MapFrame:
+        return self._map_frame
+
+    @map_frame.setter
+    def map_frame(self, value: MapFrame) -> None:
+        assert_type(MapFrame, value)
+        self._map_frame = value
 
     @property
     def previous_image_frame(self) -> ImageFrame:
@@ -150,7 +152,7 @@ class Matcher(Node):
 
     @previous_image_frame.setter
     def previous_image_frame(self, value: ImageFrame) -> None:
-        self._assert_same_type(ImageFrame, value)
+        assert_type(ImageFrame, value)
         self._previous_image_frame = value
 
     @property
@@ -159,7 +161,7 @@ class Matcher(Node):
 
     @camera_info.setter
     def camera_info(self, value: CameraInfo) -> None:
-        self._assert_same_type(CameraInfo, value)
+        assert_type(CameraInfo, value)
         self._camera_info = value
 
     @property
@@ -168,7 +170,7 @@ class Matcher(Node):
 
     @vehicle_local_position.setter
     def vehicle_local_position(self, value: VehicleLocalPosition) -> None:
-        self._assert_same_type(VehicleLocalPosition, value)
+        assert_type(VehicleLocalPosition, value)
         self._vehicle_local_position = value
 
     @property
@@ -177,7 +179,7 @@ class Matcher(Node):
 
     @vehicle_global_position.setter
     def vehicle_global_position(self, value: VehicleGlobalPosition) -> None:
-        self._assert_same_type(VehicleGlobalPosition, value)
+        assert_type(VehicleGlobalPosition, value)
         self._vehicle_global_position = value
 
     @property
@@ -186,7 +188,7 @@ class Matcher(Node):
 
     @vehicle_attitude.setter
     def vehicle_attitude(self, value: VehicleAttitude) -> None:
-        self._assert_same_type(VehicleAttitude, value)
+        assert_type(VehicleAttitude, value)
         self._vehicle_attitude = value
 
     @property
@@ -195,7 +197,7 @@ class Matcher(Node):
 
     @gimbal_device_attitude_status.setter
     def gimbal_device_attitude_status(self, value: GimbalDeviceAttitudeStatus) -> None:
-        self._assert_same_type(GimbalDeviceAttitudeStatus, value)
+        assert_type(GimbalDeviceAttitudeStatus, value)
         self._gimbal_device_attitude_status = value
 
     @property
@@ -204,7 +206,7 @@ class Matcher(Node):
 
     @gimbal_device_set_attitude.setter
     def gimbal_device_set_attitude(self, value: GimbalDeviceSetAttitude) -> None:
-        self._assert_same_type(GimbalDeviceSetAttitude, value)
+        assert_type(GimbalDeviceSetAttitude, value)
         self._gimbal_device_set_attitude = value
 
     def _setup_superglue(self):
@@ -389,61 +391,67 @@ class Matcher(Node):
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
             return None
 
-    def _update_map(self) -> None:
-        """Gets latest map from WMS server and saves it."""
-        global_position_latlonalt = self._vehicle_global_position_latlonalt()
-        if global_position_latlonalt is None:
-            self.get_logger().warn('Could not get vehicle global position latlonalt. Cannot update map.')
+    def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
+        """Return WGS84 coordinates of projected camera field of view."""
+        if self.camera_info is not None:
+            gimbal_fov_pix = self._project_gimbal_fov(origin.alt)
+
+            # Convert gimbal field of view from pixels to WGS84 coordinates
+            if gimbal_fov_pix is not None:
+                azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
+                distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
+                zipped = list(zip(azimuths, distances))
+                to_wgs84 = partial(move_distance, origin)
+                self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
+                ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
+
+                # Use projected field of view center instead of global position as map center
+                map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
+            else:
+                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing '
+                                           'camera.')
+                return None
+        else:
+            self.get_logger().debug('Camera info not available, cannot project gimbal FoV, defaulting to global '
+                                        'position.')
             return None
 
-        # Use these coordinates for fetching map from server
-        map_center_latlon = LatLon(global_position_latlonalt.lat, global_position_latlonalt.lon)
+        return map_center_latlon
 
-        if self._use_gimbal_projection():
-            if self.camera_info is not None:
-                gimbal_fov_pix = self._project_gimbal_fov(global_position_latlonalt.alt)
+    def _update_map(self, center: LatLon, radius: int) -> None:
+        """Gets latest map from WMS server for given location and radius and saves it."""
+        assert_type(LatLon, center)
+        assert_type(int, radius)
+        assert 0 < radius < self.MAX_MAP_RADIUS, f'Radius should be between 0 and {self.MAX_MAP_RADIUS}.'
 
-                # Convert gimbal field of view from pixels to WGS84 coordinates
-                if gimbal_fov_pix is not None:
-                    azimuths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
-                    distances = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
-                    zipped = list(zip(azimuths, distances))
-                    to_wgs84 = partial(move_distance, map_center_latlon)
-                    self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
-                    ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
-
-                    # Use projected field of view center instead of global position as map center
-                    map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
-                else:
-                    self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing '
-                                           'camera.')
-            else:
-                self.get_logger().debug('Camera info not available, cannot project gimbal FoV, defaulting to global '
-                                        'position.')
-
-        self._map_bbox = get_bbox(map_center_latlon)
+        bbox = get_bbox(center)
+        assert_type(BBox, bbox)
 
         # Build and send WMS request
         layer_str = self.get_parameter('layer').get_parameter_value().string_value
         srs_str = self.get_parameter('srs').get_parameter_value().string_value
-        self.get_logger().debug(f'Getting map for bounding box: {self._map_bbox}, layer: {layer_str}, srs: {srs_str}.')
+        assert_type(str, layer_str)
+        assert_type(str, srs_str)
         try:
-            self._map = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=self._map_bbox,
-                                         size=self._map_size_with_padding(), format='image/png',
-                                         transparent=True)
+            self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
+            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),
+                                    format='image/png', transparent=True)
         except Exception as e:
-            self.get_logger().warn('Exception from WMS server query: {}\n{}'.format(e, traceback.print_exc()))
-            return
+            self.get_logger().warn(f'Exception from WMS server query:\n{e},\n{traceback.print_exc()}.')
+            return None
 
         # Decode response from WMS server
-        self._map = np.frombuffer(self._map.read(), np.uint8)
-        self._map = imdecode(self._map, cv2.IMREAD_UNCHANGED)
-        assert self._map.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not the specified size.'
+        map_ = np.frombuffer(map_.read(), np.uint8)
+        map_ = imdecode(map_, cv2.IMREAD_UNCHANGED)
+        assert_type(np.ndarray, map_)
+        assert_ndim(map_, 3)
+        self.map_frame = MapFrame(center, radius, bbox, map_)
+        assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(),\
+            'Decoded map is not the specified size.'
 
     def _image_raw_callback(self, msg):
         """Handles latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
-        #self._topics_msgs['image_raw'] = msg
 
         # Get image data
         assert hasattr(msg, 'data'), f'No data present in received image message.'
@@ -563,10 +571,28 @@ class Matcher(Node):
         """Handles latest VehicleLocalPosition message."""
         self.vehicle_local_position = msg
 
+    def _get_dynamic_map_radius(self):
+        """Returns map radius that determines map size for WMS map requests."""
+        return MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
+
     def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""
         self.vehicle_global_position = msg
-        self._update_map()
+        center = LatLon(msg.lat, msg.lon)
+        origin = LatLonAlt(*(center + (msg.alt,)))
+        if self._use_gimbal_projection():
+            projected_center = self._projected_field_of_view_center(origin)
+            if projected_center is None:
+                self.get_logger().warn('Could not project field of view center. Using global position for map instead.')
+            else:
+                center = projected_center
+        if self._should_update_map(center):
+            self._update_map(center, self._get_dynamic_map_radius())
+
+    def _should_update_map(self, center: LatLon) -> bool:
+        """Returns true if map should be updated."""
+        # TODO: based on some config variable, do not update map if center is very close to previous map frame center
+        return True  # TODO: placeholder return value always True
 
     def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message."""
@@ -696,9 +722,14 @@ class Matcher(Node):
         try:
             self.get_logger().debug('Matching image to map.')
 
-            if self._map is None:
+            if self.map_frame is None:
                 self.get_logger().warn('Map not yet available - skipping matching.')
                 return
+            else:
+                if self.map_frame.image is None:
+                    # This happens e.g. if map frame was created but something went wrong with WMS request
+                    self.get_logger().warn('Map image not available - skipping matching.')
+                    return
 
             yaw = self._camera_yaw()
             if yaw is None:
@@ -708,7 +739,7 @@ class Matcher(Node):
             assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: ' + str(rot) + ' ([-pi, pi] expected).'
             self.get_logger().debug('Current camera yaw: ' + str(rot) + ' radians.')
 
-            map_cropped = rotate_and_crop_map(self._map, rot, self._img_dimensions())
+            map_cropped = rotate_and_crop_map(self.map_frame.image, rot, self._img_dimensions())
             assert map_cropped.shape[0:2] == self._declared_img_size(), 'Cropped map did not match declared shape.'
 
             mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
@@ -738,7 +769,7 @@ class Matcher(Node):
             fov_pix = get_fov(image_frame.image, h)
             visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
 
-            map_lat, map_lon = get_bbox_center(BBox(*self._map_bbox))
+            map_lat, map_lon = get_bbox_center(BBox(*self.map_frame.bbox))
 
             map_dims_with_padding = self._map_dimensions_with_padding()
             if map_dims_with_padding is None:
@@ -751,7 +782,7 @@ class Matcher(Node):
                 return
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
-                fov_pix, map_dims_with_padding, self._map_bbox, rot, img_dimensions)
+                fov_pix, map_dims_with_padding, self.map_frame.bbox, rot, img_dimensions)
             image_frame.fov = fov_wgs84
 
             # Compute camera altitude, and distance to principal point using triangle similarity
@@ -803,7 +834,7 @@ class Matcher(Node):
             t[1] = (1 - t[1]) * h / 2
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
                 np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
-                self._map_bbox, rot, img_dimensions)
+                self.map_frame.bbox, rot, img_dimensions)
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
             # TODO: turn cam_pos_wgs84 into a LatLonAlt
             # TODO: something is wrong with camera_altitude - should be a scalar but is array

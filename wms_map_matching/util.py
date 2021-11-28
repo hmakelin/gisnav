@@ -6,10 +6,13 @@ import os
 import math
 import geojson
 
+from typing import Any
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
 from collections import namedtuple
+
+from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -18,10 +21,24 @@ Dimensions = namedtuple('Dimensions', 'height width')  # TODO: Rename this Heigh
 RPY = namedtuple('RPY', 'roll pitch yaw')
 
 
+def assert_type(type_: Any, value: object) -> None:
+    """Asserts that inputs are of same type."""
+    assert isinstance(value, type_), f'Type {type(value)} provided when {type_} was expected.'
+
+
+def assert_ndim(value: np.ndarray, ndim: int) -> None:
+    """Asserts a specific number of dimensions for a numpy array."""
+    assert value.ndim == ndim, f'Unexpected number of dimensions: {value.ndim} ({ndim} expected).'
+
+
 class ImageFrame(object):
     """Keeps image frame related data in one place and protects it from corruption."""
 
-    def __init__(self, image, frame_id, stamp):
+    def __init__(self, image: np.ndarray, frame_id: str, stamp: Time) -> None:
+        assert_type(np.ndarray, image)
+        assert_ndim(image, 3)
+        assert_type(str, frame_id)
+        assert_type(Time, stamp)
         self._image = image
         self._frame_id = frame_id
         self._stamp = stamp
@@ -31,45 +48,84 @@ class ImageFrame(object):
         self._position = None
 
     @property
-    def image(self):
+    def image(self) -> np.ndarray:
         return self._image
 
     @property
-    def frame_id(self):
+    def frame_id(self) -> str:
         return self._frame_id
 
     @property
-    def stamp(self):
+    def stamp(self) -> Time:
         return self._stamp
 
     @property
-    def fov(self):
-        return self._estimated_fov
+    def fov(self) -> np.ndarray:
+        return self._fov
 
     @fov.setter
-    def fov(self, value):
+    def fov(self, value: np.ndarray) -> None:
         if self._fov is not None:
             raise AttributeError("Modification of property not allowed.")
-        assert isinstance(value, np.ndarray), f'Invalid type: {type(value)}, np.ndarray expected.'
+        assert_type(np.ndarray, value)
         assert value.shape == (4, 1, 2), f'Unexpected array shape: {value.shape}, (4, 1, 2) expected.'
         self._fov = value
 
     @property
-    def position(self):
+    def position(self) -> LatLonAlt:
         return self._position
 
     @position.setter
-    def position(self, value):
+    def position(self, value: LatLonAlt) -> None:
         if self._position is not None:
             raise AttributeError("Modification of property not allowed.")
-        assert isinstance(value, LatLonAlt), f'Invalid type: {type(value)}, LatLonAlt expected.'
+        assert_type(LatLonAlt, value)
         self._position = value
+
+
+class MapFrame(object):
+    """Keeps map frame related data in one place and protects it from corruption."""
+
+    def __init__(self, center: LatLon, radius: int, bbox: BBox, image: np.ndarray) -> None:
+        assert_type(BBox, bbox)
+        assert_type(LatLon, center)
+        assert_type(int, radius)
+        assert_type(np.ndarray, image)
+        assert_ndim(image, 3)
+        self._bbox = bbox
+        self._center = center
+        self._radius = radius
+        self._image = image
+
+    @property
+    def center(self) -> LatLon:
+        return self._center
+
+    @property
+    def radius(self) -> int:
+        return self._radius
+
+    @property
+    def bbox(self) -> BBox:
+        return self._bbox
+
+    @property
+    def image(self) -> np.ndarray:
+        return self._image
+
+    #@image.setter
+    #def image(self, value: np.ndarray) -> None:
+    #    if self._image is not None:
+    #        raise AttributeError("Modification of property not allowed.")
+    #    assert_type(np.ndarray, value)
+    #    assert_ndim(value, 2)
+    #    self._image = value
 
 
 MAP_RADIUS_METERS_DEFAULT = 400
 
 
-def get_bbox(latlon, radius_meters=MAP_RADIUS_METERS_DEFAULT):
+def get_bbox(latlon: LatLon, radius_meters: int = MAP_RADIUS_METERS_DEFAULT) -> BBox:
     """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
 
     Uses azimuthal equidistant projection. Based on Mike T's answer at

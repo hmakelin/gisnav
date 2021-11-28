@@ -301,16 +301,6 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
-    def _map_dim(self) -> Optional[tuple]:
-        # TODO: docstring after this thing returns a Dimensions tuple and not a regular tuple
-        camera_info = self.camera_info
-        if camera_info is not None:
-            max_dim = max(self.camera_info.width, self.camera_info.height)
-            return max_dim, max_dim  # TODO: return a Dimensions tuple, not a regular tuple
-        else:
-            self.get_logger().warn('Camera info not available, returning None for map dim.')
-            return None
-
     def _map_size_with_padding(self):
         dim = self._img_dimensions()
         if type(dim) is not Dimensions:

@@ -16,44 +16,54 @@ LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Dimensions = namedtuple('Dimensions', 'height width')  # TODO: Rename this HeightWidth so that order between Height and widht does not accidentally get mixed up?
 RPY = namedtuple('RPY', 'roll pitch yaw')
-#ImageFrameStamp = namedtuple('ImageFrameStamp', 'image frame_id timestamp')
 
 
-class ImageFrameStamp:
+class ImageFrame(object):
+    """Keeps image frame related data in one place and protects it from corruption."""
 
-    def __init__(self, image, frame_id, timestamp):
-        self.image = image
-        self.frame_id = frame_id
-        self.timestamp = timestamp
+    def __init__(self, image, frame_id, stamp):
+        self._image = image
+        self._frame_id = frame_id
+        self._stamp = stamp
 
-        # To be set later when known using setter methods
-        self._estimated_fov = None
-        self._estimated_camera_position = None  # LatLonAlt
+        # fov and position expected to be set only once and some time after instantiation, setter methods provided
+        self._fov = None
+        self._position = None
 
-    def set_estimated_fov(self, fov):
-        """Sets the fov attribute and returns True if it was set, or False it was already set."""
-        assert isinstance(fov, np.ndarray), f'Invalid argument type: {type(fov)}, np.array expected.'
-        assert fov.shape == (4, 1, 2), f'Unexpected FoV arg shape provided: {fov.shape}, (4, 1, 2) expected.'
-        if self._estimated_fov is None:
-            self._estimated_fov = fov
-            return True
-        else:
-            return False
+    @property
+    def image(self):
+        return self._image
 
-    def get_estimated_fov(self):
+    @property
+    def frame_id(self):
+        return self._frame_id
+
+    @property
+    def stamp(self):
+        return self._stamp
+
+    @property
+    def fov(self):
         return self._estimated_fov
 
-    def set_estimated_camera_position(self, latlonalt):
-        """Sets the camera position attribute and returns True if it was set, or False it was already set."""
-        assert isinstance(latlonalt, LatLonAlt), f'Invalid argument type: {type(latlonalt)}, LatLonAlt expected.'
-        if self._estimated_camera_position is None:
-            self._estimated_camera_position = latlonalt
-            return True
-        else:
-            return False
+    @fov.setter
+    def fov(self, value):
+        if self._fov is not None:
+            raise AttributeError("Modification of property not allowed.")
+        assert isinstance(value, np.ndarray), f'Invalid type: {type(value)}, np.ndarray expected.'
+        assert value.shape == (4, 1, 2), f'Unexpected array shape: {value.shape}, (4, 1, 2) expected.'
+        self._fov = value
 
-    def get_estimated_camera_position(self):
-        return self._estimated_camera_position
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, value):
+        if self._position is not None:
+            raise AttributeError("Modification of property not allowed.")
+        assert isinstance(value, LatLonAlt), f'Invalid type: {type(value)}, LatLonAlt expected.'
+        self._position = value
 
 
 MAP_RADIUS_METERS_DEFAULT = 400

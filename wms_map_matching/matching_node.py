@@ -21,7 +21,7 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
-    ImageFrameStamp, distance
+    ImageFrame, distance
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()
@@ -391,7 +391,7 @@ class Matcher(Node):
         if frame_id is None or timestamp is None:  # TODO: do an explicit type check here?
             self.get_logger().warn(f'No frame_id or stamp in received header: {msg.header}, cannot process image.')
             return
-        image_frame = ImageFrameStamp(cv_image, frame_id, timestamp)  # Use nano-seconds only from stamp
+        image_frame = ImageFrame(cv_image, frame_id, timestamp)
 
         self._match(image_frame)
 
@@ -692,8 +692,7 @@ class Matcher(Node):
 
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
                 fov_pix, map_dims_with_padding, self._map_bbox, rot, img_dimensions)
-            fov_set = image_frame.set_estimated_fov(fov_wgs84)  # Store field of view in frame
-            assert fov_set is True, f'Something went wrong - field of view was already set earlier.'
+            image_frame.fov = fov_wgs84
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
@@ -749,9 +748,7 @@ class Matcher(Node):
             # TODO: turn cam_pos_wgs84 into a LatLonAlt
             # TODO: something is wrong with camera_altitude - should be a scalar but is array
             lalt = LatLonAlt(*(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
-            cam_pos_set = image_frame.set_estimated_camera_position(lalt)  # Store the camera position in the frame (should not return False)
-            assert cam_pos_set is True, f'Something went wrong - camera position was already set earlier.'
-
+            image_frame.position = lalt
 
             fov_gimbal = self._gimbal_fov_wgs84
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
@@ -769,29 +766,27 @@ class Matcher(Node):
             velocity = None
             # TODO: Make it so that previous global position can be fetched without risk of mixing the order of these operations (e.g. use timestamps and/or frame_id or something).
             if self._previous_image_frame_stamp is not None:
-                previous_camera_global_position = self._previous_image_frame_stamp.get_estimated_camera_position()
-                assert previous_camera_global_position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-                current_camera_global_position = image_frame.get_estimated_camera_position() # TODO: # Could use cam_pos_wgs84 directly but its somewhere up there - should break _match down into smaller units
-                assert current_camera_global_position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-                assert hasattr(self._previous_image_frame_stamp, 'timestamp'),\
+                assert self._previous_image_frame_stamp.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+                assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+                assert hasattr(self._previous_image_frame_stamp, 'stamp'),\
                     'Previous image frame timstamp not found.'
 
                 # TODO: refactor this assertion so that it's more compact
-                if self._previous_image_frame_stamp.timestamp.sec == image_frame.timestamp.sec:
-                    assert self._previous_image_frame_stamp.timestamp.nanonsec < image_frame.timestamp.nanosec, \
-                        f'Previous image frame timestamp {self._previous_image_frame_stamp.timestamp} was >= than ' \
-                        f'current image frame timestamp {image_frame.timestamp}.'
+                if self._previous_image_frame_stamp.stamp.sec == image_frame.stamp.sec:
+                    assert self._previous_image_frame_stamp.stamp.nanonsec < image_frame.stamp.nanosec, \
+                        f'Previous image frame timestamp {self._previous_image_frame_stamp.stamp} was >= than ' \
+                        f'current image frame timestamp {image_frame.stamp}.'
                 else:
-                    assert self._previous_image_frame_stamp.timestamp.sec < image_frame.timestamp.sec,\
-                        f'Previous image frame timestamp {self._previous_image_frame_stamp.timestamp} was >= than ' \
-                        f'current image frame timestamp {image_frame.timestamp}.'
-                time_difference = image_frame.timestamp.sec - self._previous_image_frame_stamp.timestamp.sec
+                    assert self._previous_image_frame_stamp.stamp.sec < image_frame.stamp.sec,\
+                        f'Previous image frame timestamp {self._previous_image_frame_stamp.stamp} was >= than ' \
+                        f'current image frame timestamp {image_frame.stamp}.'
+                time_difference = image_frame.stamp.sec - self._previous_image_frame_stamp.stamp.sec
                 if time_difference == 0:
-                    time_difference = (image_frame.timestamp.nanosec -
-                                       self._previous_image_frame_stamp.timestamp.nanosec) / 1e9
+                    time_difference = (image_frame.stamp.nanosec -
+                                       self._previous_image_frame_stamp.stamp.nanosec) / 1e9
                 assert time_difference > 0, f'Time difference between frames was 0.'
-                x_dist, y_dist = distances(current_camera_global_position, previous_camera_global_position)  # TODO: compute x,y,z components separately!
-                z_dist = current_camera_global_position.alt - previous_camera_global_position.alt
+                x_dist, y_dist = distances(image_frame.position, self._previous_image_frame_stamp.position)  # TODO: compute x,y,z components separately!
+                z_dist = image_frame.position.alt - self._previous_image_frame_stamp.position.alt
                 dist = (x_dist, y_dist, z_dist)
                 assert all(isinstance(x, float) for x in dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
                 velocity = tuple(x / time_difference for x in dist)

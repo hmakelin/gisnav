@@ -896,8 +896,8 @@ class Matcher(Node):
             # The stuff below is all 2. and 4. (not 1. nor 3.)
 
             # Write data to GeoJSON for visualization and debugging in external GIS software
-            write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
-                                                     gimbal_fov_wgs84)
+            #write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
+            #                                         gimbal_fov_wgs84)
 
             local_position = self._local_frame_position(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84)),
                                                         camera_altitude)

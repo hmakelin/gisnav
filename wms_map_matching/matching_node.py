@@ -177,7 +177,7 @@ class Matcher(Node):
 
     @superglue.setter
     def superglue(self, value: SuperGlue) -> None:
-        assert_type(dict, value)
+        assert_type(SuperGlue, value)
         self._superglue = value
 
     @property
@@ -413,6 +413,7 @@ class Matcher(Node):
 
         return dst_corners
 
+    # TODO: this has no usages? Remove?
     def _vehicle_global_position_latlonalt(self) -> Optional[LatLonAlt]:
         """Returns vehicle global position as a LatLonAlt tuple."""
         if self.vehicle_global_position is None:
@@ -601,7 +602,7 @@ class Matcher(Node):
 
     def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""
-        self.vehicle_global_position = msg
+        self.vehicle_global_position = msg  # TODO: seems like self.vehicle_global_position property is never accessed currently, info only needed here to trigger _update_map? Comment out this variabhle completely?
         center = LatLon(msg.lat, msg.lon)
         origin = LatLonAlt(*(center + (msg.alt,)))
         if self._use_gimbal_projection():
@@ -744,27 +745,33 @@ class Matcher(Node):
     def _match(self, image_frame) -> None:
         """Matches camera image to map image and computes camera position and field of view."""
         try:
-            self.get_logger().debug('Matching image to map.')
+            # Vehicle local frame global reference position
+            local_frame_origin_position = self._vehicle_local_position_ref_latlonalt()
 
-            if self.map_frame is None:
-                self.get_logger().warn('Map not yet available - skipping matching.')
-                return
-            else:
-                if self.map_frame.image is None:
-                    # This happens e.g. if map frame was created but something went wrong with WMS request
-                    self.get_logger().warn('Map image not available - skipping matching.')
-                    return
+            # Camera information
+            camera_normal = self._get_camera_normal()
+            camera_yaw = self._camera_yaw()
+            camera_pitch = self._camera_pitch()
 
-            yaw = self._camera_yaw()
-            if yaw is None:
-                self.get_logger().warn('Could not get camera yaw. Skipping matching.')
-                return
-            rot = math.radians(yaw)
-            assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: ' + str(rot) + ' ([-pi, pi] expected).'
-            self.get_logger().debug('Current camera yaw: ' + str(rot) + ' radians.')
+            # Image and map raster information
+            map_dims_with_padding = self._map_dimensions_with_padding()
+            img_dimensions = self._img_dimensions()
 
-            map_cropped = rotate_and_crop_map(self.map_frame.image, rot, self._img_dimensions())
-            assert map_cropped.shape[0:2] == self._declared_img_size(), 'Cropped map did not match declared shape.'
+            # Make sure all info is available before attempting to match
+            required_info = [self.map_frame, local_frame_origin_position, self.camera_info,
+                             camera_normal, camera_yaw, camera_pitch, map_dims_with_padding, img_dimensions]
+            if not all(x is not None for x in required_info):
+                self.get_logger().warn(f'Cannot match - At least one of following was None: {required_info}.')
+                return None
+
+            self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
+            self.get_logger().debug(f'Current camera yaw: {camera_yaw} degrees.')
+            rot = math.radians(camera_yaw)
+            assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: {rot} ([-pi, pi] expected).'
+
+            map_cropped = rotate_and_crop_map(self.map_frame.image, rot, img_dimensions)
+            assert map_cropped.shape[0:2] == img_dimensions,\
+                f'Cropped map shape {map_cropped.shape} did not match image dimensions {img_dimensions}.'
 
             mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
 
@@ -774,18 +781,9 @@ class Matcher(Node):
                 self.get_logger().warn(f'Found {match_count_img} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
                 return
 
-            camera_normal = self._get_camera_normal()
-            if camera_normal is None:
-                self.get_logger().warn('Could not get camera normal. Skipping matching.')
-                return
-
-            if self.camera_info is None:
-                self.get_logger().warn('Could not get camera info. Skipping matching.')
-                return
             k = self.camera_info.k.reshape([3, 3])
-
-            h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal, affine=self._restrict_affine())
-
+            h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
+                                                                  affine=self._restrict_affine())
             assert_shape(h, (3, 3))
             assert_shape(t, (3, 1))
             assert_shape(r, (3, 3))
@@ -795,16 +793,6 @@ class Matcher(Node):
 
             map_lat, map_lon = get_bbox_center(BBox(*self.map_frame.bbox))
 
-            map_dims_with_padding = self._map_dimensions_with_padding()
-            if map_dims_with_padding is None:
-                self.get_logger().warn('Could not get map dimensions info. Skipping matching.')
-                return
-
-            img_dimensions = self._img_dimensions()
-            if map_dims_with_padding is None:
-                self.get_logger().warn('Could not get img dimensions info. Skipping matching.')
-                return
-
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
                 fov_pix, map_dims_with_padding, self.map_frame.bbox, rot, img_dimensions)
             image_frame.fov = fov_wgs84
@@ -813,10 +801,7 @@ class Matcher(Node):
             # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
             focal_length = k[0][0]
-            assert hasattr(img_dimensions, 'width') and hasattr(img_dimensions, 'height'), \
-                'Img dimensions did not have expected attributes.'
             camera_distance = get_camera_distance(focal_length, img_dimensions.width, fov_center_line_length)
-            camera_pitch = self._camera_pitch()
             camera_altitude = None
             if camera_pitch is None:
                 # TODO: Use some other method to estimate altitude if pitch not available?
@@ -853,9 +838,8 @@ class Matcher(Node):
 
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster
-            h, w = img_dimensions
-            t[0] = (1 - t[0]) * w / 2
-            t[1] = (1 - t[1]) * h / 2
+            t[0] = (1 - t[0]) * img_dimensions.width / 2
+            t[1] = (1 - t[1]) * img_dimensions.height / 2
             cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
                 np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
                 self.map_frame.bbox, rot, img_dimensions)
@@ -865,14 +849,14 @@ class Matcher(Node):
             image_frame.position = lalt
 
             fov_gimbal = self._gimbal_fov_wgs84
+            assert fov_gimbal is not None, f'For some reason projected gimbal fov (WGS84) was None.'
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
                                                      fov_gimbal)
 
             # Compute position (meters) and velocity (meters/second) in local frame
             local_position = None
-            local_frame_origin_latlonalt = self._vehicle_local_position_ref_latlonalt()
-            if local_frame_origin_latlonalt is not None:
-                local_position = distances(local_frame_origin_latlonalt, LatLon(*tuple(cam_pos_wgs84))) \
+            if local_frame_origin_position is not None:
+                local_position = distances(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84))) \
                                  + (camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
             else:
                 self.get_logger().debug(f'Could not get local frame origin - will not compute local position.')
@@ -907,7 +891,7 @@ class Matcher(Node):
                 self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
 
             self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
-            self.get_logger().debug(f'Local frame origin: {self._vehicle_local_position_ref_latlonalt()}.')
+            self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
             self._publish_vehicle_visual_odometry(local_position, velocity)
 
             self.previous_image_frame = image_frame

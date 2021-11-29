@@ -33,13 +33,21 @@ def assert_ndim(value: np.ndarray, ndim: int) -> None:
 
 def assert_len(value: Union[Sequence, Collection], len_: int):
     """Asserts a specific length for a sequence or a collection (e.g. a list)."""
-    assert len(value), f'Unexpected length: {len(value)} ({len_} expected).'
+    assert len(value) == len_, f'Unexpected length: {len(value)} ({len_} expected).'
 
 
 def assert_shape(value: np.ndarray, shape: tuple):
     """Asserts a specific shape for np.ndarray."""
-    assert len(value), f'Unexpected shape: {value.shape} ({shape} expected).'
+    assert value.shape == shape, f'Unexpected shape: {value.shape} ({shape} expected).'
 
+
+def assert_first_stamp_greater(stamp1: Time, stamp2: Time) -> None:
+    """Asserts that the first stamp is higher (later in time) than the second stamp."""
+    assertion_error_msg = f'stamp2 {stamp2} was >= than current image frame timestamp {stamp1}.'
+    if stamp1.sec == stamp2.sec:
+        assert stamp1.nanosec > stamp2.nanosec, assertion_error_msg
+    else:
+        assert stamp1.sec > stamp2.sec, assertion_error_msg
 
 #def assert_same_resolution(img1: np.ndarray, img2: np.ndarray):
 #    """Asserts that images have same resolution (but may have different number of channels)."""
@@ -381,7 +389,7 @@ def get_bbox_center(bbox):
     return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
-def rotate_and_crop_map(map, radians, dimensions, visualize=False):
+def rotate_and_crop_map(map: np.ndarray, radians: float, dimensions: Dimensions, visualize: bool = False) -> np.ndarray:
     # TODO: only tested on width>height images.
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
@@ -398,6 +406,7 @@ def rotate_and_crop_map(map, radians, dimensions, visualize=False):
         cv2.waitKey(1)
         cv2.imshow('cropped', map_cropped)
         cv2.waitKey(1)
+    assert map_cropped.shape[0:2] == dimensions, f'Cropped shape {map_cropped.shape} did not match dims {dimensions}.'
     return map_cropped
 
 

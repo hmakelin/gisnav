@@ -21,7 +21,8 @@ from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
-    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, MapFrame, MAP_RADIUS_METERS_DEFAULT
+    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame,\
+    MAP_RADIUS_METERS_DEFAULT
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition,\
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -758,29 +759,29 @@ class Matcher(Node):
             img_dimensions = self._img_dimensions()
 
             # Make sure all info is available before attempting to match
-            required_info = [self.map_frame, local_frame_origin_position, self.camera_info,
+            # TODO: _gimbal_fov_wgs84 should be handled in some better way - now we have a property jsut to pass it from update_map-> project_gimabal_fov to matcher (and matcher just writes it into file, does nothing else with it, could be written where it is created!)
+            required_info = [self.map_frame, local_frame_origin_position, self.camera_info, self._gimbal_fov_wgs84,
                              camera_normal, camera_yaw, camera_pitch, map_dims_with_padding, img_dimensions]
             if not all(x is not None for x in required_info):
                 self.get_logger().warn(f'Cannot match - At least one of following was None: {required_info}.')
                 return None
 
+            # Check that heading is valid
             self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
-            self.get_logger().debug(f'Current camera yaw: {camera_yaw} degrees.')
             rot = math.radians(camera_yaw)
             assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: {rot} ([-pi, pi] expected).'
 
+            # Get cropped and rotated map
             map_cropped = rotate_and_crop_map(self.map_frame.image, rot, img_dimensions)
-            assert map_cropped.shape[0:2] == img_dimensions,\
-                f'Cropped map shape {map_cropped.shape} did not match image dimensions {img_dimensions}.'
 
+            # Get matched keypoints and check that they seem valid
             mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
+            assert_len(mkp_img, len(mkp_map))
+            if len(mkp_img) < self.MINIMUM_MATCHES:
+                self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
+                return None
 
-            match_count_img = len(mkp_img)
-            assert match_count_img == len(mkp_map), 'Matched keypoint counts did not match.'
-            if match_count_img < self.MINIMUM_MATCHES:
-                self.get_logger().warn(f'Found {match_count_img} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
-                return
-
+            # Find and decompose homography matrix, do some sanity checks
             k = self.camera_info.k.reshape([3, 3])
             h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
                                                                   affine=self._restrict_affine())
@@ -788,28 +789,25 @@ class Matcher(Node):
             assert_shape(t, (3, 1))
             assert_shape(r, (3, 3))
 
+            # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
             fov_pix = get_fov(image_frame.image, h)
             visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
-
-            map_lat, map_lon = get_bbox_center(BBox(*self.map_frame.bbox))
-
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
                 fov_pix, map_dims_with_padding, self.map_frame.bbox, rot, img_dimensions)
             image_frame.fov = fov_wgs84
 
+
+            # Center of bbox  # TODO: is this needed?
+            map_lat, map_lon = get_bbox_center(BBox(*self.map_frame.bbox))
+
             # Compute camera altitude, and distance to principal point using triangle similarity
-            # TODO: _update_map has similar logic used in gimbal fov projection, try to combine
+            # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
             focal_length = k[0][0]
             camera_distance = get_camera_distance(focal_length, img_dimensions.width, fov_center_line_length)
-            camera_altitude = None
-            if camera_pitch is None:
-                # TODO: Use some other method to estimate altitude if pitch not available?
-                self.get_logger().warn('Camera pitch not available - cannot estimate altitude visually.')
-            else:
-                camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, distance to principal point {camera_distance} m,'
-                                    f' altitude {camera_altitude} m.')
+            camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
+            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}, distance to principal'
+                                    f'point {camera_distance} m, altitude {camera_altitude} m.')
 
             """
             mkp_map_uncropped = []
@@ -848,39 +846,24 @@ class Matcher(Node):
             lalt = LatLonAlt(*(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
             image_frame.position = lalt
 
-            fov_gimbal = self._gimbal_fov_wgs84
-            assert fov_gimbal is not None, f'For some reason projected gimbal fov (WGS84) was None.'
+            # Write data to GeoJSON for visualization and debugging in external GIS software
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
-                                                     fov_gimbal)
+                                                     self._gimbal_fov_wgs84)
 
             # Compute position (meters) and velocity (meters/second) in local frame
-            local_position = None
-            if local_frame_origin_position is not None:
-                local_position = distances(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84))) \
+            local_position = distances(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84))) \
                                  + (camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
-            else:
-                self.get_logger().debug(f'Could not get local frame origin - will not compute local position.')
 
             velocity = None
             if self.previous_image_frame is not None:
                 assert self.previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
                 assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-                assert hasattr(self.previous_image_frame, 'stamp'),\
-                    'Previous image frame timstamp not found.'  # TODO: is this assertion needed?
 
                 # TODO: refactor this assertion so that it's more compact
-                if self.previous_image_frame.stamp.sec == image_frame.stamp.sec:
-                    assert self.previous_image_frame.stamp.nanosec < image_frame.stamp.nanosec, \
-                        f'Previous image frame timestamp {self.previous_image_frame.stamp} was >= than ' \
-                        f'current image frame timestamp {image_frame.stamp}.'
-                else:
-                    assert self.previous_image_frame.stamp.sec < image_frame.stamp.sec,\
-                        f'Previous image frame timestamp {self.previous_image_frame.stamp} was >= than ' \
-                        f'current image frame timestamp {image_frame.stamp}.'
+                assert_first_stamp_greater(image_frame.stamp, self.previous_image_frame.stamp)
                 time_difference = image_frame.stamp.sec - self.previous_image_frame.stamp.sec
                 if time_difference == 0:
-                    time_difference = (image_frame.stamp.nanosec -
-                                       self.previous_image_frame.stamp.nanosec) / 1e9
+                    time_difference = (image_frame.stamp.nanosec - self.previous_image_frame.stamp.nanosec) / 1e9
                 assert time_difference > 0, f'Time difference between frames was 0.'
                 x_dist, y_dist = distances(image_frame.position, self.previous_image_frame.position)  # TODO: compute x,y,z components separately!
                 z_dist = image_frame.position.alt - self.previous_image_frame.position.alt

@@ -320,7 +320,7 @@ class Matcher(Node):
 
     def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
         """Sets up an rclpy subscriber."""
-        callback_name = '_' + topic_name.lower() + '_callback'
+        callback_name = topic_name.lower() + '_callback'
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)
@@ -493,7 +493,7 @@ class Matcher(Node):
         assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
             'Decoded map is not the specified size.'
 
-    def _image_raw_callback(self, msg: Image) -> None:
+    def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera."""
         self.get_logger().debug('Camera image callback triggered.')
         assert_type(Image, msg)
@@ -590,7 +590,7 @@ class Matcher(Node):
     def _yaw_index(self) -> int:
         return self.EULER_SEQUENCE.lower().find('x')
 
-    def _camera_info_callback(self, msg: CameraInfo) -> None:
+    def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message."""
         self.get_logger().debug(f'Camera info received:\n{msg}.')
         self.camera_info = msg
@@ -599,7 +599,7 @@ class Matcher(Node):
             self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
             camera_info_topic.destroy()
 
-    def _vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
+    def vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest VehicleLocalPosition message."""
         self.vehicle_local_position = msg
 
@@ -607,7 +607,7 @@ class Matcher(Node):
         """Returns map radius that determines map size for WMS map requests."""
         return MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
 
-    def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
+    def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""
         self.vehicle_global_position = msg  # TODO: seems like self.vehicle_global_position property is never accessed currently, info only needed here to trigger _update_map? Comment out this variabhle completely?
         center = LatLon(msg.lat, msg.lon)
@@ -626,15 +626,15 @@ class Matcher(Node):
         # TODO: based on some config variable, do not update map if center is very close to previous map frame center
         return True  # TODO: placeholder return value always True
 
-    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
+    def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message."""
         self.gimbal_device_attitude_status = msg
 
-    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
+    def gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
         """Handles latest GimbalDeviceSetAttitude message."""
         self.gimbal_device_set_attitude = msg
 
-    def _vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
+    def vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
         """Handles latest VehicleAttitude message."""
         self.vehicle_attitude = msg
 

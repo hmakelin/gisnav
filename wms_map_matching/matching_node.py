@@ -303,12 +303,12 @@ class Matcher(Node):
 
             publish = topic.get(self.PUBLISH_KEY, None)
             if publish is not None:
-                assert isinstance(publish, bool), f'Type {type(publish)} provided when bool was expected.'
+                assert_type(bool, publish)
                 self._topics.update({self.PUBLISH_KEY: {topic_name: self._create_publisher(topic_name, class_)}})
 
             subscribe = topic.get(self.SUBSCRIBE_KEY, None)
             if subscribe is not None:
-                assert isinstance(subscribe, bool), f'Type {type(subscribe)} provided when bool was expected.'
+                assert_type(bool, subscribe)
                 self._topics.update({self.SUBSCRIBE_KEY: {topic_name: self._create_subscriber(topic_name, class_)}})
 
         self.get_logger().info('Topics setup complete.')

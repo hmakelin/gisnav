@@ -878,31 +878,6 @@ class Matcher(Node):
             self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}rd, distance to principal'
                                     f'point {camera_distance} m, altitude {camera_altitude} m.')
 
-            """
-            mkp_map_uncropped = []
-            for i in range(0, len(mkp_map)):
-                mkp_map_uncropped.append(list(
-                    uncrop_pixel_coordinates(self._img_dimensions(), self._map_dimensions_with_padding(), mkp_map[i])))
-            mkp_map_uncropped = np.array(mkp_map_uncropped)
-
-            mkp_map_unrotated = []
-            for i in range(0, len(mkp_map_uncropped)):
-                mkp_map_unrotated.append(
-                    list(rotate_point(rot, self._map_dimensions_with_padding(), mkp_map_uncropped[i])))
-            mkp_map_unrotated = np.array(mkp_map_unrotated)
-
-            h2, h_mask2, translation_vector2, rotation_matrix2 = self._process_matches(mkp_img, mkp_map_unrotated,
-                                                                                 # mkp_map_uncropped,
-                                                                                 self._camera_info().k.reshape([3, 3]),
-                                                                                 cam_normal,
-                                                                                 affine=
-                                                                                 self._config['misc']['affine'])
-
-            fov_pix_2 = get_fov(self._cv_image, h2)
-            visualize_homography('Uncropped and unrotated', self._cv_image, self._map, mkp_img, mkp_map_unrotated,
-                                 fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
-            """
-
             # This computse 1. position and attaches it to image_frame
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster

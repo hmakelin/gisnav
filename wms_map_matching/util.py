@@ -365,7 +365,6 @@ def distances(latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAl
     """Calculate distance in meters in x and y dimensions of two LatLons."""
     assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
     assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
-    print(type(latlon2))
     g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
     lats1 = (latlon1.lat, latlon1.lat)
     lons1 = (latlon1.lon, latlon1.lon)

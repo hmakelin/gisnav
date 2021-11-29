@@ -689,11 +689,12 @@ class Matcher(Node):
         msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32 TODO: remove redundant np.float32?
         msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
 
-    def _camera_pitch(self) -> int:
+    def _camera_pitch(self) -> Optional[int]:
         """Returns camera pitch in degrees relative to vehicle frame."""
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
+            return None
         assert_type(RPY, rpy)
         return rpy.pitch
 
@@ -824,6 +825,44 @@ class Matcher(Node):
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
             return True, required_info + optional_info
 
+    @staticmethod
+    def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
+            -> LatLon:
+        """Returns camera position based on translation vector and metadata """
+        # This computse 1. position and attaches it to image_frame
+        # Convert translation vector to WGS84 coordinates
+        # Translate relative to top left corner, not principal point/center of map raster
+        t[0] = (1 - t[0]) * img_dim.width / 2
+        t[1] = (1 - t[1]) * img_dim.height / 2
+        # TODO: break this func into an array and single version?
+        cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
+            np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
+        cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
+        # TODO: something is wrong with camera_altitude - should be a scalar but is array
+        #latlonalt = LatLonAlt(
+        #    *(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
+        latlon = LatLon(*tuple(cam_pos_wgs84))
+        return latlon
+
+    @staticmethod
+    def _compute_camera_distance(fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
+        assert_type(np.ndarray, fov_wgs84)
+        assert_type(float, focal_length)
+        assert_type(Dim, img_dim)
+        fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
+        camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)  # TODO: move logic here, this is only place where this util function is used?
+        assert_type(float, camera_distance)
+        return camera_distance
+
+    @staticmethod
+    def _compute_camera_altitude(camera_distance: float, camera_pitch: float) -> float:
+        """Computes camera altitude based on input."""
+        camera_altitude = math.cos(math.radians(
+            camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
+        #self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}rd, distance to principal'
+        #                        f'point {camera_distance} m, altitude {camera_altitude} m.')
+        return camera_altitude
+
     # TODO: the 'output' of this function is that it attaches stuff to image_frame? or what does it do?
     # Current tasks too many:
     # 1. attach fov and position to image_frame
@@ -865,42 +904,23 @@ class Matcher(Node):
                 fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
             image_frame.fov = fov_wgs84
 
-            # Center of bbox  # TODO: is this needed?
-            map_lat, map_lon = get_bbox_center(BBox(*map_frame.bbox))
+            # Center of bbox
+            #map_lat, map_lon = get_bbox_center(BBox(*map_frame.bbox))
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
-            fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
-            focal_length = k[0][0]
-            camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)
-            camera_altitude = math.cos(math.radians(
-                camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}rd, distance to principal'
-                                    f'point {camera_distance} m, altitude {camera_altitude} m.')
+            camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
+            camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
 
-            # This computse 1. position and attaches it to image_frame
-            # Convert translation vector to WGS84 coordinates
-            # Translate relative to top left corner, not principal point/center of map raster
-            t[0] = (1 - t[0]) * img_dim.width / 2
-            t[1] = (1 - t[1]) * img_dim.height / 2
-            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
-                # TODO: break this func into an array and single version?
-                np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding,
-                map_frame.bbox, camera_yaw, img_dim)
-            cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
-            # TODO: something is wrong with camera_altitude - should be a scalar but is array
-            lalt = LatLonAlt(
-                *(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
-            image_frame.position = lalt
+            position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
+            local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+            image_frame.position = LatLonAlt(*(position + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
 
             # The stuff below is all 2. and 4. (not 1. nor 3.)
 
             # Write data to GeoJSON for visualization and debugging in external GIS software
             #write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
             #                                         gimbal_fov_wgs84)
-
-            local_position = self._local_frame_position(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84)),
-                                                        camera_altitude)
 
             velocity = None
             if previous_image_frame is not None:

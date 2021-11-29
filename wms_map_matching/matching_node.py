@@ -17,14 +17,14 @@ import cv2
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84,\
-    write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dimensions, rotate_and_crop_map, \
-    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox,\
-    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances,\
-    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame,\
+from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
+    write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dim, rotate_and_crop_map, \
+    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox, \
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances, \
+    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame, \
     MAP_RADIUS_METERS_DEFAULT
 
-from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition,\
+from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
 from sensor_msgs.msg import CameraInfo, Image
 
@@ -137,12 +137,12 @@ class Matcher(Node):
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
 
         # To be used for pyproj transformations
-        #self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
+        # self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
 
-        #self._image_frame = None  # Not currently used / needed
+        # self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
         self._map_frame = None  # Map raster received from WMS endpoint here along with its bounding box
-        #self._previous_map_frame  # Todo: to be used by _should_update_map()
+        # self._previous_map_frame  # Todo: to be used by _should_update_map()
 
         # Properties that are mapped to microRTPS topics
         self._camera_info = None
@@ -167,7 +167,7 @@ class Matcher(Node):
 
     @wms.setter
     def wms(self, value: WebMapService) -> None:
-        #assert_type(WebMapService, value)
+        # assert_type(WebMapService, value)
         # TODO: check that this is correct type - needs a bit more work than above,
         #  example: <owslib.map.wms111.WebMapService_1_1_1 object at 0x7f3e7e4e3e50>
         self._wms = value
@@ -344,23 +344,23 @@ class Matcher(Node):
             raise e
 
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
-        dim = self._img_dimensions()
+        dim = self._img_dim()
         if dim is None:
             self.get_logger().warn(f'Dimensions not available - returning None as map size.')
             return None
-        assert_type(Dimensions, dim)
+        assert_type(Dim, dim)
         diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
         assert_type(int, diagonal)  # TODO: What if this is float?
         return diagonal, diagonal
 
-    def _map_dimensions_with_padding(self) -> Optional[Dimensions]:
+    def _map_dim_with_padding(self) -> Optional[Dim]:
         map_size = self._map_size_with_padding()
         if map_size is None:
             self.get_logger().warn(f'Map size with padding not available - returning None as map dimensions.')
             return None
         assert_type(tuple, map_size)
         assert_len(map_size, 2)
-        return Dimensions(*map_size)
+        return Dim(*map_size)
 
     def _declared_img_size(self) -> Optional[Tuple[int, int]]:
         """Returns image resolution size as it is declared in the latest CameraInfo message."""
@@ -370,14 +370,14 @@ class Matcher(Node):
             self.get_logger().warn('Camera info was not available - returning None as declared image size.')
             return None
 
-    def _img_dimensions(self) -> Optional[Dimensions]:
+    def _img_dim(self) -> Optional[Dim]:
         declared_size = self._declared_img_size()
         if declared_size is None:
             self.get_logger().warn('CDeclared size not available - returning None as image dimensions.')
             return None
         assert_type(tuple, declared_size)
         assert_len(declared_size, 2)
-        return Dimensions(*declared_size)
+        return Dim(*declared_size)
 
     def _project_gimbal_fov(self, altitude_meters: float) -> Optional[np.ndarray]:
         """Returns field of view BBox projected using gimbal attitude and camera intrinsics information."""
@@ -393,7 +393,7 @@ class Matcher(Node):
         if self.camera_info is None:
             self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
             return None
-        h, w = self._img_dimensions()
+        h, w = self._img_dim()
         # TODO: assert h w not none and integers? and divisible by 2?
 
         # Intrinsic matrix
@@ -445,7 +445,7 @@ class Matcher(Node):
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
                 azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
-                dists = list(map(lambda x: math.sqrt(x[0]**2 + x[1]**2), gimbal_fov_pix))
+                dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(move_distance, origin)
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
@@ -490,7 +490,7 @@ class Matcher(Node):
         assert_type(np.ndarray, map_)
         assert_ndim(map_, 3)
         self.map_frame = MapFrame(center, radius, bbox, map_)
-        assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(),\
+        assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
             'Decoded map is not the specified size.'
 
     def _image_raw_callback(self, msg: Image) -> None:
@@ -507,7 +507,13 @@ class Matcher(Node):
                                              f'shape {img_size}.'
 
         image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
-        self._match(image_frame)
+
+        # Check whether we can do matching
+        pass_, inputs = self._match_inputs()
+        if not pass_:
+            self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
+            return None
+        self._match(image_frame, *inputs)
 
     def _camera_yaw(self) -> Optional[int]:
         """Returns camera yaw in degrees."""
@@ -558,7 +564,7 @@ class Matcher(Node):
 
         return rpy
 
-    def _get_camera_normal(self) -> Optional[np.ndarray]:
+    def _camera_normal(self) -> Optional[np.ndarray]:
         nadir = np.array([0, 0, 1])
         rpy = self._get_camera_rpy()
         if rpy is None:
@@ -574,7 +580,7 @@ class Matcher(Node):
         # TODO: this assertion is arbitrary? how to handle unexpected camera normal length?
         # TODO: may have to raise error here - dont know what to do, this assertion could trigger an error
         camera_normal_length = np.linalg.norm(camera_normal)
-        assert abs(camera_normal_length-1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
+        assert abs(camera_normal_length - 1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
 
         return camera_normal
 
@@ -635,7 +641,7 @@ class Matcher(Node):
     def _publish_vehicle_visual_odometry(self, position: tuple, velocity: tuple) -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
         https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
-        module_name = 'px4_msgs.msg'   #TODO: get ffrom config file
+        module_name = 'px4_msgs.msg'  # TODO: get ffrom config file
         class_name = 'VehicleVisualOdometry'  # TODO: get from config file or look at _import_class stuff in this file
         assert VehicleVisualOdometry is not None, f'{class_name} was not found in module {module_name}.'
         msg = VehicleVisualOdometry()
@@ -652,18 +658,19 @@ class Matcher(Node):
 
         # Position
         if position is not None:
-            assert len(position) == 3, f'Unexpected length for position estimate: {len(position)} (3 expected).'  # TODO: can also be length 2 if altitude is not published, handle that
+            assert len(
+                position) == 3, f'Unexpected length for position estimate: {len(position)} (3 expected).'  # TODO: can also be length 2 if altitude is not published, handle that
             assert all(isinstance(x, float) for x in position), f'Position contained non-float elements.'
             # TODO: check for np.float32?
             msg.x, msg.y, msg.z = position  # float32 North, East, Down
         else:
             self.get_logger().warn('Position tuple was None - publishing NaN as position.')
-            msg.x, msg.y, msg.z = (float('nan'), ) * 3  # float32 North, East, Down
+            msg.x, msg.y, msg.z = (float('nan'),) * 3  # float32 North, East, Down
 
         # Attitude quaternions - not used
-        msg.q = (float('nan'), ) * 4  # float32
-        msg.q_offset = (float('nan'), ) * 4
-        msg.pose_covariance = (float('nan'), ) * 21
+        msg.q = (float('nan'),) * 4  # float32
+        msg.q_offset = (float('nan'),) * 4
+        msg.pose_covariance = (float('nan'),) * 21
 
         # Velocity frame of reference
         msg.velocity_frame = self.LOCAL_FRAME_NED  # uint8
@@ -676,11 +683,11 @@ class Matcher(Node):
             msg.vx, msg.vy, msg.vz = velocity  # float32 North, East, Down
         else:
             self.get_logger().warn('Velocity tuple was None - publishing NaN as velocity.')
-            msg.vx, msg.vy, msg.vz = (float('nan'), ) * 3  # float32 North, East, Down
+            msg.vx, msg.vy, msg.vz = (float('nan'),) * 3  # float32 North, East, Down
 
         # Angular velocity - not used
-        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'), ) * 3  # float32 TODO: remove redundant np.float32?
-        msg.velocity_covariance = (float('nan'), ) * 21  # float32 North, East, Down
+        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32 TODO: remove redundant np.float32?
+        msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
 
     def _camera_pitch(self) -> int:
         """Returns camera pitch in degrees relative to vehicle frame."""
@@ -743,36 +750,67 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
-    def _match(self, image_frame) -> None:
+    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, CameraInfo, np.ndarray, np.ndarray,
+                                                 float, float, Dim, Dim, bool, Optional[np.ndarray]]]:
+        """Returns success, data where success is False if there are any Nones in the list.
+
+        This performs a check that all required data is available for performing a _match.
+
+        Data consists of:
+            map_frame - np.darray map_frame to match
+            local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
+            camera_info - CameraInfo
+            gimbal_fov_wgs4 - np.ndarray Gimbal FoV projection to ground
+            camera_normal - np.ndarray Camera normal unit vector
+            camera_yaw - float
+            camera_pitch - float
+            map_dim_with_padding - Dim map dimensions including padding for rotation
+            img_dim - Dim image dimensions
+            restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
+            previous_image_frame - Optional[np.ndarray], previous image frame, if available, None otherwise
+        """
+        # Vehicle local frame global reference position
+        local_frame_origin_position = self._vehicle_local_position_ref_latlonalt()
+
+        # Camera information
+        camera_normal, camera_yaw, camera_pitch = self._camera_normal(), self._camera_yaw(), self._camera_pitch()
+
+        # Image and map raster dimensions
+        map_dim_with_padding, img_dim = self._map_dim_with_padding(), self._img_dim()
+
+        # Should homography be restricted to 2D affine transformation
+        restrict_affine = self._restrict_affine()
+
+        # Make sure all info is available before attempting to match
+        # TODO: _gimbal_fov_wgs84 should be handled in some better way - now we have a property jsut to pass it from update_map-> project_gimabal_fov to matcher (and matcher just writes it into file, does nothing else with it, could be written where it is created!)
+        required_info = (self.map_frame, local_frame_origin_position, self.camera_info, self._gimbal_fov_wgs84,
+                         camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
+        optional_info = (self.previous_image_frame, )
+
+        if not all(x is not None for x in required_info):
+            self.get_logger().warn(f'At least one of following was None: {required_info}. Cannot do matching.')
+            return False, required_info + optional_info
+        else:
+            assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
+            return True, required_info + optional_info
+
+    # TODO: the 'output' of this function is that it attaches stuff to image_frame? or what does it do?
+    # Current tasks too many:
+    # 1. attach fov and position to image_frame
+    # 2. COmpute and publish position and velocity,
+    # 3. Visualize homography,
+    # 4. Output fov and position as geoJSON
+    def _match(self, image_frame: np.ndarray, map_frame: np.ndarray, local_frame_origin_position: LatLonAlt,
+               camera_info: CameraInfo, gimbal_fov_wgs84: np.ndarray, camera_normal: np.ndarray, camera_yaw: float,
+               camera_pitch: float, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+               previous_image_frame: Optional[np.ndarray]) -> None:
         """Matches camera image to map image and computes camera position and field of view."""
         try:
-            # Vehicle local frame global reference position
-            local_frame_origin_position = self._vehicle_local_position_ref_latlonalt()
-
-            # Camera information
-            camera_normal = self._get_camera_normal()
-            camera_yaw = self._camera_yaw()
-            camera_pitch = self._camera_pitch()
-
-            # Image and map raster information
-            map_dims_with_padding = self._map_dimensions_with_padding()
-            img_dimensions = self._img_dimensions()
-
-            # Make sure all info is available before attempting to match
-            # TODO: _gimbal_fov_wgs84 should be handled in some better way - now we have a property jsut to pass it from update_map-> project_gimabal_fov to matcher (and matcher just writes it into file, does nothing else with it, could be written where it is created!)
-            required_info = [self.map_frame, local_frame_origin_position, self.camera_info, self._gimbal_fov_wgs84,
-                             camera_normal, camera_yaw, camera_pitch, map_dims_with_padding, img_dimensions]
-            if not all(x is not None for x in required_info):
-                self.get_logger().warn(f'Cannot match - At least one of following was None: {required_info}.')
-                return None
-
-            # Check that heading is valid
             self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
-            rot = math.radians(camera_yaw)
-            assert -math.pi <= rot <= math.pi, 'Unexpected gimbal yaw value: {rot} ([-pi, pi] expected).'
+            camera_yaw = math.radians(camera_yaw)
 
             # Get cropped and rotated map
-            map_cropped = rotate_and_crop_map(self.map_frame.image, rot, img_dimensions)
+            map_cropped = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
 
             # Get matched keypoints and check that they seem valid
             mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
@@ -782,31 +820,32 @@ class Matcher(Node):
                 return None
 
             # Find and decompose homography matrix, do some sanity checks
-            k = self.camera_info.k.reshape([3, 3])
+            k = camera_info.k.reshape([3, 3])
             h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
-                                                                  affine=self._restrict_affine())
+                                                                  affine=restrict_affine)
             assert_shape(h, (3, 3))
             assert_shape(t, (3, 1))
             assert_shape(r, (3, 3))
 
+            # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
             # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
             fov_pix = get_fov(image_frame.image, h)
             visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
             fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
-                fov_pix, map_dims_with_padding, self.map_frame.bbox, rot, img_dimensions)
+                fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
             image_frame.fov = fov_wgs84
 
-
             # Center of bbox  # TODO: is this needed?
-            map_lat, map_lon = get_bbox_center(BBox(*self.map_frame.bbox))
+            map_lat, map_lon = get_bbox_center(BBox(*map_frame.bbox))
 
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
             fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
             focal_length = k[0][0]
-            camera_distance = get_camera_distance(focal_length, img_dimensions.width, fov_center_line_length)
-            camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}, distance to principal'
+            camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)
+            camera_altitude = math.cos(math.radians(
+                camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
+            self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}rd, distance to principal'
                                     f'point {camera_distance} m, altitude {camera_altitude} m.')
 
             """
@@ -834,41 +873,49 @@ class Matcher(Node):
                                  fov_pix_2)  # TODO: separate calculation of fov_pix from their visualization!
             """
 
+            # This computse 1. position and attaches it to image_frame
             # Convert translation vector to WGS84 coordinates
             # Translate relative to top left corner, not principal point/center of map raster
-            t[0] = (1 - t[0]) * img_dimensions.width / 2
-            t[1] = (1 - t[1]) * img_dimensions.height / 2
-            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(  # TODO: break this func into an array and single version?
-                np.array(t[0:2].reshape((1, 1, 2))), map_dims_with_padding,
-                self.map_frame.bbox, rot, img_dimensions)
+            t[0] = (1 - t[0]) * img_dim.width / 2
+            t[1] = (1 - t[1]) * img_dim.height / 2
+            cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
+                # TODO: break this func into an array and single version?
+                np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding,
+                map_frame.bbox, camera_yaw, img_dim)
             cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
             # TODO: something is wrong with camera_altitude - should be a scalar but is array
-            lalt = LatLonAlt(*(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
+            lalt = LatLonAlt(
+                *(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
             image_frame.position = lalt
+
+            # The stuff below is all 2. and 4. (not 1. nor 3.)
 
             # Write data to GeoJSON for visualization and debugging in external GIS software
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
-                                                     self._gimbal_fov_wgs84)
+                                                     gimbal_fov_wgs84)
 
             # Compute position (meters) and velocity (meters/second) in local frame
             local_position = distances(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84))) \
-                                 + (camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
+                             + (
+                             camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
 
             velocity = None
-            if self.previous_image_frame is not None:
-                assert self.previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+            if previous_image_frame is not None:
+                assert previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
                 assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
 
                 # TODO: refactor this assertion so that it's more compact
-                assert_first_stamp_greater(image_frame.stamp, self.previous_image_frame.stamp)
-                time_difference = image_frame.stamp.sec - self.previous_image_frame.stamp.sec
+                assert_first_stamp_greater(image_frame.stamp, previous_image_frame.stamp)
+                time_difference = image_frame.stamp.sec - previous_image_frame.stamp.sec
                 if time_difference == 0:
-                    time_difference = (image_frame.stamp.nanosec - self.previous_image_frame.stamp.nanosec) / 1e9
+                    time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
                 assert time_difference > 0, f'Time difference between frames was 0.'
-                x_dist, y_dist = distances(image_frame.position, self.previous_image_frame.position)  # TODO: compute x,y,z components separately!
-                z_dist = image_frame.position.alt - self.previous_image_frame.position.alt
+                x_dist, y_dist = distances(image_frame.position,
+                                           previous_image_frame.position)  # TODO: compute x,y,z components separately!
+                z_dist = image_frame.position.alt - previous_image_frame.position.alt
                 dist = (x_dist, y_dist, z_dist)
-                assert all(isinstance(x, float) for x in dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
+                assert all(isinstance(x, float) for x in
+                           dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
                 velocity = tuple(x / time_difference for x in dist)
             else:
                 self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')

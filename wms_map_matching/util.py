@@ -17,7 +17,7 @@ from builtin_interfaces.msg._time import Time  # Need this for type checking in 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
-Dimensions = namedtuple('Dimensions', 'height width')  # TODO: Rename this HeightWidth so that order between Height and widht does not accidentally get mixed up?
+Dim = namedtuple('Dim', 'height width')  # TODO: Rename this HeightWidth so that order between Height and widht does not accidentally get mixed up?
 RPY = namedtuple('RPY', 'roll pitch yaw')
 
 
@@ -389,7 +389,7 @@ def get_bbox_center(bbox):
     return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
-def rotate_and_crop_map(map: np.ndarray, radians: float, dimensions: Dimensions, visualize: bool = False) -> np.ndarray:
+def rotate_and_crop_map(map: np.ndarray, radians: float, dimensions: Dim, visualize: bool = False) -> np.ndarray:
     # TODO: only tested on width>height images.
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 

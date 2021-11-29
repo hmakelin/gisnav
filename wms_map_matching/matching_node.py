@@ -129,6 +129,8 @@ class Matcher(Node):
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
+        # Setup SuperGlue
+        self._superglue = None
         self._setup_superglue()
 
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
@@ -136,8 +138,10 @@ class Matcher(Node):
         # To be used for pyproj transformations
         #self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
 
+        #self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
         self._map_frame = None  # Map raster received from WMS endpoint here along with its bounding box
+        #self._previous_map_frame  # Todo: to be used by _should_update_map()
 
         # Properties that are mapped to microRTPS topics
         self._camera_info = None
@@ -166,6 +170,15 @@ class Matcher(Node):
         # TODO: check that this is correct type - needs a bit more work than above,
         #  example: <owslib.map.wms111.WebMapService_1_1_1 object at 0x7f3e7e4e3e50>
         self._wms = value
+
+    @property
+    def superglue(self) -> SuperGlue:
+        return self._superglue
+
+    @superglue.setter
+    def superglue(self, value: SuperGlue) -> None:
+        assert_type(dict, value)
+        self._superglue = value
 
     @property
     def share_dir(self) -> str:
@@ -248,8 +261,8 @@ class Matcher(Node):
         self._gimbal_device_set_attitude = value
 
     def _setup_superglue(self) -> None:
-        """Sets up SuperGlue."""  # TODO: make all these private?
-        self._superglue = SuperGlue(self._config['superglue'], self.get_logger())
+        """Sets up SuperGlue."""
+        self.superglue = SuperGlue(self._config['superglue'], self.get_logger())
 
     def _load_config(self, yaml_file: str) -> None:
         """Loads config from the provided YAML file."""

@@ -750,6 +750,36 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
+    @staticmethod
+    def _local_frame_position(local_frame_origin: LatLonAlt, camera_position: LatLon, camera_altitude: float) \
+            -> Tuple[float, float, float]:
+        """Returns camera position tuple (x, y) in meters in local frame."""
+        assert_type(LatLonAlt, local_frame_origin)
+        assert_type(LatLon, camera_position)
+        assert_type(float, camera_altitude)
+        return distances(local_frame_origin, camera_position) + (camera_altitude,)
+
+    @staticmethod
+    def _local_frame_velocity(image_frame: ImageFrame, previous_image_frame: ImageFrame)\
+            -> Tuple[float, float, Optional[float]]:
+        """Computes velocity in meters per second for position between two image frames."""
+        assert_type(ImageFrame, image_frame)
+        assert_type(ImageFrame, previous_image_frame)
+        assert previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+        assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
+        assert_first_stamp_greater(image_frame.stamp, previous_image_frame.stamp)
+        time_difference = image_frame.stamp.sec - previous_image_frame.stamp.sec
+        if time_difference == 0:
+            time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
+        assert time_difference > 0, f'Time difference between frames was 0.'
+        x_dist, y_dist = distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
+        z_dist = image_frame.position.alt - previous_image_frame.position.alt
+        dist = (x_dist, y_dist, z_dist)
+        assert all(isinstance(x, float) for x in
+                   dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
+        velocity = tuple(x / time_difference for x in dist)
+        return velocity[0], velocity[1], velocity[2]  # Do this way to get rid of warning
+
     def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, CameraInfo, np.ndarray, np.ndarray,
                                                  float, float, Dim, Dim, bool, Optional[np.ndarray]]]:
         """Returns success, data where success is False if there are any Nones in the list.
@@ -894,29 +924,12 @@ class Matcher(Node):
             write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
                                                      gimbal_fov_wgs84)
 
-            # Compute position (meters) and velocity (meters/second) in local frame
-            local_position = distances(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84))) \
-                             + (
-                             camera_altitude,)  # TODO: see lalt and set_esitmated_camera_position call above - should not need to do this twice?
+            local_position = self._local_frame_position(local_frame_origin_position, LatLon(*tuple(cam_pos_wgs84)),
+                                                        camera_altitude)
 
             velocity = None
             if previous_image_frame is not None:
-                assert previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-                assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-
-                # TODO: refactor this assertion so that it's more compact
-                assert_first_stamp_greater(image_frame.stamp, previous_image_frame.stamp)
-                time_difference = image_frame.stamp.sec - previous_image_frame.stamp.sec
-                if time_difference == 0:
-                    time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
-                assert time_difference > 0, f'Time difference between frames was 0.'
-                x_dist, y_dist = distances(image_frame.position,
-                                           previous_image_frame.position)  # TODO: compute x,y,z components separately!
-                z_dist = image_frame.position.alt - previous_image_frame.position.alt
-                dist = (x_dist, y_dist, z_dist)
-                assert all(isinstance(x, float) for x in
-                           dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
-                velocity = tuple(x / time_difference for x in dist)
+                velocity = self._local_frame_velocity(image_frame, previous_image_frame)
             else:
                 self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
 

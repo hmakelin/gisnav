@@ -6,7 +6,7 @@ import os
 import math
 import geojson
 
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, get_args
 from functools import partial
 from shapely.ops import transform
 from shapely.geometry import Point
@@ -361,8 +361,11 @@ def get_distance_of_fov_center(fov_wgs84):
     return dist
 
 
-def distances(latlon1, latlon2):
+def distances(latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
     """Calculate distance in meters in x and y dimensions of two LatLons."""
+    assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
+    assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
+    print(type(latlon2))
     g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
     lats1 = (latlon1.lat, latlon1.lat)
     lons1 = (latlon1.lon, latlon1.lon)

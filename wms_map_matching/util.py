@@ -201,18 +201,6 @@ def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corn
     return out
 
 
-def move_distance(latlon: LatLonAlt, azmth_dist: Tuple[float, float]) -> LatLon:
-    """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
-    assert_type(tuple, azmth_dist)
-    assert_type(LatLonAlt, latlon)  # TODO: accept both LatLon and LatLonAlt
-    azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
-    assert_type(float, azmth)
-    assert_type(float, dist)
-    g = pyproj.Geod(ellps='WGS84')
-    lon, lat, azmth = g.fwd(latlon.lon, latlon.lat, azmth, dist)
-    return LatLon(lat, lon)
-
-
 def get_fov(img_arr: np.ndarray, h_mat: np.ndarray) -> np.ndarray:
     """Calculates field of view (FoV) corners from homography and image shape."""
     assert_type(np.ndarray, img_arr)
@@ -352,34 +340,6 @@ def get_camera_distance(focal_length, pixels, ground_truth):
     return ground_truth * focal_length / pixels
 
 
-def get_distance_of_fov_center(fov_wgs84):
-    """Calculate distance between middle of sides of FoV based on triangle similarity."""
-    midleft = ((fov_wgs84[0] + fov_wgs84[1])*0.5).squeeze()
-    midright = ((fov_wgs84[2] + fov_wgs84[3])*0.5).squeeze()
-    g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
-    _, __, dist = g.inv(midleft[1], midleft[0], midright[1], midright[0]) # TODO: use distance method here
-    return dist
-
-
-def distances(latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
-    """Calculate distance in meters in x and y dimensions of two LatLons."""
-    assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
-    assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
-    g = pyproj.Geod(ellps='clrk66')  # TODO: this could be stored in Matcher and this could be a private method there
-    lats1 = (latlon1.lat, latlon1.lat)
-    lons1 = (latlon1.lon, latlon1.lon)
-    lats2 = (latlon1.lat, latlon2.lat)  # Lon difference for first, lat difference for second --> first: y, second: x
-    lons2 = (latlon2.lon, latlon1.lon)
-    _, __, dist = g.inv(lons1, lats1, lons2, lats2)
-    dist = (-dist[1], dist[0])  # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions, invert X axis so that it points north
-    return dist
-
-
-def distance(latlon1, latlon2):
-    """Calculate distance in meters between two latlons."""
-    g = pyproj.Geod(ellps='clrk66')
-    _, __, dist = g.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
-    return dist
 
 def altitude_from_gimbal_pitch(pitch_degrees, distance):
     """Returns camera altitude if gimbal pitch and distance to center of FoV is known."""

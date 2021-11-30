@@ -6,8 +6,9 @@ import yaml
 import importlib
 import math
 import time
+import pyproj
 
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, get_args
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
@@ -19,9 +20,9 @@ from scipy.spatial.transform import Rotation
 from functools import partial
 from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dim, rotate_and_crop_map, \
-    visualize_homography, get_fov, get_camera_distance, get_distance_of_fov_center, LatLon, fov_to_bbox, \
-    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, move_distance, RPY, LatLonAlt, distances, \
-    ImageFrame, distance, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame, \
+    visualize_homography, get_fov, get_camera_distance, LatLon, fov_to_bbox, \
+    get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, RPY, LatLonAlt, \
+    ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame, \
     MAP_RADIUS_METERS_DEFAULT
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
@@ -49,7 +50,10 @@ class Matcher(Node):
     LOCAL_FRAME_NED = 0
 
     # Maximum radius for map requests (in meters)
-    MAX_MAP_RADIUS = 1000  # TODO: put default into config.yaml, make a ROS param so it can be changed on the fly
+    MAX_MAP_RADIUS = 1000  # TODO: put default into config.yaml, make them all ROS params so they can be changed on the fly
+
+    # Ellipsoid model used by pyproj
+    PYPROJ_ELLIPSOID = 'WGS84'
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
@@ -137,7 +141,7 @@ class Matcher(Node):
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
 
         # To be used for pyproj transformations
-        # self._g = pyproj.Geod(ellps='clrk66')  # TODO: move pyproj stuff from util.py here under Matcher() class
+        self._g = pyproj.Geod(ellps=self.PYPROJ_ELLIPSOID)
 
         # self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
@@ -167,6 +171,7 @@ class Matcher(Node):
 
     @wms.setter
     def wms(self, value: WebMapService) -> None:
+        # TODO: is this setter even needed, this is done during Matcher initialization?
         # assert_type(WebMapService, value)
         # TODO: check that this is correct type - needs a bit more work than above,
         #  example: <owslib.map.wms111.WebMapService_1_1_1 object at 0x7f3e7e4e3e50>
@@ -180,6 +185,10 @@ class Matcher(Node):
     def superglue(self, value: SuperGlue) -> None:
         assert_type(SuperGlue, value)
         self._superglue = value
+
+    @property
+    def g(self) -> pyproj.Geod:
+        return self._g
 
     @property
     def share_dir(self) -> str:
@@ -343,6 +352,44 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
+    def get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
+        """Calculate distance between middle of sides of FoV based on triangle similarity."""
+        midleft = ((fov_wgs84[0] + fov_wgs84[1]) * 0.5).squeeze()
+        midright = ((fov_wgs84[2] + fov_wgs84[3]) * 0.5).squeeze()
+        _, __, dist = self.g.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
+        return dist
+
+    def distances(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
+        """Calculate distance in meters in x and y dimensions of two LatLons."""
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
+        lats1 = (latlon1.lat, latlon1.lat)
+        lons1 = (latlon1.lon, latlon1.lon)
+        lats2 = (latlon1.lat, latlon2.lat)  # Lon difference for first, lat difference for second --> y, x
+        lons2 = (latlon2.lon, latlon1.lon)
+        _, __, dist = self.g.inv(lons1, lats1, lons2, lats2)
+
+        # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions,
+        # also invert X axis so that it points north
+        dist = (-dist[1], dist[0])
+        return dist
+
+    #def distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
+    #    """Calculate distance in meters between two latlons."""
+    #    _, __, dist = self.g.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
+    #    return dist
+
+    def move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[float, float]) -> LatLon:
+        """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
+        assert_type(tuple, azmth_dist)
+        assert_type(LatLonAlt, latlon)  # TODO: accept both LatLon and LatLonAlt
+        azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
+        assert_type(float, azmth)
+        assert_type(float, dist)
+        g = pyproj.Geod(ellps='WGS84')
+        lon, lat, azmth = g.fwd(latlon.lon, latlon.lat, azmth, dist)
+        return LatLon(lat, lon)
+
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         dim = self._img_dim()
         if dim is None:
@@ -447,7 +494,7 @@ class Matcher(Node):
                 azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
-                to_wgs84 = partial(move_distance, origin)
+                to_wgs84 = partial(self.move_distance, origin)
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
@@ -478,7 +525,7 @@ class Matcher(Node):
         assert_type(str, srs_str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
-            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),
+            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),
                                     format='image/png', transparent=True)
         except Exception as e:
             self.get_logger().warn(f'Exception from WMS server query:\n{e},\n{traceback.print_exc()}.')
@@ -751,17 +798,15 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
-    @staticmethod
-    def _local_frame_position(local_frame_origin: LatLonAlt, camera_position: LatLon, camera_altitude: float) \
+    def _local_frame_position(self, local_frame_origin: LatLonAlt, camera_position: LatLon, camera_altitude: float) \
             -> Tuple[float, float, float]:
         """Returns camera position tuple (x, y) in meters in local frame."""
         assert_type(LatLonAlt, local_frame_origin)
         assert_type(LatLon, camera_position)
         assert_type(float, camera_altitude)
-        return distances(local_frame_origin, camera_position) + (camera_altitude,)
+        return self.distances(local_frame_origin, camera_position) + (camera_altitude,)
 
-    @staticmethod
-    def _local_frame_velocity(image_frame: ImageFrame, previous_image_frame: ImageFrame)\
+    def _local_frame_velocity(self, image_frame: ImageFrame, previous_image_frame: ImageFrame)\
             -> Tuple[float, float, Optional[float]]:
         """Computes velocity in meters per second for position between two image frames."""
         assert_type(ImageFrame, image_frame)
@@ -773,7 +818,7 @@ class Matcher(Node):
         if time_difference == 0:
             time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
         assert time_difference > 0, f'Time difference between frames was 0.'
-        x_dist, y_dist = distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
+        x_dist, y_dist = self.distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
         z_dist = image_frame.position.alt - previous_image_frame.position.alt
         dist = (x_dist, y_dist, z_dist)
         assert all(isinstance(x, float) for x in
@@ -844,12 +889,11 @@ class Matcher(Node):
         latlon = LatLon(*tuple(cam_pos_wgs84))
         return latlon
 
-    @staticmethod
-    def _compute_camera_distance(fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
+    def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
         assert_type(np.ndarray, fov_wgs84)
         assert_type(float, focal_length)
         assert_type(Dim, img_dim)
-        fov_center_line_length = get_distance_of_fov_center(fov_wgs84)
+        fov_center_line_length = self.get_distance_of_fov_center(fov_wgs84)
         camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)  # TODO: move logic here, this is only place where this util function is used?
         assert_type(float, camera_distance)
         return camera_distance

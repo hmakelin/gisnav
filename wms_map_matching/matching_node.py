@@ -8,8 +8,6 @@ import math
 import time
 
 from pyproj import Geod, Proj, transform
-from shapely.ops import transform as shapely_transform
-from shapely.geometry import Point
 from typing import Optional, Union, Tuple, get_args
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -146,7 +144,6 @@ class Matcher(Node):
 
         # To be used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
-        self._proj_wgs84 = Proj('+proj=longlat +datum=WGS84')
 
         # self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
@@ -194,10 +191,6 @@ class Matcher(Node):
     @property
     def geod(self) -> Geod:
         return self._geod
-
-    @property
-    def proj_wgs84(self) -> Proj:
-        return self._proj_wgs84
 
     @property
     def share_dir(self) -> str:
@@ -363,7 +356,8 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
-    def get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: int = MAP_RADIUS_METERS_DEFAULT) -> BBox:
+    def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Union[int, float] = MAP_RADIUS_METERS_DEFAULT)\
+            -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
 
         Uses azimuthal equidistant projection. Based on Mike T's answer at
@@ -377,23 +371,19 @@ class Matcher(Node):
             The bounding box (left, bottom, right, top).
         """
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
-        assert_type(int, radius_meters)
-        proj_str = f'+proj=aeqd +lat_0={latlon.lat} +lon_0={latlon.lon} +x_0=0 +y_0=0'
-        projection = partial(transform, Proj(proj_str), self.proj_wgs84)
-        circle = Point(0, 0).buffer(radius_meters)
-        circle_transformed = shapely_transform(projection, circle).exterior.coords[:]
-        lons_lats = list(zip(*circle_transformed))
-        assert all(isinstance(x, tuple) for x in lons_lats), f'Expected all items to be of type tuple in {lons_lats}.'
-        return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
+        assert_type(get_args(Union[int, float]), radius_meters)
+        ul = self._move_distance(latlon, (-45, radius_meters))
+        lr = self._move_distance(latlon, (135, radius_meters))
+        return BBox(ul.lon, lr.lat, lr.lon, ul.lat)
 
-    def get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
+    def _get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
         """Calculate distance between middle of sides of FoV based on triangle similarity."""
         midleft = ((fov_wgs84[0] + fov_wgs84[1]) * 0.5).squeeze()
         midright = ((fov_wgs84[2] + fov_wgs84[3]) * 0.5).squeeze()
         _, __, dist = self.geod.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
         return dist
 
-    def distances(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
+    def _distances(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
         """Calculate distance in meters in x and y dimensions of two LatLons."""
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
@@ -413,13 +403,14 @@ class Matcher(Node):
     #    _, __, dist = self.g.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
     #    return dist
 
-    def move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[float, float]) -> LatLon:
+    def _move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[Union[int, float], Union[int, float]])\
+            -> LatLon:
         """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
         assert_type(tuple, azmth_dist)
-        assert_type(LatLonAlt, latlon)  # TODO: accept both LatLon and LatLonAlt
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)  # TODO: accept both LatLon and LatLonAlt
         azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
-        assert_type(float, azmth)
-        assert_type(float, dist)
+        assert_type(get_args(Union[int, float]), azmth)
+        assert_type(get_args(Union[int, float]), dist)
         lon, lat, azmth = self.geod.fwd(latlon.lon, latlon.lat, azmth, dist)
         return LatLon(lat, lon)
 
@@ -527,7 +518,7 @@ class Matcher(Node):
                 azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
-                to_wgs84 = partial(self.move_distance, origin)
+                to_wgs84 = partial(self._move_distance, origin)
                 self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
@@ -548,7 +539,7 @@ class Matcher(Node):
         assert_type(int, radius)
         assert 0 < radius < self.MAX_MAP_RADIUS, f'Radius should be between 0 and {self.MAX_MAP_RADIUS}.'
 
-        bbox = self.get_bbox(center)
+        bbox = self._get_bbox(center)
         assert_type(BBox, bbox)
 
         # Build and send WMS request
@@ -837,7 +828,7 @@ class Matcher(Node):
         assert_type(LatLonAlt, local_frame_origin)
         assert_type(LatLon, camera_position)
         assert_type(float, camera_altitude)
-        return self.distances(local_frame_origin, camera_position) + (camera_altitude,)
+        return self._distances(local_frame_origin, camera_position) + (camera_altitude,)
 
     def _local_frame_velocity(self, image_frame: ImageFrame, previous_image_frame: ImageFrame)\
             -> Tuple[float, float, Optional[float]]:
@@ -851,7 +842,7 @@ class Matcher(Node):
         if time_difference == 0:
             time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
         assert time_difference > 0, f'Time difference between frames was 0.'
-        x_dist, y_dist = self.distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
+        x_dist, y_dist = self._distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
         z_dist = image_frame.position.alt - previous_image_frame.position.alt
         dist = (x_dist, y_dist, z_dist)
         assert all(isinstance(x, float) for x in
@@ -926,7 +917,7 @@ class Matcher(Node):
         assert_type(np.ndarray, fov_wgs84)
         assert_type(float, focal_length)
         assert_type(Dim, img_dim)
-        fov_center_line_length = self.get_distance_of_fov_center(fov_wgs84)
+        fov_center_line_length = self._get_distance_of_fov_center(fov_wgs84)
         camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)  # TODO: move logic here, this is only place where this util function is used?
         assert_type(float, camera_distance)
         return camera_distance

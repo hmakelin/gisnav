@@ -8,8 +8,6 @@ import geojson
 
 from typing import Any, Union, Tuple, get_args
 from functools import partial
-from shapely.ops import transform
-from shapely.geometry import Point
 from collections import namedtuple, Sequence, Collection
 
 from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame  # TODO: get rid of this
@@ -137,33 +135,6 @@ class MapFrame(object):
     @property
     def image(self) -> np.ndarray:
         return self._image
-
-
-MAP_RADIUS_METERS_DEFAULT = 400
-
-
-def get_bbox(latlon: LatLon, radius_meters: int = MAP_RADIUS_METERS_DEFAULT) -> BBox:
-    """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
-
-    Uses azimuthal equidistant projection. Based on Mike T's answer at
-    https://gis.stackexchange.com/questions/289044/creating-buffer-circle-x-kilometers-from-point-using-python.
-
-    Arguments:
-        latlon: The lat-lon tuple (EPSG:4326) for the circle.
-        radius_meters: Radius in meters of the circle.
-
-    Returns:
-        The bounding box (left, bottom, right, top).
-    """
-    proj_str = '+proj=aeqd +lat_0={lat} +lon_0={lon} +x_0=0 +y_0=0'
-    projection = partial(pyproj.transform,
-                         pyproj.Proj(proj_str.format(lat=latlon.lat, lon=latlon.lon)),
-                         pyproj.Proj('+proj=longlat +datum=WGS84'))
-    circle = Point(0, 0).buffer(radius_meters)
-    circle_transformed = transform(projection, circle).exterior.coords[:]
-    lons_lats = list(zip(*circle_transformed))
-    return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
-
 
 def fov_to_bbox(fov_wgs84):
     """Returns BBox for WGS84 field of view."""

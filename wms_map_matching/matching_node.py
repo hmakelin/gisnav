@@ -6,8 +6,10 @@ import yaml
 import importlib
 import math
 import time
-import pyproj
 
+from pyproj import Geod, Proj, transform
+from shapely.ops import transform as shapely_transform
+from shapely.geometry import Point
 from typing import Optional, Union, Tuple, get_args
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -18,12 +20,11 @@ import cv2
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from wms_map_matching.util import get_bbox, setup_sys_path, convert_fov_from_pix_to_wgs84, \
+from wms_map_matching.util import setup_sys_path, convert_fov_from_pix_to_wgs84, \
     write_fov_and_camera_location_to_geojson, get_bbox_center, BBox, Dim, rotate_and_crop_map, \
     visualize_homography, get_fov, get_camera_distance, LatLon, fov_to_bbox, \
     get_angle, create_src_corners, uncrop_pixel_coordinates, rotate_point, RPY, LatLonAlt, \
-    ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame, \
-    MAP_RADIUS_METERS_DEFAULT
+    ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, assert_first_stamp_greater, MapFrame
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -54,6 +55,9 @@ class Matcher(Node):
 
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
+
+    # Fetched map rasters are squares that enclose a circle of given radius
+    MAP_RADIUS_METERS_DEFAULT = 400  # in meters
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
@@ -141,7 +145,8 @@ class Matcher(Node):
         self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
 
         # To be used for pyproj transformations
-        self._g = pyproj.Geod(ellps=self.PYPROJ_ELLIPSOID)
+        self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
+        self._proj_wgs84 = Proj('+proj=longlat +datum=WGS84')
 
         # self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
@@ -187,8 +192,12 @@ class Matcher(Node):
         self._superglue = value
 
     @property
-    def g(self) -> pyproj.Geod:
-        return self._g
+    def geod(self) -> Geod:
+        return self._geod
+
+    @property
+    def proj_wgs84(self) -> Proj:
+        return self._proj_wgs84
 
     @property
     def share_dir(self) -> str:
@@ -352,11 +361,34 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
+    def get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: int = MAP_RADIUS_METERS_DEFAULT) -> BBox:
+        """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
+
+        Uses azimuthal equidistant projection. Based on Mike T's answer at
+        https://gis.stackexchange.com/questions/289044/creating-buffer-circle-x-kilometers-from-point-using-python.
+
+        Arguments:
+            latlon: The lat-lon tuple (EPSG:4326) for the circle.
+            radius_meters: Radius in meters of the circle.
+
+        Returns:
+            The bounding box (left, bottom, right, top).
+        """
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
+        assert_type(int, radius_meters)
+        proj_str = f'+proj=aeqd +lat_0={latlon.lat} +lon_0={latlon.lon} +x_0=0 +y_0=0'
+        projection = partial(transform, Proj(proj_str), self.proj_wgs84)
+        circle = Point(0, 0).buffer(radius_meters)
+        circle_transformed = shapely_transform(projection, circle).exterior.coords[:]
+        lons_lats = list(zip(*circle_transformed))
+        assert all(isinstance(x, tuple) for x in lons_lats), f'Expected all items to be of type tuple in {lons_lats}.'
+        return BBox(min(lons_lats[0]), min(lons_lats[1]), max(lons_lats[0]), max(lons_lats[1]))
+
     def get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
         """Calculate distance between middle of sides of FoV based on triangle similarity."""
         midleft = ((fov_wgs84[0] + fov_wgs84[1]) * 0.5).squeeze()
         midright = ((fov_wgs84[2] + fov_wgs84[3]) * 0.5).squeeze()
-        _, __, dist = self.g.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
+        _, __, dist = self.geod.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
         return dist
 
     def distances(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
@@ -367,7 +399,7 @@ class Matcher(Node):
         lons1 = (latlon1.lon, latlon1.lon)
         lats2 = (latlon1.lat, latlon2.lat)  # Lon difference for first, lat difference for second --> y, x
         lons2 = (latlon2.lon, latlon1.lon)
-        _, __, dist = self.g.inv(lons1, lats1, lons2, lats2)
+        _, __, dist = self.geod.inv(lons1, lats1, lons2, lats2)
 
         # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions,
         # also invert X axis so that it points north
@@ -386,8 +418,7 @@ class Matcher(Node):
         azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
         assert_type(float, azmth)
         assert_type(float, dist)
-        g = pyproj.Geod(ellps='WGS84')
-        lon, lat, azmth = g.fwd(latlon.lon, latlon.lat, azmth, dist)
+        lon, lat, azmth = self.geod.fwd(latlon.lon, latlon.lat, azmth, dist)
         return LatLon(lat, lon)
 
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
@@ -515,7 +546,7 @@ class Matcher(Node):
         assert_type(int, radius)
         assert 0 < radius < self.MAX_MAP_RADIUS, f'Radius should be between 0 and {self.MAX_MAP_RADIUS}.'
 
-        bbox = get_bbox(center)
+        bbox = self.get_bbox(center)
         assert_type(BBox, bbox)
 
         # Build and send WMS request
@@ -652,7 +683,7 @@ class Matcher(Node):
 
     def _get_dynamic_map_radius(self) -> int:
         """Returns map radius that determines map size for WMS map requests."""
-        return MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
+        return self.MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""

@@ -358,22 +358,12 @@ class Matcher(Node):
 
     def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Union[int, float] = MAP_RADIUS_METERS_DEFAULT)\
             -> BBox:
-        """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
-
-        Uses azimuthal equidistant projection. Based on Mike T's answer at
-        https://gis.stackexchange.com/questions/289044/creating-buffer-circle-x-kilometers-from-point-using-python.
-
-        Arguments:
-            latlon: The lat-lon tuple (EPSG:4326) for the circle.
-            radius_meters: Radius in meters of the circle.
-
-        Returns:
-            The bounding box (left, bottom, right, top).
-        """
+        """Gets the bounding box containing a circle with given radius centered at given lat-lon fix."""
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
         assert_type(get_args(Union[int, float]), radius_meters)
-        ul = self._move_distance(latlon, (-45, radius_meters))
-        lr = self._move_distance(latlon, (135, radius_meters))
+        corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
+        ul = self._move_distance(latlon, (-45, corner_distance))
+        lr = self._move_distance(latlon, (135, corner_distance))
         return BBox(ul.lon, lr.lat, lr.lon, ul.lat)
 
     def _get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:

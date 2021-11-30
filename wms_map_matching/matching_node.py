@@ -132,7 +132,7 @@ class Matcher(Node):
         self._init_wms()
 
         # Dict for storing all microRTPS bridge subscribers and publishers
-        self._topics = dict()
+        self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
         self._setup_topics()
 
         # Converts image_raw to cv2 compatible image
@@ -323,14 +323,16 @@ class Matcher(Node):
             publish = topic.get(self.PUBLISH_KEY, None)
             if publish is not None:
                 assert_type(bool, publish)
-                self._topics.update({self.PUBLISH_KEY: {topic_name: self._create_publisher(topic_name, class_)}})
+                # TODO: this just overwrites previous publish_key
+                self._topics.get(self.PUBLISH_KEY).update({topic_name: self._create_publisher(topic_name, class_)})
 
             subscribe = topic.get(self.SUBSCRIBE_KEY, None)
             if subscribe is not None:
                 assert_type(bool, subscribe)
-                self._topics.update({self.SUBSCRIBE_KEY: {topic_name: self._create_subscriber(topic_name, class_)}})
+                # TODO: this just overwrites previous subscribe_key
+                self._topics.get(self.SUBSCRIBE_KEY).update({topic_name: self._create_subscriber(topic_name, class_)})
 
-        self.get_logger().info('Topics setup complete.')
+        self.get_logger().info(f'Topics setup complete:\n{self._topics}.')
 
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher."""

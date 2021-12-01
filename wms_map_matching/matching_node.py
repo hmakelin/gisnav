@@ -386,11 +386,6 @@ class Matcher(Node):
         dist = (-dist[1], dist[0])
         return dist
 
-    #def distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
-    #    """Calculate distance in meters between two latlons."""
-    #    _, __, dist = self.g.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
-    #    return dist
-
     def _move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[Union[int, float], Union[int, float]])\
             -> LatLon:
         """Returns LatLon given distance in the direction of azimuth (degrees) from original point."""
@@ -700,9 +695,7 @@ class Matcher(Node):
     def _publish_vehicle_visual_odometry(self, position: tuple, velocity: tuple) -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
         https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
-        module_name = 'px4_msgs.msg'  # TODO: get ffrom config file
-        class_name = 'VehicleVisualOdometry'  # TODO: get from config file or look at _import_class stuff in this file
-        assert VehicleVisualOdometry is not None, f'{class_name} was not found in module {module_name}.'
+        assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
 
         # TODO: could throw a warning if position and velocity BOTH are None - would publish a message full of NaN
@@ -720,7 +713,6 @@ class Matcher(Node):
             assert len(
                 position) == 3, f'Unexpected length for position estimate: {len(position)} (3 expected).'  # TODO: can also be length 2 if altitude is not published, handle that
             assert all(isinstance(x, float) for x in position), f'Position contained non-float elements.'
-            # TODO: check for np.float32?
             msg.x, msg.y, msg.z = position  # float32 North, East, Down
         else:
             self.get_logger().warn('Position tuple was None - publishing NaN as position.')
@@ -738,14 +730,13 @@ class Matcher(Node):
         if velocity is not None:
             assert len(velocity) == 3, f'Unexpected length for velocity estimate: {len(velocity)} (3 expected).'
             assert all(isinstance(x, float) for x in velocity), f'Velocity contained non-float elements.'
-            # TODO: check for np.float32?
             msg.vx, msg.vy, msg.vz = velocity  # float32 North, East, Down
         else:
             self.get_logger().warn('Velocity tuple was None - publishing NaN as velocity.')
             msg.vx, msg.vy, msg.vz = (float('nan'),) * 3  # float32 North, East, Down
 
         # Angular velocity - not used
-        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32 TODO: remove redundant np.float32?
+        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32
         msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
 
     def _camera_pitch(self) -> Optional[int]:
@@ -884,7 +875,6 @@ class Matcher(Node):
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
             -> LatLon:
         """Returns camera position based on translation vector and metadata """
-        # This computse 1. position and attaches it to image_frame
         # Convert translation vector to WGS84 coordinates
         # Translate relative to top left corner, not principal point/center of map raster
         t[0] = (1 - t[0]) * img_dim.width / 2
@@ -893,9 +883,6 @@ class Matcher(Node):
         cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
             np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
         cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
-        # TODO: something is wrong with camera_altitude - should be a scalar but is array
-        #latlonalt = LatLonAlt(
-        #    *(tuple(cam_pos_wgs84) + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?
         latlon = LatLon(*tuple(cam_pos_wgs84))
         return latlon
 
@@ -911,18 +898,14 @@ class Matcher(Node):
     @staticmethod
     def _compute_camera_altitude(camera_distance: float, camera_pitch: float) -> float:
         """Computes camera altitude based on input."""
-        camera_altitude = math.cos(math.radians(
-            camera_pitch)) * camera_distance  # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-        #self.get_logger().debug(f'Camera pitch {camera_pitch} deg, camera yaw {camera_yaw}rd, distance to principal'
-        #                        f'point {camera_distance} m, altitude {camera_altitude} m.')
+        # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
+        camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
         return camera_altitude
 
-    # TODO: the 'output' of this function is that it attaches stuff to image_frame? or what does it do?
-    # Current tasks too many:
+    # TODO Current tasks for _match too many:
     # 1. attach fov and position to image_frame
-    # 2. COmpute and publish position and velocity,
+    # 2. Compute and publish position and velocity,
     # 3. Visualize homography,
-    # 4. Output fov and position as geoJSON
     def _match(self, image_frame: np.ndarray, map_frame: np.ndarray, local_frame_origin_position: LatLonAlt,
                camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
@@ -958,9 +941,6 @@ class Matcher(Node):
                 fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
             image_frame.fov = fov_wgs84
 
-            # Center of bbox
-            #map_lat, map_lon = get_bbox_center(BBox(*map_frame.bbox))
-
             # Compute camera altitude, and distance to principal point using triangle similarity
             # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
             camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
@@ -969,12 +949,6 @@ class Matcher(Node):
             position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
             local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
             image_frame.position = LatLonAlt(*(position + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
-
-            # The stuff below is all 2. and 4. (not 1. nor 3.)
-
-            # Write data to GeoJSON for visualization and debugging in external GIS software
-            #write_fov_and_camera_location_to_geojson(fov_wgs84, cam_pos_wgs84, (map_lat, map_lon, camera_distance),
-            #                                         gimbal_fov_wgs84)
 
             velocity = None
             if previous_image_frame is not None:

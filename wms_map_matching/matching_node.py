@@ -513,13 +513,13 @@ class Matcher(Node):
 
         return map_center_latlon
 
-    def _update_map(self, center: LatLon, radius: int) -> None:
+    def _update_map(self, center: LatLon, radius: Union[int, float]) -> None:
         """Gets latest map from WMS server for given location and radius and saves it."""
         assert_type(LatLon, center)
-        assert_type(int, radius)
+        assert_type(get_args(Union[int, float]), radius)
         assert 0 < radius < self.MAX_MAP_RADIUS, f'Radius should be between 0 and {self.MAX_MAP_RADIUS}.'
 
-        bbox = self._get_bbox(center)
+        bbox = self._get_bbox(center)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
         assert_type(BBox, bbox)
 
         # Build and send WMS request
@@ -529,8 +529,8 @@ class Matcher(Node):
         assert_type(str, srs_str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
-            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),
-                                    format='image/png', transparent=True)
+            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),  # TODO: make map size with padding an argument?
+                                   format='image/png', transparent=True)
         except Exception as e:
             self.get_logger().warn(f'Exception from WMS server query:\n{e},\n{traceback.print_exc()}.')
             return None
@@ -542,7 +542,7 @@ class Matcher(Node):
         assert_ndim(map_, 3)
         self.map_frame = MapFrame(center, radius, bbox, map_)
         assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
-            'Decoded map is not the specified size.'
+            'Decoded map is not the specified size.'  # TODO: make map size with padding an argument?
 
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera."""
@@ -870,7 +870,7 @@ class Matcher(Node):
 
     @staticmethod
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
-            -> LatLon:
+            -> LatLon:  # TODO: Yaw is degrees or radians? If degrees, could also accept ints?
         """Returns camera position based on translation vector and metadata """
         # Convert translation vector to WGS84 coordinates
         # Translate relative to top left corner, not principal point/center of map raster
@@ -893,7 +893,7 @@ class Matcher(Node):
         return camera_distance
 
     @staticmethod
-    def _compute_camera_altitude(camera_distance: float, camera_pitch: float) -> float:
+    def _compute_camera_altitude(camera_distance: float, camera_pitch: float) -> float:  # TODO: pitch is degrees or radians? If degrees, could also accept ints?
         """Computes camera altitude based on input."""
         # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
         camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance

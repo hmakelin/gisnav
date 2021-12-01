@@ -798,12 +798,12 @@ class Matcher(Node):
 
         return h, h_mask, translation, rotation
 
-    def _local_frame_position(self, local_frame_origin: LatLonAlt, camera_position: LatLon, camera_altitude: float) \
-            -> Tuple[float, float, float]:
+    def _local_frame_position(self, local_frame_origin: LatLonAlt, camera_position: LatLon,
+                              camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
         """Returns camera position tuple (x, y) in meters in local frame."""
         assert_type(LatLonAlt, local_frame_origin)
         assert_type(LatLon, camera_position)
-        assert_type(float, camera_altitude)
+        assert_type(get_args(Union[int, float]), camera_altitude)
         return self._distances(local_frame_origin, camera_position) + (camera_altitude,)
 
     def _local_frame_velocity(self, image_frame: ImageFrame, previous_image_frame: ImageFrame)\
@@ -837,8 +837,8 @@ class Matcher(Node):
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
-            camera_yaw - float
-            camera_pitch - float
+            camera_yaw - float  # TODO: degrees? If so, accept int also
+            camera_pitch - float  # TODO: degrees? If so, accept int also
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
@@ -870,7 +870,7 @@ class Matcher(Node):
 
     @staticmethod
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
-            -> LatLon:  # TODO: Yaw is degrees or radians? If degrees, could also accept ints?
+            -> LatLon:  # TODO: Yaw is degrees or radians? If degrees, could also accept ints? Seems like radians so maybe only float is justified unless more refactoring is done
         """Returns camera position based on translation vector and metadata """
         # Convert translation vector to WGS84 coordinates
         # Translate relative to top left corner, not principal point/center of map raster
@@ -893,8 +893,8 @@ class Matcher(Node):
         return camera_distance
 
     @staticmethod
-    def _compute_camera_altitude(camera_distance: float, camera_pitch: float) -> float:  # TODO: pitch is degrees or radians? If degrees, could also accept ints?
-        """Computes camera altitude based on input."""
+    def _compute_camera_altitude(camera_distance: float, camera_pitch: Union[int, float]) -> float:
+        """Computes camera altitude based on distance to principal point and pitch in degrees."""
         # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
         camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
         return camera_altitude

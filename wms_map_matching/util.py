@@ -1,4 +1,3 @@
-import pyproj
 import cv2
 import numpy as np
 import sys
@@ -6,7 +5,7 @@ import os
 import math
 import geojson
 
-from typing import Any, Union, Tuple, get_args
+from typing import Any, Union, Tuple
 from functools import partial
 from collections import namedtuple, Sequence, Collection
 
@@ -46,12 +45,6 @@ def assert_first_stamp_greater(stamp1: Time, stamp2: Time) -> None:
         assert stamp1.nanosec > stamp2.nanosec, assertion_error_msg
     else:
         assert stamp1.sec > stamp2.sec, assertion_error_msg
-
-#def assert_same_resolution(img1: np.ndarray, img2: np.ndarray):
-#    """Asserts that images have same resolution (but may have different number of channels)."""
-#    assert img1.shape[0:2] == img2.shape[0:2], f'Resoultions did not match: img1 {img1.shape} vs. img2 {img2.shape}.'
-
-# assert len(map_size) == 2, f'Map size was unexpected length {len(map_size)}, 2 expected.'
 
 
 class ImageFrame(object):

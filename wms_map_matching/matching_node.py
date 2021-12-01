@@ -140,8 +140,6 @@ class Matcher(Node):
         self._superglue = None
         self._setup_superglue()
 
-        self._gimbal_fov_wgs84 = []  # TODO: remove this attribute, just passing it through here from _update_map to _match (temp hack)
-
         # To be used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
 
@@ -509,11 +507,11 @@ class Matcher(Node):
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(self._move_distance, origin)
-                self._gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
+                gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
                 # Use projected field of view center instead of global position as map center
-                map_center_latlon = get_bbox_center(fov_to_bbox(self._gimbal_fov_wgs84))
+                map_center_latlon = get_bbox_center(fov_to_bbox(gimbal_fov_wgs84))
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 return None
@@ -840,8 +838,8 @@ class Matcher(Node):
         velocity = tuple(x / time_difference for x in dist)
         return velocity[0], velocity[1], velocity[2]  # Do this way to get rid of warning
 
-    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, CameraInfo, np.ndarray, np.ndarray,
-                                                 float, float, Dim, Dim, bool, Optional[np.ndarray]]]:
+    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, CameraInfo, np.ndarray, float, float, Dim, Dim,
+                                                 bool, Optional[np.ndarray]]]:
         """Returns success, data where success is False if there are any Nones in the list.
 
         This performs a check that all required data is available for performing a _match.
@@ -850,7 +848,6 @@ class Matcher(Node):
             map_frame - np.darray map_frame to match
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             camera_info - CameraInfo
-            gimbal_fov_wgs4 - np.ndarray Gimbal FoV projection to ground
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float
             camera_pitch - float
@@ -872,9 +869,8 @@ class Matcher(Node):
         restrict_affine = self._restrict_affine()
 
         # Make sure all info is available before attempting to match
-        # TODO: _gimbal_fov_wgs84 should be handled in some better way - now we have a property jsut to pass it from update_map-> project_gimabal_fov to matcher (and matcher just writes it into file, does nothing else with it, could be written where it is created!)
-        required_info = (self.map_frame, local_frame_origin_position, self.camera_info, self._gimbal_fov_wgs84,
-                         camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
+        required_info = (self.map_frame, local_frame_origin_position, self.camera_info, camera_normal, camera_yaw,
+                         camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
         optional_info = (self.previous_image_frame, )
 
         if not all(x is not None for x in required_info):
@@ -928,8 +924,8 @@ class Matcher(Node):
     # 3. Visualize homography,
     # 4. Output fov and position as geoJSON
     def _match(self, image_frame: np.ndarray, map_frame: np.ndarray, local_frame_origin_position: LatLonAlt,
-               camera_info: CameraInfo, gimbal_fov_wgs84: np.ndarray, camera_normal: np.ndarray, camera_yaw: float,
-               camera_pitch: float, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+               camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
+               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                previous_image_frame: Optional[np.ndarray]) -> None:
         """Matches camera image to map image and computes camera position and field of view."""
         try:

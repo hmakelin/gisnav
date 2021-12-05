@@ -1026,7 +1026,6 @@ class Matcher(Node):
 
 
 def main(args=None):
-    assert __debug__ is False
     if __debug__:
         pr = cProfile.Profile()
         pr.enable()

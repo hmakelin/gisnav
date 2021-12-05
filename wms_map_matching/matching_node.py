@@ -4,6 +4,9 @@ import traceback
 import yaml
 import math
 import time
+import cProfile
+import io
+import pstats
 
 from pyproj import Geod, Proj, transform
 from typing import Optional, Union, Tuple, get_args
@@ -1023,11 +1026,27 @@ class Matcher(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    matcher = Matcher('matcher', share_dir, superglue_dir)
-    rclpy.spin(matcher)
-    matcher.destroy_node()
-    rclpy.shutdown()
+    assert __debug__ is False
+    if __debug__:
+        pr = cProfile.Profile()
+        pr.enable()
+    try:
+        rclpy.init(args=args)
+        matcher = Matcher('matcher', share_dir, superglue_dir)
+        rclpy.spin(matcher)
+    except KeyboardInterrupt as e:
+        print(f'Keyboard interrupt received:\n{e}')
+        if pr is not None:
+            # Print out profiling stats
+            pr.disable()
+            s = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())
+    finally:
+        matcher.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

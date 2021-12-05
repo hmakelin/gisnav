@@ -571,7 +571,7 @@ class Matcher(Node):
         # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
         assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
 
-        bbox = self._get_bbox(center)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
+        bbox = self._get_bbox(center, radius)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
         assert_type(BBox, bbox)
 
         map_size = self._map_size_with_padding()
@@ -715,9 +715,13 @@ class Matcher(Node):
         self.vehicle_local_position = msg
         self.get_logger().debug(f'VehicleLocalPosition: {msg}.')
 
-    def _get_dynamic_map_radius(self) -> int:
+    def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that determines map size for WMS map requests."""
-        return self.get_parameter('misc.map_radius_meters_default').get_parameter_value().integer_value  # TODO: assume constant, figure out an algorithm to adjust this dynamically
+        # TODO: return 3xflight altitude, otherwise assume return default constant
+        assert_type(get_args(Union[int, float]), altitude)
+        map_radius = 3*altitude
+        return map_radius
+        #return self.get_parameter('misc.map_radius_meters_default').get_parameter_value().integer_value
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""
@@ -730,7 +734,7 @@ class Matcher(Node):
                 self.get_logger().warn('Could not project field of view center. Using global position for map instead.')
             else:
                 center = projected_center
-        map_radius = self._get_dynamic_map_radius()
+        map_radius = self._get_dynamic_map_radius(msg.alt)
         if self._should_update_map(center, map_radius):
             self._update_map(center, map_radius)
         else:

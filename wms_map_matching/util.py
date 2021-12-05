@@ -5,7 +5,7 @@ import os
 import math
 import geojson
 
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, get_args
 from functools import partial
 from collections import namedtuple, Sequence, Collection
 
@@ -102,10 +102,10 @@ class ImageFrame(object):
 class MapFrame(object):
     """Keeps map frame related data in one place and protects it from corruption."""
 
-    def __init__(self, center: LatLon, radius: int, bbox: BBox, image: np.ndarray) -> None:
+    def __init__(self, center: LatLon, radius: Union[int, float], bbox: BBox, image: np.ndarray) -> None:
         assert_type(BBox, bbox)
         assert_type(LatLon, center)
-        assert_type(int, radius)
+        assert_type(get_args(Union[int, float]), radius)
         assert_type(np.ndarray, image)
         assert_ndim(image, 3)
         self._bbox = bbox

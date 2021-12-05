@@ -459,7 +459,7 @@ class Matcher(Node):
         p = np.matmul(k, e)
         try:
             p_inv = np.linalg.inv(p)
-        except np.LinAlgError as e:
+        except np.linalg.LinAlgError as e:
             self.get_logger().error(f'Could not invert the projection matrix: {p}. RPY was {rpy}. Trace:'
                                     f'\n{e},\n{traceback.print_exc()}.')
             return None

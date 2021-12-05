@@ -45,14 +45,8 @@ class Matcher(Node):
     # Local frame reference for px4_msgs.msg.VehicleVisualOdometry messages
     LOCAL_FRAME_NED = 0
 
-    # Maximum radius for map requests (in meters)
-    MAX_MAP_RADIUS = 1000  # TODO: put default into config.yaml, make them all ROS params so they can be changed on the fly
-
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
-
-    # Fetched map rasters are squares that enclose a circle of given radius
-    MAP_RADIUS_METERS_DEFAULT = 400  # in meters
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
@@ -278,6 +272,7 @@ class Matcher(Node):
 
     def _declare_ros_params(self, config: dict):
         """Declares ROS parameters from config file."""
+        # TODO: add defaults here and do not use .yaml file for defaults?
         namespace = 'wms'
         self.declare_parameters(namespace, [
             ('url', config.get(namespace, {}).get('url', None), ParameterDescriptor(read_only=True)),
@@ -289,7 +284,9 @@ class Matcher(Node):
         namespace = 'misc'
         self.declare_parameters(namespace, [
             ('affine', config.get(namespace, {}).get('affine', None)),
-            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None))
+            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
+            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
+            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None))
         ])
 
     def _setup_superglue(self) -> None:
@@ -373,9 +370,10 @@ class Matcher(Node):
             self.get_logger().error('Could not connect to WMS server.')
             raise e
 
-    def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Union[int, float] = MAP_RADIUS_METERS_DEFAULT)\
-            -> BBox:
+    def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix."""
+        if radius_meters is None:
+            radius_meters = self.get_parameter('misc.map_radius_meters_default').get_parameter_value().integer_value
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
         assert_type(get_args(Union[int, float]), radius_meters)
         corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
@@ -548,7 +546,9 @@ class Matcher(Node):
         """Gets latest map from WMS server for given location and radius and saves it."""
         assert_type(LatLon, center)
         assert_type(get_args(Union[int, float]), radius)
-        assert 0 < radius < self.MAX_MAP_RADIUS, f'Radius should be between 0 and {self.MAX_MAP_RADIUS}.'
+        max_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
+        # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
+        assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
 
         bbox = self._get_bbox(center)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
         assert_type(BBox, bbox)
@@ -689,7 +689,7 @@ class Matcher(Node):
 
     def _get_dynamic_map_radius(self) -> int:
         """Returns map radius that determines map size for WMS map requests."""
-        return self.MAP_RADIUS_METERS_DEFAULT  # TODO: assume constant, figure out an algorithm to adjust this dynamically
+        return self.get_parameter('misc.map_radius_meters_default').get_parameter_value().integer_value  # TODO: assume constant, figure out an algorithm to adjust this dynamically
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message."""

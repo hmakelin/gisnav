@@ -8,6 +8,8 @@ matcher:
     misc:
       affine: True  # Consider setting to True if camera is known to be nadir-facing
       gimbal_projection: True
+      max_map_radius: 1000
+      map_radius_meters_default: 400
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

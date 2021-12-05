@@ -457,7 +457,13 @@ class Matcher(Node):
 
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         p = np.matmul(k, e)
-        p_inv = np.linalg.inv(p)
+        try:
+            p_inv = np.linalg.inv(p)
+        except np.LinAlgError as e:
+            self.get_logger().error(f'Could not invert the projection matrix: {p}. Got error:'
+                                    f'\n{e},\n{traceback.print_exc()}.')
+            return None
+
         assert_shape(p_inv, (3, 3))
 
         dst_corners = cv2.perspectiveTransform(src_corners, p_inv)  # TODO: use util.get_fov here?

@@ -553,6 +553,11 @@ class Matcher(Node):
         bbox = self._get_bbox(center)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
         assert_type(BBox, bbox)
 
+        map_size = self._map_size_with_padding()
+        if map_size is None:
+            self.get_logger().warn('Map size not yet available - skipping WMS request.')
+            return None
+
         # Build and send WMS request
         layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
@@ -560,7 +565,7 @@ class Matcher(Node):
         assert_type(str, srs_str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
-            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=self._map_size_with_padding(),  # TODO: make map size with padding an argument?
+            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size,  # TODO: make map size with padding an argument?
                                    format='image/png', transparent=True)
         except Exception as e:
             self.get_logger().warn(f'Exception from WMS server query:\n{e},\n{traceback.print_exc()}.')

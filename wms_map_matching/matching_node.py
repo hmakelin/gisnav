@@ -104,15 +104,18 @@ class Matcher(Node):
         }
     ]
 
-    def __init__(self, share_directory: str, superglue_directory: str, config: str = 'config.yml') -> None:
+    def __init__(self, node_name: str, share_directory: str, superglue_directory: str, config: str = 'params.yml')\
+            -> None:
         """Initializes the node.
 
         Arguments:
+            node_name - String name for the Node.
             share_dir - String path of the share directory where configuration and other files are.
             superglue_dir - String path of the directory where SuperGlue related files are.
             config - String path to the config file in the share folder.
         """
-        super().__init__('matcher')
+        assert_type(str, node_name)
+        super().__init__(node_name)
         assert_type(str, share_directory)
         assert_type(str, superglue_directory)
         assert_type(str, config)
@@ -122,6 +125,11 @@ class Matcher(Node):
         # Setup config
         self._config = None
         self._load_config(config)
+
+        # Declare ROS parameters
+        params = self._config.get(node_name, {}).get('ros__parameters')  # TODO: should not use dict here? Use hard coded defaults?
+        assert_type(dict, params)
+        self._declare_ros_params(params)
 
         # Setup WMS server
         self._wms = None
@@ -268,9 +276,27 @@ class Matcher(Node):
         assert_type(GimbalDeviceSetAttitude, value)
         self._gimbal_device_set_attitude = value
 
+    def _declare_ros_params(self, config: dict):
+        """Declares ROS parameters from config file."""
+        namespace = 'wms'
+        self.declare_parameters(namespace, [
+            ('url', config.get(namespace, {}).get('url', None), ParameterDescriptor(read_only=True)),
+            ('version', config.get(namespace, {}).get('version', None), ParameterDescriptor(read_only=True)),
+            ('layer', config.get(namespace, {}).get('layer', None)),
+            ('srs', config.get(namespace, {}).get('srs', None))
+        ])
+
+        namespace = 'misc'
+        self.declare_parameters(namespace, [
+            ('affine', config.get(namespace, {}).get('affine', None)),
+            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None))
+        ])
+
     def _setup_superglue(self) -> None:
         """Sets up SuperGlue."""
-        self.superglue = SuperGlue(self._config['superglue'], self.get_logger())
+        superglue_conf = self._config.get('matcher', {}).get('superglue', None)
+        assert_type(dict, superglue_conf)
+        self.superglue = SuperGlue(superglue_conf, self.get_logger())
 
     def _load_config(self, yaml_file: str) -> None:
         """Loads config from the provided YAML file."""
@@ -285,7 +311,7 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self) -> bool:
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
-        gimbal_projection_flag = self._config.get('misc', {}).get('gimbal_projection', False)
+        gimbal_projection_flag = self.get_parameter('misc.affine').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
             return gimbal_projection_flag
         else:
@@ -294,7 +320,7 @@ class Matcher(Node):
 
     def _restrict_affine(self) -> bool:
         """Returns True if homography matrix should be restricted to an affine transformation (nadir facing camera)."""
-        restrict_affine_flag = self._config.get('misc', {}).get('affine', False)
+        restrict_affine_flag = self.get_parameter('misc.affine').get_parameter_value().bool_value
         if type(restrict_affine_flag) is bool:
             return restrict_affine_flag
         else:
@@ -340,14 +366,9 @@ class Matcher(Node):
         The url and version parameters are required to initialize the WMS client and are therefore set to read only. The
         layer and srs parameters can be changed dynamically.
         """
-        self.declare_parameter('url', self._config['wms']['url'], ParameterDescriptor(read_only=True))
-        self.declare_parameter('version', self._config['wms']['version'], ParameterDescriptor(read_only=True))
-        self.declare_parameter('layer', self._config['wms']['layer'])
-        self.declare_parameter('srs', self._config['wms']['srs'])
-
         try:
-            self.wms = WebMapService(self.get_parameter('url').get_parameter_value().string_value,
-                                     version=self.get_parameter('version').get_parameter_value().string_value)
+            self.wms = WebMapService(self.get_parameter('wms.url').get_parameter_value().string_value,
+                                     version=self.get_parameter('wms.version').get_parameter_value().string_value)
         except Exception as e:
             self.get_logger().error('Could not connect to WMS server.')
             raise e
@@ -533,8 +554,8 @@ class Matcher(Node):
         assert_type(BBox, bbox)
 
         # Build and send WMS request
-        layer_str = self.get_parameter('layer').get_parameter_value().string_value
-        srs_str = self.get_parameter('srs').get_parameter_value().string_value
+        layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
+        srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
         assert_type(str, layer_str)
         assert_type(str, srs_str)
         try:
@@ -998,7 +1019,7 @@ class Matcher(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    matcher = Matcher(share_dir, superglue_dir)
+    matcher = Matcher('matcher', share_dir, superglue_dir)
     rclpy.spin(matcher)
     matcher.destroy_node()
     rclpy.shutdown()

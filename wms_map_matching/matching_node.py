@@ -60,6 +60,7 @@ class Matcher(Node):
     CLASS_KEY = 'class'
     SUBSCRIBE_KEY = 'subscribe'  # Used as key in both Matcher.TOPICS and Matcher._topics
     PUBLISH_KEY = 'publish'  # Used as key in both Matcher.TOPICS and Matcher._topics
+    VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME = 'VehicleVisualOdometry_PubSubTopic'  # TODO: Used when publishing, do this in some bette way
     TOPICS = [
         {
             TOPIC_NAME_KEY: 'VehicleLocalPosition_PubSubTopic',
@@ -97,7 +98,7 @@ class Matcher(Node):
             SUBSCRIBE_KEY: True
         },
         {
-            TOPIC_NAME_KEY: 'VehicleVisualOdometry_PubSubTopic',
+            TOPIC_NAME_KEY: VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME,
             CLASS_KEY: VehicleVisualOdometry,
             PUBLISH_KEY: True
         }
@@ -474,19 +475,22 @@ class Matcher(Node):
         return LatLonAlt(self.vehicle_global_position.lat, self.vehicle_global_position.lon,
                          self.vehicle_global_position.alt)
 
-    def _vehicle_local_position_ref_latlonalt(self) -> Optional[LatLonAlt]:
+    def _vehicle_local_position_ref_latlonalt_timestamp(self) -> Tuple[Optional[LatLonAlt], Optional[int]]:
         """Returns vehicle local frame origin as LatLonAlt tuple."""
         if self.vehicle_local_position is None:
             self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
-            return None
+            return None, None        # TODO re-enable this line!
+        #return LatLonAlt(37.5236488,-122.25511039999999,1.7497217655181885), self.vehicle_local_position.timestamp # TODO: hard coded lcoal position (GPS disabled in PX4) remove this line!
+        # Try commander set_ekf_origin 37.5236488, -122.25511039999999, 1.7497217655181885 before using the above hard coded dummy value
 
         if self.vehicle_local_position.xy_global is True and self.vehicle_local_position.z_global is True:
+            assert_type(int, self.vehicle_local_position.timestamp)
             return LatLonAlt(self.vehicle_local_position.ref_lat, self.vehicle_local_position.ref_lon,
-                             self.vehicle_local_position.ref_alt)
+                             self.vehicle_local_position.ref_alt), self.vehicle_local_position.timestamp
         else:
             # TODO: z may not be needed - make a separate _ref_latlon method!
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
-            return None
+            return None, None
 
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Return WGS84 coordinates of projected camera field of view."""
@@ -646,6 +650,7 @@ class Matcher(Node):
         self.get_logger().debug(f'Camera info received:\n{msg}.')
         self.camera_info = msg
         camera_info_topic = self._topics.get(self.SUBSCRIBE_KEY, {}).get('camera_info', None)
+        #self._update_map(LatLon(37.5236488, -122.25511039999999), self._get_dynamic_map_radius())  # TODO: remove this line, only used in debugging as hard coded dummy when global position was not available
         if camera_info_topic is not None:
             self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
             camera_info_topic.destroy()
@@ -653,6 +658,7 @@ class Matcher(Node):
     def vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest VehicleLocalPosition message."""
         self.vehicle_local_position = msg
+        self.get_logger().debug(f'VehicleLocalPosition: {msg}.')
 
     def _get_dynamic_map_radius(self) -> int:
         """Returns map radius that determines map size for WMS map requests."""
@@ -689,18 +695,23 @@ class Matcher(Node):
         """Handles latest VehicleAttitude message."""
         self.vehicle_attitude = msg
 
-    def _publish_vehicle_visual_odometry(self, position: tuple, velocity: tuple) -> None:
+    # TODO: use timestamp of the ImageFrame, not current unix time!
+    def _publish_vehicle_visual_odometry(self, timestamp: int, position: tuple, velocity: tuple, rotation: tuple) -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
-        https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg. """
+        https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg.
+
+        See https://docs.px4.io/v1.12/en/advanced_config/tuning_the_ecl_ekf.html#external-vision-system for supported
+        EKF2_AID_MASK values when using an external vision system.
+        """
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
 
         # TODO: could throw a warning if position and velocity BOTH are None - would publish a message full of NaN
 
         # Timestamp
-        now = int(time.time() * 1e6)  # uint64 time in microseconds  # TODO: should be time since system start?
-        msg.timestamp = now
-        msg.timestamp_sample = now  # uint64 TODO: what's this?
+        #now = int(time.time() * 1e6)  # uint64 time in microseconds  # TODO: should be time since system start?
+        msg.timestamp = timestamp  # now
+        msg.timestamp_sample = timestamp  # now  # uint64
 
         # Position and linear velocity local frame of reference
         msg.local_frame = self.LOCAL_FRAME_NED  # uint8
@@ -716,8 +727,9 @@ class Matcher(Node):
             msg.x, msg.y, msg.z = (float('nan'),) * 3  # float32 North, East, Down
 
         # Attitude quaternions - not used
-        msg.q = (float('nan'),) * 4  # float32
-        msg.q_offset = (float('nan'),) * 4
+        assert msg.local_frame is self.LOCAL_FRAME_NED  # TODO: this needed?
+        msg.q = rotation  # (float('nan'),) * 4  # float32  # TODO: need vehicle yaw against NED frame here, need to assert self.LOCAL_FRAME_NED is used
+        msg.q_offset = (0.0, ) * 4  # (float('nan'),) * 4      # TODO: make this zero and assert that self.LOCAL_FRAME_NED is used
         msg.pose_covariance = (float('nan'),) * 21
 
         # Velocity frame of reference
@@ -735,6 +747,9 @@ class Matcher(Node):
         # Angular velocity - not used
         msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32
         msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
+
+        self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{msg}.')
+        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME).publish(msg)
 
     def _camera_pitch(self) -> Optional[int]:
         """Returns camera pitch in degrees relative to vehicle frame."""
@@ -826,8 +841,8 @@ class Matcher(Node):
         velocity = tuple(x / time_difference for x in dist)
         return velocity[0], velocity[1], velocity[2]  # Do this way to get rid of warning
 
-    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, CameraInfo, np.ndarray, float, float, Dim, Dim,
-                                                 bool, Optional[np.ndarray]]]:
+    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
+                                                 Dim, bool, Optional[np.ndarray]]]:
         """Returns success, data where success is False if there are any Nones in the list.
 
         This performs a check that all required data is available for performing a _match.
@@ -835,6 +850,7 @@ class Matcher(Node):
         Data consists of:
             map_frame - np.darray map_frame to match
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
+            timestamp - Local position message timestamp (to sync vehicle visual odom messages)
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float  # TODO: degrees? If so, accept int also
@@ -845,7 +861,7 @@ class Matcher(Node):
             previous_image_frame - Optional[np.ndarray], previous image frame, if available, None otherwise
         """
         # Vehicle local frame global reference position
-        local_frame_origin_position = self._vehicle_local_position_ref_latlonalt()
+        local_frame_origin_position, timestamp = self._vehicle_local_position_ref_latlonalt_timestamp()  # TODO: also get timestamp?
 
         # Camera information
         camera_normal, camera_yaw, camera_pitch = self._camera_normal(), self._camera_yaw(), self._camera_pitch()
@@ -857,9 +873,12 @@ class Matcher(Node):
         restrict_affine = self._restrict_affine()
 
         # Make sure all info is available before attempting to match
-        required_info = (self.map_frame, local_frame_origin_position, self.camera_info, camera_normal, camera_yaw,
-                         camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
+        required_info = (self.map_frame, local_frame_origin_position, timestamp, self.camera_info,
+                         camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
         optional_info = (self.previous_image_frame, )
+
+        if local_frame_origin_position is None or timestamp is None:  # TODO: handle this better!
+            return False, required_info + optional_info
 
         if not all(x is not None for x in required_info):
             self.get_logger().warn(f'At least one of following was None: {required_info}. Cannot do matching.')
@@ -904,6 +923,7 @@ class Matcher(Node):
     # 2. Compute and publish position and velocity,
     # 3. Visualize homography,
     def _match(self, image_frame: np.ndarray, map_frame: np.ndarray, local_frame_origin_position: LatLonAlt,
+               local_position_timestamp: int,
                camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                previous_image_frame: Optional[np.ndarray]) -> None:
@@ -942,10 +962,17 @@ class Matcher(Node):
             # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
             camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
             camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
+            self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
             position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
             local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
             image_frame.position = LatLonAlt(*(position + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
+
+            # Yaw against ned frame (quaternion)
+            rotation = [0, 0, 0]
+            rotation[self._yaw_index()] = camera_yaw
+            rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
+            assert_len(rotation, 4)
 
             velocity = None
             if previous_image_frame is not None:
@@ -955,7 +982,7 @@ class Matcher(Node):
 
             self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
             self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-            self._publish_vehicle_visual_odometry(local_position, velocity)
+            self._publish_vehicle_visual_odometry(local_position_timestamp, local_position, velocity, rotation)
 
             self.previous_image_frame = image_frame
 

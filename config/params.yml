@@ -10,6 +10,8 @@ matcher:
       gimbal_projection: True
       max_map_radius: 1000
       map_radius_meters_default: 400
+      update_map_center_threshold: 20
+      update_map_radius_threshold: 50
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

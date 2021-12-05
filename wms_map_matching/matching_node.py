@@ -149,7 +149,7 @@ class Matcher(Node):
         # self._image_frame = None  # Not currently used / needed
         self._previous_image_frame = None  # ImageFrame from previous match, needed to compute velocity
         self._map_frame = None  # Map raster received from WMS endpoint here along with its bounding box
-        # self._previous_map_frame  # Todo: to be used by _should_update_map()
+        self._previous_map_frame = None  # MapFrame used previously, needed for checking whether map should be updated
 
         # Properties that are mapped to microRTPS topics
         self._camera_info = None
@@ -209,6 +209,15 @@ class Matcher(Node):
     def map_frame(self, value: MapFrame) -> None:
         assert_type(MapFrame, value)
         self._map_frame = value
+
+    @property
+    def previous_map_frame(self) -> MapFrame:
+        return self._previous_map_frame
+
+    @previous_map_frame.setter
+    def previous_map_frame(self, value: MapFrame) -> None:
+        assert_type(MapFrame, value)
+        self._previous_map_frame = value
 
     @property
     def previous_image_frame(self) -> ImageFrame:
@@ -289,7 +298,9 @@ class Matcher(Node):
             ('affine', config.get(namespace, {}).get('affine', None)),
             ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
-            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None))
+            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
+            ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
+            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None))
         ])
 
     def _setup_superglue(self) -> None:
@@ -404,6 +415,13 @@ class Matcher(Node):
         # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions,
         # also invert X axis so that it points north
         dist = (-dist[1], dist[0])
+        return dist
+
+    def _distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]):
+        """Returns distance between two LatLon(Alt)s in meters."""
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
+        _, __, dist = self.geod.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
         return dist
 
     def _move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[Union[int, float], Union[int, float]])\
@@ -579,6 +597,8 @@ class Matcher(Node):
         map_ = imdecode(map_, cv2.IMREAD_UNCHANGED)
         assert_type(np.ndarray, map_)
         assert_ndim(map_, 3)
+        if self.map_frame is not None:
+            self.previous_map_frame = self.map_frame
         self.map_frame = MapFrame(center, radius, bbox, map_)
         assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
             'Decoded map is not the specified size.'  # TODO: make map size with padding an argument?
@@ -710,13 +730,30 @@ class Matcher(Node):
                 self.get_logger().warn('Could not project field of view center. Using global position for map instead.')
             else:
                 center = projected_center
-        if self._should_update_map(center):
-            self._update_map(center, self._get_dynamic_map_radius())
+        map_radius = self._get_dynamic_map_radius()
+        if self._should_update_map(center, map_radius):
+            self._update_map(center, map_radius)
+        else:
+            self.get_logger().debug('Map center and radius not changed enough to update map yet.')
 
-    def _should_update_map(self, center: LatLon) -> bool:
+    def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Returns true if map should be updated."""
         # TODO: based on some config variable, do not update map if center is very close to previous map frame center
-        return True  # TODO: placeholder return value always True
+        assert_type(get_args(Union[int, float]), radius)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+        if self.previous_map_frame is not None:
+            if abs(self._distance(center, self.previous_map_frame.center)) > \
+                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value or \
+                    abs(radius - self.previous_map_frame.radius) > \
+                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value:
+                # Old map is too far from what's required --> update
+                return True
+            else:
+                # Old map is OK
+                return False
+        else:
+            # No map yet, should update
+            return True
 
     def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message."""

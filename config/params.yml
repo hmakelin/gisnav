@@ -6,7 +6,7 @@ matcher:
       layer: 'WorldImagery'
       srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting
     misc:
-      affine: True  # Consider setting to True if camera is known to be nadir-facing
+      affine_threshold: 5
       gimbal_projection: True
       max_map_radius: 1000
       map_radius_meters_default: 400

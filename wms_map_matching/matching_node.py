@@ -284,7 +284,7 @@ class Matcher(Node):
 
     def _declare_ros_params(self, config: dict):
         """Declares ROS parameters from config file."""
-        # TODO: add defaults here and do not use .yaml file for defaults?
+        # TODO: add defaults here instead of Nones and do not use .yaml file for defaults
         namespace = 'wms'
         self.declare_parameters(namespace, [
             ('url', config.get(namespace, {}).get('url', None), ParameterDescriptor(read_only=True)),
@@ -295,7 +295,7 @@ class Matcher(Node):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('affine', config.get(namespace, {}).get('affine', None)),
+            ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
             ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
             ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
@@ -322,7 +322,7 @@ class Matcher(Node):
 
     def _use_gimbal_projection(self) -> bool:
         """Returns True if gimbal projection is enabled for fetching map bbox rasters."""
-        gimbal_projection_flag = self.get_parameter('misc.affine').get_parameter_value().bool_value
+        gimbal_projection_flag = self.get_parameter('misc.gimbal_projection').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
             return gimbal_projection_flag
         else:
@@ -331,11 +331,17 @@ class Matcher(Node):
 
     def _restrict_affine(self) -> bool:
         """Returns True if homography matrix should be restricted to an affine transformation (nadir facing camera)."""
-        restrict_affine_flag = self.get_parameter('misc.affine').get_parameter_value().bool_value
-        if type(restrict_affine_flag) is bool:
-            return restrict_affine_flag
+        restrict_affine_threshold = self.get_parameter('misc.affine_threshold').get_parameter_value().integer_value
+        assert_type(get_args(Union[int, float]), restrict_affine_threshold)
+        camera_pitch = self._camera_pitch()
+        # TODO: check that abs(camera_pitch) <= 90? (0 is nadir facing)
+        if camera_pitch is not None:
+            if abs(camera_pitch) <= restrict_affine_threshold:
+                return True
+            else:
+                return False
         else:
-            self.get_logger().warn(f'Could not read affine restriction flag: {restrict_affine_flag}. Assume False.')
+            self.get_logger().warn(f'Could not get camera pitch - cannot assume affine 2D transformation.')
             return False
 
     def _setup_topics(self) -> None:

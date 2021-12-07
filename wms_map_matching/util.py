@@ -129,8 +129,11 @@ class MapFrame(object):
     def image(self) -> np.ndarray:
         return self._image
 
-def fov_to_bbox(fov_wgs84):
+
+def fov_to_bbox(fov_wgs84: np.ndarray) -> BBox:
     """Returns BBox for WGS84 field of view."""
+    assert_type(np.ndarray, fov_wgs84)
+    assert_shape(fov_wgs84, (4, 2))
     left, bottom, right, top = 180, 90, -180, -90
     for pt in fov_wgs84:
         right = pt[1] if pt[1] >= right else right
@@ -140,12 +143,15 @@ def fov_to_bbox(fov_wgs84):
     return BBox(left, bottom, right, top)
 
 
-def _make_keypoint(pt, sz=1.0):
-    """Converts tuple to a cv2.KeyPoint."""
+def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
+    """Converts input numpy array to a cv2.KeyPoint."""
+    assert_type(np.ndarray, pt)
+    assert_shape(pt, (2,))
     return cv2.KeyPoint(pt[0], pt[1], sz)
 
 
-def visualize_homography(figure_name, img_arr, map_arr, kp_img, kp_map, dst_corners):
+def visualize_homography(figure_name: str, img_arr: np.ndarray, map_arr: np.ndarray, kp_img: np.ndarray,
+                         kp_map: np.ndarray, dst_corners: np.ndarray) -> np.ndarray:
     """Visualizes a homography including keypoint matches and field of view."""
     # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
     kp_count = len(kp_img)
@@ -224,7 +230,7 @@ def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_
     return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
 
 
-def rotate_point(radians, img_dim, pt):
+def rotate_point(radians: float, img_dim: Dim, pt: np.ndarray) -> Tuple[float, float]:
     """Rotates point around center of image by radians, counter-clockwise."""
     cx = img_dim[0] / 2
     cy = img_dim[1] / 2  # Should be same as cx (assuming image or map raster is square)
@@ -235,52 +241,17 @@ def rotate_point(radians, img_dim, pt):
     return x, y
 
 
-def convert_pix_to_wgs84(img_dim, bbox, pt):
+def convert_pix_to_wgs84(img_dim: Dim, bbox: BBox, pt: np.ndarray) -> Tuple[float, float]:  # TODO: change return type to LatLon?
     """Converts a pixel inside an image to lat lon coordinates based on the image's bounding box.
 
     In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left."""
+    assert_type(Dim, img_dim)
+    assert_type(BBox, bbox)
+    assert_type(np.ndarray, pt)
+    assert_shape(pt, (2,))
     lat = bbox.bottom + (bbox.top - bbox.bottom) * (img_dim.height - pt[1]) / img_dim.height  # TODO: use the 'LatLon' named tuple for pt
     lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
     return lat, lon
-
-
-def write_fov_and_camera_location_to_geojson(fov, location, fov_center, fov_gimbal, filename_fov='field_of_view.json',
-                                             filename_location='estimated_location.json',
-                                             filename_fov_center='fov_center.json',
-                                             filename_gimbal_fov='projected_field_of_view.json',
-                                             filename_gimbal_fov_upper_left='projected_field_of_view_ul.json'):
-    # TODO: write simulated drone location also!
-    """Writes the field of view and lat lon location of drone and center of fov into a geojson file.
-
-    Arguments:
-        fov - Estimated camera field of view.
-        location - Estimated camera location.
-        map_location - Center of the FoV.
-    """
-    with open(filename_fov, 'w') as f:
-        polygon = geojson.Polygon(
-            [list(map(lambda x: tuple(reversed(tuple(x))), fov.squeeze()))])  # GeoJSON uses lon-lat
-        geojson.dump(polygon, f)
-
-    with open(filename_gimbal_fov, 'w') as f:
-        polygon = geojson.Polygon(
-            [list(map(lambda x: tuple(reversed(tuple(x))), fov_gimbal.squeeze()))])  # GeoJSON uses lon-lat
-        geojson.dump(polygon, f)
-
-    # Can only have 1 geometry per geoJSON - need to dump this Point stuff into another file
-    with open(filename_location, 'w') as f2:
-        latlon = geojson.Point(tuple(reversed(location[0:2])))
-        geojson.dump(latlon, f2)
-
-    with open(filename_fov_center, 'w') as f3:
-        fov_latlon = geojson.Point(tuple(reversed(fov_center[0:2])))
-        geojson.dump(fov_latlon, f3)
-
-    with open(filename_gimbal_fov_upper_left, 'w') as f4:
-        ul = geojson.Point(tuple(reversed(fov_gimbal.squeeze()[0])))
-        geojson.dump(ul, f4)
-
-    # TODO: write gimbal-projected FoV into its own file
 
 
 def get_camera_apparent_altitude(map_radius, map_dimensions, K):
@@ -302,7 +273,6 @@ def get_camera_apparent_altitude(map_radius, map_dimensions, K):
 def get_camera_distance(focal_length, pixels, ground_truth):
     """Calculates distance of camera to object whose ground truth widht is known."""
     return ground_truth * focal_length / pixels
-
 
 
 def altitude_from_gimbal_pitch(pitch_degrees, distance):
@@ -347,15 +317,20 @@ def crop_center(img, dimensions):
     return img_cropped
 
 
-def uncrop_pixel_coordinates(cropped_dimensions, dimensions, pt):
+def uncrop_pixel_coordinates(cropped_dimensions: Dim, dimensions: Dim, pt: np.ndarray) -> np.ndarray:
     """Adjusts the pt x and y coordinates for the original size provided by dimensions."""
-    pt[0] = pt[0] + (dimensions.width - cropped_dimensions.width)/2  # TODO: check that 0 -> width and index 1 -> height, could be other way around!
-    pt[1] = pt[1] + (dimensions.height - cropped_dimensions.height)/2
-    return pt
+    assert_type(np.ndarray, pt)
+    assert_shape(pt, (2,))
+    assert_type(Dim, cropped_dimensions)
+    assert_type(Dim, dimensions)
+    pt_out = pt + 0.5*np.array([dimensions.width-cropped_dimensions.width, dimensions.height-cropped_dimensions.height])
+    assert_shape(pt_out, pt.shape)
+    return pt_out
 
 
-def get_angle(vec1, vec2, normalize=False):
+def get_angle(vec1: np.ndarray, vec2: np.ndarray, normalize=False):
     """Returns angle in radians between two vectors."""
+    # TODO: assert that inputs are vectors
     if normalize:
         vec1 = vec1 / np.linalg.norm(vec1)
         vec2 = vec2 / np.linalg.norm(vec2)

@@ -675,6 +675,7 @@ class Matcher(Node):
         try:
             map_ = wms_client.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size, format='image/png',
                                      transparent=True)
+            # TODO: what will map_ be if the reqeust times out? will an error be raised?
         except Exception as e:
             raise e  # TODO: need to do anything here or just pass it on?
 

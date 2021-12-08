@@ -5,6 +5,7 @@ matcher:
       version: '1.1.1'
       layer: 'WorldImagery'
       srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting
+      request_timeout: 5
     misc:
       affine_threshold: 5
       gimbal_projection: True

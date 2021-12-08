@@ -254,30 +254,10 @@ def convert_pix_to_wgs84(img_dim: Dim, bbox: BBox, pt: np.ndarray) -> Tuple[floa
     return lat, lon
 
 
-def get_camera_apparent_altitude(map_radius, map_dimensions, K):
-    """Returns camera apparent altitude using the K of the drone's camera and the map's known ground truth size.
-
-    Assumes same K for the hypothetical camera that was used to take a picture of the (ortho-rectified) map raster.
-
-    Arguments:
-        map_radius - The radius in meters of the map raster (the raster should be a square enclosing a circle of radius)
-        map_dimensions - The image dimensions in pixels of the map raster.
-        K - Camera intrinsic matrix (assume same K for map raster as for drone camera).
-    """
-    focal_length = K[0]
-    width_pixels = map_dimensions.width  # [0]
-    return map_radius * focal_length / width_pixels
-
-
 # TODO: use this to replace "get_camera_apparent_altitude"
 def get_camera_distance(focal_length, pixels, ground_truth):
     """Calculates distance of camera to object whose ground truth widht is known."""
     return ground_truth * focal_length / pixels
-
-
-def altitude_from_gimbal_pitch(pitch_degrees, distance):
-    """Returns camera altitude if gimbal pitch and distance to center of FoV is known."""
-    return distance*math.sin(math.radians(pitch_degrees))
 
 
 def get_bbox_center(bbox):

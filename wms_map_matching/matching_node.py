@@ -7,7 +7,7 @@ import cProfile
 import io
 import pstats
 
-from multiprocessing.pool import ThreadPool, Pool, AsyncResult
+from multiprocessing.pool import Pool, AsyncResult
 from pyproj import Geod, Proj, transform
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
@@ -141,11 +141,8 @@ class Matcher(Node):
         # TODO: if the pool stuff works, redo _init_wms and move all this init mess there
         # TODO: get rid of ThreadPool if Pool works
         self._wms = None
-        self._wms_threadpool = ThreadPool(processes=1)
-        url = self.get_parameter('wms.url').get_parameter_value().string_value,
-        version_ = self.get_parameter('wms.version').get_parameter_value().string_value
         self._wms_results = None
-        self._wms_pool = Pool(1)
+        self._wms_pool = Pool(1)  # Do not increase the process count, it should be 1
 
         self._init_wms()
 
@@ -186,21 +183,12 @@ class Matcher(Node):
         self._config = value
 
     @property
-    def wms_threadpool(self) -> ThreadPool:
-        return self._wms_threadpool
-
-    @wms_threadpool.setter
-    def wms_threadpool(self, value: ThreadPool) -> None:
-        assert_type(ThreadPool, value)
-        self._wms_threadpool = value
-
-    @property
     def wms_pool(self) -> Pool:
         return self._wms_pool
 
     @wms_pool.setter
     def wms_pool(self, value: Pool) -> None:
-        assert_type(ThreadPool, value)
+        assert_type(Pool, value)
         self._wms_pool = value
 
     @property
@@ -835,34 +823,18 @@ class Matcher(Node):
         assert_type(get_args(Union[int, float]), radius)
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
         if self.previous_map_frame is not None:
-            if abs(self._distance(center, self.previous_map_frame.center)) > \
+            if not abs(self._distance(center, self.previous_map_frame.center)) > \
                     self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value or \
                     abs(radius - self.previous_map_frame.radius) > \
                     self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value:
-                # Old map is too far from what's required --> update
-                return True
-            else:
-                # Old map is OK
                 return False
-        else:
-            # No map yet, check whether old request is still processing
-            if self.wms_results is not None:
-                #timeout_ = self.get_parameter('misc.request_timeout').get_parameter_value().integer_value
-                #try:
-                #    self.wms_results.get(timeout_)  # TODO: is this correct? update: no - commented all of this out
-                #except TimeoutError as te:
-                #    # Results timed out, OK to try again
-                #    self.get_logger().error(f'WMS request timed out:\n{te},\n{traceback.print_exc()}.')
-                #    return True
-                if self.wms_results.ready():
-                    # Previous results already recieved, OK to try again
-                    return True
-                else:
-                    # Previous request still running
-                    return False
-            else:
-                # WMS results is None - this is the first update
-                return True
+        # No map yet, check whether old request is still processing
+        if self.wms_results is not None:
+            if not self.wms_results.ready():
+                # Previous request still running
+                return False
+
+        return True
 
     def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message."""

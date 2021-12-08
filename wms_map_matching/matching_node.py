@@ -7,8 +7,9 @@ import cProfile
 import io
 import pstats
 
+from multiprocessing.pool import Pool, AsyncResult
 from pyproj import Geod, Proj, transform
-from typing import Optional, Union, Tuple, get_args
+from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
@@ -17,7 +18,7 @@ import numpy as np
 import cv2
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
-from functools import partial
+from functools import partial, lru_cache
 from wms_map_matching.util import setup_sys_path, convert_fov_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
     rotate_and_crop_map, visualize_homography, get_fov, get_camera_distance, LatLon, fov_to_bbox, get_angle,\
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape,\
@@ -32,6 +33,18 @@ share_dir, superglue_dir = setup_sys_path()
 
 # Import this after util.setup_sys_path has been called
 from wms_map_matching.superglue import SuperGlue
+
+
+@lru_cache(maxsize=None)
+def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
+    """Initializes the WMS process and returns the WMS client which is cached."""
+    assert_type(str, url)
+    assert_type(str, version_)
+    assert_type(int, timeout_)
+    try:
+        return WebMapService(url, version=version_, timeout=timeout_)
+    except Exception as e:
+        raise e  # TODO: anything here?
 
 
 class Matcher(Node):
@@ -128,7 +141,12 @@ class Matcher(Node):
         self._declare_ros_params(params)
 
         # Setup WMS server
+        # TODO: if the pool stuff works, redo _init_wms and move all this init mess there
+        # TODO: get rid of ThreadPool if Pool works
         self._wms = None
+        self._wms_results = None
+        self._wms_pool = Pool(1)  # Do not increase the process count, it should be 1
+
         self._init_wms()
 
         # Dict for storing all microRTPS bridge subscribers and publishers
@@ -166,6 +184,24 @@ class Matcher(Node):
     def config(self, value: dict) -> None:
         assert_type(dict, value)
         self._config = value
+
+    @property
+    def wms_pool(self) -> Pool:
+        return self._wms_pool
+
+    @wms_pool.setter
+    def wms_pool(self, value: Pool) -> None:
+        assert_type(Pool, value)
+        self._wms_pool = value
+
+    @property
+    def wms_results(self) -> AsyncResult:
+        return self._wms_results
+
+    @wms_results.setter
+    def wms_results(self, value: AsyncResult) -> None:
+        assert_type(AsyncResult, value)
+        self._wms_results = value
 
     @property
     def wms(self) -> WebMapService:
@@ -289,7 +325,8 @@ class Matcher(Node):
             ('url', config.get(namespace, {}).get('url', None), ParameterDescriptor(read_only=True)),
             ('version', config.get(namespace, {}).get('version', None), ParameterDescriptor(read_only=True)),
             ('layer', config.get(namespace, {}).get('layer', None)),
-            ('srs', config.get(namespace, {}).get('srs', None))
+            ('srs', config.get(namespace, {}).get('srs', None)),
+            ('request_timeout', config.get(namespace, {}).get('request_timeout', None))
         ])
 
         namespace = 'misc'
@@ -570,6 +607,7 @@ class Matcher(Node):
 
     def _update_map(self, center: LatLon, radius: Union[int, float]) -> None:
         """Gets latest map from WMS server for given location and radius and saves it."""
+        self.get_logger().info(f'Updating map at {center}, radius {radius} meters.')
         assert_type(LatLon, center)
         assert_type(get_args(Union[int, float]), radius)
         max_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
@@ -585,28 +623,69 @@ class Matcher(Node):
             return None
 
         # Build and send WMS request
+        url = self.get_parameter('wms.url').get_parameter_value().string_value
+        version = self.get_parameter('wms.version').get_parameter_value().string_value
         layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
+        assert_type(str, url)
+        assert_type(str, version)
         assert_type(str, layer_str)
         assert_type(str, srs_str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
-            map_ = self.wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size,  # TODO: make map size with padding an argument?
-                                   format='image/png', transparent=True)
+            if self.wms_results is not None:
+                assert self.wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
+            timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
+            self.wms_results = self.wms_pool.starmap_async(
+                self._wms_pool_worker, [(center, radius, bbox, map_size, url, version, layer_str, srs_str, timeout)],
+                callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
-            self.get_logger().warn(f'Exception from WMS server query:\n{e},\n{traceback.print_exc()}.')
+            self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
+
+    def wms_pool_worker_callback(self, result: List[MapFrame]) -> None:
+        """Handles result from WMS pool worker."""
+        assert_len(result, 1)
+        result = result[0]
+        self.get_logger().info(f'WMS callback for bbox: {result.bbox}.')
+        assert_type(MapFrame, result)
+        if self.map_frame is not None:
+            self.previous_map_frame = self.map_frame
+        self.map_frame = result
+        assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
+            'Decoded map is not the specified size.'  # TODO: make map size with padding an argument?
+
+    def wms_pool_worker_error_callback(self, e: BaseException) -> None:
+        """Handles errors from WMS pool worker."""
+        self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
+
+    @staticmethod
+    def _wms_pool_worker(center: LatLon, radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
+                         url: str, version: str, layer_str: str, srs_str: str, timeout: int) -> MapFrame:
+        """Gets latest map from WMS server for given location and radius and returns it."""
+        # TODO: computation of bbox could be pushed in here - would just need to make Matcher._get_bbox pickle-able
+        assert_type(str, url)
+        assert_type(str, version)
+        wms_client = _cached_wms_client(url, version, timeout)
+        assert wms_client is not None
+        assert_type(BBox, bbox)
+        assert(all(isinstance(x, int) for x in map_size))
+        assert_type(str, layer_str)
+        assert_type(str, srs_str)
+        try:
+            map_ = wms_client.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size, format='image/png',
+                                     transparent=True)
+            # TODO: what will map_ be if the reqeust times out? will an error be raised?
+        except Exception as e:
+            raise e  # TODO: need to do anything here or just pass it on?
 
         # Decode response from WMS server
         map_ = np.frombuffer(map_.read(), np.uint8)
         map_ = imdecode(map_, cv2.IMREAD_UNCHANGED)
         assert_type(np.ndarray, map_)
         assert_ndim(map_, 3)
-        if self.map_frame is not None:
-            self.previous_map_frame = self.map_frame
-        self.map_frame = MapFrame(center, radius, bbox, map_)
-        assert self.map_frame.image.shape[0:2] == self._map_size_with_padding(), \
-            'Decoded map is not the specified size.'  # TODO: make map size with padding an argument?
+        map_frame = MapFrame(center, radius, bbox, map_)
+        return map_frame
 
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera."""
@@ -743,26 +822,26 @@ class Matcher(Node):
         if self._should_update_map(center, map_radius):
             self._update_map(center, map_radius)
         else:
-            self.get_logger().debug('Map center and radius not changed enough to update map yet.')
+            self.get_logger().debug('Map center and radius not changed enough to update map yet, '
+                                    'or previous results are not ready.')
 
     def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Returns true if map should be updated."""
-        # TODO: based on some config variable, do not update map if center is very close to previous map frame center
         assert_type(get_args(Union[int, float]), radius)
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
         if self.previous_map_frame is not None:
-            if abs(self._distance(center, self.previous_map_frame.center)) > \
-                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value or \
-                    abs(radius - self.previous_map_frame.radius) > \
-                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value:
-                # Old map is too far from what's required --> update
-                return True
-            else:
-                # Old map is OK
+            if not (abs(self._distance(center, self.previous_map_frame.center)) >
+                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value or
+                    abs(radius - self.previous_map_frame.radius) >
+                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value):
                 return False
-        else:
-            # No map yet, should update
-            return True
+        # No map yet, check whether old request is still processing
+        if self.wms_results is not None:
+            if not self.wms_results.ready():
+                # Previous request still running
+                return False
+
+        return True
 
     def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message."""
@@ -1071,6 +1150,12 @@ class Matcher(Node):
             self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
 
+    def terminate_wms_pools(self):
+        """Terminates the WMS Pool and ThreadPool."""
+        if self.wms_pool is not None:
+            self.get_logger().info('Terminating WMS pool.')
+            self.wms_pool.terminate()
+
 def main(args=None):
     if __debug__:
         pr = cProfile.Profile()
@@ -1089,6 +1174,7 @@ def main(args=None):
             ps.print_stats()
             print(s.getvalue())
     finally:
+        matcher.terminate_wms_pools()
         matcher.destroy_node()
         rclpy.shutdown()
 

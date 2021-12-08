@@ -3,7 +3,6 @@ import os
 import traceback
 import yaml
 import math
-import time
 import cProfile
 import io
 import pstats
@@ -1086,8 +1085,7 @@ def main(args=None):
             # Print out profiling stats
             pr.disable()
             s = io.StringIO()
-            sortby = pstats.SortKey.CUMULATIVE
-            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
             ps.print_stats()
             print(s.getvalue())
     finally:

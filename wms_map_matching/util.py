@@ -3,7 +3,6 @@ import numpy as np
 import sys
 import os
 import math
-import geojson
 
 from typing import Any, Union, Tuple, get_args
 from functools import partial

@@ -6,4 +6,3 @@ scipy>=1.4.0
 OWSLib
 pyyaml
 pyproj
-geojson

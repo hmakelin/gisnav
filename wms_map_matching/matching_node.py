@@ -35,9 +35,9 @@ share_dir, superglue_dir = setup_sys_path()
 from wms_map_matching.superglue import SuperGlue
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=1)
 def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
-    """Initializes the WMS process and returns the WMS client which is cached."""
+    """Returns a WMS client which is cached."""
     assert_type(str, url)
     assert_type(str, version_)
     assert_type(int, timeout_)
@@ -140,14 +140,9 @@ class Matcher(Node):
         assert_type(dict, params)
         self._declare_ros_params(params)
 
-        # Setup WMS server
-        # TODO: if the pool stuff works, redo _init_wms and move all this init mess there
-        # TODO: get rid of ThreadPool if Pool works
-        self._wms = None
+        # WMS client and requests in a separate process
         self._wms_results = None
         self._wms_pool = Pool(1)  # Do not increase the process count, it should be 1
-
-        self._init_wms()
 
         # Dict for storing all microRTPS bridge subscribers and publishers
         self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
@@ -202,18 +197,6 @@ class Matcher(Node):
     def wms_results(self, value: AsyncResult) -> None:
         assert_type(AsyncResult, value)
         self._wms_results = value
-
-    @property
-    def wms(self) -> WebMapService:
-        return self._wms
-
-    @wms.setter
-    def wms(self, value: WebMapService) -> None:
-        # TODO: is this setter even needed, this is done during Matcher initialization?
-        # assert_type(WebMapService, value)
-        # TODO: check that this is correct type - needs a bit more work than above,
-        #  example: <owslib.map.wms111.WebMapService_1_1_1 object at 0x7f3e7e4e3e50>
-        self._wms = value
 
     @property
     def superglue(self) -> SuperGlue:
@@ -412,19 +395,6 @@ class Matcher(Node):
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)
-
-    def _init_wms(self) -> None:
-        """Initializes the Web Map Service (WMS) client used by the node to request map rasters.
-
-        The url and version parameters are required to initialize the WMS client and are therefore set to read only. The
-        layer and srs parameters can be changed dynamically.
-        """
-        try:
-            self.wms = WebMapService(self.get_parameter('wms.url').get_parameter_value().string_value,
-                                     version=self.get_parameter('wms.version').get_parameter_value().string_value)
-        except Exception as e:
-            self.get_logger().error('Could not connect to WMS server.')
-            raise e
 
     def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix."""

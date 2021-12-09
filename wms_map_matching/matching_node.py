@@ -328,10 +328,13 @@ class Matcher(Node):
         # Setup publish timer
         frequency = self.get_parameter('misc.publish_frequency').get_parameter_value().integer_value
         assert_type(int, frequency)
-        if not 30 <= frequency <= 50:
-            error_msg = f'Frequency should be between 30 and 50 Hz ({frequency} provided).'
+        if not 0 <= frequency:
+            error_msg = f'Publish frequency must be >0 Hz ({frequency} provided).'
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
+        if not 30 <= frequency <= 50:
+            warn_msg = f'Publish frequency should be between 30 and 50 Hz ({frequency} provided) for EKF2 filter.'
+            self.get_logger().warn(warn_msg)
         timer_period = 1.0 / frequency
         self.timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
 
@@ -429,14 +432,14 @@ class Matcher(Node):
 
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher."""
-        return self.create_publisher(class_, topic_name, 10)
+        return self.create_publisher(class_, topic_name, 10)  # TODO: add explicit QoSProfile instead of depth
 
     def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
         """Sets up an rclpy subscriber."""
         callback_name = topic_name.lower() + '_callback'
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
-        return self.create_subscription(class_, topic_name, callback, 10)
+        return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
 
     def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix."""

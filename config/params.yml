@@ -13,6 +13,7 @@ matcher:
       map_radius_meters_default: 400
       update_map_center_threshold: 20
       update_map_radius_threshold: 50
+      publish_frequency: 40  # Hz
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

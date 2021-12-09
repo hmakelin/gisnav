@@ -148,6 +148,11 @@ class Matcher(Node):
         self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
         self._setup_topics()
 
+        # Setup vehicle visual odometry publisher timer
+        self._timer = None
+        self._vehicle_visual_odometry_message = None  # To be published by timer callback
+        self._setup_timer()
+
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
@@ -206,6 +211,24 @@ class Matcher(Node):
     def superglue(self, value: SuperGlue) -> None:
         assert_type(SuperGlue, value)
         self._superglue = value
+
+    @property
+    def timer(self) -> rclpy.timer.Timer:
+        return self._timer
+
+    @timer.setter
+    def timer(self, value: rclpy.timer.Timer) -> None:
+        assert_type(rclpy.timer.Timer, value)
+        self._timer = value
+
+    @property
+    def vehicle_visual_odometry_message(self) -> VehicleVisualOdometry:
+        return self._vehicle_visual_odometry_message
+
+    @vehicle_visual_odometry_message.setter
+    def vehicle_visual_odometry_message(self, value: VehicleVisualOdometry) -> None:
+        assert_type(VehicleVisualOdometry, value)
+        self._vehicle_visual_odometry_message = value
 
     @property
     def geod(self) -> Geod:
@@ -300,6 +323,26 @@ class Matcher(Node):
         assert_type(GimbalDeviceSetAttitude, value)
         self._gimbal_device_set_attitude = value
 
+    def _setup_timer(self) -> None:
+        """Sets up a timer to control the publish rate of vehicle visual odometry."""
+        # Setup publish timer
+        frequency = self.get_parameter('misc.publish_frequency').get_parameter_value().integer_value
+        assert_type(int, frequency)
+        if not 30 <= frequency <= 50:
+            error_msg = f'Frequency should be between 30 and 50 Hz ({frequency} provided).'
+            self.get_logger().error(error_msg)
+            raise ValueError(error_msg)
+        timer_period = 1.0 / frequency
+        self.timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
+
+    def _vehicle_visual_odometry_timer_callback(self) -> None:
+        """Publishes the vehicle visual odometry message."""
+        if self.vehicle_visual_odometry_message is not None:
+            assert_type(VehicleVisualOdometry, self.vehicle_visual_odometry_message)
+            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self.vehicle_visual_odometry_message}.')
+            self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
+                .publish(self.vehicle_visual_odometry_message)
+
     def _declare_ros_params(self, config: dict):
         """Declares ROS parameters from config file."""
         # TODO: add defaults here instead of Nones and do not use .yaml file for defaults
@@ -319,7 +362,8 @@ class Matcher(Node):
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
             ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
             ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
-            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None))
+            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
+            ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True))
         ])
 
     def _setup_superglue(self) -> None:
@@ -374,13 +418,11 @@ class Matcher(Node):
             publish = topic.get(self.PUBLISH_KEY, None)
             if publish is not None:
                 assert_type(bool, publish)
-                # TODO: this just overwrites previous publish_key
                 self._topics.get(self.PUBLISH_KEY).update({topic_name: self._create_publisher(topic_name, class_)})
 
             subscribe = topic.get(self.SUBSCRIBE_KEY, None)
             if subscribe is not None:
                 assert_type(bool, subscribe)
-                # TODO: this just overwrites previous subscribe_key
                 self._topics.get(self.SUBSCRIBE_KEY).update({topic_name: self._create_subscriber(topic_name, class_)})
 
         self.get_logger().info(f'Topics setup complete:\n{self._topics}.')
@@ -826,7 +868,7 @@ class Matcher(Node):
         self.vehicle_attitude = msg
 
     # TODO: use timestamp of the ImageFrame, not current unix time!
-    def _publish_vehicle_visual_odometry(self, timestamp: int, position: tuple, velocity: tuple, rotation: tuple) -> None:
+    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, velocity: tuple, rotation: tuple) -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge as defined in
         https://github.com/PX4/px4_msgs/blob/master/msg/VehicleVisualOdometry.msg.
 
@@ -878,8 +920,10 @@ class Matcher(Node):
         msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32
         msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
 
-        self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{msg}.')
-        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME).publish(msg)
+        self.get_logger().debug(f'Setting outgoing vehicle visual odometry message as:\n{msg}.')
+        self.vehicle_visual_odometry_message = msg
+        #self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{msg}.')
+        #self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME).publish(msg)
 
     def _camera_pitch(self) -> Optional[int]:
         """Returns camera pitch in degrees relative to vehicle frame."""
@@ -1112,7 +1156,7 @@ class Matcher(Node):
 
             self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
             self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-            self._publish_vehicle_visual_odometry(local_position_timestamp, local_position, velocity, rotation)
+            self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
 
             self.previous_image_frame = image_frame
 
@@ -1125,6 +1169,13 @@ class Matcher(Node):
         if self.wms_pool is not None:
             self.get_logger().info('Terminating WMS pool.')
             self.wms_pool.terminate()
+
+    def destroy_timers(self):
+        """Destroys the vehicle visual odometry timer."""
+        if self.timer is not None:
+            self.get_logger().info('Destroying publish timer.')
+            assert_type(rclpy.timer.Timer, self.timer)
+            self.timer.destroy()
 
 def main(args=None):
     if __debug__:
@@ -1144,6 +1195,7 @@ def main(args=None):
             ps.print_stats()
             print(s.getvalue())
     finally:
+        matcher.destroy_timers()
         matcher.terminate_wms_pools()
         matcher.destroy_node()
         rclpy.shutdown()

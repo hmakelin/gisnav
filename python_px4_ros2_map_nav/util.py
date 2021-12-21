@@ -195,7 +195,7 @@ def setup_sys_path() -> Tuple[str, str]:
     """Adds the package share directory to the path so that SuperGlue can be imported."""
     if 'get_package_share_directory' not in sys.modules:
         from ament_index_python.packages import get_package_share_directory
-    package_name = 'wms_map_matching'  # TODO: try to read from somewhere (e.g. package.xml)
+    package_name = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
     share_dir = get_package_share_directory(package_name)
     superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')  # todo: set this stuff up in the superglue adapter module
     sys.path.append(os.path.abspath(superglue_dir))

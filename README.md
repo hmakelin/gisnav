@@ -1,122 +1,77 @@
-# WMS Map Matching
-
-![Map matching in PX4-Gazebo SITL simulation](./demo.jpg)
-
+# Map Based Navigation for PX4-ROS 2
 ## Introduction
+> **WARNING:** Do not use this software for a real use case. This software is untested and has only been demonstrated
+> with PX4 in a software-in-the-loop (SITL) environment.
 
-This ROS2 package matches a nadir-facing video stream from an airborne drone's camera to a map of its location. This
-package is designed to be simulated software-in-the-loop (SITL) with [PX4](https://docs.px4.io/master/) in
-[Gazebo](https://gazebosim.org/).
+This repository contains a ROS 2 package and node which matches a nadir-facing video stream from an airborne drone's
+camera to a map from the same location.
 
-Current implementation retrieves a map raster from a Web Map Service (WMS) endpoint for the vehicle's approximate
-location as determined by GNSS and then matches it to frame from the video stream using a graph neural network based 
-algorithm ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
+The ROS 2 node works by retrieving a map raster from a Web Map Service (WMS) endpoint for the vehicle's approximate
+location as determined by existing sensors such as GPS, and then matches it to a frame from the video stream using a
+graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
 
 ## Getting started
+### 1. Clone, build, and run the simulation environment at $HOME
+See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
+for more instruction on what to provide for build arguments - the strings below are examples.
+```
+cd $HOME
+git clone https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git
+cd px4-ros2-map-nav-sim
+docker-compose build \
+    --build-arg MAPPROXY_TILE_URL="https://example.server.com/tiles/%(z)s/%(y)s/%(x)s" \
+    --build-arg NVIDIA_DRIVER_MAJOR_VERSION=470 \
+    .
+docker-compose up -d
+```
+### 2. Clone this repository and dependencies
+```
+mkdir -p $HOME/px4_ros_com_ros2/src
+cd $HOME/px4_ros_com_ros2/src
+git clone https://github.com/PX4/px4_ros_com.git
+git clone https://github.com/PX4/px4_msgs.git
+git clone https://gitlab.com/px4-ros2-map-nav/python-px4-ros2-map-nav.git
+```
 
-These instructions provide an example for running this package in a PX4-Gazebo SITL simulation. They assume you are
-working on a Linux system. Running this package in another kind of setup is also possible but may require further
-integration work.
+### 3. Build your ROS 2 workspace
+```
+cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
+./build_ros2_workspace.bash
+```
 
-### 1. Prerequisites
+### 4. Run the node
+```
+ros2 run px4-ros2-map-nav matching_node --ros-args --log-level info
+```
 
-You will need to setup the following items to get started:
+## Advanced Configuration
+TODO
 
-1. [Install ROS2](https://docs.ros.org/en/foxy/Installation.html)
-2. [Install PX4](https://docs.px4.io/master/en/dev_setup/dev_env.html) for the Gazebo SITL target
-3. [Install PX4-ROS2 bridge](https://docs.px4.io/master/en/ros/ros2_comm.html#installation-setup), including FastDDS
-4. [Install QGroundControl](https://docs.qgroundcontrol.com/master/en/index.html)
-5. [Install MapProxy](https://mapproxy.org/download)
-6. [Install gscam2](https://github.com/clydemcqueen/gscam2)
-
-### 2. Configure microRTPS bridge topics
-
-In the `PX4-Autopilot/msg/tools/` and `px4_ros_com_ros2/src/px4_ros_com/templates/` folders, edit the
-`uorb_rtps_message_ids.yaml` file by adding a `send: True` flag under the `VehicleGlobalPosition` and
-`GimbalDeviceInformation` topics.
-
-Remember to build the `px4_msgs` and `px4_ros_com` packages in the `px4_ros_com_ros2` workspace after editing the YAML
-file:
-
-`~/px4_ros_com_ros2$ colcon build packages-select px4_msgs px4_ros_com`
-
-### 3. Configure and launch MapProxy
-
-Make a YAML configuration file for your MapProxy server. You can use the following example of proxying a tiled endpoint
-as a WMS endpoint as a starting point. Many web services use a tiled endpoint instead of WMS because tiles can be
-cached.
-
-**TODO: provide example .yaml file**
-
-`$ mapproxy-util serve-develop worldimagery.yaml`
-
-### 4. Launch Gazebo simulation
-
-In the `PX4-Autopilot` installation folder, launch a simulation in the `ksql_airport` (San Carlos airport) world. The
-`typhoon_h480` option will enable video streaming (see
-[PX4 documentation here](https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming)). Note the double
-underscore between before the `ksql_airport` world suffix.
-
-`~/PX4-Autopilot$ make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport`
-
-### 5. Launch microRTPS agent
-
-Open a shell and type in the following command to launch the microRTPS agent:
-
-`$ micrortps_agent -t UDP`
-
-### 6. Launch QGroundControl
-
-In a new shell, navigate to the folder where you installed QGroundControl and launch the app:
-
-`$ ./QGroundControl.AppImage`
-
-### 7. Launch gscam2
-
-**TODO: example gscam_params file and camera_calibration file**
-
-`ros2 run gscam2 gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml -p preroll:=True -p sync_sinc:=False`
-
-### 8. Launch the matching node
-
-`~/px4_ros_com_ros2$ ros2 run wms_map_matching matching_node --ros-args --log-level debug`
-
-
-## Published Topics
-
-- `~essential_matrix` (`float64[9]`)
-- `~fundamental_matrix` (`float64[9]`)
-- `~homography_matrix` (`float64[9]`)
-- `~pose` (`float64[12]`)
-
-## Subscribed Topics
-
-The `camera_info` and `image_raw` topics are assumed to be provided by [gscam2](https://github.com/clydemcqueen/gscam2).
-The `VehicleLocalPosition_PubSubTopic` is assumed to be provided by the
-[PX4 microRTPS bridge](https://docs.px4.io/master/en/middleware/micrortps.html) and is therefore appended with the
-`_PubSubTopic` suffix.
-
-- `camera_info` (`sensor_msgs/CameraInfo`)
-- `image_raw` (`sensor_msgs/Image`)
-- `VehicleLocalPosition_PubSubTopic` (`px4_msgs/VehicleLocalPosition`)
-
-## Parameters
-
-The default parameters are defined in `config/config.yaml`. Some of the parameters are defined as read-only and cannot
-be changed at runtime. You can use e.g. [MapProxy](https://mapproxy.org/) to provide your own WMS endpoint serving
-either your own maps or proxying a 3rd party WMS/WMTS service.
-
-- `~url` (`string`, default: `http://localhost:8080/wms`, **read-only**)
-- `~version` (`string`, default: `1.1.1`, **read-only**)
-- `~layer` (`string`, default: `WorldImagery`)
-- `~srs` (`string`, default: `EPSG:4326`)\*
-
-*\*While the `~srs` parameter can technically be changed, only EPSG:4326 is supported. 
-The program will currently not work with any other SRS.*
-
+## Repository Structure
+This repository is structured as a `colcon` package:
+```
+.
+├── config
+│       └── params.yml                  # Configurable ROS 2 parameters
+├── LICENSE.md
+├── package.xml                         # Package metadata, also used by setup.py
+├── README.md
+├── requirements.txt                    # Python dependencies, used by setup.py
+├── resource
+│        └── wms_map_matching
+├── setup.cfg
+├── setup.py
+├── test
+│        ├── test_copyright.py
+│        ├── test_flake8.py
+│        └── test_pep257.py
+└── wms_map_matching
+    ├── __init__.py
+    ├── matching_node.py                # Code for the ROS 2 node
+    ├── superglue.py                    # SuperGlue adapter code
+    └── util.py                         # Static functions and other utilities
+```
 ## License
-
-This package is released under the MIT license. See the `LICENSE.md` file included in this repository for more
-information. Also see the
-[SuperGlue license file](https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/LICENSE) for SuperGlue
+This software is released under the MIT license. See the `LICENSE.md` in this repository for more information. Also see
+the [SuperGlue license file](https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/LICENSE) for SuperGlue
 licensing information.

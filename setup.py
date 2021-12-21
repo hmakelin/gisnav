@@ -52,7 +52,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'matching_node = wms_map_matching.matching_node:main'
+            'map_nav_node = python_px4_ros2_map_nav.map_nav_node:main'
         ],
     },
 )

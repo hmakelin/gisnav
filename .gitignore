@@ -1,7 +1,7 @@
 # Python virtual environment
 /venv
 
-# Pycharm generated files
+# PyCharm generated files
 .idea/
 
 # Python bytecode

@@ -19,7 +19,7 @@ import cv2
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from wms_map_matching.util import setup_sys_path, convert_fov_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
+from python_px4_ros2_map_nav.util import setup_sys_path, convert_fov_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
     rotate_and_crop_map, visualize_homography, get_fov, get_camera_distance, LatLon, fov_to_bbox, get_angle,\
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape,\
     assert_first_stamp_greater, MapFrame
@@ -32,7 +32,7 @@ from sensor_msgs.msg import CameraInfo, Image
 share_dir, superglue_dir = setup_sys_path()
 
 # Import this after util.setup_sys_path has been called
-from wms_map_matching.superglue import SuperGlue
+from python_px4_ros2_map_nav.superglue import SuperGlue
 
 
 @lru_cache(maxsize=1)
@@ -47,7 +47,7 @@ def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
         raise e  # TODO: anything here?
 
 
-class Matcher(Node):
+class MapNavNode(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'
 
@@ -128,6 +128,7 @@ class Matcher(Node):
         assert_type(str, share_directory)
         assert_type(str, superglue_directory)
         assert_type(str, config)
+        self._name = node_name
         self._share_dir = share_directory
         self._superglue_dir = superglue_directory
 
@@ -175,6 +176,15 @@ class Matcher(Node):
         self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        assert_type(str, value)
+        self._name = value
 
     @property
     def config(self) -> dict:
@@ -371,7 +381,7 @@ class Matcher(Node):
 
     def _setup_superglue(self) -> None:
         """Sets up SuperGlue."""
-        superglue_conf = self._config.get('matcher', {}).get('superglue', None)
+        superglue_conf = self._config.get(self.name, {}).get('superglue', None)
         assert_type(dict, superglue_conf)
         self.superglue = SuperGlue(superglue_conf, self.get_logger())
 
@@ -1186,7 +1196,7 @@ def main(args=None):
         pr.enable()
     try:
         rclpy.init(args=args)
-        matcher = Matcher('matcher', share_dir, superglue_dir)
+        matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)  # TODO: make name same as in params.yml
         rclpy.spin(matcher)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')

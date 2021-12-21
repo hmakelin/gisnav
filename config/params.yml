@@ -1,9 +1,9 @@
-matcher:
+map_nav_node:
   ros__parameters:
     wms:
       url: 'http://localhost:8080/wms'
       version: '1.1.1'
-      layer: 'WorldImagery'
+      layer: 'Imagery'
       srs: 'EPSG:4326'  # util.get_bbox currently only supports EPSG:4326 --> don't change this setting
       request_timeout: 5
     misc:
@@ -11,7 +11,7 @@ matcher:
       gimbal_projection: True
       max_map_radius: 1000
       map_radius_meters_default: 400
-      update_map_center_threshold: 20
+      update_map_center_threshold: 50
       update_map_radius_threshold: 50
       publish_frequency: 40  # Hz
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md

@@ -30,7 +30,7 @@ mkdir -p $HOME/px4_ros_com_ros2/src
 cd $HOME/px4_ros_com_ros2/src
 git clone https://github.com/PX4/px4_ros_com.git
 git clone https://github.com/PX4/px4_msgs.git
-git clone https://gitlab.com/px4-ros2-map-nav/python-px4-ros2-map-nav.git
+git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 ```
 
 ### 3. Build your ROS 2 workspace
@@ -41,7 +41,7 @@ cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
 
 ### 4. Run the node
 ```
-ros2 run px4-ros2-map-nav matching_node --ros-args --log-level info
+ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info
 ```
 
 ## Advanced Configuration
@@ -58,16 +58,16 @@ This repository is structured as a `colcon` package:
 ├── README.md
 ├── requirements.txt                    # Python dependencies, used by setup.py
 ├── resource
-│        └── wms_map_matching
+│        └── python_px4_ros2_map_nav
 ├── setup.cfg
 ├── setup.py
 ├── test
-│        ├── test_copyright.py
-│        ├── test_flake8.py
-│        └── test_pep257.py
-└── wms_map_matching
+│        ├── test_copyright.py          # Boilerplate tests
+│        ├── test_flake8.py             # Boilerplate tests
+│        └── test_pep257.py             # Boilerplate tests
+└── python_px4_ros2_map_nav
     ├── __init__.py
-    ├── matching_node.py                # Code for the ROS 2 node
+    ├── map_nav_node.py                 # Code for the ROS 2 node
     ├── superglue.py                    # SuperGlue adapter code
     └── util.py                         # Static functions and other utilities
 ```

@@ -66,6 +66,11 @@ This repository is structured as a `colcon` package:
 .
 ├── config
 │       └── params.yml                  # Configurable ROS 2 parameters
+├── docs
+│       ├── conf.py                     # Sphinx configuration file
+│       ├── index.rst                   # Sphinx API documentation template
+│       ├── make.bat
+│       └── Makefile
 ├── LICENSE.md
 ├── package.xml                         # Package metadata, also used by setup.py
 ├── README.md

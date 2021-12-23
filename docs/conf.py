@@ -36,10 +36,10 @@ if os.path.isfile(package_file):
 else:
     raise FileNotFoundError(f'Could not find package file at {package_file}.')
 
-version_string = f'v{version}'
-rst_prolog = f"""
-python_px4_ros2_map_nav {version_string}
-"""
+#version_string = f'v{version}'
+#rst_prolog = f"""
+#python_px4_ros2_map_nav {version_string}
+#"""
 
 # -- Add SuperGlue to path ---------------------------------------------------
 #from python_px4_ros2_map_nav.util import setup_sys_path

@@ -10,7 +10,7 @@ The ROS 2 node works by retrieving a map raster from a Web Map Service (WMS) end
 location as determined by existing sensors such as GPS, and then matches it to a frame from the video stream using a
 graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
 
-## Getting started
+## Getting Started
 ### 1. Clone, build, and run the simulation environment at $HOME
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.
@@ -47,7 +47,7 @@ ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info
 ## Advanced Configuration
 TODO
 
-## API Documentation
+## Generating API Documentation
 You can use Sphinx to generate the API documentation which will appear in the `docs/_build` folder:
 ```
 # Load the workspace in your shell if you have not yet done so
@@ -75,6 +75,7 @@ This repository is structured as a `colcon` package:
 ├── package.xml                         # Package metadata, also used by setup.py
 ├── README.md
 ├── requirements.txt                    # Python dependencies, used by setup.py
+├── requirements-dev.txt                # Python dependencies for development tools
 ├── resource
 │        └── python_px4_ros2_map_nav
 ├── setup.cfg

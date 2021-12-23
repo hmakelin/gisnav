@@ -1390,8 +1390,6 @@ class MapNavNode(Node):
         :param previous_image_frame: Previous image frame
         :return:
         """
-
-        """"""
         try:
             self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
             camera_yaw = math.radians(camera_yaw)

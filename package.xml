@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>python_px4_ros2_map_nav</name>
-  <version>0.8.4</version>
+  <version>0.8.5</version>
   <description>Matches airborne drone video to map retrieved from OGC WMS endpoint.</description>
   <author email="hmakelin@protonmail.com">Harri Mäkelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Mäkelin</maintainer>

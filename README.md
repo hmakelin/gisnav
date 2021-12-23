@@ -47,6 +47,19 @@ ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info
 ## Advanced Configuration
 TODO
 
+## API Documentation
+You can use Sphinx to generate the API documentation which will appear in the `docs/_build` folder:
+```
+# Load the workspace in your shell if you have not yet done so
+source /opt/ros/foxy/setup.bash
+source install/setup.bash
+
+# Go to docs/ folder, install Sphinx and generate html docs
+cd docs/
+pip3 install -r requirements-dev.txt
+make html
+```
+
 ## Repository Structure
 This repository is structured as a `colcon` package:
 ```

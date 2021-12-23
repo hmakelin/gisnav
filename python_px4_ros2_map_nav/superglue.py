@@ -1,23 +1,21 @@
-"""This module adapts the SuperGlue match_pairs.py demo code for this app."""
 import torch
 import cv2
 import numpy as np
 
+from typing import Tuple
 # Assumes models has been added to path (see import statements in map_nav_node.py)
 from models.matching import Matching
 from models.utils import frame2tensor
 
 
 class SuperGlue:
-    """Matches img to map, adapts code from match_pairs.py so that do not have to write files to disk."""
+    """Matches img to map, see code in match_pairs.py for further examples."""
 
     def __init__(self, config, logger=None):
-        """Init the SuperGlue matcher.
+        """Initializer
 
-        Args:
-            config - Dict with SuperGlue config parameters.
-            output_dir - Path to directory where to store output visualization.
-            logger - ROS2 node logger for logging messages.
+        :param config: Dict with SuperGlue config parameters.
+        :param logger: Path to directory where to store output visualization.
         """
         self._config = config
         self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -29,20 +27,20 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map, confidence=0.7):
-        """Match img to map.
+    def match(self, img, map_, confidence=0.7) -> Tuple[np.ndarray, np.ndarray]:
+        """Matches image to map.
 
-        Arguments:
-            img - The image frame.
-            map - The map frame.
-            confidence - Confidence threshold for filtering returned matches.
+        :param img: The image array
+        :param map_: The map array
+        :param confidence: Confidence threshold for valid matched keypoints
+        :return: Matched keypoints
         """
         img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(map, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(map_, cv2.COLOR_BGR2GRAY)
         img = frame2tensor(img_grayscale, self._device)
-        map = frame2tensor(map_grayscale, self._device)
+        map_ = frame2tensor(map_grayscale, self._device)
 
-        pred = self._matching({'image0': img, 'image1': map})  # TODO: check that img and map are formatted correctly
+        pred = self._matching({'image0': img, 'image1': map_})  # TODO: check that img and map are formatted correctly
 
         pred = {k: v[0].cpu().detach().numpy() for k, v in pred.items()}
         kp_img, kp_map = pred['keypoints0'], pred['keypoints1']

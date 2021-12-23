@@ -11,3 +11,6 @@
 build/
 install/
 log/
+
+# Built Sphinx documentation
+docs/_build/

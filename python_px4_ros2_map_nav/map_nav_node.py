@@ -1163,7 +1163,7 @@ class MapNavNode(Node):
     def _camera_pitch(self) -> Optional[int]:  # TODO: float?
         """Returns camera pitch in degrees relative to vehicle frame.
 
-        :return: Camera pitch in degrees
+        :return: Camera pitch in degrees, or None if not available
         """
         rpy = self._get_camera_rpy()
         if rpy is None:

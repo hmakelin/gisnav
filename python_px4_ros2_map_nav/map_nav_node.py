@@ -623,7 +623,7 @@ class MapNavNode(Node):
         azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
         assert_type(get_args(Union[int, float]), azmth)
         assert_type(get_args(Union[int, float]), dist)
-        lon, lat, azmth = self.geod.fwd(latlon.lon, latlon.lat, azmth, dist)
+        lon, lat, azmth = self._geod.fwd(latlon.lon, latlon.lat, azmth, dist)
         return LatLon(lat, lon)
 
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
@@ -658,8 +658,9 @@ class MapNavNode(Node):
 
         :return: Image resolution tuple (height, width) or None if not available
         """
-        if self.camera_info is not None:
-            return self.camera_info.height, self.camera_info.width  # numpy order: h, w, c --> height first
+        if self._camera_info is not None:
+            # TODO: assert or check hasattr?
+            return self._camera_info.height, self._camera_info.width  # numpy order: h, w, c --> height first
         else:
             self.get_logger().warn('Camera info was not available - returning None as declared image size.')
             return None
@@ -692,14 +693,14 @@ class MapNavNode(Node):
         e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))
         assert_shape(e, (3, 4))
 
-        if self.camera_info is None:
+        if self._camera_info is None:
             self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
             return None
         h, w = self._img_dim()
         # TODO: assert h w not none and integers? and divisible by 2?
 
         # Intrinsic matrix
-        k = np.array(self.camera_info.k).reshape([3, 3])
+        k = np.array(self._camera_info.k).reshape([3, 3])
 
         # Project image corners to z=0 plane (ground)
         src_corners = create_src_corners(h, w)
@@ -727,14 +728,14 @@ class MapNavNode(Node):
 
         :return: Local reference frame origin location in WGS84 or None if not available
         """
-        if self.vehicle_local_position is None:
+        if self._vehicle_local_position is None:
             self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
             return None, None
 
-        if self.vehicle_local_position.xy_global is True and self.vehicle_local_position.z_global is True:
-            assert_type(int, self.vehicle_local_position.timestamp)
-            return LatLonAlt(self.vehicle_local_position.ref_lat, self.vehicle_local_position.ref_lon,
-                             self.vehicle_local_position.ref_alt), self.vehicle_local_position.timestamp
+        if self._vehicle_local_position.xy_global is True and self._vehicle_local_position.z_global is True:
+            assert_type(int, self._vehicle_local_position.timestamp)
+            return LatLonAlt(self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon,
+                             self._vehicle_local_position.ref_alt), self._vehicle_local_position.timestamp
         else:
             # TODO: z may not be needed - make a separate _ref_latlon method!
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
@@ -805,7 +806,7 @@ class MapNavNode(Node):
             if self._wms_results is not None:
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
             timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
-            self.wms_results = self._wms_pool.starmap_async(
+            self._wms_results = self._wms_pool.starmap_async(
                 self._wms_pool_worker, [(center, radius, bbox, map_size, url, version, layer_str, srs_str, timeout)],
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
@@ -933,11 +934,11 @@ class MapNavNode(Node):
         assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
 
         gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
-        if self.vehicle_local_position is None:
+        if self._vehicle_local_position is None:
             self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
             return None
 
-        heading = self.vehicle_local_position.heading
+        heading = self._vehicle_local_position.heading
         heading = math.degrees(heading)
         assert -180 <= heading <= 180, f'Unexpected heading value: {heading} degrees ([-180, 180] expected).'
         gimbal_yaw = gimbal_euler[yaw_index]
@@ -1065,8 +1066,8 @@ class MapNavNode(Node):
                     self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value):
                 return False
         # No map yet, check whether old request is still processing
-        if self.wms_results is not None:
-            if not self.wms_results.ready():
+        if self._wms_results is not None:
+            if not self._wms_results.ready():
                 # Previous request still running
                 return False
         return True
@@ -1299,9 +1300,9 @@ class MapNavNode(Node):
         restrict_affine = self._restrict_affine()
 
         # Make sure all info is available before attempting to match
-        required_info = (self._map_frame, local_frame_origin_position, timestamp, self.camera_info,
+        required_info = (self._map_frame, local_frame_origin_position, timestamp, self._camera_info,
                          camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
-        optional_info = (self.previous_image_frame, )
+        optional_info = (self._previous_image_frame, )
 
         if local_frame_origin_position is None or timestamp is None:  # TODO: handle this better!
             return False, required_info + optional_info
@@ -1447,7 +1448,7 @@ class MapNavNode(Node):
             self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
             self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
 
-            self.previous_image_frame = image_frame
+            self._previous_image_frame = image_frame
 
         except Exception as e:
             self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
@@ -1466,10 +1467,10 @@ class MapNavNode(Node):
 
         :return:
         """
-        if self.timer is not None:
+        if self._timer is not None:
             self.get_logger().info('Destroying publish timer.')
-            assert_type(rclpy.timer.Timer, self.timer)
-            self.timer.destroy()
+            assert_type(rclpy.timer.Timer, self._timer)
+            self._timer.destroy()
 
 
 def main(args=None):

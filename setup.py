@@ -13,6 +13,8 @@ if os.path.isfile(package_file):
     package_name = root.find('name').text
     version = root.find('version').text
     description = root.find('description').text
+    author = root.find('author').text
+    author_email = root.find('author').attrib.get('email', '')
     maintainer = root.find('maintainer').text
     maintainer_email = root.find('maintainer').attrib.get('email', '')
     license_name = root.find('license').text
@@ -45,6 +47,8 @@ setup(
     ],
     install_requires=install_requires,
     zip_safe=True,
+    author=author,
+    author_email=author_email,
     maintainer=maintainer,
     maintainer_email=maintainer_email,
     description=description,

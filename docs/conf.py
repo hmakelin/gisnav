@@ -29,14 +29,17 @@ if os.path.isfile(package_file):
     package_name = root.find('name').text
     version = root.find('version').text
     description = root.find('description').text
+    author = root.find('author').text
+    author_email = root.find('author').attrib.get('email', '')
     maintainer = root.find('maintainer').text
     maintainer_email = root.find('maintainer').attrib.get('email', '')
     license_name = root.find('license').text
 else:
     raise FileNotFoundError(f'Could not find package file at {package_file}.')
 
+version_string = f'v{version}'
 rst_prolog = f"""
-python_px4_ros2_map_nav version |version|
+python_px4_ros2_map_nav {version_string}
 """
 
 # -- Add SuperGlue to path ---------------------------------------------------
@@ -51,9 +54,9 @@ sys.path.append(os.path.abspath(superglue_dir))
 
 # -- Project information -----------------------------------------------------
 
-project = 'python_px4_ros2_map_nav'
-copyright = '2021, Harri Mäkelin'
-author = 'Harri Mäkelin'
+project = package_name
+copyright = f'2021, {author}'
+author = author
 
 
 # -- General configuration ---------------------------------------------------

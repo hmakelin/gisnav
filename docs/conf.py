@@ -37,7 +37,6 @@ else:
 
 rst_prolog = f"""
 python_px4_ros2_map_nav version |version|
-.. |version| replace:: {version}
 """
 
 # -- Add SuperGlue to path ---------------------------------------------------

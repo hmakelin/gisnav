@@ -1,7 +1,5 @@
-API documentation for python_px4_ros2_map_nav
+API documentation
 ===================================================
-
-|version|
 
 This is the automatically generated API documentation for the `python_px4_ros2_map_nav`_ ROS 2 package. This
 documentation also contains the private members of each module.
@@ -38,14 +36,6 @@ python\_px4\_ros2\_map\_nav.superglue module
 python\_px4\_ros2\_map\_nav.util module
 ---------------------------------------
 .. automodule:: python_px4_ros2_map_nav.util
-   :members:
-   :private-members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-.. automodule:: python_px4_ros2_map_nav
    :members:
    :private-members:
    :undoc-members:

@@ -23,8 +23,6 @@ class SuperGlue:
         self._logger = logger
         if self._logger is not None:
             self._logger.debug('SuperGlue using device {}'.format(self._device))
-
-        if self._logger is not None:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 

@@ -1353,7 +1353,7 @@ class MapNavNode(Node):
         assert_type(float, focal_length)
         assert_type(Dim, img_dim)
         fov_center_line_length = self._get_distance_of_fov_center(fov_wgs84)
-        camera_distance = get_camera_distance(focal_length, img_dim.width, fov_center_line_length)  # TODO: move logic here, this is only place where this util function is used?
+        camera_distance = fov_center_line_length * focal_length / img_dim.width
         assert_type(float, camera_distance)
         return camera_distance
 
@@ -1488,7 +1488,7 @@ def main(args=None):
         pr.enable()
     try:
         rclpy.init(args=args)
-        matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)  # TODO: make name same as in params.yml
+        matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)
         rclpy.spin(matcher)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')

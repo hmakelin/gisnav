@@ -334,19 +334,7 @@ def convert_pix_to_wgs84(img_dim: Dim, bbox: BBox, pt: np.ndarray) -> LatLon:
     return LatLon(lat, lon)
 
 
-# TODO: use this to replace "get_camera_apparent_altitude"
-def get_camera_distance(focal_length, pixels, ground_truth):
-    """Calculates distance of camera to object whose ground truth width is known.
-
-    :param focal_length: Camera focal length
-    :param pixels: Object width in pixels
-    :param ground_truth: Object width in meters
-    :return: Camera distance to object in meters
-    """
-    return ground_truth * focal_length / pixels
-
-
-def get_bbox_center(bbox):
+def get_bbox_center(bbox: BBox) -> LatLon:
     """Returns bounding box center coordinates.
 
     :param bbox: The bounding box
@@ -355,25 +343,25 @@ def get_bbox_center(bbox):
     return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
 
 
-def rotate_and_crop_map(map: np.ndarray, radians: float, dimensions: Dim, visualize: bool = False) -> np.ndarray:
+def rotate_and_crop_map(map_: np.ndarray, radians: float, dimensions: Dim, visualize: bool = False) -> np.ndarray:
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
     Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map.
 
-    :param map: Map raster
+    :param map_: Map raster
     :param radians: Rotation in radians
     :param dimensions: Map dimensions
     :param visualize: Flag to indicate whether intermediate rasters should be visualized
     :return: Rotated and cropped map raster
     """
     # TODO: only tested on width>height images.
-    cx, cy = tuple(np.array(map.shape[0:2]) / 2)
+    cx, cy = tuple(np.array(map_.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-    map_rotated = cv2.warpAffine(map, r, map.shape[1::-1])
+    map_rotated = cv2.warpAffine(map_, r, map_.shape[1::-1])
     map_cropped = crop_center(map_rotated, dimensions)
     if visualize:
-        cv2.imshow('padded', map)
+        cv2.imshow('padded', map_)
         cv2.waitKey(1)
         cv2.imshow('rotated', map_rotated)
         cv2.waitKey(1)
@@ -383,7 +371,7 @@ def rotate_and_crop_map(map: np.ndarray, radians: float, dimensions: Dim, visual
     return map_cropped
 
 
-def crop_center(img, dimensions):
+def crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
     """Crops dimensions sized part from center.
 
     :param img: Image to crop

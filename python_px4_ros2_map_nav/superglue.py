@@ -1,4 +1,5 @@
 """Module that contains an adapter for the SuperGlue GNN model."""
+import rclpy.impl.rcutils_logger
 import torch
 import cv2
 import numpy as np
@@ -12,7 +13,7 @@ from models.utils import frame2tensor
 class SuperGlue:
     """Matches img to map, see code in match_pairs.py for further examples."""
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config: dict, logger: rclpy.impl.rcutils_logger.RcutilsLogger = None):
         """Initializer
 
         :param config: Dict with SuperGlue config parameters.
@@ -26,7 +27,7 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img, map_, confidence=0.7) -> Tuple[np.ndarray, np.ndarray]:
+    def match(self, img: np.ndarray, map_: np.ndarray, confidence: float = 0.7) -> Tuple[np.ndarray, np.ndarray]:
         """Matches image to map.
 
         :param img: The image array

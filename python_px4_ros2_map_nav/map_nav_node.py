@@ -1017,15 +1017,15 @@ class MapNavNode(Node):
         self._vehicle_local_position = msg
         self.get_logger().debug(f'VehicleLocalPosition: {msg}.')
 
-    @staticmethod
-    def _get_dynamic_map_radius(altitude: Union[int, float]) -> int:
+    def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude.
 
         :param altitude: Altitude of camera in meters
         :return: Suitable map radius in meters
         """
         assert_type(get_args(Union[int, float]), altitude)
-        map_radius = 3*altitude
+        max_map_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
+        map_radius = min(3*altitude, max_map_radius)
         return map_radius
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:

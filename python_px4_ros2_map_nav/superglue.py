@@ -1,3 +1,4 @@
+"""Module that contains an adapter for the SuperGlue GNN model."""
 import torch
 import cv2
 import numpy as np

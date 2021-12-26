@@ -1,3 +1,4 @@
+"""Module that contains the MapNavNode ROS 2 node."""
 import rclpy
 import os
 import traceback

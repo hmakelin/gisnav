@@ -1,3 +1,4 @@
+"""Module containing utility functions for map_nav_node."""
 import cv2
 import numpy as np
 import sys
@@ -13,7 +14,7 @@ from builtin_interfaces.msg._time import Time  # Need this for type checking in 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
-Dim = namedtuple('Dim', 'height width')  # TODO: Rename this HeightWidth so that order between Height and widht does not accidentally get mixed up?
+Dim = namedtuple('Dim', 'height width')
 RPY = namedtuple('RPY', 'roll pitch yaw')
 
 
@@ -95,18 +96,22 @@ class ImageFrame(object):
 
     @property
     def image(self) -> np.ndarray:
+        """Image raster."""
         return self._image
 
     @property
     def frame_id(self) -> str:
+        """ROS 2 frame_id."""
         return self._frame_id
 
     @property
     def stamp(self) -> Time:
+        """ROS 2 timestamp."""
         return self._stamp
 
     @property
     def fov(self) -> np.ndarray:
+        """WGS84 coordinates of image corners (Field of View)."""
         return self._fov
 
     @fov.setter
@@ -119,6 +124,7 @@ class ImageFrame(object):
 
     @property
     def position(self) -> LatLonAlt:
+        """WGS84 coordinates of position of camera that took the image."""
         return self._position
 
     @position.setter
@@ -152,18 +158,22 @@ class MapFrame(object):
 
     @property
     def center(self) -> LatLon:
+        """WGS84 coordinates of map center."""
         return self._center
 
     @property
     def radius(self) -> int:
+        """Radius of circle in meters enclosed by the map."""
         return self._radius
 
     @property
     def bbox(self) -> BBox:
+        """WGS84 coordinates of map bounding box."""
         return self._bbox
 
     @property
     def image(self) -> np.ndarray:
+        """Map image raster."""
         return self._image
 
 

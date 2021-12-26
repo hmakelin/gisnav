@@ -1025,7 +1025,11 @@ class MapNavNode(Node):
         """
         assert_type(get_args(Union[int, float]), altitude)
         max_map_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
-        map_radius = min(3*altitude, max_map_radius)
+        map_radius = 3*altitude
+        if map_radius > max_map_radius:
+            self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
+                                   f'max_map_radius instead.')
+            map_radius = max_map_radius
         return map_radius
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:

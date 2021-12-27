@@ -450,8 +450,8 @@ class MapNavNode(Node):
                 assert now > self._publish_timestamp  # TODO: Is it possible that they are the same?
                 frequency = 1e9 * 1/(now - self._publish_timestamp)
                 self._publish_timestamp = now
-            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}.'
-                                    f'Publish frequency {frequency}.')
+            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
+                                    f'Publish frequency {frequency} Hz.')
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
 

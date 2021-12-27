@@ -175,6 +175,7 @@ class MapNavNode(Node):
         # Setup SuperGlue
         #self._superglue = self._setup_superglue()
         #self._setup_superglue()
+        self._stored_inputs = None  # Must check for None when using this
         self._superglue_results = None  # Must check for None when using this
         # Do not increase the process count, it should be 1
         self._superglue_pool = torch.multiprocessing.Pool(1, initializer=self._superglue_init_worker,
@@ -237,6 +238,41 @@ class MapNavNode(Node):
     def _wms_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(get_args(Optional[AsyncResult]), value)
         self.__wms_results = value
+
+    @property
+    def _superglue_pool(self) -> torch.multiprocessing.Pool:
+        """Pool for running SuperGlue in dedicated process."""
+        return self.__superglue_pool
+
+    @_superglue_pool.setter
+    def _superglue_pool(self, value: torch.multiprocessing.Pool) -> None:
+        # TODO assert type
+        #assert_type(torch.multiprocessing.Pool, value)
+        self.__superglue_pool = value
+
+    @property
+    def _stored_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
+                                                  Dim, bool, Optional[np.ndarray]]]:
+        """Inputs stored at time of launching a new asynchronous match that are needed for processing its results."""
+        return self.__stored_inputs
+
+    @_stored_inputs.setter
+    def _stored_inputs(self, value: Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float,
+                                                      Dim, Dim, bool, Optional[np.ndarray]]]) -> None:
+        # TODO: assert type
+        #assert_type(get_args(Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
+        #                                       Dim, bool, Optional[np.ndarray]]]), value)
+        self.__stored_inputs = value
+
+    @property
+    def _superglue_results(self) -> Optional[AsyncResult]:
+        """Asynchronous results from a SuperGlue process."""
+        return self.__superglue_results
+
+    @_superglue_results.setter
+    def _superglue_results(self, value: Optional[AsyncResult]) -> None:
+        assert_type(get_args(Optional[AsyncResult]), value)
+        self.__superglue_results = value
 
     @property
     def _superglue(self) -> SuperGlue:
@@ -912,6 +948,11 @@ class MapNavNode(Node):
 
     @staticmethod
     def _superglue_init_worker(config: dict):
+        """Initializes SuperGlue in a dedicated process.
+
+        :param config: SuperGlue config
+        :return:
+        """
         superglue_conf = config.get('superglue', None)
         assert_type(dict, superglue_conf)
         global superglue
@@ -933,7 +974,6 @@ class MapNavNode(Node):
         except Exception as e:
             raise e  # TODO: need to do anything here or just pass it on?
 
-
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
@@ -953,12 +993,26 @@ class MapNavNode(Node):
 
         image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
 
-        # Check whether we can do matching
-        pass_, inputs = self._match_inputs()
-        if not pass_:
-            self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
-            return None
-        self._match(image_frame, *inputs)
+        if self._should_match():
+            assert self._superglue_results is None or self._superglue_results.ready()
+            pass_, inputs = self._match_inputs()
+            if not pass_:  # TODO: move these checks to _should_match (now we have 2 should match checks)
+                self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
+                return None
+
+            camera_yaw = inputs[5]
+            map_frame = inputs[0]
+            img_dim = inputs[8]
+
+            self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
+            camera_yaw = math.radians(camera_yaw)
+
+            # Get cropped and rotated map
+            map_cropped = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
+
+            # Use these inputs for post-processing the results from match
+            self._stored_inputs = (image_frame, ) + inputs + (map_cropped, )  # TODO: very messy - clean up these interfaces
+            self._match(image_frame, map_cropped)  # TODO: separaete visualizeation (map_cropped) from _match to clean this up a bit
 
     def _camera_yaw(self) -> Optional[int]:  # TODO: int or float?
         """Returns camera yaw in degrees.
@@ -1426,18 +1480,115 @@ class MapNavNode(Node):
         camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
         return camera_altitude
 
+    def _should_match(self):
+        """Determines whether _match should be called based on whether previous match is still being processed.
+
+        :return:
+        """
+        if self._superglue_results is None or self._superglue_results.ready():  # TODO: handle timeouts, failures for _superglue_results
+            return True
+        else:
+            return False
+
+    def superglue_worker_error_callback(self, e: BaseException):
+        raise NotImplementedError  # TODO!
+
+    def superglue_worker_callback(self, results):
+        print("Worker callback!")  # TODO: remove
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
+        if len(mkp_img) < self.MINIMUM_MATCHES:
+            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
+            return None
+
+        self._process_matches(mkp_img, mkp_map, *self._stored_inputs)
+
+    # TODO: use keyword dictionary to make API cleaner?
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
+                         local_frame_origin_position: LatLonAlt, local_position_timestamp: int, camera_info: CameraInfo,
+                         camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float, map_dim_with_padding: Dim,
+                         img_dim: Dim, restrict_affine: bool,
+                         previous_image_frame: Optional[ImageFrame],
+                         map_cropped: np.ndarray):  # TODO: get rid of map cropped? Move visualization somewhere else?
+        """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
+
+        :param mkp_img:
+        :param mkp_map:
+        :param image_frame:
+        :param map_frame:
+        :param local_frame_origin_position:
+        :param local_position_timestamp:
+        :param camera_info:
+        :param camera_normal:
+        :param camera_yaw:
+        :param camera_pitch:
+        :param map_dim_with_padding:
+        :param img_dim:
+        :param restrict_affine:
+        :param previous_image_frame:
+        :return:
+        """
+
+        # Find and decompose homography matrix, do some sanity checks
+        k = camera_info.k.reshape([3, 3])
+        h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
+                                                              affine=restrict_affine)
+        assert_shape(h, (3, 3))
+        assert_shape(t, (3, 1))
+        assert_shape(r, (3, 3))
+
+        # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
+        # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
+        fov_pix = get_fov(image_frame.image, h)
+        visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
+        fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
+            fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
+        image_frame.fov = fov_wgs84
+
+        # Compute camera altitude, and distance to principal point using triangle similarity
+        # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
+        camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
+        camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
+        self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
+
+        position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
+        local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+        image_frame.position = LatLonAlt(*(position + (
+            camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
+
+        # Yaw against ned frame (quaternion)
+        rotation = [0, 0, 0]
+        rotation[self._yaw_index()] = camera_yaw
+        rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
+        assert_len(rotation, 4)
+
+        velocity = None
+        if previous_image_frame is not None:
+            velocity = self._local_frame_velocity(image_frame, previous_image_frame)
+        else:
+            self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
+
+        self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
+        self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
+        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
+
+        self._previous_image_frame = image_frame
+
     # TODO Current tasks for _match too many:
     # 1. attach fov and position to image_frame
     # 2. Compute and publish position and velocity,
     # 3. Visualize homography,
-    def _match(self, image_frame: ImageFrame, map_frame: MapFrame, local_frame_origin_position: LatLonAlt,
-               local_position_timestamp: int,
-               camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
-               previous_image_frame: Optional[ImageFrame]) -> None:
+    def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray):
+#                , map_frame: MapFrame,
+#               local_frame_origin_position: LatLonAlt,
+#               local_position_timestamp: int,
+#               camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
+#               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+#               previous_image_frame: Optional[ImageFrame]) -> None:
         """Matches camera image to map image and computes camera position and field of view.
 
         :param image_frame: The image frame to match
+        :param map_cropped: TODO
         :param map_frame: The map frame against which to match the image
         :param local_frame_origin_position: WGS84 coordinates of local frame origin
         :param local_position_timestamp: Timestamp of latest VehicleLocalPosition message  # TODO: use some better way to sync timestamps
@@ -1451,67 +1602,13 @@ class MapNavNode(Node):
         :param previous_image_frame: Previous image frame
         :return:
         """
-        try:
-            self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
-            camera_yaw = math.radians(camera_yaw)
 
-            # Get cropped and rotated map
-            map_cropped = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
-
-            # Get matched keypoints and check that they seem valid
-            #mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
-            mkp_img, mkp_map = self._superglue_pool.starmap(self._superglue_pool_worker, [(image_frame.image, map_cropped)])[0]  # TODO: make this async! Needs more restructuring, just trying this out first
-            assert_len(mkp_img, len(mkp_map))
-            if len(mkp_img) < self.MINIMUM_MATCHES:
-                self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
-                return None
-
-            # Find and decompose homography matrix, do some sanity checks
-            k = camera_info.k.reshape([3, 3])
-            h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
-                                                                  affine=restrict_affine)
-            assert_shape(h, (3, 3))
-            assert_shape(t, (3, 1))
-            assert_shape(r, (3, 3))
-
-            # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
-            # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
-            fov_pix = get_fov(image_frame.image, h)
-            visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
-            fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
-                fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
-            image_frame.fov = fov_wgs84
-
-            # Compute camera altitude, and distance to principal point using triangle similarity
-            # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
-            camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
-            camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
-            self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
-
-            position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
-            local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
-            image_frame.position = LatLonAlt(*(position + (camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
-
-            # Yaw against ned frame (quaternion)
-            rotation = [0, 0, 0]
-            rotation[self._yaw_index()] = camera_yaw
-            rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
-            assert_len(rotation, 4)
-
-            velocity = None
-            if previous_image_frame is not None:
-                velocity = self._local_frame_velocity(image_frame, previous_image_frame)
-            else:
-                self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
-
-            self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
-            self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-            self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
-
-            self._previous_image_frame = image_frame
-
-        except Exception as e:
-            self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
+        # Launch a new SuperGlue match
+        assert self._superglue_results is None or self._superglue_results.ready()
+        self._superglue_results = self._superglue_pool.starmap_async(self._superglue_pool_worker,
+                                                                     [(image_frame.image, map_cropped)],
+                                                                     callback=self.superglue_worker_callback,
+                                                                     error_callback=self.superglue_worker_error_callback)
 
     def terminate_wms_pool(self):
         """Terminates the WMS Pool.

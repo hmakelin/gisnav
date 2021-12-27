@@ -9,6 +9,7 @@ import io
 import pstats
 import numpy as np
 import cv2
+import time
 
 from multiprocessing.pool import Pool, AsyncResult
 from pyproj import Geod
@@ -21,7 +22,7 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, convert_fov_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
-    rotate_and_crop_map, visualize_homography, get_fov, get_camera_distance, LatLon, fov_to_bbox, get_angle,\
+    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_to_bbox, get_angle,\
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape,\
     assert_first_stamp_greater, MapFrame
 
@@ -158,6 +159,7 @@ class MapNavNode(Node):
 
         # Setup vehicle visual odometry publisher timer
         self._timer = self._setup_timer()
+        self._publish_timestamp = 0
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
@@ -242,6 +244,16 @@ class MapNavNode(Node):
     def _timer(self, value: rclpy.timer.Timer) -> None:
         assert_type(rclpy.timer.Timer, value)
         self.__timer = value
+
+    @property
+    def _publish_timestamp(self) -> int:
+        """Timestamp in of when last VehicleVisualOdometry message was published."""
+        return self.__publish_timestamp
+
+    @_publish_timestamp.setter
+    def _publish_timestamp(self, value: int) -> None:
+        assert_type(int, value)
+        self.__publish_timestamp = value
 
     @property
     def _topics(self) -> dict:
@@ -419,7 +431,14 @@ class MapNavNode(Node):
         """
         if self._vehicle_visual_odometry is not None:
             assert_type(VehicleVisualOdometry, self._vehicle_visual_odometry)
-            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}.')
+            now = time.time_ns()
+            frequency = None
+            if self._publish_timestamp is not None:
+                assert now > self._publish_timestamp  # TODO: Is it possible that they are the same?
+                frequency = 1e9 * 1/(now - self._publish_timestamp)
+                self._publish_timestamp = now
+            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}.'
+                                    f'Publish frequency {frequency}.')
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
 
@@ -1457,7 +1476,7 @@ class MapNavNode(Node):
             self.get_logger().error('Matching returned exception: {}\n{}'.format(e, traceback.print_exc()))
 
     def terminate_wms_pool(self):
-        """Terminates the WMS Pool and ThreadPool.
+        """Terminates the WMS Pool.
 
         :return:
         """

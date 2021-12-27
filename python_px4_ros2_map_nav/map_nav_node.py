@@ -11,7 +11,15 @@ import numpy as np
 import cv2
 import time
 
-from multiprocessing.pool import Pool, AsyncResult
+# Import and configure torch for multiprocessing
+import torch
+try:
+    torch.multiprocessing.set_start_method('spawn', force=True)
+except RuntimeError:
+    pass
+torch.set_num_threads(1)
+
+from multiprocessing.pool import Pool, AsyncResult  # Used for WMS client process, not for torch
 from pyproj import Geod
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
@@ -165,7 +173,12 @@ class MapNavNode(Node):
         self._cv_bridge = CvBridge()
 
         # Setup SuperGlue
-        self._superglue = self._setup_superglue()
+        #self._superglue = self._setup_superglue()
+        #self._setup_superglue()
+        self._superglue_results = None  # Must check for None when using this
+        # Do not increase the process count, it should be 1
+        self._superglue_pool = torch.multiprocessing.Pool(1, initializer=self._superglue_init_worker,
+                                                          initargs=(self._config.get(self.name, {}), ))
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -897,6 +910,30 @@ class MapNavNode(Node):
         map_frame = MapFrame(center, radius, bbox, map_)
         return map_frame
 
+    @staticmethod
+    def _superglue_init_worker(config: dict):
+        superglue_conf = config.get('superglue', None)
+        assert_type(dict, superglue_conf)
+        global superglue
+        superglue = SuperGlue(superglue_conf)
+
+    @staticmethod
+    def _superglue_pool_worker(img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Finds matching keypoints between input images.
+
+        :param img: The first image
+        :param map_: The second image
+        :return: Tuple of two lists containing matching keypoints in img and map, respectively
+        """
+        """"""
+        assert_type(np.ndarray, img)
+        assert_type(np.ndarray, map_)
+        try:
+            return superglue.match(img, map_)
+        except Exception as e:
+            raise e  # TODO: need to do anything here or just pass it on?
+
+
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
@@ -1422,7 +1459,8 @@ class MapNavNode(Node):
             map_cropped = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
 
             # Get matched keypoints and check that they seem valid
-            mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
+            #mkp_img, mkp_map = self._superglue.match(image_frame.image, map_cropped)
+            mkp_img, mkp_map = self._superglue_pool.starmap(self._superglue_pool_worker, [(image_frame.image, map_cropped)])[0]  # TODO: make this async! Needs more restructuring, just trying this out first
             assert_len(mkp_img, len(mkp_map))
             if len(mkp_img) < self.MINIMUM_MATCHES:
                 self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')

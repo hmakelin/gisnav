@@ -83,6 +83,10 @@ class MapNavNode(Node):
     # Default name of config file
     CONFIG_FILE_DEFAULT = "params.yml"
 
+    # Minimum and maximum publish frequencies for EKF2 fusion
+    MINIMUM_PUBLISH_FREQUENCY = 30
+    MAXIMUM_PUBLISH_FREQUENCY = 50
+
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
     TOPIC_NAME_KEY = 'topic_name'
@@ -466,8 +470,9 @@ class MapNavNode(Node):
             error_msg = f'Publish frequency must be >0 Hz ({frequency} provided).'
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
-        if not 30 <= frequency <= 50:
-            warn_msg = f'Publish frequency should be between 30 and 50 Hz ({frequency} provided) for EKF2 filter.'
+        if not self.MINIMUM_PUBLISH_FREQUENCY <= frequency <= self.MAXIMUM_PUBLISH_FREQUENCY:
+            warn_msg = f'Publish frequency should be between {self.MINIMUM_PUBLISH_FREQUENCY} and ' \
+                       f'{self.MAXIMUM_PUBLISH_FREQUENCY} Hz ({frequency} provided) for EKF2 filter.'
             self.get_logger().warn(warn_msg)
         timer_period = 1.0 / frequency
         timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
@@ -481,13 +486,20 @@ class MapNavNode(Node):
         if self._vehicle_visual_odometry is not None:
             assert_type(VehicleVisualOdometry, self._vehicle_visual_odometry)
             now = time.time_ns()
-            frequency = None
+            hz = None
             if self._publish_timestamp is not None:
                 assert now > self._publish_timestamp  # TODO: Is it possible that they are the same?
-                frequency = 1e9 * 1/(now - self._publish_timestamp)
+                hz = 1e9 * 1 / (now - self._publish_timestamp)
                 self._publish_timestamp = now
             self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
-                                    f'Publish frequency {frequency} Hz.')
+                                    f'Publish frequency {hz} Hz.')
+
+            # Warn if we are close to the bounds of acceptable frequency range
+            warn_padding = 3
+            if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
+                self.get_logger().warn(f'Publish frequency {hz} was close or outside of bounds of required frequency '
+                                       f'range of [{self.MINIMUM_PUBLISH_FREQUENCY}, {self.MAXIMUM_PUBLISH_FREQUENCY}] '
+                                       f'Hz for EKF2 fusion.')
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
 

@@ -497,9 +497,9 @@ class MapNavNode(Node):
             # Warn if we are close to the bounds of acceptable frequency range
             warn_padding = 3
             if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
-                self.get_logger().warn(f'Publish frequency {hz} was close or outside of bounds of required frequency '
-                                       f'range of [{self.MINIMUM_PUBLISH_FREQUENCY}, {self.MAXIMUM_PUBLISH_FREQUENCY}] '
-                                       f'Hz for EKF2 fusion.')
+                self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
+                                       f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
+                                       f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
 
@@ -1506,7 +1506,6 @@ class MapNavNode(Node):
         raise NotImplementedError  # TODO!
 
     def superglue_worker_callback(self, results):
-        print("Worker callback!")  # TODO: remove
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
         if len(mkp_img) < self.MINIMUM_MATCHES:

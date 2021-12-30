@@ -194,7 +194,6 @@ class MapNavNode(Node):
 
         # Must check for None when using these
         # self._image_frame = None  # Not currently used / needed
-        self._previous_image_frame = None
         self._map_frame = None
         self._previous_map_frame = None
 
@@ -391,16 +390,6 @@ class MapNavNode(Node):
     def _previous_map_frame(self, value: Optional[MapFrame]) -> None:
         assert_type(get_args(Optional[MapFrame]), value)
         self.__previous_map_frame = value
-
-    @property
-    def _previous_image_frame(self) -> Optional[ImageFrame]:
-        """Previous image frame and supporting metadata which is compared to current frame for a velocity estimate."""
-        return self.__previous_image_frame
-
-    @_previous_image_frame.setter
-    def _previous_image_frame(self, value: Optional[ImageFrame]) -> None:
-        assert_type(get_args(Optional[ImageFrame]), value)
-        self.__previous_image_frame = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:
@@ -1017,7 +1006,7 @@ class MapNavNode(Node):
                 self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
                 return None
 
-            camera_yaw = inputs[5]
+            camera_yaw = inputs[5]  # TODO: use something more robust, hard coded indices here prone to breaking
             map_frame = inputs[0]
             img_dim = inputs[8]
 
@@ -1229,7 +1218,7 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, velocity: tuple, rotation: tuple) \
+    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple) \
             -> None:
         """Publishes a VehicleVisualOdometry message over the microRTPS bridge.
 
@@ -1238,7 +1227,6 @@ class MapNavNode(Node):
 
         :param timestamp: Timestamp to be included in the outgoing message
         :param position: Position tuple (x, y, z) to be published
-        :param velocity: Velocity tuple (vx, vy, vz) to be published
         :param rotation: Rotation quaternion to be published
         :return:
         """
@@ -1275,13 +1263,7 @@ class MapNavNode(Node):
         msg.velocity_frame = self.LOCAL_FRAME_NED  # uint8
 
         # Velocity
-        if velocity is not None:
-            assert len(velocity) == 3, f'Unexpected length for velocity estimate: {len(velocity)} (3 expected).'
-            assert all(isinstance(x, float) for x in velocity), f'Velocity contained non-float elements.'
-            msg.vx, msg.vy, msg.vz = velocity  # float32 North, East, Down
-        else:
-            self.get_logger().warn('Velocity tuple was None - publishing NaN as velocity.')
-            msg.vx, msg.vy, msg.vz = (float('nan'),) * 3  # float32 North, East, Down
+        msg.vx, msg.vy, msg.vz = (float('nan'),) * 3  # float32 North, East, Down
 
         # Angular velocity - not used
         msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32
@@ -1289,8 +1271,6 @@ class MapNavNode(Node):
 
         self.get_logger().debug(f'Setting outgoing vehicle visual odometry message as:\n{msg}.')
         self._vehicle_visual_odometry = msg
-        #self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{msg}.')
-        #self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME).publish(msg)
 
     def _camera_pitch(self) -> Optional[int]:  # TODO: float?
         """Returns camera pitch in degrees relative to vehicle frame.
@@ -1372,34 +1352,8 @@ class MapNavNode(Node):
         assert_type(get_args(Union[int, float]), camera_altitude)
         return self._distances(local_frame_origin, camera_position) + (camera_altitude,)
 
-    # TODO: why is this called local?
-    def _local_frame_velocity(self, image_frame: ImageFrame, previous_image_frame: ImageFrame)\
-            -> Tuple[float, float, Optional[float]]:
-        """Computes velocity in meters per second for position between two image frames.
-
-        :param image_frame: Latest image frame
-        :param previous_image_frame: Previous image frame
-        :return: Tuple containing x, y, and z (None if not available) axis velocities in meters per second
-        """
-        assert_type(ImageFrame, image_frame)
-        assert_type(ImageFrame, previous_image_frame)
-        assert previous_image_frame.position is not None, f'Previous camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-        assert image_frame.position is not None, f'Current camera position was unexpectedly None.'  # TODO: is it possible that this is None? Need to do warning instead of assert?
-        assert_first_stamp_greater(image_frame.stamp, previous_image_frame.stamp)
-        time_difference = image_frame.stamp.sec - previous_image_frame.stamp.sec
-        if time_difference == 0:
-            time_difference = (image_frame.stamp.nanosec - previous_image_frame.stamp.nanosec) / 1e9
-        assert time_difference > 0, f'Time difference between frames was 0.'
-        x_dist, y_dist = self._distances(image_frame.position, previous_image_frame.position)  # TODO: compute x,y,z components separately!
-        z_dist = image_frame.position.alt - previous_image_frame.position.alt
-        dist = (x_dist, y_dist, z_dist)
-        assert all(isinstance(x, float) for x in
-                   dist), f'Expected all float values for distance: {dist}.'  # TODO: z could be None/NaN - handle it!
-        velocity = tuple(x / time_difference for x in dist)
-        return velocity[0], velocity[1], velocity[2]  # Do this way to get rid of warning
-
     def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
-                                                 Dim, bool, Optional[np.ndarray]]]:
+                                                 Dim, bool]]:
         """Performs a check that all required data is available for performing a _match, and returns the input data.
 
         Returns (success, data) where success is False if there are any Nones in the data tuple.
@@ -1415,7 +1369,6 @@ class MapNavNode(Node):
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
-            previous_image_frame - Optional[np.ndarray], previous image frame, if available, None otherwise
 
         :return: Tuple containing success flag and data mentioned in the description
         """
@@ -1434,17 +1387,16 @@ class MapNavNode(Node):
         # Make sure all info is available before attempting to match
         required_info = (self._map_frame, local_frame_origin_position, timestamp, self._camera_info,
                          camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
-        optional_info = (self._previous_image_frame, )
 
         if local_frame_origin_position is None or timestamp is None:  # TODO: handle this better!
-            return False, required_info + optional_info
+            return False, required_info
 
         if not all(x is not None for x in required_info):
             self.get_logger().warn(f'At least one of following was None: {required_info}. Cannot do matching.')
-            return False, required_info + optional_info
+            return False, required_info
         else:
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
-            return True, required_info + optional_info
+            return True, required_info
 
     @staticmethod
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
@@ -1524,7 +1476,6 @@ class MapNavNode(Node):
                          local_frame_origin_position: LatLonAlt, local_position_timestamp: int, camera_info: CameraInfo,
                          camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float, map_dim_with_padding: Dim,
                          img_dim: Dim, restrict_affine: bool,
-                         previous_image_frame: Optional[ImageFrame],
                          map_cropped: np.ndarray):  # TODO: get rid of map cropped? Move visualization somewhere else?
         """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
 
@@ -1541,7 +1492,6 @@ class MapNavNode(Node):
         :param map_dim_with_padding:
         :param img_dim:
         :param restrict_affine:
-        :param previous_image_frame:
         :return:
         """
 
@@ -1580,21 +1530,13 @@ class MapNavNode(Node):
         rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
         assert_len(rotation, 4)
 
-        velocity = None
-        if previous_image_frame is not None:
-            velocity = self._local_frame_velocity(image_frame, previous_image_frame)
-        else:
-            self.get_logger().warning(f'Could not get previous image frame stamp - will not compute velocity.')
-
-        self.get_logger().debug(f'Local frame position: {local_position}, velocity: {velocity}.')
+        self.get_logger().debug(f'Local frame position: {local_position}.')
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
+        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, rotation)
 
         export_position = self.get_parameter('misc.export_position').get_parameter_value().bool_value
         if export_position:
             self._export_position(image_frame.position, image_frame.fov)
-
-        self._previous_image_frame = image_frame
 
     def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str = POSITION_EXPORT_DEFAULT_FILENAME)\
             -> None:
@@ -1632,8 +1574,7 @@ class MapNavNode(Node):
 #               local_frame_origin_position: LatLonAlt,
 #               local_position_timestamp: int,
 #               camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-#               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
-#               previous_image_frame: Optional[ImageFrame]) -> None:
+#               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool) -> None:
         """Matches camera image to map image and computes camera position and field of view.
 
         :param image_frame: The image frame to match
@@ -1648,7 +1589,6 @@ class MapNavNode(Node):
         :param map_dim_with_padding: Map dimensions including padding for rotations
         :param img_dim: Image dimensions
         :param restrict_affine: Flag indicating whether homography should be restricted to a 2D transformation
-        :param previous_image_frame: Previous image frame
         :return:
         """
 

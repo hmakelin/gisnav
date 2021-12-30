@@ -653,26 +653,6 @@ class MapNavNode(Node):
         _, __, dist = self._geod.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
         return dist
 
-    def _distances(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> Tuple[float, float]:
-        """Calculate distance in meters in x and y dimensions between two points.
-
-        :param latlon1: The first point
-        :param latlon2: The second point
-        :return: The x and y distances in meters as a tuple: (x-distance, y-distance)
-        """
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
-        lats1 = (latlon1.lat, latlon1.lat)
-        lons1 = (latlon1.lon, latlon1.lon)
-        lats2 = (latlon1.lat, latlon2.lat)  # Lon difference for first, lat difference for second --> y, x
-        lons2 = (latlon2.lon, latlon1.lon)
-        _, __, dist = self._geod.inv(lons1, lats1, lons2, lats2)
-
-        # invert order to x, y (lat diff, lon diff in meters) in NED frame dimensions,
-        # also invert X axis so that it points north
-        dist = (-dist[1], dist[0])
-        return dist
-
     def _distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
         """Returns distance between two points in meters.
 
@@ -1340,17 +1320,27 @@ class MapNavNode(Node):
 
     def _local_frame_position(self, local_frame_origin: LatLonAlt, camera_position: LatLon,
                               camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
-        """Returns camera position tuple (x, y) in meters in local frame.
+        """Returns camera position in meters in NED frame.
 
         :param local_frame_origin: WGS84 coordinates of local frame origin  #TODO: can also be LonLat, not just LonLatAlt?
         :param camera_position: WGS84 coordinates of camera position
-        :param camera_altitude: Camera altitude in meters
+        :param camera_altitude: Camera altitude in meters  # TODO: this is not needed, it is just 'passing through'
         :return:
         """
         assert_type(LatLonAlt, local_frame_origin)
         assert_type(LatLon, camera_position)
         assert_type(get_args(Union[int, float]), camera_altitude)
-        return self._distances(local_frame_origin, camera_position) + (camera_altitude,)
+
+        lats_orig = (local_frame_origin.lat, local_frame_origin.lat)
+        lons_orig = (local_frame_origin.lon, local_frame_origin.lon)
+        lats_term = (local_frame_origin.lat, camera_position.lat)
+        lons_term = (camera_position.lon, local_frame_origin.lon)
+        _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
+
+        lon_diff = dist[0]
+        lat_diff = dist[1]
+
+        return lat_diff, lon_diff, camera_altitude
 
     def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
                                                  Dim, bool]]:

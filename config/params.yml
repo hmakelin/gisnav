@@ -14,6 +14,7 @@ map_nav_node:
       update_map_center_threshold: 50
       update_map_radius_threshold: 50
       publish_frequency: 40  # Hz
+      export_position: True
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

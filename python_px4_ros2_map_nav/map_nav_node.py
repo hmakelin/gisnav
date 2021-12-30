@@ -25,6 +25,7 @@ from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
+from geojson import Point, Feature, FeatureCollection, dump
 
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
@@ -86,6 +87,9 @@ class MapNavNode(Node):
     # Minimum and maximum publish frequencies for EKF2 fusion
     MINIMUM_PUBLISH_FREQUENCY = 30
     MAXIMUM_PUBLISH_FREQUENCY = 50
+
+    # File to export position data to
+    POSITION_EXPORT_DEFAULT_FILENAME = 'position.json'
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
@@ -528,7 +532,8 @@ class MapNavNode(Node):
             ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
             ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
             ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
-            ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True))
+            ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
+            ('export_position', config.get(namespace, {}).get('export_position', None))
         ])
 
     def _setup_superglue(self) -> SuperGlue:
@@ -1583,7 +1588,30 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
         self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, velocity, rotation)
 
+        export_position = self.get_parameter('misc.export_position').get_parameter_value().bool_value
+        if export_position:
+            self._export_position(position)
+
         self._previous_image_frame = image_frame
+
+    def _export_position(self, position: LatLon, filename: str = POSITION_EXPORT_DEFAULT_FILENAME) -> None:
+        """Exports the computed position into a geojson file.
+
+        :param position: Computed camera position
+        :param filename: Name of file to write into
+        :return:
+        """
+        assert_type(LatLon, position)
+        pt = Point((position.lon, position.lat))
+        features = [Feature(geometry=pt)]
+        feature_collection = FeatureCollection(features)
+        try:
+            with open(filename, 'w') as f:
+                dump(feature_collection, f)
+        except Exception as e:
+            self.get_logger().error(f'Could not write file {filename} because of exception:'
+                                    f'\n{e}\n{traceback.print_exc()}')
+
 
     # TODO Current tasks for _match too many:
     # 1. attach fov and position to image_frame

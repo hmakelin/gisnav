@@ -1517,6 +1517,7 @@ class MapNavNode(Node):
             camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
 
         # Yaw against ned frame (quaternion)
+        # TODO: Need to give vehicle yaw to VVO message, not camera yaw. Also, FOV may have slight rotation compared to camera_yaw, extract that information from fov_pix or fov_wgs84
         rotation = [0, 0, 0]
         rotation[self._yaw_index()] = camera_yaw
         rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())

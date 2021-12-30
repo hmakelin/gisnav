@@ -25,7 +25,7 @@ from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from owslib.wms import WebMapService
-from geojson import Point, Feature, FeatureCollection, dump
+from geojson import Point, Polygon, Feature, FeatureCollection, dump
 
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
@@ -1590,20 +1590,28 @@ class MapNavNode(Node):
 
         export_position = self.get_parameter('misc.export_position').get_parameter_value().bool_value
         if export_position:
-            self._export_position(position)
+            self._export_position(image_frame.position, image_frame.fov)
 
         self._previous_image_frame = image_frame
 
-    def _export_position(self, position: LatLon, filename: str = POSITION_EXPORT_DEFAULT_FILENAME) -> None:
-        """Exports the computed position into a geojson file.
+    def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str = POSITION_EXPORT_DEFAULT_FILENAME)\
+            -> None:
+        """Exports the computed position and field of view (FOV) into a geojson file.
 
         :param position: Computed camera position
         :param filename: Name of file to write into
         :return:
         """
-        assert_type(LatLon, position)
-        pt = Point((position.lon, position.lat))
-        features = [Feature(geometry=pt)]
+        assert_type(get_args(Union[LatLon, LatLonAlt]), position)
+        assert_type(np.ndarray, fov)
+        assert_type(str, filename)
+        point = Feature(geometry=Point((position.lon, position.lat)))
+        corners = np.flip(fov.squeeze()).tolist()
+        print(corners)
+        corners = [tuple(x) for x in corners]
+        print(corners)
+        corners = Feature(geometry=Polygon([corners]))
+        features = [point, corners]
         feature_collection = FeatureCollection(features)
         try:
             with open(filename, 'w') as f:

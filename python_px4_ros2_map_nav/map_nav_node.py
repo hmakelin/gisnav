@@ -1605,12 +1605,12 @@ class MapNavNode(Node):
         assert_type(get_args(Union[LatLon, LatLonAlt]), position)
         assert_type(np.ndarray, fov)
         assert_type(str, filename)
-        point = Feature(geometry=Point((position.lon, position.lat)))
+        point = Feature(geometry=Point((position.lon, position.lat)))  # TODO: add name/description properties
         corners = np.flip(fov.squeeze()).tolist()
         print(corners)
         corners = [tuple(x) for x in corners]
         print(corners)
-        corners = Feature(geometry=Polygon([corners]))
+        corners = Feature(geometry=Polygon([corners]))  # TODO: add name/description properties
         features = [point, corners]
         feature_collection = FeatureCollection(features)
         try:

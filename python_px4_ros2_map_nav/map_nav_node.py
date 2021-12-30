@@ -1340,7 +1340,7 @@ class MapNavNode(Node):
         lon_diff = dist[0]
         lat_diff = dist[1]
 
-        return lat_diff, lon_diff, camera_altitude
+        return lat_diff, lon_diff, -camera_altitude
 
     def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
                                                  Dim, bool]]:

@@ -1536,7 +1536,7 @@ class MapNavNode(Node):
         :param local_position_timestamp:
         :param camera_info:
         :param camera_normal:
-        :param camera_yaw:
+        :param camera_yaw:  # TODO: this should be radians? But now implementation converts it to radians, see below
         :param camera_pitch:
         :param map_dim_with_padding:
         :param img_dim:
@@ -1552,6 +1552,8 @@ class MapNavNode(Node):
         assert_shape(h, (3, 3))
         assert_shape(t, (3, 1))
         assert_shape(r, (3, 3))
+
+        camera_yaw = math.radians(camera_yaw)  # TODO: give input already as radians, ugly API needs to be fixed anyways
 
         # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
         # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels

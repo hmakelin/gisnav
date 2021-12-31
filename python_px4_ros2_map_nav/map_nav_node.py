@@ -1524,17 +1524,19 @@ class MapNavNode(Node):
         #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
         ll, lr = fov_pix[1], fov_pix[2]  # TODO: do not use hard coded indices! prone to breaking
         fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr-ll).squeeze(), normalize=True))
-        rotation = [0, 0, 0]
-        vehicle_yaw = math.degrees(self._vehicle_local_position.heading) - fov_adjustment_angle
-        rotation[self._yaw_index()] = vehicle_yaw
-        rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
-        assert_len(rotation, 4)
+        assert self._vehicle_attitude is not None
+        assert hasattr(self._vehicle_attitude, 'q')
+        euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
+        vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
+        euler[self._yaw_index()] = vehicle_yaw
+        quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
+        assert_len(quaternion, 4)
 
         self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
         self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
         self.get_logger().debug(f'Local frame position: {local_position}.')
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, rotation)
+        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, quaternion)
 
         export_position = self.get_parameter('misc.export_position').get_parameter_value().bool_value
         if export_position:

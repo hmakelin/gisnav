@@ -1516,13 +1516,22 @@ class MapNavNode(Node):
         image_frame.position = LatLonAlt(*(position + (
             camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
 
-        # Yaw against ned frame (quaternion)
-        # TODO: Need to give vehicle yaw to VVO message, not camera yaw. Also, FOV may have slight rotation compared to camera_yaw, extract that information from fov_pix or fov_wgs84
+        # Vehicle yaw against NED frame (quaternion)
+        # Get the vector from lower left to lower right and calculate its angle to the width unit vector. Use the small
+        # angle to adjust vehicle heading (assume vehicle always knows gimbal/camera yaw).
+        # TODO: Seems like when gimbal (camera) is nadir facing, PX4 automatically rotates it back to face vehicle
+        #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
+        #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
+        ll, lr = fov_pix[1], fov_pix[2]  # TODO: do not use hard coded indices! prone to breaking
+        fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr-ll).squeeze(), normalize=True))
         rotation = [0, 0, 0]
-        rotation[self._yaw_index()] = camera_yaw
+        vehicle_yaw = math.degrees(self._vehicle_local_position.heading) - fov_adjustment_angle
+        rotation[self._yaw_index()] = vehicle_yaw
         rotation = tuple(Rotation.from_euler(self.EULER_SEQUENCE, rotation, degrees=True).as_quat())
         assert_len(rotation, 4)
 
+        self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
+        self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
         self.get_logger().debug(f'Local frame position: {local_position}.')
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
         self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, rotation)
@@ -1544,9 +1553,7 @@ class MapNavNode(Node):
         assert_type(str, filename)
         point = Feature(geometry=Point((position.lon, position.lat)))  # TODO: add name/description properties
         corners = np.flip(fov.squeeze()).tolist()
-        print(corners)
         corners = [tuple(x) for x in corners]
-        print(corners)
         corners = Feature(geometry=Polygon([corners]))  # TODO: add name/description properties
         features = [point, corners]
         feature_collection = FeatureCollection(features)

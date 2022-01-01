@@ -630,11 +630,6 @@ class MapNavNode(Node):
         namespace = 'misc'
         self.declare_parameters(namespace, [
             ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
-            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
-            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
-            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
-            ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
-            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
             ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', None))
         ])
@@ -643,7 +638,12 @@ class MapNavNode(Node):
         self.declare_parameters(namespace, [
             ('initial_guess_lat', config.get(namespace, {}).config.get('initial_guess', {}).get('lat', None)),
             ('initial_guess_lon', config.get(namespace, {}).config.get('initial_guess', {}).get('lon', None)),
-            ('publish_frequency', config.get(namespace, {}).config.get('publish_frequency', None), ParameterDescriptor(read_only=True))
+            ('publish_frequency', config.get(namespace, {}).config.get('publish_frequency', None), ParameterDescriptor(read_only=True)),
+            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
+            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
+            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
+            ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
+            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None))
         ])
 
     def _setup_superglue(self) -> SuperGlue:
@@ -677,7 +677,7 @@ class MapNavNode(Node):
 
         :return: True if projected principal point should be used.
         """
-        gimbal_projection_flag = self.get_parameter('misc.gimbal_projection').get_parameter_value().bool_value
+        gimbal_projection_flag = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
             return gimbal_projection_flag
         else:
@@ -754,7 +754,7 @@ class MapNavNode(Node):
         :return: The bounding box
         """
         if radius_meters is None:
-            radius_meters = self.get_parameter('misc.map_radius_meters_default').get_parameter_value().integer_value
+            radius_meters = self.get_parameter('map_update.map_radius_meters_default').get_parameter_value().integer_value
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
         assert_type(get_args(Union[int, float]), radius_meters)
         corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
@@ -956,7 +956,7 @@ class MapNavNode(Node):
         self.get_logger().info(f'Updating map at {center}, radius {radius} meters.')
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
         assert_type(get_args(Union[int, float]), radius)
-        max_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
+        max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
         # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
         assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
 
@@ -1242,7 +1242,7 @@ class MapNavNode(Node):
         :return: Suitable map radius in meters
         """
         assert_type(get_args(Union[int, float]), altitude)
-        max_map_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
+        max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
         map_radius = 3*altitude
         if map_radius > max_map_radius:
             self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
@@ -1272,9 +1272,9 @@ class MapNavNode(Node):
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
         if self._previous_map_frame is not None:
             if not (abs(self._distance(center, self._previous_map_frame.center)) >
-                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value or
+                    self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
                     abs(radius - self._previous_map_frame.radius) >
-                    self.get_parameter('misc.update_map_center_threshold').get_parameter_value().integer_value):
+                    self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return False
         # No map yet, check whether old request is still processing
         if self._wms_results is not None:

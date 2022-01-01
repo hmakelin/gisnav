@@ -8,11 +8,6 @@ map_nav_node:
       request_timeout: 5
     misc:
       affine_threshold: 5
-      gimbal_projection: True
-      max_map_radius: 1000
-      map_radius_meters_default: 400
-      update_map_center_threshold: 50
-      update_map_radius_threshold: 50
       publish_frequency: 40  # Hz
       export_position: True
     map_update:
@@ -21,6 +16,11 @@ map_nav_node:
         lon: -122.255122
       update_frequency: 1
       default_altitude: 130
+      gimbal_projection: True
+      max_map_radius: 1000
+      map_radius_meters_default: 400
+      update_map_center_threshold: 50
+      update_map_radius_threshold: 50
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

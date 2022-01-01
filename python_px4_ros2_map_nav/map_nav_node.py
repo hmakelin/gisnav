@@ -571,8 +571,8 @@ class MapNavNode(Node):
         if self._use_gimbal_projection():
             projected_principal_point = self._projected_field_of_view_center(origin)
             if projected_principal_point is None:
-                self.get_logger().warn('Could not project field of view center. Using vehicle global position for map '
-                                       'center instead.')
+                self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
+                                       'instead.')
             else:
                 origin = projected_principal_point
 

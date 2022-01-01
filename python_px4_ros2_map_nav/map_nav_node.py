@@ -1747,6 +1747,8 @@ def main(args=None):
     if __debug__:
         pr = cProfile.Profile()
         pr.enable()
+    else:
+        pr = None
     try:
         rclpy.init(args=args)
         matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)

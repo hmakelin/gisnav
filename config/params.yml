@@ -15,6 +15,12 @@ map_nav_node:
       update_map_radius_threshold: 50
       publish_frequency: 40  # Hz
       export_position: True
+    map_update:
+      initial_guess:  # Values from ksql_airport.world file
+        lat: 37.523640
+        lon: -122.255122
+      update_frequency: 1
+      default_altitude: 130
   superglue:  # Recommended outdoor config from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3

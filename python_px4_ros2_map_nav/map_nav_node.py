@@ -169,12 +169,15 @@ class MapNavNode(Node):
         self._wms_results = None  # Must check for None when using this
         self._wms_pool = Pool(1)  # Do not increase the process count, it should be 1
 
+        # Setup map update timer
+        self._map_update_timer = self._setup_map_update_timer()
+
         # Dict for storing all microRTPS bridge subscribers and publishers
         self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
         self._setup_topics()
 
         # Setup vehicle visual odometry publisher timer
-        self._timer = self._setup_timer()
+        self._publish_timer = self._setup_publish_timer()
         self._publish_timestamp = 0
 
         # Converts image_raw to cv2 compatible image
@@ -247,6 +250,16 @@ class MapNavNode(Node):
         self.__wms_results = value
 
     @property
+    def _map_update_timer(self) -> rclpy.timer.Timer:
+        """Timer for throttling map update WMS requests."""
+        return self.__map_update_timer
+
+    @_map_update_timer.setter
+    def _map_update_timer(self, value: rclpy.timer.Timer) -> None:
+        assert_type(rclpy.timer.Timer, value)
+        self.__map_update_timer = value
+
+    @property
     def _superglue_pool(self) -> torch.multiprocessing.Pool:
         """Pool for running SuperGlue in dedicated process."""
         return self.__superglue_pool
@@ -292,12 +305,12 @@ class MapNavNode(Node):
         self.__superglue = value
 
     @property
-    def _timer(self) -> rclpy.timer.Timer:
+    def _publish_timer(self) -> rclpy.timer.Timer:
         """Timer for controlling publish frequency of outgoing VehicleVisualOdometry messages."""
         return self.__timer
 
-    @_timer.setter
-    def _timer(self, value: rclpy.timer.Timer) -> None:
+    @_publish_timer.setter
+    def _publish_timer(self, value: rclpy.timer.Timer) -> None:
         assert_type(rclpy.timer.Timer, value)
         self.__timer = value
 
@@ -451,7 +464,7 @@ class MapNavNode(Node):
         assert_type(get_args(Optional[GimbalDeviceSetAttitude]), value)
         self.__gimbal_device_set_attitude = value
 
-    def _setup_timer(self) -> rclpy.timer.Timer:
+    def _setup_publish_timer(self) -> rclpy.timer.Timer:
         """Sets up a timer to control the publish rate of vehicle visual odometry.
 
         :return: The timer instance
@@ -470,6 +483,107 @@ class MapNavNode(Node):
         timer_period = 1.0 / frequency
         timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
         return timer
+
+    def _setup_map_update_timer(self) -> rclpy.timer.Timer:
+        """Sets up a timer to throttle map update requests.
+
+        :return: The timer instance
+        """
+        frequency = self.get_parameter('map_update.publish_frequency').get_parameter_value().integer_value
+        assert_type(int, frequency)
+        if not 0 <= frequency:
+            error_msg = f'Map update frequency must be >0 Hz ({frequency} provided).'
+            self.get_logger().error(error_msg)
+            raise ValueError(error_msg)
+        timer_period = 1.0 / frequency
+        timer = self.create_timer(timer_period, self._map_update_timer_callback)
+        return timer
+
+    def _lat_lon_alt_from_vehicle_global_position(self) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        """Returns lat, lon and alt from VehicleGlobalPosition, or None if not available.
+
+        :return: LatLonAlt, or None if not available."""
+        lat, lon, alt = None, None, None
+        if self._vehicle_global_position is not None:
+            # Get lat and lon
+            if self._vehicle_global_position.xy_valid:
+                lat, lon = self._vehicle_global_position.lat, self._vehicle_global_position.lon
+
+            # Get altitude
+            if self._vehicle_global_position.z_valid:
+                alt = abs(self._vehicle_global_position.z)
+
+        return lat, lon, alt
+
+    def _alt_from_vehicle_local_position(self) -> Optional[float]:
+        """Returns altitude from vehicle local position or None if not available.
+
+        :return: Altitude in meters or None if not available"""
+        if self._vehicle_local_position is not None:
+            if self._vehicle_local_position.z_valid:
+                self.get_logger().debug('Using VehicleLocalPosition.z for altitude.')
+                return abs(self._vehicle_local_position.z)
+            elif self._vehicle_local_position.dist_bottom_valid:
+                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude.')
+                return abs(self._vehicle_local_position.dist_bottom)
+            else:
+                return None
+        else:
+            return None
+
+    def _lat_lon_alt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
+        """Returns lat, lon and altitude from provided values, or None if not available."""
+        return self.get_parameter('map_update.initial_guess_lat').get_parameter_value().double_value, \
+               self.get_parameter('map_update.initial_guess_lat').get_parameter_value().double_value, \
+               self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
+
+    def _map_update_timer_callback(self) -> None:
+        """Updates stored map if vehicle has moved enough from previous position and if needed inputs are available.
+
+        :return:
+        """
+        # Try to get lat, lon, alt from VehicleGlobalPosition if available
+        latlonalt = self._lat_lon_alt_from_vehicle_global_position()
+
+        # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
+        if latlonalt[2] is None:  # TODO: hard coded index for altitude, prone to breaking?
+            self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
+                                   'instead.')
+            latlonalt[2] = self._alt_from_vehicle_local_position()
+
+        # If some of latlonalt are still None, try to get from provided initial guess and default alt
+        if not all(latlonalt):
+            # Warn, not debug, since this is a static guess
+            self.get_logger().warn('Could not get (lat, lon, alt) tuple from VehicleGlobalPosition nor '
+                                   'VehicleLocalPosition, checking if initial guess has been provided.')
+            latlonalt_guess = self._lat_lon_alt_from_initial_guess()
+            latlonalt = tuple(latlonalt[i] if latlonalt[i] is not None else latlonalt_guess[i] for i in
+                              range(len(latlonalt)))
+
+        # Cannot determine vehicle global position
+        if not all(latlonalt):
+            self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
+            return
+
+        origin = LatLonAlt(*latlonalt)
+
+        # Project principal point if required
+        if self._use_gimbal_projection():
+            projected_principal_point = self._projected_field_of_view_center(origin)
+            if projected_principal_point is None:
+                self.get_logger().warn('Could not project field of view center. Using vehicle global position for map '
+                                       'center instead.')
+            else:
+                origin = projected_principal_point
+
+        # Get map size based on altitude
+        map_radius = self._get_dynamic_map_radius(origin.alt)
+        # Update map if needed
+        if self._should_update_map(origin, map_radius):
+            self._update_map(origin, map_radius)
+        else:
+            self.get_logger().debug('Map center and radius not changed enough to update map yet, '
+                                    'or previous results are not ready.')
 
     def _vehicle_visual_odometry_timer_callback(self) -> None:
         """Publishes the vehicle visual odometry message at given intervals.
@@ -523,6 +637,13 @@ class MapNavNode(Node):
             ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
             ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', None))
+        ])
+
+        namespace = 'map_update'
+        self.declare_parameters(namespace, [
+            ('initial_guess_lat', config.get(namespace, {}).config.get('initial_guess', {}).get('lat', None)),
+            ('initial_guess_lon', config.get(namespace, {}).config.get('initial_guess', {}).get('lon', None)),
+            ('publish_frequency', config.get(namespace, {}).config.get('publish_frequency', None), ParameterDescriptor(read_only=True))
         ])
 
     def _setup_superglue(self) -> SuperGlue:
@@ -825,7 +946,7 @@ class MapNavNode(Node):
 
         return map_center_latlon
 
-    def _update_map(self, center: LatLon, radius: Union[int, float]) -> None:
+    def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
         """Gets latest map from WMS server for given location and radius and saves it.
 
         :param center: WGS84 coordinates of map to be retrieved
@@ -833,7 +954,7 @@ class MapNavNode(Node):
         :return:
         """
         self.get_logger().info(f'Updating map at {center}, radius {radius} meters.')
-        assert_type(LatLon, center)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
         assert_type(get_args(Union[int, float]), radius)
         max_radius = self.get_parameter('misc.max_map_radius').get_parameter_value().integer_value
         # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
@@ -1135,24 +1256,13 @@ class MapNavNode(Node):
         :param msg: VehicleGlobalPosition from the PX4-ROS 2 bridge
         :return:
         """
-        self._vehicle_global_position = msg  # TODO: seems like self.vehicle_global_position property is never accessed currently, info only needed here to trigger _update_map? Comment out this variabhle completely?
-        center = LatLon(msg.lat, msg.lon)
-        origin = LatLonAlt(*(center + (msg.alt,)))
-        if self._use_gimbal_projection():
-            projected_center = self._projected_field_of_view_center(origin)
-            if projected_center is None:
-                self.get_logger().warn('Could not project field of view center. Using global position for map instead.')
-            else:
-                center = projected_center
-        map_radius = self._get_dynamic_map_radius(msg.alt)
-        if self._should_update_map(center, map_radius):
-            self._update_map(center, map_radius)
-        else:
-            self.get_logger().debug('Map center and radius not changed enough to update map yet, '
-                                    'or previous results are not ready.')
+        self._vehicle_global_position = msg
 
     def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Checks if a new WMS map request should be made to update old map.
+
+        Map is updated unless (1) there is a previous map frame that is close enough to provided center and has radius
+        that is close enough to new request or (2) previous WMS request is still processing.
 
         :param center: WGS84 coordinates of new map candidate center
         :param radius: Radius in meters of new map candidate
@@ -1610,15 +1720,20 @@ class MapNavNode(Node):
             self.get_logger().info('Terminating WMS pool.')
             self._wms_pool.terminate()
 
-    def destroy_publish_timer(self):
-        """Destroys the vehicle visual odometry timer.
+    def destroy_timers(self):
+        """Destroys the vehicle visual odometry publish and map update timers.
 
         :return:
         """
-        if self._timer is not None:
+        if self._publish_timer is not None:
             self.get_logger().info('Destroying publish timer.')
-            assert_type(rclpy.timer.Timer, self._timer)
-            self._timer.destroy()
+            assert_type(rclpy.timer.Timer, self._publish_timer)
+            self._publish_timer.destroy()
+
+        if self._publish_timer is not None:
+            self.get_logger().info('Destroying map update timer.')
+            assert_type(rclpy.timer.Timer, self._map_update_timer)
+            self._map_update_timer.destroy()
 
 
 def main(args=None):
@@ -1646,7 +1761,7 @@ def main(args=None):
             ps.print_stats()
             print(s.getvalue())
     finally:
-        matcher.destroy_publish_timer()
+        matcher.destroy_timers()
         matcher.terminate_wms_pool()
         matcher.destroy_node()
         rclpy.shutdown()

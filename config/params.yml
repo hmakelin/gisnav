@@ -9,7 +9,7 @@ map_nav_node:
     misc:
       affine_threshold: 5
       publish_frequency: 40  # Hz
-      export_position: True
+      export_geojson: 'position.json'
     map_update:
       initial_guess:  # Values from ksql_airport.world file
         lat: 37.523640

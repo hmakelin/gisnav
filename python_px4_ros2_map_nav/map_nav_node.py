@@ -88,9 +88,6 @@ class MapNavNode(Node):
     MINIMUM_PUBLISH_FREQUENCY = 30
     MAXIMUM_PUBLISH_FREQUENCY = 50
 
-    # File to export position data to
-    POSITION_EXPORT_DEFAULT_FILENAME = 'position.json'
-
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
     TOPIC_NAME_KEY = 'topic_name'
@@ -533,8 +530,8 @@ class MapNavNode(Node):
 
     def _lat_lon_alt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
         """Returns lat, lon and altitude from provided values, or None if not available."""
-        return self.get_parameter('map_update.initial_guess_lat').get_parameter_value().double_value, \
-               self.get_parameter('map_update.initial_guess_lat').get_parameter_value().double_value, \
+        return self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
+               self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
                self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
     def _map_update_timer_callback(self) -> None:
@@ -631,13 +628,13 @@ class MapNavNode(Node):
         self.declare_parameters(namespace, [
             ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
             ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
-            ('export_position', config.get(namespace, {}).get('export_position', None))
+            ('export_geojson', config.get(namespace, {}).get('export_geojson', None))
         ])
 
         namespace = 'map_update'
         self.declare_parameters(namespace, [
-            ('initial_guess_lat', config.get(namespace, {}).config.get('initial_guess', {}).get('lat', None)),
-            ('initial_guess_lon', config.get(namespace, {}).config.get('initial_guess', {}).get('lon', None)),
+            ('initial_guess.lat', config.get(namespace, {}).config.get('initial_guess', {}).get('lat', None)),
+            ('initial_guess.lon', config.get(namespace, {}).config.get('initial_guess', {}).get('lon', None)),
             ('publish_frequency', config.get(namespace, {}).config.get('publish_frequency', None), ParameterDescriptor(read_only=True)),
             ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
@@ -1648,15 +1645,15 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
         self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, quaternion)
 
-        export_position = self.get_parameter('misc.export_position').get_parameter_value().bool_value
-        if export_position:
-            self._export_position(image_frame.position, image_frame.fov)
+        export_geojson = self.get_parameter('misc.export_geojson').get_parameter_value().string_value
+        if export_geojson is not None:
+            self._export_position(image_frame.position, image_frame.fov, export_geojson)
 
-    def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str = POSITION_EXPORT_DEFAULT_FILENAME)\
-            -> None:
+    def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.
 
         :param position: Computed camera position
+        :param: fov: Field of view of camera
         :param filename: Name of file to write into
         :return:
         """

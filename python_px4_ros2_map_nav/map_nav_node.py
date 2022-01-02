@@ -486,7 +486,7 @@ class MapNavNode(Node):
 
         :return: The timer instance
         """
-        frequency = self.get_parameter('map_update.publish_frequency').get_parameter_value().integer_value
+        frequency = self.get_parameter('map_update.update_frequency').get_parameter_value().integer_value
         assert_type(int, frequency)
         if not 0 <= frequency:
             error_msg = f'Map update frequency must be >0 Hz ({frequency} provided).'
@@ -571,7 +571,8 @@ class MapNavNode(Node):
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
             else:
-                origin = projected_principal_point
+                origin = LatLonAlt(projected_principal_point.lat, projected_principal_point.lon, origin.alt)
+
 
         # Get map size based on altitude
         map_radius = self._get_dynamic_map_radius(origin.alt)
@@ -633,9 +634,10 @@ class MapNavNode(Node):
 
         namespace = 'map_update'
         self.declare_parameters(namespace, [
-            ('initial_guess.lat', config.get(namespace, {}).config.get('initial_guess', {}).get('lat', None)),
-            ('initial_guess.lon', config.get(namespace, {}).config.get('initial_guess', {}).get('lon', None)),
-            ('publish_frequency', config.get(namespace, {}).config.get('publish_frequency', None), ParameterDescriptor(read_only=True)),
+            ('initial_guess.lat', config.get(namespace, {}).get('initial_guess', {}).get('lat', None)),
+            ('initial_guess.lon', config.get(namespace, {}).get('initial_guess', {}).get('lon', None)),
+            ('update_frequency', config.get(namespace, {}).get('update_frequency', None), ParameterDescriptor(read_only=True)),
+            ('default_altitude', config.get(namespace, {}).get('default_altitude', None)),
             ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
             ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
@@ -980,7 +982,8 @@ class MapNavNode(Node):
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
             timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
             self._wms_results = self._wms_pool.starmap_async(
-                self._wms_pool_worker, [(center, radius, bbox, map_size, url, version, layer_str, srs_str, timeout)],
+                self._wms_pool_worker, [(LatLon(center.lat, center.lon), radius, bbox, map_size, url, version,  # TODO: conersion of center to LatLon may be redundant?
+                                         layer_str, srs_str, timeout)],
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
@@ -1010,8 +1013,9 @@ class MapNavNode(Node):
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
 
     @staticmethod
-    def _wms_pool_worker(center: LatLon, radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
-                         url: str, version: str, layer_str: str, srs_str: str, timeout: int) -> MapFrame:
+    def _wms_pool_worker(center: LatLon, radius: Union[int, float], bbox: BBox,
+                         map_size: Tuple[int, int], url: str, version: str, layer_str: str, srs_str: str, timeout: int)\
+            -> MapFrame:
         """Gets latest map from WMS server for given location and radius and returns it.
 
         :param center: Center of the map to be retrieved
@@ -1029,12 +1033,15 @@ class MapNavNode(Node):
         # TODO: computation of bbox could be pushed in here - would just need to make Matcher._get_bbox pickle-able
         assert_type(str, url)
         assert_type(str, version)
+        assert_type(int, timeout)
         wms_client = _cached_wms_client(url, version, timeout)
         assert wms_client is not None
         assert_type(BBox, bbox)
         assert(all(isinstance(x, int) for x in map_size))
         assert_type(str, layer_str)
         assert_type(str, srs_str)
+        assert_type(LatLon, center)
+        assert_type(get_args(Union[int, float]), radius)
         try:
             map_ = wms_client.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size, format='image/png',
                                      transparent=True)

@@ -531,7 +531,7 @@ class MapNavNode(Node):
     def _lat_lon_alt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
         """Returns lat, lon and altitude from provided values, or None if not available."""
         return self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
-               self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
+               self.get_parameter('map_update.initial_guess.lon').get_parameter_value().double_value, \
                self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
     def _map_update_timer_callback(self) -> None:

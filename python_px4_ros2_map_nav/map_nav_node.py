@@ -571,6 +571,8 @@ class MapNavNode(Node):
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
             else:
+                # TODO: this is a bit misleading - nothing is at origin.alt above the principal pont. We just want
+                #  to give this as input argument to _update_map (altitude will not be used), try to fix later
                 origin = LatLonAlt(projected_principal_point.lat, projected_principal_point.lon, origin.alt)
 
 

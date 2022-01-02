@@ -486,13 +486,12 @@ class MapNavNode(Node):
 
         :return: The timer instance
         """
-        frequency = self.get_parameter('map_update.update_frequency').get_parameter_value().integer_value
-        assert_type(int, frequency)
-        if not 0 <= frequency:
-            error_msg = f'Map update frequency must be >0 Hz ({frequency} provided).'
+        timer_period = self.get_parameter('map_update.update_delay').get_parameter_value().integer_value
+        assert_type(int, timer_period)
+        if not 0 <= timer_period:
+            error_msg = f'Map update delay must be >0 seconds ({timer_period} provided).'
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
-        timer_period = 1.0 / frequency
         timer = self.create_timer(timer_period, self._map_update_timer_callback)
         return timer
 
@@ -638,7 +637,7 @@ class MapNavNode(Node):
         self.declare_parameters(namespace, [
             ('initial_guess.lat', config.get(namespace, {}).get('initial_guess', {}).get('lat', None)),
             ('initial_guess.lon', config.get(namespace, {}).get('initial_guess', {}).get('lon', None)),
-            ('update_frequency', config.get(namespace, {}).get('update_frequency', None), ParameterDescriptor(read_only=True)),
+            ('update_delay', config.get(namespace, {}).get('update_delay', None), ParameterDescriptor(read_only=True)),
             ('default_altitude', config.get(namespace, {}).get('default_altitude', None)),
             ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
@@ -1113,9 +1112,9 @@ class MapNavNode(Node):
                 self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
                 return None
 
-            camera_yaw = inputs[5]  # TODO: use something more robust, hard coded indices here prone to breaking
+            camera_yaw = inputs[3]  # TODO: use something more robust, hard coded indices here prone to breaking
             map_frame = inputs[0]
-            img_dim = inputs[8]
+            img_dim = inputs[6]
 
             self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
             camera_yaw = math.radians(camera_yaw)
@@ -1349,10 +1348,14 @@ class MapNavNode(Node):
             self.get_logger().warn('Position tuple was None - publishing NaN as position.')
             msg.x, msg.y, msg.z = (float('nan'),) * 3  # float32 North, East, Down
 
-        # Attitude quaternions - not used
+        # Attitude quaternions
         assert msg.local_frame is self.LOCAL_FRAME_NED  # TODO: this needed?
-        msg.q = rotation  # (float('nan'),) * 4  # float32  # TODO: need vehicle yaw against NED frame here, need to assert self.LOCAL_FRAME_NED is used
-        msg.q_offset = (0.0, ) * 4  # (float('nan'),) * 4      # TODO: make this zero and assert that self.LOCAL_FRAME_NED is used
+        if rotation is not None:
+            msg.q = rotation  # (float('nan'),) * 4  # float32  # TODO: need vehicle yaw against NED frame here, need to assert self.LOCAL_FRAME_NED is used
+            msg.q_offset = (0.0, ) * 4  # (float('nan'),) * 4      # TODO: make this zero and assert that self.LOCAL_FRAME_NED is used
+        else:
+            msg.q = (float('nan'),) * 4  # float32
+            msg.q_offset = (float('nan'),) * 4
         msg.pose_covariance = (float('nan'),) * 21
 
         # Velocity frame of reference
@@ -1434,7 +1437,7 @@ class MapNavNode(Node):
 
         return h, h_mask, translation, rotation
 
-    def _local_frame_position(self, local_frame_origin: LatLonAlt, camera_position: LatLon,
+    def _local_frame_position(self, local_frame_origin: Union[LatLon, LatLonAlt], camera_position: LatLon,
                               camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
         """Returns camera position in meters in NED frame.
 
@@ -1443,7 +1446,7 @@ class MapNavNode(Node):
         :param camera_altitude: Camera altitude in meters  # TODO: this is not needed, it is just 'passing through'
         :return:
         """
-        assert_type(LatLonAlt, local_frame_origin)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), local_frame_origin)
         assert_type(LatLon, camera_position)
         assert_type(get_args(Union[int, float]), camera_altitude)
 
@@ -1460,16 +1463,14 @@ class MapNavNode(Node):
 
         return lat_sign*lat_diff, lon_sign*lon_diff, -camera_altitude
 
-    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
-                                                 Dim, bool]]:
+    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, CameraInfo, np.ndarray, float, float, Dim,
+                                                 Dim, bool, LatLonAlt, int]]:
         """Performs a check that all required data is available for performing a _match, and returns the input data.
 
         Returns (success, data) where success is False if there are any Nones in the data tuple.
 
         Data consists of:
             map_frame - np.darray map_frame to match
-            local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
-            timestamp - Local position message timestamp (to sync vehicle visual odom messages)
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float  # TODO: degrees? If so, accept int also
@@ -1477,6 +1478,8 @@ class MapNavNode(Node):
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
+            local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
+            timestamp - Local position message timestamp (to sync vehicle visual odom messages)
 
         :return: Tuple containing success flag and data mentioned in the description
         """
@@ -1493,18 +1496,17 @@ class MapNavNode(Node):
         restrict_affine = self._restrict_affine()
 
         # Make sure all info is available before attempting to match
-        required_info = (self._map_frame, local_frame_origin_position, timestamp, self._camera_info,
-                         camera_normal, camera_yaw, camera_pitch, map_dim_with_padding, img_dim, restrict_affine)
+        required_info = (self._map_frame, self._camera_info, camera_normal, camera_yaw, camera_pitch,
+                         map_dim_with_padding, img_dim, restrict_affine)
 
-        if local_frame_origin_position is None or timestamp is None:  # TODO: handle this better!
-            return False, required_info
+        optional_info = (local_frame_origin_position, timestamp)
 
         if not all(x is not None for x in required_info):
             self.get_logger().warn(f'At least one of following was None: {required_info}. Cannot do matching.')
-            return False, required_info
+            return False, required_info + optional_info
         else:
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
-            return True, required_info
+            return True, required_info + optional_info
 
     @staticmethod
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
@@ -1581,9 +1583,9 @@ class MapNavNode(Node):
 
     # TODO: use keyword dictionary to make API cleaner?
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
-                         local_frame_origin_position: LatLonAlt, local_position_timestamp: int, camera_info: CameraInfo,
+                         camera_info: CameraInfo,
                          camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float, map_dim_with_padding: Dim,
-                         img_dim: Dim, restrict_affine: bool,
+                         img_dim: Dim, restrict_affine: bool, local_frame_origin_position: Optional[LatLonAlt], local_position_timestamp: Optional[int],
                          map_cropped: np.ndarray):  # TODO: get rid of map cropped? Move visualization somewhere else?
         """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
 
@@ -1591,8 +1593,6 @@ class MapNavNode(Node):
         :param mkp_map:
         :param image_frame:
         :param map_frame:
-        :param local_frame_origin_position:
-        :param local_position_timestamp:
         :param camera_info:
         :param camera_normal:
         :param camera_yaw:  # TODO: this should be radians? But now implementation converts it to radians, see below
@@ -1600,6 +1600,9 @@ class MapNavNode(Node):
         :param map_dim_with_padding:
         :param img_dim:
         :param restrict_affine:
+        :param local_frame_origin_position:
+        :param local_position_timestamp:
+        :param: map_cropped
         :return:
         """
 
@@ -1628,7 +1631,14 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
         position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
-        local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+        if local_frame_origin_position is None:
+            self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
+                                    'frame origin.')
+            # Initialize local frame reference for vvo
+            local_position = self._local_frame_position(position, position, camera_altitude)  # TODO: no need to calculate all this, x and y are 0?
+        else:
+            local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+
         image_frame.position = LatLonAlt(*(position + (
             camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
 
@@ -1639,19 +1649,26 @@ class MapNavNode(Node):
         #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
         #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
         ll, lr = fov_pix[1], fov_pix[2]  # TODO: do not use hard coded indices! prone to breaking
-        fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr-ll).squeeze(), normalize=True))
-        assert self._vehicle_attitude is not None
-        assert hasattr(self._vehicle_attitude, 'q')
-        euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
-        vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
-        euler[self._yaw_index()] = vehicle_yaw
-        quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
-        assert_len(quaternion, 4)
+        if self._vehicle_attitude is not None:
+            # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
+            fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr - ll).squeeze(), normalize=True))
+            assert hasattr(self._vehicle_attitude, 'q')
+            euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
+            vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
+            euler[self._yaw_index()] = vehicle_yaw
+            quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
+            assert_len(quaternion, 4)
+            self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
+            self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
+        else:
+            quaternion = None
 
-        self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
-        self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
         self.get_logger().debug(f'Local frame position: {local_position}.')
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
+        if local_position_timestamp is None:
+            # Initialize timestamp for vvo
+            self.get_logger().debug('No ekf2 timestamp provided, using current time as timestamp.')
+            local_position_timestamp = int(time.time_ns()/1000)  # time "since system start" in microseconds
         self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, quaternion)
 
         export_geojson = self.get_parameter('misc.export_geojson').get_parameter_value().string_value

@@ -14,7 +14,7 @@ map_nav_node:
       initial_guess:  # Values from ksql_airport.world file
         lat: 37.523640
         lon: -122.255122
-      update_frequency: 1
+      update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
       default_altitude: 130
       gimbal_projection: True
       max_map_radius: 1000

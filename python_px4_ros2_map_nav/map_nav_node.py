@@ -501,13 +501,8 @@ class MapNavNode(Node):
         :return: LatLonAlt, or None if not available."""
         lat, lon, alt = None, None, None
         if self._vehicle_global_position is not None:
-            # Get lat and lon
-            if self._vehicle_global_position.xy_valid:
-                lat, lon = self._vehicle_global_position.lat, self._vehicle_global_position.lon
-
-            # Get altitude
-            if self._vehicle_global_position.z_valid:
-                alt = abs(self._vehicle_global_position.z)
+            lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
+                            self._vehicle_global_position.alt
 
         return lat, lon, alt
 
@@ -1105,26 +1100,28 @@ class MapNavNode(Node):
 
         image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
 
+        # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
         if self._should_match():
             assert self._superglue_results is None or self._superglue_results.ready()
-            pass_, inputs = self._match_inputs()
-            if not pass_:  # TODO: move these checks to _should_match (now we have 2 should match checks)
-                self.get_logger().warn(f'_match_inputs check did not pass - skipping image frame matching.')
-                return None
+            inputs = self._match_inputs(image_frame)
+            for k, v in inputs.items():
+                if v is None:
+                    # TODO: remove this temporary allowance, local frame origin is not optional!
+                    if k not in ['local_frame_origin_position', 'timestamp']:
+                        self.get_logger().warn(f'Key {k} was None in stored matching inputs - cannot call match.')
+                        return
 
-            camera_yaw = inputs[3]  # TODO: use something more robust, hard coded indices here prone to breaking
-            map_frame = inputs[0]
-            img_dim = inputs[6]
+            camera_yaw = inputs.get('camera_yaw', None)
+            map_frame = inputs.get('map_frame', None)
+            img_dim = inputs.get('img_dim', None)
+            assert all((camera_yaw, map_frame, img_dim))  # Redundant (see above 'for k, v in inputs.items(): ...')
+
+            self._stored_inputs = inputs
+            map_cropped = inputs.get('map_cropped')
+            assert_type(np.ndarray, map_cropped)
 
             self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
-            camera_yaw = math.radians(camera_yaw)
-
-            # Get cropped and rotated map
-            map_cropped = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
-
-            # Use these inputs for post-processing the results from match
-            self._stored_inputs = (image_frame, ) + inputs + (map_cropped, )  # TODO: very messy - clean up these interfaces
-            self._match(image_frame, map_cropped)  # TODO: separaete visualizeation (map_cropped) from _match to clean this up a bit
+            self._match(image_frame, map_cropped)
 
     def _camera_yaw(self) -> Optional[int]:  # TODO: int or float?
         """Returns camera yaw in degrees.
@@ -1463,13 +1460,10 @@ class MapNavNode(Node):
 
         return lat_sign*lat_diff, lon_sign*lon_diff, -camera_altitude
 
-    def _match_inputs(self) -> Tuple[bool, Tuple[np.ndarray, CameraInfo, np.ndarray, float, float, Dim,
-                                                 Dim, bool, LatLonAlt, int]]:
-        """Performs a check that all required data is available for performing a _match, and returns the input data.
+    def _match_inputs(self, image_frame: ImageFrame) -> dict:
+        """Returns a dictionary snapshot of the input data required to perform and process a match.
 
-        Returns (success, data) where success is False if there are any Nones in the data tuple.
-
-        Data consists of:
+        The dictionary has the following data:
             map_frame - np.darray map_frame to match
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
@@ -1481,32 +1475,40 @@ class MapNavNode(Node):
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             timestamp - Local position message timestamp (to sync vehicle visual odom messages)
 
-        :return: Tuple containing success flag and data mentioned in the description
+        :param image_frame: The image frame from the drone video
+
+        :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
-        # Vehicle local frame global reference position
-        local_frame_origin_position, timestamp = self._vehicle_local_position_ref_latlonalt_timestamp()  # TODO: also get timestamp?
+        data = {
+            'image_frame': image_frame,
+            'map_frame': self._map_frame,
+            # Camera information
+            'camera_info': self._camera_info,
+            'camera_normal': self._camera_normal(),
+            'camera_yaw': self._camera_yaw(),
+            'camera_pitch': self._camera_pitch(),
+            # Image and map raster dimensions
+            'map_dim_with_padding': self._map_dim_with_padding(),
+            'img_dim': self._img_dim(),
+            # Should homography be restricted to 2D affine transformation
+            'restrict_affine': self._restrict_affine(),
+            # Vehicle local frame global reference position
+            'local_frame_origin_position': (self._vehicle_local_position_ref_latlonalt_timestamp())[0],
+            'timestamp': (self._vehicle_local_position_ref_latlonalt_timestamp())[1],
+        }
 
-        # Camera information
-        camera_normal, camera_yaw, camera_pitch = self._camera_normal(), self._camera_yaw(), self._camera_pitch()
-
-        # Image and map raster dimensions
-        map_dim_with_padding, img_dim = self._map_dim_with_padding(), self._img_dim()
-
-        # Should homography be restricted to 2D affine transformation
-        restrict_affine = self._restrict_affine()
-
-        # Make sure all info is available before attempting to match
-        required_info = (self._map_frame, self._camera_info, camera_normal, camera_yaw, camera_pitch,
-                         map_dim_with_padding, img_dim, restrict_affine)
-
-        optional_info = (local_frame_origin_position, timestamp)
-
-        if not all(x is not None for x in required_info):
-            self.get_logger().warn(f'At least one of following was None: {required_info}. Cannot do matching.')
-            return False, required_info + optional_info
-        else:
+        # Get cropped and rotated map
+        camera_yaw = data.get('camera_yaw', None)
+        map_frame = data.get('map_frame', None)
+        img_dim = data.get('img_dim', None)
+        if all((camera_yaw, map_frame, img_dim)):
+            assert hasattr(map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
-            return True, required_info + optional_info
+            data['map_cropped'] = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
+        else:
+            data['map_cropped'] = None
+
+        return data
 
     @staticmethod
     def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
@@ -1579,30 +1581,30 @@ class MapNavNode(Node):
             self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
             return None
 
-        self._process_matches(mkp_img, mkp_map, *self._stored_inputs)
+        self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
-    # TODO: use keyword dictionary to make API cleaner?
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
-                         camera_info: CameraInfo,
-                         camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float, map_dim_with_padding: Dim,
-                         img_dim: Dim, restrict_affine: bool, local_frame_origin_position: Optional[LatLonAlt], local_position_timestamp: Optional[int],
-                         map_cropped: np.ndarray):  # TODO: get rid of map cropped? Move visualization somewhere else?
+                         camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
+                         map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+                         local_frame_origin_position: Optional[LatLonAlt], timestamp: Optional[int],
+                         map_cropped: Optional[np.ndarray] = None):  # TODO: get rid of map cropped? Move visualization somewhere else?
         """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
 
-        :param mkp_img:
-        :param mkp_map:
-        :param image_frame:
-        :param map_frame:
-        :param camera_info:
-        :param camera_normal:
-        :param camera_yaw:  # TODO: this should be radians? But now implementation converts it to radians, see below
-        :param camera_pitch:
-        :param map_dim_with_padding:
-        :param img_dim:
-        :param restrict_affine:
-        :param local_frame_origin_position:
-        :param local_position_timestamp:
-        :param: map_cropped
+        :param mkp_img: Matching keypoints in drone image
+        :param mkp_map: Matching keypoints in map raster
+        :param image_frame: The drone image
+        :param map_frame: The map raster
+        :param camera_info: CameraInfo from time of match (from _match_inputs)
+        :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)
+        :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
+        :param camera_pitch: Camera pitch in degrees from time of match (from _match_inputs)
+        :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
+        :param img_dim: Drone image dimensions from time of match (from _match_inputs)
+        :param restrict_affine: Restrict affine flag from time of match (from _match_inputs)
+        :param local_frame_origin_position: Local frame origin coordinates from time of match (from _match_inputs)
+        :param timestamp: Local position message timestamp from time of match (from _match_inputs)
+        :param map_cropped: Optional map cropped image, visualizes matches if provided
+
         :return:
         """
 
@@ -1619,7 +1621,8 @@ class MapNavNode(Node):
         # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
         # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
         fov_pix = get_fov(image_frame.image, h)
-        visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
+        if map_cropped is not None:
+            visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
         fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
             fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
         image_frame.fov = fov_wgs84
@@ -1665,11 +1668,11 @@ class MapNavNode(Node):
 
         self.get_logger().debug(f'Local frame position: {local_position}.')
         self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
-        if local_position_timestamp is None:
+        if timestamp is None:
             # Initialize timestamp for vvo
             self.get_logger().debug('No ekf2 timestamp provided, using current time as timestamp.')
-            local_position_timestamp = int(time.time_ns()/1000)  # time "since system start" in microseconds
-        self._create_vehicle_visual_odometry_msg(local_position_timestamp, local_position, quaternion)
+            timestamp = int(time.time_ns() / 1000)  # time "since system start" in microseconds
+        self._create_vehicle_visual_odometry_msg(timestamp, local_position, quaternion)
 
         export_geojson = self.get_parameter('misc.export_geojson').get_parameter_value().string_value
         if export_geojson is not None:

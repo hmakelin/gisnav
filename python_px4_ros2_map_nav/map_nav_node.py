@@ -1504,6 +1504,7 @@ class MapNavNode(Node):
         if all((camera_yaw, map_frame, img_dim)):
             assert hasattr(map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
+            camera_yaw = math.radians(camera_yaw)
             data['map_cropped'] = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
         else:
             data['map_cropped'] = None

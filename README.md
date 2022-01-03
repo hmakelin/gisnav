@@ -15,6 +15,8 @@ graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magic
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.
 ```
+xhost +
+
 cd $HOME
 git clone https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git
 cd px4-ros2-map-nav-sim

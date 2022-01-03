@@ -197,6 +197,8 @@ class MapNavNode(Node):
         self._map_frame = None
         self._previous_map_frame = None
 
+        self._local_origin = None  # Local frame origin WGS84 coordinates
+
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
         self._vehicle_local_position = None
@@ -350,6 +352,17 @@ class MapNavNode(Node):
     def _geod(self, value: Geod) -> None:
         assert_type(Geod, value)
         self.__geod = value
+
+    @property
+    def _local_origin(self) -> Optional[LatLonAlt]:
+        """Local frame origin WGS84 coordinates."""
+        return self.__local_origin
+
+    @_local_origin.setter
+    def _local_origin(self, value: Optional[LatLonAlt]) -> None:
+        assert_type(get_args(Optional[LatLonAlt]), value)
+        self.__local_origin = value
+
 
     @property
     def _share_dir(self) -> str:
@@ -912,6 +925,21 @@ class MapNavNode(Node):
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
             return None, None
 
+    @staticmethod
+    def _get_azimuth(x: float, y: float) -> float:
+        """Get azimuth of position x and y coordinates.
+
+        :param x: Meters towards east
+        :param y: Meters towards north
+
+        :return: Azimuth in degrees
+        """
+        rads = math.atan2(y, x)
+        rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
+        rads = -rads + math.pi/2  # Clockwise from north
+        return math.degrees(rads)
+
+
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
@@ -923,7 +951,7 @@ class MapNavNode(Node):
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
-                azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))
+                azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))  # TODO: is this atan2 stuff correct? x and y signs? use _get_azimuth instaead
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(self._move_distance, origin)
@@ -1639,7 +1667,21 @@ class MapNavNode(Node):
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
                                     'frame origin.')
             # Initialize local frame reference for vvo
-            local_position = self._local_frame_position(position, position, camera_altitude)  # TODO: no need to calculate all this, x and y are 0?
+            if self._local_origin is None:
+                # Compute WGS84 coordinates of PX4 local frame origin
+                # TODO: check that x and y are valid
+                x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
+                azmth = self._get_azimuth(x, y)
+                dist = math.sqrt(x**2 + y**2)
+                alt = self._alt_from_vehicle_local_position()
+                assert alt is not None
+                self._local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (alt, )))
+                # This should only be set only once assuming the following local_position computation is the only
+                #  piece of code that uses self._local_origin
+                self.get_logger().info(f'Local frame origin set at {self._local_origin}, this should happen only once.')
+
+            # TODO: assert that ref lat and ref lon in VehicleLocalPosition are none and self._vehicle_global_position is None?
+            local_position = self._local_frame_position(self._local_origin, position, camera_altitude)
         else:
             local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
 

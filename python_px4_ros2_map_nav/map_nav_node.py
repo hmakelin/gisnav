@@ -638,7 +638,8 @@ class MapNavNode(Node):
         self.declare_parameters(namespace, [
             ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
             ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
-            ('export_geojson', config.get(namespace, {}).get('export_geojson', None))
+            ('export_position', config.get(namespace, {}).get('export_position', None)),
+            ('export_projection', config.get(namespace, {}).get('export_projection', None))
         ])
 
         namespace = 'map_update'
@@ -951,7 +952,7 @@ class MapNavNode(Node):
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
-                azmths = list(map(lambda x: math.degrees(math.atan2(x[0], x[1])), gimbal_fov_pix))  # TODO: is this atan2 stuff correct? x and y signs? use _get_azimuth instaead
+                azmths = list(map(lambda x: self._get_azimuth(x[0], x[1]), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(self._move_distance, origin)
@@ -960,6 +961,11 @@ class MapNavNode(Node):
 
                 # Use projected field of view center instead of global position as map center
                 map_center_latlon = get_bbox_center(fov_to_bbox(gimbal_fov_wgs84))
+
+                # Export to file in GIS readable format
+                export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
+                if export_projection is not None:
+                    self._export_position(map_center_latlon, gimbal_fov_wgs84, export_projection)
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 return None
@@ -1717,7 +1723,7 @@ class MapNavNode(Node):
             timestamp = int(time.time_ns() / 1000)  # time "since system start" in microseconds
         self._create_vehicle_visual_odometry_msg(timestamp, local_position, quaternion)
 
-        export_geojson = self.get_parameter('misc.export_geojson').get_parameter_value().string_value
+        export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
             self._export_position(image_frame.position, image_frame.fov, export_geojson)
 

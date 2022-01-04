@@ -572,8 +572,8 @@ class MapNavNode(Node):
         origin = LatLonAlt(*latlonalt)
 
         # Project principal point if required
-        if self._use_gimbal_projection():
-            projected_principal_point = self._projected_field_of_view_center(origin)
+        if self._use_gimbal_projection():  # TODO Get rid of this flag and just use 0 for threshold to turn it off
+            projected_principal_point = self._projected_field_of_view_center(origin)  # TODO: this is fov bbox center, not principal point!
             if projected_principal_point is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
@@ -890,7 +890,6 @@ class MapNavNode(Node):
         # Project image corners to z=0 plane (ground)
         src_corners = create_src_corners(h, w)
         assert_shape(src_corners, (4, 1, 2))
-
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         p = np.matmul(k, e)
         try:
@@ -939,7 +938,6 @@ class MapNavNode(Node):
         rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
         rads = -rads + math.pi/2  # Clockwise from north
         return math.degrees(rads)
-
 
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
@@ -1198,14 +1196,20 @@ class MapNavNode(Node):
         gimbal_yaw = gimbal_euler[yaw_index]
         assert -180 <= gimbal_yaw <= 180, f'Unexpected gimbal yaw value: {gimbal_yaw} ([-180, 180] expected).'
 
+        pitch = -(90 + gimbal_euler[pitch_index])  # TODO: ensure abs(pitch) <= 90?
+        if pitch < 0:
+            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
+            assert self.EULER_SEQUENCE == 'YXZ'  # Tested with 'YXZ' this configuration
+            gimbal_yaw = 180 - gimbal_yaw
+            pitch = 180 + pitch
+
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
         yaw = heading + gimbal_yaw  # TODO: if over 180, make it negative instead
-        assert abs(yaw) <= 360, f'Yaw was unexpectedly large: {abs(yaw)}, max 360 expected.'
+        yaw = yaw % 360
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
-        pitch = -(90 + gimbal_euler[pitch_index])  # TODO: ensure abs(pitch) <= 90?
         roll = 0  # TODO remove zero roll assumption
         rpy = RPY(roll, pitch, yaw)
 
@@ -1668,7 +1672,7 @@ class MapNavNode(Node):
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
-        position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
+        position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
         if local_frame_origin_position is None:
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
                                     'frame origin.')

@@ -863,19 +863,20 @@ class MapNavNode(Node):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _project_gimbal_fov(self, altitude_meters: float) -> Optional[np.ndarray]:
+    def _project_gimbal_fov(self, translation: np.ndarray) -> Optional[np.ndarray]:
         """Returns field of view (FOV) BBox projected using gimbal attitude and camera intrinsics information.
 
         :param altitude_meters: Altitude of camera in meters  # TODO: why is altitude an arg but other info are retrieved inside the function?
         :return: Projected FOV bounding box in pixel coordinates or None if not available
         """
+        assert_shape(translation, (3,))
         rpy = self._get_camera_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return None
 
         r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True).as_matrix()
-        e = np.hstack((r, np.expand_dims(np.array([0, 0, altitude_meters]), axis=1)))
+        e = np.hstack((r, np.expand_dims(translation, axis=1)))
         assert_shape(e, (3, 4))
 
         if self._camera_info is None:
@@ -946,7 +947,24 @@ class MapNavNode(Node):
         :return: Center of the FOV or None if not available
         """
         if self._camera_info is not None:
-            gimbal_fov_pix = self._project_gimbal_fov(origin.alt)
+            # TODO: compute translation vector
+            pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls
+            assert 0.0 <= pitch <= 90.0, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
+            # TODO: don't attempt to match if pitch is too close to 90 degrees, make some sort of configurable threshold (e.g. 45 degrees).
+            if pitch is None:
+                self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
+                return None
+            pitch_rad = math.radians(pitch)
+            assert origin.alt is not None
+            assert hasattr(origin, 'alt')
+            hypotenuse = origin.alt * math.atan(pitch_rad)  # Distance from camera origin to projected principal point
+            abs_cy = hypotenuse*math.asin(pitch_rad)
+            abs_cx = hypotenuse*math.acos(pitch_rad)
+            cy = math.copysign(abs_cy, math.sin(pitch_rad))
+            cx = math.copysign(abs_cx, math.cos(pitch_rad))
+            translation = np.array([-cy, -cx, origin.alt])
+            print(f'Translation vecto: {translation}')
+            gimbal_fov_pix = self._project_gimbal_fov(translation)
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:

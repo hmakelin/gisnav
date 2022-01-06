@@ -27,7 +27,7 @@ class SuperGlue:
             self._logger.debug('SuperGlue using config {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
-    def match(self, img: np.ndarray, map_: np.ndarray, confidence: float = 0.7) -> Tuple[np.ndarray, np.ndarray]:
+    def match(self, img: np.ndarray, map_: np.ndarray, confidence: float = 0.3) -> Tuple[np.ndarray, np.ndarray]:
         """Matches image to map.
 
         :param img: The image array

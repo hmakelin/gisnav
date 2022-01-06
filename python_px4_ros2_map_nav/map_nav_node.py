@@ -1777,17 +1777,7 @@ class MapNavNode(Node):
         """Matches camera image to map image and computes camera position and field of view.
 
         :param image_frame: The image frame to match
-        :param map_cropped: TODO
-        :param map_frame: The map frame against which to match the image
-        :param local_frame_origin_position: WGS84 coordinates of local frame origin
-        :param local_position_timestamp: Timestamp of latest VehicleLocalPosition message  # TODO: use some better way to sync timestamps
-        :param camera_info: Latest CameraInfo message
-        :param camera_normal: Camera normal unit vector
-        :param camera_yaw: Camera yaw in degrees
-        :param camera_pitch: Camera pitch in degrees
-        :param map_dim_with_padding: Map dimensions including padding for rotations
-        :param img_dim: Image dimensions
-        :param restrict_affine: Flag indicating whether homography should be restricted to a 2D transformation
+        :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
         """
         # Launch a new SuperGlue match

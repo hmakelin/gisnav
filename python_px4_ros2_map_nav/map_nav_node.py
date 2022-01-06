@@ -958,9 +958,7 @@ class MapNavNode(Node):
             pitch_rad = math.radians(pitch)
             assert origin.alt is not None
             assert hasattr(origin, 'alt')
-            print(pitch)
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
-            print(pitch_rad)
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
             translation = np.array([-cx, -cy, origin.alt])
@@ -1254,8 +1252,6 @@ class MapNavNode(Node):
         camera_normal_length = np.linalg.norm(camera_normal)
         assert abs(camera_normal_length - 1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
 
-        #print(f'camera normal: {camera_normal}')
-
         return camera_normal
 
     def _pitch_index(self) -> int:
@@ -1543,9 +1539,7 @@ class MapNavNode(Node):
         dist_coeffs = np.zeros((4, 1))
         success, r, translation, _ = cv2.solvePnPRansac(mkp_img, mkp_map, k, dist_coeffs, flags=0)
         r = r.squeeze()
-        print(f'rotation vector: {r}')
         rotation, _ = cv2.Rodrigues(r)
-        print(f'rotation: {rotation}')
 
         return h, h_mask, translation, rotation  # TODO: return blank matrices for h and h_mask
 

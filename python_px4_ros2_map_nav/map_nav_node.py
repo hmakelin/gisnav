@@ -1778,12 +1778,7 @@ class MapNavNode(Node):
     # 1. attach fov and position to image_frame
     # 2. Compute and publish position and velocity,
     # 3. Visualize homography,
-    def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray):
-#                , map_frame: MapFrame,
-#               local_frame_origin_position: LatLonAlt,
-#               local_position_timestamp: int,
-#               camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-#               map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool) -> None:
+    def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray) -> None:
         """Matches camera image to map image and computes camera position and field of view.
 
         :param image_frame: The image frame to match

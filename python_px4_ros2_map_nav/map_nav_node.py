@@ -30,7 +30,7 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, convert_fov_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
+from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
     rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_to_bbox, get_angle,\
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape,\
     assert_first_stamp_greater, MapFrame
@@ -1584,7 +1584,7 @@ class MapNavNode(Node):
         t[0] = (1 - t[0]) * img_dim.width / 2
         t[1] = (1 - t[1]) * img_dim.height / 2
         # TODO: break this func into an array and single version?
-        cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_fov_from_pix_to_wgs84(
+        cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_from_pix_to_wgs84(
             np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
         cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
         latlon = LatLon(*tuple(cam_pos_wgs84))
@@ -1688,7 +1688,7 @@ class MapNavNode(Node):
         fov_pix = get_fov(image_frame.image, h)
         if map_cropped is not None:
             visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
-        fov_wgs84, fov_uncropped, fov_unrotated = convert_fov_from_pix_to_wgs84(
+        fov_wgs84, fov_uncropped, fov_unrotated = convert_from_pix_to_wgs84(
             fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
         image_frame.fov = fov_wgs84
 

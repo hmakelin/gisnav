@@ -281,8 +281,8 @@ def setup_sys_path() -> Tuple[str, str]:
     return share_dir, superglue_dir
 
 
-def convert_fov_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim,
-                                  uncrop=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def convert_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim,
+                              uncrop=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Converts the field of view (FOV) from pixel coordinates to WGS 84.
 
     :param fov_in_pix: Numpy array of FOV corners in pixel coordinates of rotated map raster

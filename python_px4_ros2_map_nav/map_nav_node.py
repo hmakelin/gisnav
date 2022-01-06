@@ -1628,10 +1628,18 @@ class MapNavNode(Node):
         else:
             return False
 
-    def superglue_worker_error_callback(self, e: BaseException):
-        raise NotImplementedError  # TODO!
+    def superglue_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for SuperGlue worker.
 
-    def superglue_worker_callback(self, results):
+        :return:
+        """
+        self.get_logger().error(f'SuperGlue process returned and error:\n{e}\n{traceback.print_exc()}')
+
+    def superglue_worker_callback(self, results) -> None:
+        """Callback for SuperGlue worker.
+
+        :return:
+        """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
         if len(mkp_img) < self.MINIMUM_MATCHES:

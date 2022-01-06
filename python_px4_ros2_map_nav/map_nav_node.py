@@ -1773,11 +1773,6 @@ class MapNavNode(Node):
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
 
-
-    # TODO Current tasks for _match too many:
-    # 1. attach fov and position to image_frame
-    # 2. Compute and publish position and velocity,
-    # 3. Visualize homography,
     def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray) -> None:
         """Matches camera image to map image and computes camera position and field of view.
 
@@ -1795,7 +1790,6 @@ class MapNavNode(Node):
         :param restrict_affine: Flag indicating whether homography should be restricted to a 2D transformation
         :return:
         """
-
         # Launch a new SuperGlue match
         assert self._superglue_results is None or self._superglue_results.ready()
         self._superglue_results = self._superglue_pool.starmap_async(self._superglue_pool_worker,

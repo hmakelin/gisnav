@@ -1302,11 +1302,25 @@ class MapNavNode(Node):
         """
         assert_type(get_args(Union[int, float]), altitude)
         max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
-        map_radius = 3*altitude
+
+        camera_info = self._camera_info
+        if camera_info is not None:
+            assert hasattr(camera_info, 'k')
+            assert hasattr(camera_info, 'w')
+            w = camera_info.w
+            f = camera_info.k[0]
+            hfov = 2 * math.atan(w / (2 * f))
+            map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
+        else:
+            # TODO: does this happen? Trying to update map before camera info has been received?
+            self.get_logger().warn(f'Could not get camera info, using best guess for map width.')
+            map_radius = 3*altitude  # Arbitrary guess
+
         if map_radius > max_map_radius:
             self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
                                    f'max_map_radius instead.')
             map_radius = max_map_radius
+
         return map_radius
 
     def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:

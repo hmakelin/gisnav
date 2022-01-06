@@ -1309,6 +1309,7 @@ class MapNavNode(Node):
             assert hasattr(camera_info, 'w')
             w = camera_info.w
             f = camera_info.k[0]
+            assert camera_info.k[0] == camera_info.k[3]
             hfov = 2 * math.atan(w / (2 * f))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
@@ -1721,6 +1722,7 @@ class MapNavNode(Node):
 
         # Compute camera altitude, and distance to principal point using triangle similarity
         # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
+        assert camera_info.k[0][0] == camera_info.k[1][1]
         camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')

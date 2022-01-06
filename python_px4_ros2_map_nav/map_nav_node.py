@@ -653,7 +653,8 @@ class MapNavNode(Node):
             ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
             ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
             ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
-            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None))
+            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
+            ('max_pitch', config.get(namespace, {}).get('max_pitch', None))
         ])
 
     def _setup_superglue(self) -> SuperGlue:
@@ -1340,17 +1341,37 @@ class MapNavNode(Node):
         """
         assert_type(get_args(Union[int, float]), radius)
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+        # Check whether old request is still processing
+        if self._wms_results is not None:
+            if not self._wms_results.ready():
+                # Previous request still running
+                return False
+
+        # Check whether previous map frame is too close to new requested position
         if self._previous_map_frame is not None:
             if not (abs(self._distance(center, self._previous_map_frame.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
                     abs(radius - self._previous_map_frame.radius) >
                     self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return False
-        # No map yet, check whether old request is still processing
-        if self._wms_results is not None:
-            if not self._wms_results.ready():
-                # Previous request still running
+
+        # Check whether camera pitch is too large if using gimbal projection
+        # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
+        use_gimbal_projection = self.get_parameter('misc.gimbal_projection').get_parameter_value().bool_value
+        if use_gimbal_projection:
+            camera_pitch = self._camera_pitch()
+            if camera_pitch is not None:
+                max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
+                assert camera_pitch > 0  # TODO: can it be negative?
+                if camera_pitch > max_pitch:
+                    self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch} and gimbal'
+                                            f'projection is enabled - skipping updating map.')
+                    return False
+            else:
+                self.get_logger().debug(f'Could not determine camera pitch and gimbal projection is enabled, will skip '
+                                        f'updating map.')
                 return False
+
         return True
 
     def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:

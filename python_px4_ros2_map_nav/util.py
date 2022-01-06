@@ -281,11 +281,12 @@ def setup_sys_path() -> Tuple[str, str]:
     return share_dir, superglue_dir
 
 
-def convert_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox, map_raster_rotation, img_dim,
-                              uncrop=True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Converts the field of view (FOV) from pixel coordinates to WGS 84.
+def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map_raster_bbox: BBox,
+                              map_raster_rotation: float, img_dim: Dim, uncrop: bool = True) \
+        -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Converts the input array from pixel coordinates to WGS 84.
 
-    :param fov_in_pix: Numpy array of FOV corners in pixel coordinates of rotated map raster
+    :param array: Numpy array in pixel coordinates (of e.g. rotated map raster field of view corners)
     :param map_raster_padded_dim: Size of the padded map raster image
     :param map_raster_bbox: The WGS84 bounding box of the padded map raster
     :param map_raster_rotation: The rotation that was applied to the map raster before matching in radians
@@ -295,9 +296,9 @@ def convert_from_pix_to_wgs84(fov_in_pix, map_raster_padded_dim, map_raster_bbox
     """
     if uncrop:
         uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
-        fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, fov_in_pix)
+        fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, array)
     else:
-        fov_in_pix_uncropped = fov_in_pix
+        fov_in_pix_uncropped = array
 
     rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
     fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)

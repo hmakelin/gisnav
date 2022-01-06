@@ -950,21 +950,20 @@ class MapNavNode(Node):
         if self._camera_info is not None:
             # TODO: compute translation vector
             pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls
-            assert 0.0 <= pitch <= 90.0, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
             # TODO: don't attempt to match if pitch is too close to 90 degrees, make some sort of configurable threshold (e.g. 45 degrees).
             if pitch is None:
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None
+            assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
             pitch_rad = math.radians(pitch)
             assert origin.alt is not None
             assert hasattr(origin, 'alt')
-            hypotenuse = origin.alt * math.atan(pitch_rad)  # Distance from camera origin to projected principal point
-            abs_cy = hypotenuse*math.asin(pitch_rad)
-            abs_cx = hypotenuse*math.acos(pitch_rad)
-            cy = math.copysign(abs_cy, math.sin(pitch_rad))
-            cx = math.copysign(abs_cx, math.cos(pitch_rad))
-            translation = np.array([-cy, -cx, origin.alt])
-            print(f'Translation vecto: {translation}')
+            print(pitch)
+            hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
+            print(pitch_rad)
+            cx = hypotenuse*math.sin(pitch_rad)
+            cy = hypotenuse*math.cos(pitch_rad)
+            translation = np.array([-cx, -cy, origin.alt])
             gimbal_fov_pix = self._project_gimbal_fov(translation)
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
@@ -1248,13 +1247,14 @@ class MapNavNode(Node):
 
         r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True)
         camera_normal = r.apply(nadir)
-
         assert_shape(camera_normal, nadir.shape)
 
         # TODO: this assertion is arbitrary? how to handle unexpected camera normal length?
         # TODO: may have to raise error here - dont know what to do, this assertion could trigger an error
         camera_normal_length = np.linalg.norm(camera_normal)
         assert abs(camera_normal_length - 1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
+
+        #print(f'camera normal: {camera_normal}')
 
         return camera_normal
 
@@ -1306,10 +1306,10 @@ class MapNavNode(Node):
         camera_info = self._camera_info
         if camera_info is not None:
             assert hasattr(camera_info, 'k')
-            assert hasattr(camera_info, 'w')
-            w = camera_info.w
+            assert hasattr(camera_info, 'width')
+            w = camera_info.width
             f = camera_info.k[0]
-            assert camera_info.k[0] == camera_info.k[3]
+            assert camera_info.k[0] == camera_info.k[4]
             hfov = 2 * math.atan(w / (2 * f))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
@@ -1501,10 +1501,53 @@ class MapNavNode(Node):
         # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
         get_angle_partial = partial(get_angle, -camera_normal)
         angles = list(map(get_angle_partial, Ns))
+
         index_of_smallest_angle = angles.index(min(angles))
         rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
 
         return h, h_mask, translation, rotation
+
+    @staticmethod
+    def _estimate_pose(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray,
+                       camera_normal: np.ndarray, reproj_threshold: float = 1.0, affine: bool = False) \
+            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Processes matching keypoints from img and map and returns homography matrix, mask, translation and rotation.
+
+        :param mkp_img: Matching keypoints from image
+        :param mkp_map: Matching keypoints from map
+        :param k: Camera intrinsics matrix
+        :param camera_normal: Camera normal unit vector
+        :param reproj_threshold: RANSAC reprojection threshold parameter
+        :param affine: Flag indicating whether homography should be restricted to 2D affine transformation
+        :return: Tuple containing homography matrix, mask, translation and rotation
+        """
+        min_points = 4
+        assert_type(np.ndarray, mkp_img)
+        assert_type(np.ndarray, mkp_map)
+        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
+
+        assert_type(bool, affine)
+        assert_type(float, reproj_threshold)
+        if not affine:
+            h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)  # TODO: remove this stuff if using solvePnP!
+        else:
+            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
+            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
+
+        assert_type(np.ndarray, k)
+        assert_shape(k, (3, 3))
+        #num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
+
+        mkp_img = np.array(list(map(lambda x: (x[0], x[1], 0), mkp_img)))  # make 3d points
+
+        dist_coeffs = np.zeros((4, 1))
+        success, r, translation, _ = cv2.solvePnPRansac(mkp_img, mkp_map, k, dist_coeffs, flags=0)
+        r = r.squeeze()
+        print(f'rotation vector: {r}')
+        rotation, _ = cv2.Rodrigues(r)
+        print(f'rotation: {rotation}')
+
+        return h, h_mask, translation, rotation  # TODO: return blank matrices for h and h_mask
 
     def _local_frame_position(self, local_frame_origin: Union[LatLon, LatLonAlt], camera_position: LatLon,
                               camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
@@ -1705,6 +1748,7 @@ class MapNavNode(Node):
         k = camera_info.k.reshape([3, 3])
         h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
                                                               affine=restrict_affine)
+        #h, h_mask, t, r = self._estimate_pose(mkp_img, mkp_map, k, camera_normal, affine=restrict_affine)
         assert_shape(h, (3, 3))
         assert_shape(t, (3, 1))
         assert_shape(r, (3, 3))
@@ -1722,7 +1766,7 @@ class MapNavNode(Node):
 
         # Compute camera altitude, and distance to principal point using triangle similarity
         # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
-        assert camera_info.k[0][0] == camera_info.k[1][1]
+        assert k[0][0] == k[1][1]
         camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')

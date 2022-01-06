@@ -639,7 +639,8 @@ class MapNavNode(Node):
             ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
             ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', None)),
-            ('export_projection', config.get(namespace, {}).get('export_projection', None))
+            ('export_projection', config.get(namespace, {}).get('export_projection', None)),
+            ('max_pitch', config.get(namespace, {}).get('max_pitch', None))
         ])
 
         namespace = 'map_update'
@@ -1623,10 +1624,22 @@ class MapNavNode(Node):
 
         :return:
         """
-        if self._superglue_results is None or self._superglue_results.ready():  # TODO: handle timeouts, failures for _superglue_results
-            return True
-        else:
+        # Check that a request is not already running
+        if not (self._superglue_results is None or self._superglue_results.ready()):  # TODO: handle timeouts, failures for _superglue_results
             return False
+
+        # Check whether camera pitch is too large
+        camera_pitch = self._camera_pitch()
+        if camera_pitch is not None:
+            max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
+            if camera_pitch > max_pitch:
+                self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch} - skipping matching.')
+                return False
+        else:
+            self.get_logger().debug(f'Could not determine camera pitch, will skip matching.')
+            return False
+
+        return True
 
     def superglue_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for SuperGlue worker.

@@ -11,6 +11,7 @@ map_nav_node:
       publish_frequency: 40  # Hz
       export_position: 'position.json'
       export_projection: 'projection.json'
+      max_pitch: 30
     map_update:
       initial_guess:  # Values from ksql_airport.world file
         lat: 37.523640

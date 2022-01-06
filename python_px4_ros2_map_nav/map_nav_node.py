@@ -491,6 +491,7 @@ class MapNavNode(Node):
                        f'{self.MAXIMUM_PUBLISH_FREQUENCY} Hz ({frequency} provided) for EKF2 filter.'
             self.get_logger().warn(warn_msg)
         timer_period = 1.0 / frequency
+        self.get_logger().debug(f'Setting up publish timer with period {timer_period} / frequency {frequency} Hz.')
         timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
         return timer
 
@@ -1357,18 +1358,19 @@ class MapNavNode(Node):
 
         # Check whether camera pitch is too large if using gimbal projection
         # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
-        use_gimbal_projection = self.get_parameter('misc.gimbal_projection').get_parameter_value().bool_value
+        use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if use_gimbal_projection:
+            # TODO: same logic in _should_match -- combine into separate function?
             camera_pitch = self._camera_pitch()
             if camera_pitch is not None:
                 max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
                 assert camera_pitch > 0  # TODO: can it be negative?
                 if camera_pitch > max_pitch:
-                    self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch} and gimbal'
+                    self.get_logger().warn(f'Camera pitch {camera_pitch} is above limit {max_pitch} and gimbal'
                                             f'projection is enabled - skipping updating map.')
                     return False
             else:
-                self.get_logger().debug(f'Could not determine camera pitch and gimbal projection is enabled, will skip '
+                self.get_logger().warn(f'Could not determine camera pitch and gimbal projection is enabled, will skip '
                                         f'updating map.')
                 return False
 

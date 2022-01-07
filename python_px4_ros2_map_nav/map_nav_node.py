@@ -969,15 +969,9 @@ class MapNavNode(Node):
             if gimbal_fov_pix is not None:
                 azmths = list(map(lambda x: self._get_azimuth(x[0], x[1]), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
-                azmth = self._get_azimuth(cx, cy)  # TODO: does not work, this does not contain rotatin info, always same direction
-                dist = math.sqrt(cx**2 + cy**2)
                 zipped = list(zip(azmths, dists))
-                zipped2 = [(azmth, dist)]  # TODO: add this to the others and do as a single op (array length: 4 + 1)
                 to_wgs84 = partial(self._move_distance, origin)
                 gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
-                map_center_latlon = np.array(list(map(to_wgs84, zipped2))).squeeze()
-                print(map_center_latlon)
-                map_center_latlonalt = LatLonAlt(map_center_latlon[0], map_center_latlon[1], origin.alt)
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
                 # Use projected field of view center instead of global position as map center
@@ -994,7 +988,7 @@ class MapNavNode(Node):
             self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None
 
-        return map_center_latlon  #alt  # TODO: using principal point for updating map no good, too close to bottom fov. Principal point still needed but not for updating map.
+        return map_center_latlon  # TODO: using principal point for updating map no good, too close to bottom fov. Principal point still needed but not for updating map.
 
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
         """Gets latest map from WMS server for given location and radius and saves it.

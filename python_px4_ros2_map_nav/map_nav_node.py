@@ -31,9 +31,8 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
-    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_to_bbox, fov_center, get_angle,\
-    create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape,\
-    assert_first_stamp_greater, MapFrame
+    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle,\
+    create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -976,8 +975,7 @@ class MapNavNode(Node):
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
                 # Use projected field of view center instead of global position as map center
-                #map_center_latlon = get_bbox_center(fov_to_bbox(gimbal_fov_wgs84))
-                map_center_latlon = get_bbox_center(fov_center(gimbal_fov_wgs84))
+                map_center_latlon = fov_center(gimbal_fov_wgs84)
 
                 # Export to file in GIS readable format
                 export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value

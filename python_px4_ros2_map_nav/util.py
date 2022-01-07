@@ -177,23 +177,6 @@ class MapFrame(object):
         return self._image
 
 
-def fov_to_bbox(fov_wgs84: np.ndarray) -> BBox:
-    """Returns BBox for WGS84 field of view (FOV).
-
-    :param fov_wgs84: FOV corners in WGS84 coordinates
-    :return: The bounding nox
-    """
-    assert_type(np.ndarray, fov_wgs84)
-    assert_shape(fov_wgs84, (4, 2))
-    left, bottom, right, top = 180, 90, -180, -90
-    for pt in fov_wgs84:
-        right = pt[1] if pt[1] >= right else right
-        left = pt[1] if pt[1] <= left else left
-        top = pt[0] if pt[0] >= top else top
-        bottom = pt[0] if pt[0] <= bottom else bottom
-    return BBox(left, bottom, right, top)
-
-
 def fov_center(fov_wgs84: np.ndarray) -> BBox:
     # TODO: logic very similar to fov_to_bbox, combine?
     """Returns Field of View center coordinates (WGS84).
@@ -210,6 +193,7 @@ def fov_center(fov_wgs84: np.ndarray) -> BBox:
         top = pt[0] if pt[0] >= top else top
         bottom = pt[0] if pt[0] <= bottom else bottom
     return LatLon((top + bottom) / 2, (left + right) / 2)
+
 
 def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
     """Converts input numpy array to a cv2.KeyPoint.

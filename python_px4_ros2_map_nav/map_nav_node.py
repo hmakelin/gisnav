@@ -969,13 +969,19 @@ class MapNavNode(Node):
             if gimbal_fov_pix is not None:
                 azmths = list(map(lambda x: self._get_azimuth(x[0], x[1]), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
+                azmth = self._get_azimuth(cx, cy)  # TODO: does not work, this does not contain rotatin info, always same direction
+                dist = math.sqrt(cx**2 + cy**2)
                 zipped = list(zip(azmths, dists))
+                zipped2 = [(azmth, dist)]  # TODO: add this to the others and do as a single op (array length: 4 + 1)
                 to_wgs84 = partial(self._move_distance, origin)
                 gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
+                map_center_latlon = np.array(list(map(to_wgs84, zipped2))).squeeze()
+                print(map_center_latlon)
+                map_center_latlonalt = LatLonAlt(map_center_latlon[0], map_center_latlon[1], origin.alt)
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
                 # Use projected field of view center instead of global position as map center
-                map_center_latlon = fov_center(gimbal_fov_wgs84)
+                map_center_latlon = fov_center(gimbal_fov_wgs84)  # TODO: use cx, cy and not fov corners, polygon center != principal point
 
                 # Export to file in GIS readable format
                 export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
@@ -988,7 +994,7 @@ class MapNavNode(Node):
             self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None
 
-        return map_center_latlon
+        return map_center_latlon  #alt  # TODO: using principal point for updating map no good, too close to bottom fov. Principal point still needed but not for updating map.
 
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
         """Gets latest map from WMS server for given location and radius and saves it.
@@ -1363,11 +1369,12 @@ class MapNavNode(Node):
             camera_pitch = self._camera_pitch()
             if camera_pitch is not None:
                 max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-                assert camera_pitch > 0  # TODO: can it be negative?
                 if camera_pitch > max_pitch:
                     self.get_logger().warn(f'Camera pitch {camera_pitch} is above limit {max_pitch} and gimbal'
                                             f'projection is enabled - skipping updating map.')
                     return False
+                elif camera_pitch < 0:
+                    self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
             else:
                 self.get_logger().warn(f'Could not determine camera pitch and gimbal projection is enabled, will skip '
                                         f'updating map.')
@@ -1525,46 +1532,6 @@ class MapNavNode(Node):
 
         return h, h_mask, translation, rotation
 
-    @staticmethod
-    def _estimate_pose(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray,
-                       camera_normal: np.ndarray, reproj_threshold: float = 1.0, affine: bool = False) \
-            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Processes matching keypoints from img and map and returns homography matrix, mask, translation and rotation.
-
-        :param mkp_img: Matching keypoints from image
-        :param mkp_map: Matching keypoints from map
-        :param k: Camera intrinsics matrix
-        :param camera_normal: Camera normal unit vector
-        :param reproj_threshold: RANSAC reprojection threshold parameter
-        :param affine: Flag indicating whether homography should be restricted to 2D affine transformation
-        :return: Tuple containing homography matrix, mask, translation and rotation
-        """
-        min_points = 4
-        assert_type(np.ndarray, mkp_img)
-        assert_type(np.ndarray, mkp_map)
-        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
-
-        assert_type(bool, affine)
-        assert_type(float, reproj_threshold)
-        if not affine:
-            h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)  # TODO: remove this stuff if using solvePnP!
-        else:
-            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
-            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
-
-        assert_type(np.ndarray, k)
-        assert_shape(k, (3, 3))
-        #num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
-
-        mkp_img = np.array(list(map(lambda x: (x[0], x[1], 0), mkp_img)))  # make 3d points
-
-        dist_coeffs = np.zeros((4, 1))
-        success, r, translation, _ = cv2.solvePnPRansac(mkp_img, mkp_map, k, dist_coeffs, flags=0)
-        r = r.squeeze()
-        rotation, _ = cv2.Rodrigues(r)
-
-        return h, h_mask, translation, rotation  # TODO: return blank matrices for h and h_mask
-
     def _local_frame_position(self, local_frame_origin: Union[LatLon, LatLonAlt], camera_position: LatLon,
                               camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
         """Returns camera position in meters in NED frame.
@@ -1642,8 +1609,8 @@ class MapNavNode(Node):
 
         return data
 
-    @staticmethod
-    def _compute_camera_position(t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
+
+    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
             -> LatLon:  # TODO: Yaw is degrees or radians? If degrees, could also accept ints? Seems like radians so maybe only float is justified unless more refactoring is done
         """Returns camera position based on translation vector and metadata.
 
@@ -1654,16 +1621,19 @@ class MapNavNode(Node):
         :param img_dim: Image dimensions
         :return: WGS84 coordinates of camera
         """
-        # Convert translation vector to WGS84 coordinates
-        # Translate relative to top left corner, not principal point/center of map raster
-        t[0] = (1 - t[0]) * img_dim.width / 2
-        t[1] = (1 - t[1]) * img_dim.height / 2
-        # TODO: break this func into an array and single version?
-        cam_pos_wgs84, cam_pos_wgs84_uncropped, cam_pos_wgs84_unrotated = convert_from_pix_to_wgs84(
-            np.array(t[0:2].reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
-        cam_pos_wgs84 = cam_pos_wgs84.squeeze()  # TODO: eliminate need for this squeeze
-        latlon = LatLon(*tuple(cam_pos_wgs84))
-        return latlon
+        # Compute WGS84 coordinates of camera
+        # TODO: check that x and y are valid
+        # TODO: need to optimize this, maybe get map center as input and not comppute it here
+        azmth = self._get_azimuth(t[0], t[1])
+        dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
+        alt = self._alt_from_vehicle_local_position()
+        dist = alt*dist
+        map_center, _, __ = convert_from_pix_to_wgs84(  # TODO: is this map center or fov center? And how close are they to each other?
+            np.array(np.array([img_dim.width / 2, img_dim.height / 2]).reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
+        map_center_wgs84 = map_center.squeeze()  # TODO: eliminate need for this squeeze
+        latlon = LatLon(*tuple(map_center_wgs84))
+        position = self._move_distance(latlon, (-azmth, dist))  # Invert azimuth, going the other way
+        return position
 
     def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
         """Computes camera distance from projected principal point in meters.
@@ -1764,7 +1734,6 @@ class MapNavNode(Node):
         k = camera_info.k.reshape([3, 3])
         h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
                                                               affine=restrict_affine)
-        #h, h_mask, t, r = self._estimate_pose(mkp_img, mkp_map, k, camera_normal, affine=restrict_affine)
         assert_shape(h, (3, 3))
         assert_shape(t, (3, 1))
         assert_shape(r, (3, 3))

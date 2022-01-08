@@ -716,7 +716,6 @@ class MapNavNode(Node):
         restrict_affine_threshold = self.get_parameter('misc.affine_threshold').get_parameter_value().integer_value
         assert_type(get_args(Union[int, float]), restrict_affine_threshold)
         camera_pitch = self._camera_pitch()
-        # TODO: check that abs(camera_pitch) <= 90? (0 is nadir facing)
         if camera_pitch is not None:
             if abs(camera_pitch) <= restrict_affine_threshold:
                 return True

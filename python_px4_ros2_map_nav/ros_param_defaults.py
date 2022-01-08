@@ -20,7 +20,7 @@ class Defaults:
     MISC_EXPORT_POSITION = 'position.json'
     MISC_EXPORT_PROJECTION = 'projection.json'
     MISC_MAX_PITCH = 30  # degrees
-    MISC_VISUALIZE_HOMOGRAPHY = True
+    MISC_VISUALIZE_HOMOGRAPHY = False
 
     MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.world
     MAP_UPDATE_UPDATE_DELAY = 1  # seconds

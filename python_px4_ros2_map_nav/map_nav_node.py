@@ -49,6 +49,8 @@ from python_px4_ros2_map_nav.superglue import SuperGlue
 def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
     """Returns a cached WMS client.
 
+    The WMS client is instantiated in a dedicated process so it is lru_cache'd to avoid recurrent instantiations.
+
     :param url: WMS server endpoint url
     :param version_: WMS server version
     :param timeout_: WMS request timeout seconds
@@ -60,7 +62,7 @@ def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
     try:
         return WebMapService(url, version=version_, timeout=timeout_)
     except Exception as e:
-        raise e  # TODO: anything here?
+        raise e  # TODO: handle gracefully (e.g. ConnectionRefusedError)
 
 
 class MapNavNode(Node):
@@ -180,8 +182,6 @@ class MapNavNode(Node):
         self._cv_bridge = CvBridge()
 
         # Setup SuperGlue
-        #self._superglue = self._setup_superglue()
-        #self._setup_superglue()
         self._stored_inputs = None  # Must check for None when using this
         self._superglue_results = None  # Must check for None when using this
         # Do not increase the process count, it should be 1
@@ -656,16 +656,6 @@ class MapNavNode(Node):
             ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
             ('max_pitch', config.get(namespace, {}).get('max_pitch', None))
         ])
-
-    def _setup_superglue(self) -> SuperGlue:
-        """Sets up SuperGlue estimator.
-
-        :return: The SuperGlue instance
-        """
-        superglue_conf = self._config.get(self.name, {}).get('superglue', None)
-        assert_type(dict, superglue_conf)
-        superglue = SuperGlue(superglue_conf, self.get_logger())
-        return superglue
 
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.

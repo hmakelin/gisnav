@@ -1599,19 +1599,20 @@ class MapNavNode(Node):
 
         return data
 
-    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float,
-                                 img_dim: Dim) -> LatLon:
+    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox,
+                                 camera_yaw: Union[int, float], img_dim: Dim) -> LatLon:
         """Returns camera position based on translation vector and metadata.
 
         :param t: Camera translation vector
         :param map_dim_with_padding: Map dimensions including padding for likely rotation
         :param bbox: Map bounding box
-        :param camera_yaw: Camera yaw in radians
+        :param camera_yaw: Camera yaw in degrees
         :param img_dim: Image dimensions
         :return: WGS84 coordinates of camera
         """
         assert_type(np.ndarray, t)
         assert_shape(t, (2,))
+        assert_type(get_args(Union[int, float]), camera_yaw)
         azmth = self._get_azimuth(t[0], t[1])
         dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
         alt = self._alt_from_vehicle_local_position()
@@ -1834,8 +1835,6 @@ class MapNavNode(Node):
         assert_shape(h, (3, 3))
         assert_shape(t, (3, 1))
         assert_shape(r, (3, 3))
-
-        camera_yaw = math.radians(camera_yaw)  # TODO: give input already as radians, ugly API needs to be fixed anyways
 
         # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
         # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels

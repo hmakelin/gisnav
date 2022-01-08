@@ -290,7 +290,7 @@ def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map
     :param array: Numpy array in pixel coordinates (of e.g. rotated map raster field of view corners)
     :param map_raster_padded_dim: Size of the padded map raster image
     :param map_raster_bbox: The WGS84 bounding box of the padded map raster
-    :param map_raster_rotation: The rotation that was applied to the map raster before matching in radians
+    :param map_raster_rotation: The rotation that was applied to the map raster before matching in degrees
     :param img_dim: Size of the image
     :param uncrop: Flag to determine whether uncropping will be included
     :return: Tuple including FOV in WGS84 coordinates, and pixel coordinates for uncropped and unrotated maps
@@ -301,6 +301,7 @@ def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map
     else:
         fov_in_pix_uncropped = array
 
+    map_raster_rotation = math.radians(map_raster_rotation)
     rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
     fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
 

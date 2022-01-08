@@ -278,8 +278,8 @@ class MapNavNode(Node):
         return self.__stored_inputs
 
     @_stored_inputs.setter
-    def _stored_inputs(self, value: dict) -> None:
-        assert_type(dict, value)
+    def _stored_inputs(self, value: Optional[dict]) -> None:
+        assert_type(get_args(Optional[dict]), value)
         self.__stored_inputs = value
 
     @property

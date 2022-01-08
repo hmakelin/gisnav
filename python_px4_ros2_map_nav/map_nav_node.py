@@ -1543,7 +1543,6 @@ class MapNavNode(Node):
         # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
         get_angle_partial = partial(get_angle, -camera_normal)
         angles = list(map(get_angle_partial, Ns))
-
         index_of_smallest_angle = angles.index(min(angles))
         rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
 
@@ -1568,12 +1567,10 @@ class MapNavNode(Node):
         lons_term = (camera_position.lon, local_frame_origin.lon)
         _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
 
-        lon_diff = dist[0]
-        lat_diff = dist[1]
-        lat_sign = -1 if local_frame_origin.lat > camera_position.lat else 1
-        lon_sign = -1 if local_frame_origin.lon > camera_position.lon else 1
+        lon_diff = math.copysign(dist[0], camera_position.lat - local_frame_origin.lat)
+        lat_diff = math.copysign(dist[1], camera_position.lon - local_frame_origin.lon)
 
-        return lat_sign*lat_diff, lon_sign*lon_diff, -camera_altitude
+        return lat_diff, lon_diff, -camera_altitude
 
     def _match_inputs(self, image_frame: ImageFrame) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.

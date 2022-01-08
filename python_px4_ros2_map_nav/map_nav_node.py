@@ -1457,10 +1457,11 @@ class MapNavNode(Node):
             msg.x, msg.y, msg.z = (float('nan'),) * 3  # float32 North, East, Down
 
         # Attitude quaternions
-        assert msg.local_frame is self.LOCAL_FRAME_NED  # TODO: this needed?
+        # Rotation is currently computed with assumed NED frame so it is asserted here just in case
+        assert msg.local_frame is self.LOCAL_FRAME_NED, f'Published rotation logic requires that NED frame is used.'
         if rotation is not None:
-            msg.q = rotation  # (float('nan'),) * 4  # float32  # TODO: need vehicle yaw against NED frame here, need to assert self.LOCAL_FRAME_NED is used
-            msg.q_offset = (0.0, ) * 4  # (float('nan'),) * 4      # TODO: make this zero and assert that self.LOCAL_FRAME_NED is used
+            msg.q = rotation
+            msg.q_offset = (0.0, ) * 4
         else:
             msg.q = (float('nan'),) * 4  # float32
             msg.q_offset = (float('nan'),) * 4
@@ -1479,7 +1480,7 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Setting outgoing vehicle visual odometry message as:\n{msg}.')
         self._vehicle_visual_odometry = msg
 
-    def _camera_pitch(self) -> Optional[int]:  # TODO: float?
+    def _camera_pitch(self) -> Optional[Union[int, float]]:
         """Returns camera pitch in degrees relative to vehicle frame.
 
         :return: Camera pitch in degrees, or None if not available

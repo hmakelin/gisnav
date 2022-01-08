@@ -30,7 +30,7 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
+from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, BBox, Dim,\
     rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, \
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults

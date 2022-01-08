@@ -283,7 +283,7 @@ def setup_sys_path() -> Tuple[str, str]:
 
 
 def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map_raster_bbox: BBox,
-                              map_raster_rotation: float, img_dim: Dim, uncrop: bool = True) \
+                              map_raster_rotation: float, img_dim: Dim) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Converts the input array from pixel coordinates to WGS 84.
 
@@ -292,14 +292,10 @@ def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map
     :param map_raster_bbox: The WGS84 bounding box of the padded map raster
     :param map_raster_rotation: The rotation that was applied to the map raster before matching in degrees
     :param img_dim: Size of the image
-    :param uncrop: Flag to determine whether uncropping will be included
     :return: Tuple including FOV in WGS84 coordinates, and pixel coordinates for uncropped and unrotated maps
     """
-    if uncrop:
-        uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
-        fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, array)
-    else:
-        fov_in_pix_uncropped = array
+    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
+    fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, array)
 
     map_raster_rotation = math.radians(map_raster_rotation)
     rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?

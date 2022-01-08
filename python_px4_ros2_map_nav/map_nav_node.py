@@ -1909,10 +1909,12 @@ class MapNavNode(Node):
         """
         # Launch a new SuperGlue match
         assert self._superglue_results is None or self._superglue_results.ready()
-        self._superglue_results = self._superglue_pool.starmap_async(self._superglue_pool_worker,
-                                                                     [(image_frame.image, map_cropped)],
-                                                                     callback=self.superglue_worker_callback,
-                                                                     error_callback=self.superglue_worker_error_callback)
+        self._superglue_results = self._superglue_pool.starmap_async(
+            self._superglue_pool_worker, 
+            [(image_frame.image, map_cropped)],
+            callback=self.superglue_worker_callback,
+            error_callback=self.superglue_worker_error_callback
+        )
 
     def terminate_wms_pool(self):
         """Terminates the WMS Pool.

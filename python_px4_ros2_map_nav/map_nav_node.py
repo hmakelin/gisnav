@@ -30,7 +30,7 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, BBox, Dim,\
+from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, BBox, Dim, get_bbox_center, \
     rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, \
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
@@ -1597,31 +1597,20 @@ class MapNavNode(Node):
 
         return data
 
-    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox,
-                                 camera_yaw: Union[int, float], img_dim: Dim) -> LatLon:
-        """Returns camera position based on translation vector and metadata.
+    def _compute_camera_position(self, t: np.ndarray, center: LatLon, scaling: float) -> LatLon:
+        """Returns camera position based on translation vector and map raster center coordinates.
 
         :param t: Camera translation vector
-        :param map_dim_with_padding: Map dimensions including padding for likely rotation
-        :param bbox: Map bounding box
-        :param camera_yaw: Camera yaw in degrees
-        :param img_dim: Image dimensions
+        :param center: Map center WGS84 coordinates
+        :param scaling: Scaling factor for translation vector (i.e. altitude in meters)
         :return: WGS84 coordinates of camera
         """
         assert_type(np.ndarray, t)
         assert_shape(t, (2,))
-        assert_type(get_args(Union[int, float]), camera_yaw)
         azmth = self._get_azimuth(t[0], t[1])
         dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
-        alt = self._alt_from_vehicle_local_position()
-        scaled_dist = alt*dist
-        center = np.array([img_dim.width / 2, img_dim.height / 2])
-        # TODO: can we get map center as input and not recompute it here?
-        map_center, _, __ = convert_from_pix_to_wgs84(np.array(center.reshape((1, 1, 2))), map_dim_with_padding, bbox,
-                                                      camera_yaw, img_dim)
-        map_center = map_center.squeeze()  # TODO: eliminate need for this squeeze
-        latlon = LatLon(*tuple(map_center))
-        position = self._move_distance(latlon, (-azmth, scaled_dist))  # Invert azimuth, going the other way
+        scaled_dist = scaling*dist
+        position = self._move_distance(center, (-azmth, scaled_dist))  # Invert azimuth, going the other way
         return position
 
     def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
@@ -1802,7 +1791,7 @@ class MapNavNode(Node):
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], timestamp: Optional[int],
-                         map_cropped: Optional[np.ndarray] = None):
+                         map_cropped: Optional[np.ndarray] = None) -> None:
         """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
 
         :param mkp_img: Matching keypoints in drone image
@@ -1852,7 +1841,8 @@ class MapNavNode(Node):
 
         t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
-        position = self._compute_camera_position(t_rotated, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
+        map_center = get_bbox_center(map_frame.bbox)
+        position = self._compute_camera_position(t_rotated, map_center, camera_altitude)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
         image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
         local_position = self._compute_local_frame_position(local_frame_origin_position, image_frame.position)

@@ -1579,16 +1579,16 @@ class MapNavNode(Node):
             map_frame - np.ndarray map_frame to match
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
-            camera_yaw - float  # TODO: degrees? If so, accept int also
-            camera_pitch - float  # TODO: degrees? If so, accept int also
+            camera_yaw - float
+            camera_pitch - float
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             timestamp - Local position message timestamp (to sync vehicle visual odom messages)
+            map_cropped - np.ndarray Rotated and cropped map raster from map_frame.image
 
         :param image_frame: The image frame from the drone video
-
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
         data = {

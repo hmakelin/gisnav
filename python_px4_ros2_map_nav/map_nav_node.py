@@ -1233,7 +1233,7 @@ class MapNavNode(Node):
         self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
-        yaw = heading + gimbal_yaw  # TODO: if over 180, make it negative instead
+        yaw = heading + gimbal_yaw
         yaw = yaw % 360
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees

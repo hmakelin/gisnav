@@ -1353,19 +1353,9 @@ class MapNavNode(Node):
         # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
         use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if use_gimbal_projection:
-            # TODO: same logic in _should_match -- combine into separate function?
-            camera_pitch = self._camera_pitch()
-            if camera_pitch is not None:
-                max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-                if camera_pitch > max_pitch:
-                    self.get_logger().warn(f'Camera pitch {camera_pitch} is above limit {max_pitch} and gimbal'
-                                            f'projection is enabled - skipping updating map.')
-                    return False
-                elif camera_pitch < 0:
-                    self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
-            else:
-                self.get_logger().warn(f'Could not determine camera pitch and gimbal projection is enabled, will skip '
-                                        f'updating map.')
+            max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
+            if self._camera_pitch_too_high(max_pitch):
+                self.get_logger().warn(f'Camera pitch not available or above maximum {max_pitch}. Will not update map.')
                 return False
 
         return True
@@ -1652,6 +1642,26 @@ class MapNavNode(Node):
         camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
         return camera_altitude
 
+    def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
+        """Returns True if camera pitch exceeds given limit.
+
+        :param max_pitch: The limit for the pitch over which it will be considered too high
+        :return: True if pitch is too high
+        """
+        assert_type(get_args(Union[int, float]), max_pitch)
+        camera_pitch = self._camera_pitch()
+        if camera_pitch is not None:
+            if abs(camera_pitch) > max_pitch:
+                self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch}.')
+                return True
+            if camera_pitch < 0:
+                self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
+        else:
+            self.get_logger().warn(f'Could not determine camera pitch.')
+            return True
+
+        return False
+
     def _should_match(self):
         """Determines whether _match should be called based on whether previous match is still being processed.
 
@@ -1662,14 +1672,9 @@ class MapNavNode(Node):
             return False
 
         # Check whether camera pitch is too large
-        camera_pitch = self._camera_pitch()
-        if camera_pitch is not None:
-            max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
-            if camera_pitch > max_pitch:
-                self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch} - skipping matching.')
-                return False
-        else:
-            self.get_logger().debug(f'Could not determine camera pitch, will skip matching.')
+        max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
+        if self._camera_pitch_too_high(max_pitch):
+            self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')
             return False
 
         return True

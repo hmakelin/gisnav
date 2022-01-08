@@ -1762,8 +1762,8 @@ class MapNavNode(Node):
         lons_term = (position.lon, origin.lon)
         _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
 
-        lon_diff = math.copysign(dist[0], position.lat - origin.lat)
-        lat_diff = math.copysign(dist[1], position.lon - origin.lon)
+        lat_diff = math.copysign(dist[0], position.lat - origin.lat)
+        lon_diff = math.copysign(dist[1], position.lon - origin.lon)
 
         alt = position.alt - origin.alt
         assert alt >= 0

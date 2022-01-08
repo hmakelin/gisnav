@@ -1684,13 +1684,16 @@ class MapNavNode(Node):
     def _should_match(self):
         """Determines whether _match should be called based on whether previous match is still being processed.
 
+        Match should be attempted if (1) there are no pending match results, and (2) camera pitch is not too high (e.g.
+        facing horizon instead of nadir).
+
         :return:
         """
-        # Check that a request is not already running
+        # Check condition (1) - that a request is not already running
         if not (self._superglue_results is None or self._superglue_results.ready()):  # TODO: handle timeouts, failures for _superglue_results
             return False
 
-        # Check whether camera pitch is too large
+        # Check condition (2) - whether camera pitch is too large
         max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
         if self._camera_pitch_too_high(max_pitch):
             self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')

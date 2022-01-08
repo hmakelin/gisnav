@@ -1520,7 +1520,7 @@ class MapNavNode(Node):
         :param camera_normal: Camera normal unit vector
         :param reproj_threshold: RANSAC reprojection threshold parameter
         :param restrict_affine: Flag indicating whether homography should be restricted to 2D affine transformation
-        :return: Tuple containing homography matrix, mask, translation and rotation
+        :return: Tuple containing homography matrix, RANSAC inlier mask, translation and rotation
         """
         min_points = 4
         assert_type(np.ndarray, mkp_img)

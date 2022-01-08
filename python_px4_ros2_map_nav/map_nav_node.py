@@ -179,7 +179,7 @@ class MapNavNode(Node):
 
         # Setup vehicle visual odometry publisher timer
         self._publish_timer = self._setup_publish_timer()
-        self._publish_timestamp = 0
+        self._publish_timestamp = None
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
@@ -315,13 +315,13 @@ class MapNavNode(Node):
         self.__timer = value
 
     @property
-    def _publish_timestamp(self) -> int:
+    def _publish_timestamp(self) -> Optional[int]:
         """Timestamp in of when last VehicleVisualOdometry message was published."""
         return self.__publish_timestamp
 
     @_publish_timestamp.setter
-    def _publish_timestamp(self, value: int) -> None:
-        assert_type(int, value)
+    def _publish_timestamp(self, value: Optional[int]) -> None:
+        assert_type(get_args(Optional[int]), value)
         self.__publish_timestamp = value
 
     @property
@@ -606,20 +606,22 @@ class MapNavNode(Node):
         if self._vehicle_visual_odometry is not None:
             assert_type(VehicleVisualOdometry, self._vehicle_visual_odometry)
             now = time.time_ns()
-            hz = None
-            if self._publish_timestamp is not None:
-                assert now > self._publish_timestamp  # TODO: Is it possible that they are the same?
-                hz = 1e9 * 1 / (now - self._publish_timestamp)
-                self._publish_timestamp = now  # TODO: what if self._publish_timestamp is None?
-            self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
-                                    f'Publish frequency {hz} Hz.')
+            if self._publish_timestamp is None:
+                self._publish_timestamp = now
+            else:
+                assert now > self._publish_timestamp
+                hz = 1e9 / (now - self._publish_timestamp)
+                self.get_logger().debug(
+                    f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
+                    f'Publish frequency {hz} Hz.')
 
-            # Warn if we are close to the bounds of acceptable frequency range
-            warn_padding = self.VVO_PUBLISH_FREQUENCY_WARNING_PADDING
-            if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
-                self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
-                                       f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
-                                       f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
+                # Warn if we are close to the bounds of acceptable frequency range
+                warn_padding = self.VVO_PUBLISH_FREQUENCY_WARNING_PADDING
+                if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
+                    self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
+                                           f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
+                                           f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
+
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
         else:

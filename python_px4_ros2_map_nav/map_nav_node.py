@@ -1321,6 +1321,36 @@ class MapNavNode(Node):
         """
         self._vehicle_global_position = msg
 
+    def _wms_results_pending(self) -> bool:
+        """Checks whether there are pending wms_results.
+
+        :return: True if there are pending results.
+        """
+        if self._wms_results is not None:
+            if not self._wms_results.ready():
+                # Previous request still running
+                return True
+
+        return False
+
+    def _previous_map_frame_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
+        """Checks if previous map frame is too close to new requested one.
+
+        :param center: WGS84 coordinates of new map candidate center
+        :param radius: Radius in meters of new map candidate
+        :return: True if previous map frame is too close.
+        """
+        assert_type(get_args(Union[int, float]), radius)
+        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+        if self._previous_map_frame is not None:
+            if not (abs(self._distance(center, self._previous_map_frame.center)) >
+                    self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
+                    abs(radius - self._previous_map_frame.radius) >
+                    self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
+                return True
+
+        return False
+
     def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Checks if a new WMS map request should be made to update old map.
 
@@ -1335,21 +1365,11 @@ class MapNavNode(Node):
         assert_type(get_args(Union[int, float]), radius)
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
 
-        # Check whether old request is still processing
-        if self._wms_results is not None:
-            if not self._wms_results.ready():
-                # Previous request still running
-                return False
+        # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
+        if self._wms_results_pending() or self._previous_map_frame_too_close(center, radius):
+            return False
 
-        # Check whether previous map frame is too close to new requested position
-        if self._previous_map_frame is not None:
-            if not (abs(self._distance(center, self._previous_map_frame.center)) >
-                    self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._previous_map_frame.radius) >
-                    self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
-                return False
-
-        # Check whether camera pitch is too large if using gimbal projection
+        # Check condition (3) - whether camera pitch is too large if using gimbal projection
         # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
         use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if use_gimbal_projection:

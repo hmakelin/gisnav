@@ -697,7 +697,7 @@ class MapNavNode(Node):
                                         f'\n{e}\n{traceback.print_exc()}')
 
     def _use_gimbal_projection(self) -> bool:
-        """Checks if map rasters should be retrieved for projected principal point instead of vehicle position.
+        """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
 
         :return: True if projected principal point should be used.
         """

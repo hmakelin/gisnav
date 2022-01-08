@@ -1076,7 +1076,7 @@ class MapNavNode(Node):
 
         :param center: Center of the map to be retrieved
         :param radius: Radius in meters of the circle to be enclosed by the map
-        :param bbox: Bounding box of the map    # TODO: this seems to be redundant info with the _update_map call, maybe combine?
+        :param bbox: Bounding box of the map
         :param map_size: Map size tuple (height, width)
         :param url: WMS server url
         :param version: WMS server version

@@ -1490,8 +1490,9 @@ class MapNavNode(Node):
 
     @staticmethod
     def _find_and_decompose_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray,
-                                       camera_normal: np.ndarray, reproj_threshold: float = 1.0, affine: bool = False) \
-            -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                       camera_normal: np.ndarray, reproj_threshold: float = 1.0,
+                                       restrict_affine: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
+                                                                               np.ndarray]:
         """Processes matching keypoints from img and map and returns homography matrix, mask, translation and rotation.
 
         :param mkp_img: Matching keypoints from image
@@ -1499,7 +1500,7 @@ class MapNavNode(Node):
         :param k: Camera intrinsics matrix
         :param camera_normal: Camera normal unit vector
         :param reproj_threshold: RANSAC reprojection threshold parameter
-        :param affine: Flag indicating whether homography should be restricted to 2D affine transformation
+        :param restrict_affine: Flag indicating whether homography should be restricted to 2D affine transformation
         :return: Tuple containing homography matrix, mask, translation and rotation
         """
         min_points = 4
@@ -1507,9 +1508,9 @@ class MapNavNode(Node):
         assert_type(np.ndarray, mkp_map)
         assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
 
-        assert_type(bool, affine)
+        assert_type(bool, restrict_affine)
         assert_type(float, reproj_threshold)
-        if not affine:
+        if not restrict_affine:
             h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)
         else:
             h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
@@ -1746,7 +1747,7 @@ class MapNavNode(Node):
         # Find and decompose homography matrix, do some sanity checks
         k = camera_info.k.reshape([3, 3])
         h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
-                                                              affine=restrict_affine)
+                                                              restrict_affine=restrict_affine)
         assert_shape(h, (3, 3))
         assert_shape(t, (3, 1))
         assert_shape(r, (3, 3))

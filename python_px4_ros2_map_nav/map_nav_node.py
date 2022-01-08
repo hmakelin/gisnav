@@ -1628,7 +1628,7 @@ class MapNavNode(Node):
         center = np.array([img_dim.width / 2, img_dim.height / 2])
         # TODO: can we get map center as input and not recompute it here?
         map_center, _, __ = convert_from_pix_to_wgs84(np.array(center.reshape((1, 1, 2))), map_dim_with_padding, bbox,
-                                                       camera_yaw, img_dim)
+                                                      camera_yaw, img_dim)
         map_center = map_center.squeeze()  # TODO: eliminate need for this squeeze
         latlon = LatLon(*tuple(map_center))
         position = self._move_distance(latlon, (-azmth, scaled_dist))  # Invert azimuth, going the other way

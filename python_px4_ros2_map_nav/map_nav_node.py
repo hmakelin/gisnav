@@ -1407,7 +1407,7 @@ class MapNavNode(Node):
 
     def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple) \
             -> None:
-        """Publishes a VehicleVisualOdometry message over the microRTPS bridge.
+        """Creates a VehicleVisualOdometry and saves it to self._vehicle_visual_odometry.
 
         See https://docs.px4.io/v1.12/en/advanced_config/tuning_the_ecl_ekf.html#external-vision-system for supported
         EKF2_AID_MASK values when using an external vision system.

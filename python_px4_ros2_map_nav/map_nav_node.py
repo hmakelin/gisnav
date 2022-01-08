@@ -606,9 +606,7 @@ class MapNavNode(Node):
         if self._vehicle_visual_odometry is not None:
             assert_type(VehicleVisualOdometry, self._vehicle_visual_odometry)
             now = time.time_ns()
-            if self._publish_timestamp is None:
-                self._publish_timestamp = now
-            else:
+            if self._publish_timestamp is not None:
                 assert now > self._publish_timestamp
                 hz = 1e9 / (now - self._publish_timestamp)
                 self.get_logger().debug(
@@ -621,7 +619,8 @@ class MapNavNode(Node):
                     self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
                                            f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
                                            f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
-
+                    
+            self._publish_timestamp = now
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
         else:

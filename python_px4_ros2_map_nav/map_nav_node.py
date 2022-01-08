@@ -1560,7 +1560,7 @@ class MapNavNode(Node):
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         The dictionary has the following data:
-            map_frame - np.darray map_frame to match
+            map_frame - np.ndarray map_frame to match
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float  # TODO: degrees? If so, accept int also

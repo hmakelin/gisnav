@@ -619,7 +619,7 @@ class MapNavNode(Node):
                     self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
                                            f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
                                            f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
-                    
+
             self._publish_timestamp = now
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
@@ -1838,7 +1838,7 @@ class MapNavNode(Node):
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
-        t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
+        t_rotated = rotate_point(math.radians(camera_yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
         map_center = get_bbox_center(map_frame.bbox)
         position = self._compute_camera_position(t_rotated, map_center, camera_altitude)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use

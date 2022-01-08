@@ -1550,30 +1550,6 @@ class MapNavNode(Node):
 
         return h, h_mask, translation, rotation
 
-    def _local_frame_position(self, local_frame_origin: Union[LatLon, LatLonAlt], camera_position: LatLon,
-                              camera_altitude: Union[int, float]) -> Tuple[float, float, float]:
-        """Returns camera position in meters in NED frame.
-
-        :param local_frame_origin: WGS84 coordinates of local frame origin  #TODO: can also be LonLat, not just LonLatAlt?
-        :param camera_position: WGS84 coordinates of camera position
-        :param camera_altitude: Camera altitude in meters  # TODO: this is not needed, it is just 'passing through'
-        :return:
-        """
-        assert_type(get_args(Union[LatLon, LatLonAlt]), local_frame_origin)
-        assert_type(LatLon, camera_position)
-        assert_type(get_args(Union[int, float]), camera_altitude)
-
-        lats_orig = (local_frame_origin.lat, local_frame_origin.lat)
-        lons_orig = (local_frame_origin.lon, local_frame_origin.lon)
-        lats_term = (local_frame_origin.lat, camera_position.lat)
-        lons_term = (camera_position.lon, local_frame_origin.lon)
-        _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
-
-        lon_diff = math.copysign(dist[0], camera_position.lat - local_frame_origin.lat)
-        lat_diff = math.copysign(dist[1], camera_position.lon - local_frame_origin.lon)
-
-        return lat_diff, lon_diff, -camera_altitude
-
     def _match_inputs(self, image_frame: ImageFrame) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
@@ -1761,6 +1737,39 @@ class MapNavNode(Node):
         self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
         return local_origin
 
+    def _compute_local_frame_position(self, origin: LatLonAlt, position: LatLonAlt) -> Tuple[float, float, float]:
+        """Computes position of WGS84 coordinates in local frame coordinates.
+
+        :param origin: WGS84 coordiantes of local frame origin
+        :param position: WGS84 coordinates and altitude in meters of estimated camera position
+        :return: Tuple containing x, y and z coordinates (meters) in local frame
+        """
+        assert_type(LatLonAlt, position)
+        assert_type(LatLonAlt, origin)
+        if origin is None:
+            assert self._vehicle_local_position.ref_lat is np.NaN  # TODO: or None?
+            assert self._vehicle_local_position.ref_lon is np.NaN
+            self.get_logger().debug('No local frame origin position provided, estimating it from current position.')
+            if self._local_origin is None:
+                # This should only be set only once assuming the following local_position computation is the only
+                #  piece of code that uses self._local_origin
+                origin = self._compute_local_frame_origin(self._vehicle_local_position, position)
+                self._local_origin = origin  # TODO: need to do outside of this if clause (always)?
+
+        lats_orig = (origin.lat, origin.lat)
+        lons_orig = (origin.lon, origin.lon)
+        lats_term = (origin.lat, origin.lat)
+        lons_term = (origin.lon, origin.lon)
+        _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
+
+        lon_diff = math.copysign(dist[0], position.lat - origin.lat)
+        lat_diff = math.copysign(dist[1], position.lon - origin.lon)
+
+        alt = position.alt - origin.alt
+        assert alt >= 0
+
+        return LatLonAlt(lat_diff, lon_diff, -alt)
+
     def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray) -> Optional[Tuple[float]]:
         """Computes attitude quaternion for outgoing VehicleVisualOdometry message.
 
@@ -1848,24 +1857,12 @@ class MapNavNode(Node):
         t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
         position = self._compute_camera_position(t_rotated, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
-        assert_type(LatLon, position)
-        if local_frame_origin_position is None:
-            self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
-                                    'frame origin.')
-            assert self._vehicle_local_position.ref_lat is None
-            assert self._vehicle_local_position.ref_lon is None
-            if self._local_origin is None:
-                # This should only be set only once assuming the following local_position computation is the only
-                #  piece of code that uses self._local_origin
-                self._local_origin = self._compute_local_frame_origin(self._vehicle_local_position, position)
+        image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
-            local_position = self._local_frame_position(self._local_origin, position, camera_altitude)
-        else:
-            local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+        local_position = self._compute_local_frame_position(local_frame_origin_position, image_frame.position)
         self.get_logger().debug(f'Local frame position: {local_position}, origin ref position {self._local_origin}.')
 
         assert camera_altitude is not None
-        image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
         quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2])  # TODO: do not use hard-coded indices, prone to breaking
 

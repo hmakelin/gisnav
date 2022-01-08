@@ -21,7 +21,7 @@ documentation also contains the private members of each module.
 
 .. _python_px4_ros2_map_nav: https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav
 
-map\_nav\_node module
+map_nav_node module
 -------------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.map_nav_node
    :members:
@@ -44,6 +44,15 @@ util module
    :private-members:
    :undoc-members:
    :show-inheritance:
+
+ros_param_defaults module
+---------------------------------------
+.. automodule:: python_px4_ros2_map_nav.ros_param_defaults
+   :members:
+   :private-members:
+   :undoc-members:
+   :show-inheritance:
+
 
 
 

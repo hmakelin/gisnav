@@ -10,6 +10,7 @@ import pstats
 import numpy as np
 import cv2
 import time
+import python_px4_ros2_map_nav.ros_param_defaults as param_defaults
 
 # Import and configure torch for multiprocessing
 import torch
@@ -33,7 +34,6 @@ from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
     rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, \
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
-
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
 from sensor_msgs.msg import CameraInfo, Image
@@ -629,6 +629,8 @@ class MapNavNode(Node):
     def _declare_ros_params(self, config: dict) -> None:
         """Declares ROS parameters from a config file.
 
+        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults` if values are not provided.
+
         :param config: The value of the ros__parameters key from the parsed configuration file.
         :return:
         """
@@ -636,34 +638,34 @@ class MapNavNode(Node):
         # TODO: log warning if config has a param that is not declared here!
         namespace = 'wms'
         self.declare_parameters(namespace, [
-            ('url', config.get(namespace, {}).get('url', None), ParameterDescriptor(read_only=True)),
-            ('version', config.get(namespace, {}).get('version', None), ParameterDescriptor(read_only=True)),
-            ('layer', config.get(namespace, {}).get('layer', None)),
-            ('srs', config.get(namespace, {}).get('srs', None)),
-            ('request_timeout', config.get(namespace, {}).get('request_timeout', None))
+            ('url', config.get(namespace, {}).get('url', ros_defaults.WMS_URL), ParameterDescriptor(read_only=True)),
+            ('version', config.get(namespace, {}).get('version', ros_defaults.WMS_VERSION), ParameterDescriptor(read_only=True)),
+            ('layer', config.get(namespace, {}).get('layer', ros_defaults.WMS_LAYER)),
+            ('srs', config.get(namespace, {}).get('srs', ros_defaults.WMS_SRS)),
+            ('request_timeout', config.get(namespace, {}).get('request_timeout', ros_defaults.WMS_REQUEST_TIMEOUT))
         ])
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('affine_threshold', config.get(namespace, {}).get('affine_threshold', None)),
-            ('publish_frequency', config.get(namespace, {}).get('publish_frequency', None), ParameterDescriptor(read_only=True)),
-            ('export_position', config.get(namespace, {}).get('export_position', None)),
-            ('export_projection', config.get(namespace, {}).get('export_projection', None)),
-            ('max_pitch', config.get(namespace, {}).get('max_pitch', None))
+            ('affine_threshold', config.get(namespace, {}).get('affine_threshold', ros_defaults.MISC_AFFINE_THRESHOLD)),
+            ('publish_frequency', config.get(namespace, {}).get('publish_frequency', ros_defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
+            ('export_position', config.get(namespace, {}).get('export_position', ros_defaults.MISC_EXPORT_POSITION)),
+            ('export_projection', config.get(namespace, {}).get('export_projection', ros_defaults.MISC_EXPORT_PROJECTION)),
+            ('max_pitch', config.get(namespace, {}).get('max_pitch', ros_defaults.MISC_MAX_PITCH))
         ])
 
         namespace = 'map_update'
         self.declare_parameters(namespace, [
-            ('initial_guess.lat', config.get(namespace, {}).get('initial_guess', {}).get('lat', None)),
-            ('initial_guess.lon', config.get(namespace, {}).get('initial_guess', {}).get('lon', None)),
-            ('update_delay', config.get(namespace, {}).get('update_delay', None), ParameterDescriptor(read_only=True)),
-            ('default_altitude', config.get(namespace, {}).get('default_altitude', None)),
-            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', None)),
-            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', None)),
-            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', None)),
-            ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', None)),
-            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', None)),
-            ('max_pitch', config.get(namespace, {}).get('max_pitch', None))
+            ('initial_guess.lat', config.get(namespace, {}).get('initial_guess', {}).get('lat', ros_defaults.MAP_UPDATE_INITIAL_GUESS.lat)),
+            ('initial_guess.lon', config.get(namespace, {}).get('initial_guess', {}).get('lon', ros_defaults.MAP_UPDATE_INITIAL_GUESS.lon)),
+            ('update_delay', config.get(namespace, {}).get('update_delay', ros_defaults.MAP_UPDATE_UPDATE_DELAY), ParameterDescriptor(read_only=True)),
+            ('default_altitude', config.get(namespace, {}).get('default_altitude', ros_defaults.MAP_UPDATE_DEFAULT_ALTITUDE)),
+            ('gimbal_projection', config.get(namespace, {}).get('gimbal_projection', ros_defaults.MAP_UPDATE_GIMBAL_PROJECTION)),
+            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', ros_defaults.MAP_UPDATE_MAX_MAP_RADIUS)),
+            ('map_radius_meters_default', config.get(namespace, {}).get('map_radius_meters_default', ros_defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT)),
+            ('update_map_center_threshold', config.get(namespace, {}).get('update_map_center_threshold', ros_defaults.MAP_UPDATE_UPDATE_MAP_CENTER_THRESHOLD)),
+            ('update_map_radius_threshold', config.get(namespace, {}).get('update_map_radius_threshold', ros_defaults.MAP_UPDATE_UPDATE_MAP_RADIUS_THRESHOLD)),
+            ('max_pitch', config.get(namespace, {}).get('max_pitch', ros_defaults.MAP_UPDATE_MAX_PITCH))
         ])
 
     def _load_config(self, yaml_file: str) -> dict:

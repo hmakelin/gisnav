@@ -1325,7 +1325,8 @@ class MapNavNode(Node):
         """Checks if a new WMS map request should be made to update old map.
 
         Map is updated unless (1) there is a previous map frame that is close enough to provided center and has radius
-        that is close enough to new request or (2) previous WMS request is still processing.
+        that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
+        large and gimbal projection is used so that map center would be too far or even beyond the horizon.
 
         :param center: WGS84 coordinates of new map candidate center
         :param radius: Radius in meters of new map candidate
@@ -1333,6 +1334,7 @@ class MapNavNode(Node):
         """
         assert_type(get_args(Union[int, float]), radius)
         assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+
         # Check whether old request is still processing
         if self._wms_results is not None:
             if not self._wms_results.ready():

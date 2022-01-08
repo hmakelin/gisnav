@@ -1599,6 +1599,12 @@ class MapNavNode(Node):
     def _compute_camera_position(self, t: np.ndarray, center: LatLon, scaling: float) -> LatLon:
         """Returns camera position based on translation vector and map raster center coordinates.
 
+        NOTE:
+        The map center coordinates are the coordinates of the center of map_cropped. The cropping and rotation of
+        map_cropped is implemented so that its center coordinates match the uncropped, unrotated map's center
+        coordinates. Input arg center can therefore be given as the center of the original map's bounding box as long
+        as the cropping and rotation implementation remains unchanged.
+
         :param t: Camera translation vector
         :param center: Map center WGS84 coordinates
         :param scaling: Scaling factor for translation vector (i.e. positive altitude in meters)

@@ -1168,9 +1168,6 @@ class MapNavNode(Node):
             inputs = self._match_inputs(image_frame)
             for k, v in inputs.items():
                 if v is None:
-                    # TODO: remove this temporary allowance, local frame origin is not optional!
-                    #if k not in ['local_frame_origin_position', 'timestamp']:
-                    #    self.get_logger().warn(f'Key {k} was None in stored matching inputs - cannot call match.')
                     return
 
             camera_yaw = inputs.get('camera_yaw', None)

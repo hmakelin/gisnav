@@ -1601,7 +1601,7 @@ class MapNavNode(Node):
 
         :param t: Camera translation vector
         :param center: Map center WGS84 coordinates
-        :param scaling: Scaling factor for translation vector (i.e. altitude in meters)
+        :param scaling: Scaling factor for translation vector (i.e. positive altitude in meters)
         :return: WGS84 coordinates of camera
         """
         assert_type(np.ndarray, t)
@@ -1609,6 +1609,7 @@ class MapNavNode(Node):
         azmth = self._get_azimuth(t[0], t[1])
         dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
         scaled_dist = scaling*dist
+        assert scaling > 0
         position = self._move_distance(center, (-azmth, scaled_dist))  # Invert azimuth, going the other way
         return position
 
@@ -1746,8 +1747,8 @@ class MapNavNode(Node):
         lons_term = (position.lon, origin.lon)
         _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
 
-        lat_diff = math.copysign(dist[0], position.lat - origin.lat)
-        lon_diff = math.copysign(dist[1], position.lon - origin.lon)
+        lat_diff = math.copysign(dist[1], position.lat - origin.lat)
+        lon_diff = math.copysign(dist[0], position.lon - origin.lon)
 
         alt = position.alt - origin.alt
         assert alt >= 0

@@ -1752,7 +1752,7 @@ class MapNavNode(Node):
         alt = position.alt - origin.alt
         assert alt >= 0
 
-        return LatLonAlt(lat_diff, lon_diff, -alt)
+        return lat_diff, lon_diff, -alt
 
     def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray) -> Optional[Tuple[float]]:
         """Computes attitude quaternion against NED frame for outgoing VehicleVisualOdometry message.
@@ -1845,7 +1845,8 @@ class MapNavNode(Node):
         image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
         local_position = self._compute_local_frame_position(local_frame_origin_position, image_frame.position)
-        self.get_logger().debug(f'Local frame position: {local_position}, origin ref position {self._local_origin}.')
+        self.get_logger().error(f'Local frame position: {local_position}, origin ref position '
+                                f'{local_frame_origin_position}.')
 
         assert camera_altitude is not None
 

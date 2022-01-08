@@ -269,17 +269,17 @@ class MapNavNode(Node):
         self.__superglue_pool = value
 
     @property
-    def _stored_inputs(self) -> Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
-                                                  Dim, bool, Optional[np.ndarray]]]:
-        """Inputs stored at time of launching a new asynchronous match that are needed for processing its results."""
+    def _stored_inputs(self) -> dict:
+        """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
+
+        See :func:`~python_px4_ros2_map_nav.MapNavNode._process_matches` for description of keys and values stored in
+        the dictionary.
+        """
         return self.__stored_inputs
 
     @_stored_inputs.setter
-    def _stored_inputs(self, value: Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float,
-                                                      Dim, Dim, bool, Optional[np.ndarray]]]) -> None:
-        # TODO: assert type
-        #assert_type(get_args(Tuple[bool, Tuple[np.ndarray, LatLonAlt, int, CameraInfo, np.ndarray, float, float, Dim,
-        #                                       Dim, bool, Optional[np.ndarray]]]), value)
+    def _stored_inputs(self, value: dict) -> None:
+        assert_type(dict, value)
         self.__stored_inputs = value
 
     @property

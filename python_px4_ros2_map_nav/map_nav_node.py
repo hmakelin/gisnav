@@ -1258,10 +1258,10 @@ class MapNavNode(Node):
         camera_normal = r.apply(nadir)
         assert_shape(camera_normal, nadir.shape)
 
-        # TODO: this assertion is arbitrary? how to handle unexpected camera normal length?
-        # TODO: may have to raise error here - dont know what to do, this assertion could trigger an error
         camera_normal_length = np.linalg.norm(camera_normal)
-        assert abs(camera_normal_length - 1) <= 0.001, f'Unexpected camera normal length {camera_normal_length}.'
+        # TODO: is this arbitrary check needed?
+        if camera_normal_length - 1 <= 0.001:
+            self.get_logger().warn(f'Camera normal length: {camera_normal_length}, does not look like a unit vector?.')
 
         return camera_normal
 

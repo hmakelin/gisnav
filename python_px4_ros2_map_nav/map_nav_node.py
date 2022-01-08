@@ -610,7 +610,7 @@ class MapNavNode(Node):
             if self._publish_timestamp is not None:
                 assert now > self._publish_timestamp  # TODO: Is it possible that they are the same?
                 hz = 1e9 * 1 / (now - self._publish_timestamp)
-                self._publish_timestamp = now
+                self._publish_timestamp = now  # TODO: what if self._publish_timestamp is None?
             self.get_logger().debug(f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
                                     f'Publish frequency {hz} Hz.')
 
@@ -960,9 +960,7 @@ class MapNavNode(Node):
         :return: Center of the FOV or None if not available
         """
         if self._camera_info is not None:
-            # TODO: compute translation vector
             pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls
-            # TODO: don't attempt to match if pitch is too close to 90 degrees, make some sort of configurable threshold (e.g. 45 degrees).
             if pitch is None:
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None

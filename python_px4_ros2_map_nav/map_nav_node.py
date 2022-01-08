@@ -31,7 +31,7 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, get_bbox_center, BBox, Dim,\
-    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle,\
+    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, \
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
 
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
@@ -1141,12 +1141,14 @@ class MapNavNode(Node):
 
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
 
+        # Check that image dimensions match declared dimensions
         img_size = self._declared_img_size()
         if img_size is not None:
             cv_img_shape = cv_image.shape[0:2]
             assert cv_img_shape == img_size, f'Converted cv_image shape {cv_img_shape} did not match declared image ' \
                                              f'shape {img_size}.'
 
+        # Process image frame
         image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
@@ -1156,9 +1158,9 @@ class MapNavNode(Node):
             for k, v in inputs.items():
                 if v is None:
                     # TODO: remove this temporary allowance, local frame origin is not optional!
-                    if k not in ['local_frame_origin_position', 'timestamp']:
-                        self.get_logger().warn(f'Key {k} was None in stored matching inputs - cannot call match.')
-                        return
+                    #if k not in ['local_frame_origin_position', 'timestamp']:
+                    #    self.get_logger().warn(f'Key {k} was None in stored matching inputs - cannot call match.')
+                    return
 
             camera_yaw = inputs.get('camera_yaw', None)
             map_frame = inputs.get('map_frame', None)
@@ -1627,6 +1629,7 @@ class MapNavNode(Node):
         map_center_wgs84 = map_center.squeeze()  # TODO: eliminate need for this squeeze
         latlon = LatLon(*tuple(map_center_wgs84))
         position = self._move_distance(latlon, (-azmth, dist))  # Invert azimuth, going the other way
+
         return position
 
     def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
@@ -1750,7 +1753,8 @@ class MapNavNode(Node):
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
-        position = self._compute_camera_position(t, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
+        t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
+        position = self._compute_camera_position(t_rotated, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
         if local_frame_origin_position is None:
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
                                     'frame origin.')

@@ -1740,6 +1740,27 @@ class MapNavNode(Node):
             self._stored_inputs['map_cropped'] = None
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
+    def _compute_local_frame_origin(self, position: Union[LatLon, LatLonAlt]):
+        """Computes local frame global coordinates from local frame coordinates and their known global coordinates.
+
+        VehicleLocalPosition does not include the reference coordinates for the local frame if e.g. GPS is turned off.
+        This function computes the reference coordinates by translating the inverse of current local coordinates from
+        current estimated global position.
+
+        :param position: WGS84 coordinates of current vehicle local position
+        :return:
+        """
+        x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
+        assert_type(float, x)
+        assert_type(float, y)
+        azmth = self._get_azimuth(x, y)
+        dist = math.sqrt(x ** 2 + y ** 2)
+        alt = self._alt_from_vehicle_local_position()
+        assert alt is not None
+        local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (alt,)))
+        self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
+        return local_origin
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
@@ -1800,21 +1821,13 @@ class MapNavNode(Node):
         if local_frame_origin_position is None:
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
                                     'frame origin.')
-            # Initialize local frame reference for vvo
+            assert self._vehicle_local_position.ref_lat is None
+            assert self._vehicle_local_position.ref_lon is None
             if self._local_origin is None:
-                # Compute WGS84 coordinates of PX4 local frame origin
-                # TODO: check that x and y are valid
-                x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
-                azmth = self._get_azimuth(x, y)
-                dist = math.sqrt(x**2 + y**2)
-                alt = self._alt_from_vehicle_local_position()
-                assert alt is not None
-                self._local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (alt, )))
                 # This should only be set only once assuming the following local_position computation is the only
                 #  piece of code that uses self._local_origin
-                self.get_logger().info(f'Local frame origin set at {self._local_origin}, this should happen only once.')
+                self._local_origin = self._compute_local_frame_origin(self._vehicle_local_position, position)
 
-            # TODO: assert that ref lat and ref lon in VehicleLocalPosition are none and self._vehicle_global_position is None?
             local_position = self._local_frame_position(self._local_origin, position, camera_altitude)
         else:
             local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)

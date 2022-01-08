@@ -1317,7 +1317,7 @@ class MapNavNode(Node):
             assert hasattr(camera_info, 'width')
             w = camera_info.width
             f = camera_info.k[0]
-            assert camera_info.k[0] == camera_info.k[4]
+            assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy
             hfov = 2 * math.atan(w / (2 * f))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:

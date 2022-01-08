@@ -622,6 +622,9 @@ class MapNavNode(Node):
                                        f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
             self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
                 .publish(self._vehicle_visual_odometry)
+        else:
+            self.get_logger().debug('Vehicle visual odometry publishing timer triggered but there was nothing to '
+                                    'publish.')
 
     def _declare_ros_params(self, config: dict) -> None:
         """Declares ROS parameters from a config file.

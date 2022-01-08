@@ -1724,14 +1724,13 @@ class MapNavNode(Node):
         :param position: WGS84 coordinates of current vehicle local position
         :return:
         """
+        assert self._vehicle_local_position is not None
         x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
         assert_type(float, x)
         assert_type(float, y)
         azmth = self._get_azimuth(x, y)
         dist = math.sqrt(x ** 2 + y ** 2)
-        alt = self._alt_from_vehicle_local_position()
-        assert alt is not None
-        local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (alt,)))
+        local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (0,)))
         self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
         return local_origin
 
@@ -1907,10 +1906,9 @@ class MapNavNode(Node):
         :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
         """
-        # Launch a new SuperGlue match
         assert self._superglue_results is None or self._superglue_results.ready()
         self._superglue_results = self._superglue_pool.starmap_async(
-            self._superglue_pool_worker, 
+            self._superglue_pool_worker,
             [(image_frame.image, map_cropped)],
             callback=self.superglue_worker_callback,
             error_callback=self.superglue_worker_error_callback

@@ -582,13 +582,11 @@ class MapNavNode(Node):
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
             else:
-                # TODO: this is a bit misleading - nothing is at origin.alt above the principal pont. We just want
-                #  to give this as input argument to _update_map (altitude will not be used), try to fix later
+                # Position at camera altitude but above the projected field of view center
                 latlonalt = LatLonAlt(fov_center_.lat, fov_center_.lon, latlonalt.alt)
 
-        # Get map size based on altitude
+        # Get map size based on altitude and update map if needed
         map_radius = self._get_dynamic_map_radius(latlonalt.alt)
-        # Update map if needed
         if self._should_update_map(latlonalt, map_radius):
             self._update_map(latlonalt, map_radius)
         else:

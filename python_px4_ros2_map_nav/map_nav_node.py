@@ -1771,18 +1771,20 @@ class MapNavNode(Node):
         return LatLonAlt(lat_diff, lon_diff, -alt)
 
     def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray) -> Optional[Tuple[float]]:
-        """Computes attitude quaternion for outgoing VehicleVisualOdometry message.
+        """Computes attitude quaternion against NED frame for outgoing VehicleVisualOdometry message.
+
+        Attitude estimate adjusts vehicle heading (used to rotate the map raster together with gimbal yaw) by the angle
+        of the estimated field of view bottom side to the x-axis vector. This adjustment angle is expected to be very
+        small in most cases as the FOV should align well with the rotated map raster.
 
         :param ll: Lower left corner pixel coordinates of estimated field of view
         :param lr: Lower right corner pixel coordinates of estimated field of view
         :return: Quaternion tuple, or None if attitude information is not available
         """
-        # Vehicle yaw against NED frame (quaternion)
-        # Get the vector from lower left to lower right and calculate its angle to the width unit vector. Use the small
-        # angle to adjust vehicle heading (assume vehicle always knows gimbal/camera yaw).
         # TODO: Seems like when gimbal (camera) is nadir facing, PX4 automatically rotates it back to face vehicle
         #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
         #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
+        #  Need to log a warning or even an error in these cases!
         assert_type(np.ndarray, ll)
         assert_type(np.ndarray, lr)
         if self._vehicle_attitude is not None:

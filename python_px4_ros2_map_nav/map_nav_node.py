@@ -1438,8 +1438,6 @@ class MapNavNode(Node):
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
 
-        # TODO: could throw a warning if position and velocity BOTH are None - would publish a message full of NaN
-
         # Timestamp
         #now = int(time.time() * 1e6)  # uint64 time in microseconds  # TODO: should be time since system start?
         msg.timestamp = timestamp  # now

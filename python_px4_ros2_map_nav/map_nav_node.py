@@ -1607,9 +1607,8 @@ class MapNavNode(Node):
 
         return data
 
-
-    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float, img_dim: Dim)\
-            -> LatLon:  # TODO: Yaw is degrees or radians? If degrees, could also accept ints? Seems like radians so maybe only float is justified unless more refactoring is done
+    def _compute_camera_position(self, t: np.ndarray, map_dim_with_padding: Dim, bbox: BBox, camera_yaw: float,
+                                 img_dim: Dim) -> LatLon:
         """Returns camera position based on translation vector and metadata.
 
         :param t: Camera translation vector
@@ -1620,18 +1619,19 @@ class MapNavNode(Node):
         :return: WGS84 coordinates of camera
         """
         # Compute WGS84 coordinates of camera
-        # TODO: check that x and y are valid
-        # TODO: need to optimize this, maybe get map center as input and not comppute it here
+        assert_type(np.ndarray, t)
+        assert_shape(t, (3,))
         azmth = self._get_azimuth(t[0], t[1])
         dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
         alt = self._alt_from_vehicle_local_position()
-        dist = alt*dist
-        map_center, _, __ = convert_from_pix_to_wgs84(  # TODO: is this map center or fov center? And how close are they to each other?
-            np.array(np.array([img_dim.width / 2, img_dim.height / 2]).reshape((1, 1, 2))), map_dim_with_padding, bbox, camera_yaw, img_dim)
-        map_center_wgs84 = map_center.squeeze()  # TODO: eliminate need for this squeeze
-        latlon = LatLon(*tuple(map_center_wgs84))
-        position = self._move_distance(latlon, (-azmth, dist))  # Invert azimuth, going the other way
-
+        scaled_dist = alt*dist
+        center = np.array([img_dim.width / 2, img_dim.height / 2])
+        # TODO: can we get map center as input and not recompute it here?
+        map_center, _, __ = convert_from_pix_to_wgs84(np.array(center.reshape((1, 1, 2))), map_dim_with_padding, bbox,
+                                                       camera_yaw, img_dim)
+        map_center = map_center.squeeze()  # TODO: eliminate need for this squeeze
+        latlon = LatLon(*tuple(map_center))
+        position = self._move_distance(latlon, (-azmth, scaled_dist))  # Invert azimuth, going the other way
         return position
 
     def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:

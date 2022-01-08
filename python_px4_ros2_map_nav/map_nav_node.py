@@ -1715,10 +1715,6 @@ class MapNavNode(Node):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        if len(mkp_img) < self.MINIMUM_MATCHES:
-            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
-            return None
-
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
@@ -1745,6 +1741,9 @@ class MapNavNode(Node):
 
         :return:
         """
+        if len(mkp_img) < self.MINIMUM_MATCHES:
+            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
+            return None
 
         # Find and decompose homography matrix, do some sanity checks
         k = camera_info.k.reshape([3, 3])

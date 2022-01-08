@@ -89,6 +89,9 @@ class MapNavNode(Node):
     MINIMUM_PUBLISH_FREQUENCY = 30
     MAXIMUM_PUBLISH_FREQUENCY = 50
 
+    # Logs a warning if publish frequency is close to the bounds of desired publish frequency
+    VVO_PUBLISH_FREQUENCY_WARNING_PADDING = 3
+
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
     TOPIC_NAME_KEY = 'topic_name'
@@ -612,7 +615,7 @@ class MapNavNode(Node):
                                     f'Publish frequency {hz} Hz.')
 
             # Warn if we are close to the bounds of acceptable frequency range
-            warn_padding = 3
+            warn_padding = self.VVO_PUBLISH_FREQUENCY_WARNING_PADDING
             if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
                 self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
                                        f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '

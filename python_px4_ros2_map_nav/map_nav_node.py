@@ -777,7 +777,8 @@ class MapNavNode(Node):
         :return: The bounding box
         """
         if radius_meters is None:
-            radius_meters = self.get_parameter('map_update.map_radius_meters_default').get_parameter_value().integer_value
+            radius_meters = self.get_parameter('map_update.map_radius_meters_default')\
+                .get_parameter_value().integer_value
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
         assert_type(get_args(Union[int, float]), radius_meters)
         corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius

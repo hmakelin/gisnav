@@ -1475,7 +1475,6 @@ class MapNavNode(Node):
         assert_type(RPY, rpy)
         return rpy.pitch
 
-    # TODO: just use one?
     def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
         """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available.
 

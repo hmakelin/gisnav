@@ -1618,7 +1618,6 @@ class MapNavNode(Node):
         :param img_dim: Image dimensions
         :return: WGS84 coordinates of camera
         """
-        # Compute WGS84 coordinates of camera
         assert_type(np.ndarray, t)
         assert_shape(t, (3,))
         azmth = self._get_azimuth(t[0], t[1])

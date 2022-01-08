@@ -558,7 +558,7 @@ class MapNavNode(Node):
         if latlonalt.alt is None:
             self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
                                    'instead.')
-            latlonalt = latlonalt[:-1] + (self._alt_from_vehicle_local_position(), )  # TODO: hard-coded index? Prone to breaking?
+            latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
 
         # If some of latlonalt are still None, try to get from provided initial guess and default alt
         if not all(latlonalt):
@@ -568,31 +568,29 @@ class MapNavNode(Node):
             latlonalt_guess = self._latlonalt_from_initial_guess()
             latlonalt = tuple(latlonalt[i] if latlonalt[i] is not None else latlonalt_guess[i] for i in
                               range(len(latlonalt)))
+            latlonalt = LatLonAlt(*latlonalt)
 
         # Cannot determine vehicle global position
         if not all(latlonalt):
             self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
             return
 
-        origin = LatLonAlt(*latlonalt)
-
         # Project principal point if required
-        if self._use_gimbal_projection():  # TODO Get rid of this flag and just use 0 for threshold to turn it off
-            projected_principal_point = self._projected_field_of_view_center(origin)  # TODO: this is fov bbox center, not principal point!
-            if projected_principal_point is None:
+        if self._use_gimbal_projection():
+            fov_center_ = self._projected_field_of_view_center(latlonalt)
+            if fov_center_ is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
             else:
                 # TODO: this is a bit misleading - nothing is at origin.alt above the principal pont. We just want
                 #  to give this as input argument to _update_map (altitude will not be used), try to fix later
-                origin = LatLonAlt(projected_principal_point.lat, projected_principal_point.lon, origin.alt)
-
+                latlonalt = LatLonAlt(fov_center_.lat, fov_center_.lon, latlonalt.alt)
 
         # Get map size based on altitude
-        map_radius = self._get_dynamic_map_radius(origin.alt)
+        map_radius = self._get_dynamic_map_radius(latlonalt.alt)
         # Update map if needed
-        if self._should_update_map(origin, map_radius):
-            self._update_map(origin, map_radius)
+        if self._should_update_map(latlonalt, map_radius):
+            self._update_map(latlonalt, map_radius)
         else:
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')

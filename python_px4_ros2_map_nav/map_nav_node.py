@@ -272,8 +272,7 @@ class MapNavNode(Node):
     def _stored_inputs(self) -> dict:
         """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
 
-        See :func:`~python_px4_ros2_map_nav.MapNavNode._process_matches` for description of keys and values stored in
-        the dictionary.
+        See :meth:`~_process_matches` for description of keys and values stored in the dictionary.
         """
         return self.__stored_inputs
 
@@ -546,7 +545,10 @@ class MapNavNode(Node):
                self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
     def _map_update_timer_callback(self) -> None:
-        """Updates stored map if vehicle has moved enough from previous position and if needed inputs are available.
+        """Attempts to update stored map at regular intervals.
+
+        Calls :meth:`~_update_map` if the center and altitude coordinates for the new map raster are available and the
+        :meth:`~_should_update_map` check passes.
 
         :return:
         """

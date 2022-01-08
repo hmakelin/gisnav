@@ -1758,8 +1758,8 @@ class MapNavNode(Node):
 
         lats_orig = (origin.lat, origin.lat)
         lons_orig = (origin.lon, origin.lon)
-        lats_term = (origin.lat, origin.lat)
-        lons_term = (origin.lon, origin.lon)
+        lats_term = (origin.lat, position.lat)
+        lons_term = (position.lon, origin.lon)
         _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
 
         lon_diff = math.copysign(dist[0], position.lat - origin.lat)

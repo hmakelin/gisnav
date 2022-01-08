@@ -362,7 +362,6 @@ class MapNavNode(Node):
         assert_type(get_args(Optional[LatLonAlt]), value)
         self.__local_origin = value
 
-
     @property
     def _share_dir(self) -> str:
         """Path to share directory"""
@@ -478,7 +477,6 @@ class MapNavNode(Node):
 
         :return: The timer instance
         """
-        # Setup publish timer
         frequency = self.get_parameter('misc.publish_frequency').get_parameter_value().integer_value
         assert_type(int, frequency)
         if not 0 <= frequency:
@@ -508,16 +506,22 @@ class MapNavNode(Node):
         timer = self.create_timer(timer_period, self._map_update_timer_callback)
         return timer
 
-    def _lat_lon_alt_from_vehicle_global_position(self) -> Tuple[Optional[float], Optional[float], Optional[float]]:
-        """Returns lat, lon and alt from VehicleGlobalPosition, or None if not available.
+    def _latlonalt_from_vehicle_global_position(self) -> LatLonAlt:
+        """Returns lat, lon and alt from VehicleGlobalPosition.
+
+        The individual values of the LatLonAlt tuple may be None if vehicle global position is not available.
 
         :return: LatLonAlt, or None if not available."""
         lat, lon, alt = None, None, None
         if self._vehicle_global_position is not None:
+            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
+                   hasattr(self._vehicle_global_position, 'alt')
             lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
                             self._vehicle_global_position.alt
-
-        return lat, lon, alt
+            assert_type(get_args(Union[int, float]), lat)
+            assert_type(get_args(Union[int, float]), lon)
+            assert_type(get_args(Union[int, float]), alt)
+        return LatLonAlt(lat, lon, alt)
 
     def _alt_from_vehicle_local_position(self) -> Optional[float]:
         """Returns altitude from vehicle local position or None if not available.
@@ -535,7 +539,7 @@ class MapNavNode(Node):
         else:
             return None
 
-    def _lat_lon_alt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
+    def _latlonalt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
         """Returns lat, lon and altitude from provided values, or None if not available."""
         return self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
                self.get_parameter('map_update.initial_guess.lon').get_parameter_value().double_value, \
@@ -547,10 +551,11 @@ class MapNavNode(Node):
         :return:
         """
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
-        latlonalt = self._lat_lon_alt_from_vehicle_global_position()
+        latlonalt = self._latlonalt_from_vehicle_global_position()
+        assert_type(LatLonAlt, latlonalt)
 
         # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
-        if latlonalt[2] is None:  # TODO: hard coded index for altitude, prone to breaking?
+        if latlonalt.alt is None:
             self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
                                    'instead.')
             latlonalt = latlonalt[:-1] + (self._alt_from_vehicle_local_position(), )  # TODO: hard-coded index? Prone to breaking?
@@ -560,7 +565,7 @@ class MapNavNode(Node):
             # Warn, not debug, since this is a static guess
             self.get_logger().warn('Could not get (lat, lon, alt) tuple from VehicleGlobalPosition nor '
                                    'VehicleLocalPosition, checking if initial guess has been provided.')
-            latlonalt_guess = self._lat_lon_alt_from_initial_guess()
+            latlonalt_guess = self._latlonalt_from_initial_guess()
             latlonalt = tuple(latlonalt[i] if latlonalt[i] is not None else latlonalt_guess[i] for i in
                               range(len(latlonalt)))
 

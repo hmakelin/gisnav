@@ -1761,6 +1761,36 @@ class MapNavNode(Node):
         self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
         return local_origin
 
+    def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray) -> Optional[Tuple[float]]:
+        """Computes attitude quaternion for outgoing VehicleVisualOdometry message.
+
+        :param ll: Lower left corner pixel coordinates of estimated field of view
+        :param lr: Lower right corner pixel coordinates of estimated field of view
+        :return: Quaternion tuple, or None if attitude information is not available
+        """
+        # Vehicle yaw against NED frame (quaternion)
+        # Get the vector from lower left to lower right and calculate its angle to the width unit vector. Use the small
+        # angle to adjust vehicle heading (assume vehicle always knows gimbal/camera yaw).
+        # TODO: Seems like when gimbal (camera) is nadir facing, PX4 automatically rotates it back to face vehicle
+        #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
+        #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
+        assert_type(np.ndarray, ll)
+        assert_type(np.ndarray, lr)
+        if self._vehicle_attitude is not None:
+            fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr - ll).squeeze(), normalize=True))
+            assert hasattr(self._vehicle_attitude, 'q')
+            euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
+            vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
+            euler[self._yaw_index()] = vehicle_yaw
+            quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
+            assert_len(quaternion, 4)
+            self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
+            self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
+            return quaternion
+        else:
+            # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
+            return None
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
@@ -1818,6 +1848,7 @@ class MapNavNode(Node):
         t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
         position = self._compute_camera_position(t_rotated, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
+        assert_type(LatLon, position)
         if local_frame_origin_position is None:
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'
                                     'frame origin.')
@@ -1831,33 +1862,13 @@ class MapNavNode(Node):
             local_position = self._local_frame_position(self._local_origin, position, camera_altitude)
         else:
             local_position = self._local_frame_position(local_frame_origin_position, position, camera_altitude)
+        self.get_logger().debug(f'Local frame position: {local_position}, origin ref position {self._local_origin}.')
 
-        image_frame.position = LatLonAlt(*(position + (
-            camera_altitude,)))  # TODO: alt should not be None? Use LatLon instead?  # TODO: move to _compute_camera_position?
+        assert camera_altitude is not None
+        image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
-        # Vehicle yaw against NED frame (quaternion)
-        # Get the vector from lower left to lower right and calculate its angle to the width unit vector. Use the small
-        # angle to adjust vehicle heading (assume vehicle always knows gimbal/camera yaw).
-        # TODO: Seems like when gimbal (camera) is nadir facing, PX4 automatically rotates it back to face vehicle
-        #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
-        #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
-        ll, lr = fov_pix[1], fov_pix[2]  # TODO: do not use hard coded indices! prone to breaking
-        if self._vehicle_attitude is not None:
-            # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
-            fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr - ll).squeeze(), normalize=True))
-            assert hasattr(self._vehicle_attitude, 'q')
-            euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
-            vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
-            euler[self._yaw_index()] = vehicle_yaw
-            quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
-            assert_len(quaternion, 4)
-            self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
-            self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
-        else:
-            quaternion = None
+        quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2])  # TODO: do not use hard-coded indices, prone to breaking
 
-        self.get_logger().debug(f'Local frame position: {local_position}.')
-        self.get_logger().debug(f'Local frame origin: {local_frame_origin_position}.')
         if timestamp is None:
             # Initialize timestamp for vvo
             self.get_logger().debug('No ekf2 timestamp provided, using current time as timestamp.')

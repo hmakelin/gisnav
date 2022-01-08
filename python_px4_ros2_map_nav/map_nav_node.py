@@ -651,7 +651,9 @@ class MapNavNode(Node):
              .get('publish_frequency', Defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
             ('export_projection', config.get(namespace, {}).get('export_projection', Defaults.MISC_EXPORT_PROJECTION)),
-            ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH))
+            ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
+            ('visualize_homography', config.get(namespace, {})
+             .get('visualize_homography', Defaults.MISC_VISUALIZE_HOMOGRAPHY))
         ])
 
         namespace = 'map_update'
@@ -1522,7 +1524,7 @@ class MapNavNode(Node):
         :param restrict_affine: Flag indicating whether homography should be restricted to 2D affine transformation
         :return: Tuple containing homography matrix, RANSAC inlier mask, translation and rotation
         """
-        min_points = 4
+        min_points = 4  # TODO: use self.MINIMIUM_MATCHES?
         assert_type(np.ndarray, mkp_img)
         assert_type(np.ndarray, mkp_map)
         assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
@@ -1731,13 +1733,18 @@ class MapNavNode(Node):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
+
+        visualize_homography_ = self.get_parameter('misc.visualize_homography').get_parameter_value().bool_value
+        if not visualize_homography_:
+            # _process_matches will not visualize homography if map_cropped is None
+            self._stored_inputs['map_cropped'] = None
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], timestamp: Optional[int],
-                         map_cropped: Optional[np.ndarray] = None):  # TODO: get rid of map cropped? Move visualization somewhere else?
+                         map_cropped: Optional[np.ndarray] = None):
         """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
 
         :param mkp_img: Matching keypoints in drone image

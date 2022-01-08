@@ -309,7 +309,7 @@ def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map
 
     return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
 
-
+# TODO: takes in a np.ndarray but returns a Tuple --> Need to make consistent
 def rotate_point(radians: float, img_dim: Dim, pt: np.ndarray) -> Tuple[float, float]:
     """Rotates point around center of image by radians, counter-clockwise.
 

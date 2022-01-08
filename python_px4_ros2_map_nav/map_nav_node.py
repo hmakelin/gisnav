@@ -1619,7 +1619,7 @@ class MapNavNode(Node):
         :return: WGS84 coordinates of camera
         """
         assert_type(np.ndarray, t)
-        assert_shape(t, (3,))
+        assert_shape(t, (2,))
         azmth = self._get_azimuth(t[0], t[1])
         dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
         alt = self._alt_from_vehicle_local_position()
@@ -1770,6 +1770,7 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
         t_rotated = rotate_point(math.radians(self._get_camera_rpy().yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
+        t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
         position = self._compute_camera_position(t_rotated, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
         if local_frame_origin_position is None:
             self.get_logger().debug('No local frame origin position provided, using current estimated position as local'

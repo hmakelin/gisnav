@@ -6,7 +6,8 @@ from python_px4_ros2_map_nav.util import LatLon
 class Defaults:
     """Class that contins default values for ROS parameter server.
 
-    These values are used by :meth:`python_px4_ros2_map_nav.map_nav_node.MapNavNode._declare_ros_params`.
+    These values are used by :meth:`python_px4_ros2_map_nav.map_nav_node.MapNavNode._declare_ros_params`. To run a
+    different configuration, you should edit the input YAML file instead and leave these defaults untouched.
     """
     WMS_URL = 'http://localhost:8080/wms'
     WMS_VERSION = '1.1.1'

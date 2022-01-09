@@ -1259,7 +1259,7 @@ class MapNavNode(Node):
 
         camera_normal_length = np.linalg.norm(camera_normal)
         # TODO: is this arbitrary check needed?
-        if camera_normal_length - 1 <= 0.001:
+        if abs(camera_normal_length - 1) <= 0.001:
             self.get_logger().warn(f'Camera normal length: {camera_normal_length}, does not look like a unit vector?.')
 
         return camera_normal
@@ -1855,7 +1855,7 @@ class MapNavNode(Node):
         image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
         local_position = self._compute_local_frame_position(local_frame_origin_position, image_frame.position)
-        self.get_logger().error(f'Local frame position: {local_position}, origin ref position '
+        self.get_logger().debug(f'Local frame position: {local_position}, origin ref position '
                                 f'{local_frame_origin_position}.')
 
         assert camera_altitude is not None

@@ -1548,6 +1548,9 @@ class MapNavNode(Node):
     def _match_inputs(self, image_frame: ImageFrame) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
+        Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
+        to :meth:`_process_matches` from the the time image used for the matching was taken.
+
         The dictionary has the following data:
             map_frame - np.ndarray map_frame to match
             camera_info - CameraInfo

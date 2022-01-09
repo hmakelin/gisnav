@@ -577,7 +577,8 @@ class MapNavNode(Node):
 
         # Cannot determine vehicle global position
         if not all(latlonalt):
-            self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
+            self.get_logger().warn(f'Could not determine vehicle global position (latlonalt: {latlonalt}) and therefore'
+                                   f' cannot update map.')
             return
 
         # Project principal point if required
@@ -1167,7 +1168,9 @@ class MapNavNode(Node):
             inputs = self._match_inputs(image_frame)
             for k, v in inputs.items():
                 if v is None:
-                    return
+                    if k not in ['local_frame_origin_position', 'timestamp']:  # TODO: use self._local_origin here to get rid of this clause?
+                        self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
+                        return
 
             camera_yaw = inputs.get('camera_yaw', None)
             map_frame = inputs.get('map_frame', None)
@@ -1229,8 +1232,8 @@ class MapNavNode(Node):
             gimbal_yaw = 180 - gimbal_yaw
             pitch = 180 + pitch
 
-        self.get_logger().warn('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
-        self.get_logger().warn('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
+        self.get_logger().debug('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
+        self.get_logger().debug('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
         yaw = heading + gimbal_yaw
         yaw = yaw % 360
@@ -1259,7 +1262,7 @@ class MapNavNode(Node):
 
         camera_normal_length = np.linalg.norm(camera_normal)
         # TODO: is this arbitrary check needed?
-        if abs(camera_normal_length - 1) <= 0.001:
+        if abs(camera_normal_length - 1) >= 0.001:
             self.get_logger().warn(f'Camera normal length: {camera_normal_length}, does not look like a unit vector?.')
 
         return camera_normal
@@ -1498,10 +1501,10 @@ class MapNavNode(Node):
         """
         gimbal_attitude = self._gimbal_device_attitude_status
         if gimbal_attitude is None:
-            self.get_logger().warn('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
+            self.get_logger().debug('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
             gimbal_attitude = self._gimbal_device_set_attitude
             if gimbal_attitude is None:
-                self.get_logger().warn('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
+                self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
     @staticmethod
@@ -1722,6 +1725,14 @@ class MapNavNode(Node):
         :return:
         """
         assert self._vehicle_local_position is not None
+        assert np.isnan(self._vehicle_local_position.ref_lat), \
+            f'_vehicle_local_position.ref_lat was {self._vehicle_local_position.ref_lat}. You should not try to ' \
+            f'compute the local origin unless it is not provided in VehicleLocalPosition'
+        assert np.isnan(self._vehicle_local_position.ref_lon), \
+            f'_vehicle_local_position.ref_lon was {self._vehicle_local_position.ref_lon}. You should not try to ' \
+            f'compute the local origin unless it is not provided in VehicleLocalPosition'
+        assert self._local_origin is None, f'self._local_origin was {self.__local_origin}. You should not try to ' \
+                                           f'recompute the local origin if it has already been done.'
         x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
         assert_type(float, x)
         assert_type(float, y)
@@ -1731,8 +1742,8 @@ class MapNavNode(Node):
         self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
         return local_origin
 
-    def _compute_local_frame_position(self, origin: LatLonAlt, position: LatLonAlt) -> Tuple[float, float, float]:
-        """Computes position of WGS84 coordinates in local frame coordinates.
+    def _compute_local_frame_position(self, position: LatLonAlt, origin: LatLonAlt) -> Tuple[float, float, float]:
+        """Computes position of WGS84 coordinates in local frame coordinates
 
         :param origin: WGS84 coordiantes of local frame origin
         :param position: WGS84 coordinates and altitude in meters of estimated camera position
@@ -1740,15 +1751,6 @@ class MapNavNode(Node):
         """
         assert_type(LatLonAlt, position)
         assert_type(LatLonAlt, origin)
-        if origin is None:
-            assert self._vehicle_local_position.ref_lat is np.NaN  # TODO: or None?
-            assert self._vehicle_local_position.ref_lon is np.NaN
-            self.get_logger().debug('No local frame origin position provided, estimating it from current position.')
-            if self._local_origin is None:
-                # This should only be set only once assuming the following local_position computation is the only
-                #  piece of code that uses self._local_origin
-                origin = self._compute_local_frame_origin(self._vehicle_local_position, position)
-                self._local_origin = origin  # TODO: need to do outside of this if clause (always)?
 
         lats_orig = (origin.lat, origin.lat)
         lons_orig = (origin.lon, origin.lon)
@@ -1854,7 +1856,16 @@ class MapNavNode(Node):
         position = self._compute_camera_position(t_rotated, map_center, camera_altitude)  # TODO: calls convert_fov_from_pix_to_wgs84 which is also called above, remove redundant use
         image_frame.position = LatLonAlt(position.lat, position.lon, camera_altitude)
 
-        local_position = self._compute_local_frame_position(local_frame_origin_position, image_frame.position)
+        assert_type(LatLonAlt, image_frame.position)
+        assert all(image_frame.position)
+
+        # If no GPS, local frame origin must be computed or retrieved from memory if it was computed earlier
+        if local_frame_origin_position is None:
+            if self._local_origin is None:
+                self._local_origin = self._compute_local_frame_origin(image_frame.position)
+            local_frame_origin_position = self._local_origin
+
+        local_position = self._compute_local_frame_position(image_frame.position, local_frame_origin_position)
         self.get_logger().debug(f'Local frame position: {local_position}, origin ref position '
                                 f'{local_frame_origin_position}.')
 

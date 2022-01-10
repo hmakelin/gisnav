@@ -754,8 +754,8 @@ class MapNavNode(Node):
 
         The field of view estimate is more stable if an affine transformation can be assumed. This also leads to the
         estimated position of the vehicle being more stable. For a better positioning estimate a nadir-facing camera
-        should be assumed and the homography estimation restricted for 2D affine transformations. See
-        :meth:`~find_and_decompose_homography` for how this flag is used to determine how the homography matrix between
+        should be assumed and the homography estimation restricted for 2D affine transformations. See implementation of
+        :meth:`~_find_and_decompose_homography` for how this flag is used to determine how the homography matrix between
         the image and map rasters is estimated.
 
         :return: True if homography matrix should be restricted to a 2D affine transformation.
@@ -1448,6 +1448,11 @@ class MapNavNode(Node):
     def _previous_map_frame_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Checks if previous map frame is too close to new requested one.
 
+        This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
+        update interval should not improve accuracy of position estimation unless the map is so old that the field of
+        view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
+        or is too small compared to the size of the map (vehicle altitude has significantly decreased).
+
         :param center: WGS84 coordinates of new map candidate center
         :param radius: Radius in meters of new map candidate
         :return: True if previous map frame is too close.
@@ -1519,7 +1524,11 @@ class MapNavNode(Node):
 
     def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple) \
             -> None:
-        """Creates a VehicleVisualOdometry and saves it to self._vehicle_visual_odometry.
+        """Creates a :class:`px4_msgs.msg.VehicleVisualOdometry` message and saves it to
+        :py:attr:`~_vehicle_visual_odometry`.
+
+        The :py:attr:`~_vehicle_visual_odometry` value is periodically accessed by :meth:`~_publish_timer_callback` to
+        publish the message over the PX4-ROS 2 bridge back to the EKF2 filter.
 
         See https://docs.px4.io/v1.12/en/advanced_config/tuning_the_ecl_ekf.html#external-vision-system for supported
         EKF2_AID_MASK values when using an external vision system.
@@ -1575,7 +1584,10 @@ class MapNavNode(Node):
         self._vehicle_visual_odometry = msg
 
     def _camera_pitch(self) -> Optional[Union[int, float]]:
-        """Returns camera pitch in degrees relative to vehicle frame.
+        """Returns camera pitch in degrees relative to nadir.
+
+        Pitch of 0 degrees is a nadir facing camera, while a positive pitch of 90 degrees means the camera is facing
+        the direction the vehicle is heading (facing horizon).
 
         :return: Camera pitch in degrees, or None if not available
         """
@@ -1588,6 +1600,10 @@ class MapNavNode(Node):
 
     def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
         """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available.
+
+        NOTE: Gimbal is assumed stabilized but in some instances GimbalDeviceSetAttitude does not reflect what real
+        attitude. This may happen for example when vehicle is hovering still and suddenly takes off in some direction,
+        there's a sudden yank on the gimbal.
 
         :return: GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude message
         """
@@ -1605,6 +1621,11 @@ class MapNavNode(Node):
                                        restrict_affine: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
                                                                                np.ndarray]:
         """Processes matching keypoints from img and map and returns homography matrix, mask, translation and rotation.
+
+        Depending on whether :param restrict_affine: applies, either :func:`cv2.findHomography` or
+        :func:`cv2.estimateAffinePartial2D` is used for homography estimation. Homography matrix is decompose using
+        :func:`cv2.decomposeHomographyMat` to extract camera translation and rotation information, i.e. to determine
+        camera position.
 
         :param mkp_img: Matching keypoints from image
         :param mkp_map: Matching keypoints from map
@@ -1644,7 +1665,7 @@ class MapNavNode(Node):
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
-        to :meth:`_process_matches` from the the time image used for the matching was taken.
+        to :meth:`_process_matches` from the time image used for the matching was taken.
 
         The dictionary has the following data:
             map_frame - np.ndarray map_frame to match
@@ -1748,6 +1769,9 @@ class MapNavNode(Node):
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if camera pitch exceeds given limit.
 
+        Used to determine whether camera is looking too high up from the ground to make matching against a map
+        worthwhile.
+
         :param max_pitch: The limit for the pitch over which it will be considered too high
         :return: True if pitch is too high
         """
@@ -1765,13 +1789,13 @@ class MapNavNode(Node):
 
         return False
 
-    def _should_match(self):
+    def _should_match(self) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
         Match should be attempted if (1) there are no pending match results, and (2) camera pitch is not too high (e.g.
         facing horizon instead of nadir).
 
-        :return:
+        :return: True if matching should be attempted
         """
         # Check condition (1) - that a request is not already running
         if not (self._superglue_results is None or self._superglue_results.ready()):  # TODO: handle timeouts, failures for _superglue_results
@@ -1794,6 +1818,11 @@ class MapNavNode(Node):
 
     def superglue_worker_callback(self, results) -> None:
         """Callback for SuperGlue worker.
+
+        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
+        are needed so that the post-processing is done using the same state information that was used for initiating
+        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
+        and current camera pitch should therefore not be used for processing the matches.
 
         :return:
         """
@@ -1895,7 +1924,11 @@ class MapNavNode(Node):
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], timestamp: Optional[int],
                          map_cropped: Optional[np.ndarray] = None) -> None:
-        """Process the matching image and map keypoints into an outgoing VehicleVisualOdometry message.
+        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
+        message.
+
+        The API for this method is designed so that the dictionary returned by :meth:`~_match_inputs` can be passed onto
+        this method as keyword arguments (**kwargs).
 
         :param mkp_img: Matching keypoints in drone image
         :param mkp_map: Matching keypoints in map raster
@@ -2000,7 +2033,7 @@ class MapNavNode(Node):
                                     f'\n{e}\n{traceback.print_exc()}')
 
     def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray) -> None:
-        """Matches camera image to map image and computes camera position and field of view.
+        """Instructs the neural network to match camera image to map image.
 
         :param image_frame: The image frame to match
         :param map_cropped: Cropped and rotated map raster (aligned with image)

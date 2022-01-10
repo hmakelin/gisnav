@@ -2011,6 +2011,8 @@ class MapNavNode(Node):
     def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.
 
+        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
+
         :param position: Computed camera position
         :param: fov: Field of view of camera
         :param filename: Name of file to write into

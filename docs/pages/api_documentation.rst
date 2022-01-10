@@ -3,8 +3,8 @@
 
 API Documentation
 ===================================================
-This is the automatically generated API documentation for the `python_px4_ros2_map_nav`_ ROS 2 package. This
-documentation also contains the private members of each module.
+This is API documentation for the `python_px4_ros2_map_nav`_ ROS 2 package is automatically generated from
+docstrings.
 
 .. _python_px4_ros2_map_nav: https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav
 

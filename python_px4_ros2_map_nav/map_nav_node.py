@@ -819,6 +819,8 @@ class MapNavNode(Node):
     def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
 
+        If the map radius is not provided, a default value is used.
+
         :param latlon: Center of the bounding box
         :param radius_meters: Radius of the circle in meters enclosed by the bounding box
         :return: The bounding box
@@ -836,8 +838,11 @@ class MapNavNode(Node):
     def _get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
         """Calculate distance between middle of sides of field of view (FOV) based on triangle similarity.
 
+        This is used when estimating camera distance from estimated principal point using triangle similarity in
+        :meth:`~_compute_camera_distance`.
+
         :param fov_wgs84: The WGS84 corner coordinates of the FOV
-        :return:
+        :return: Camera distance in meters from its principal point projected onto ground
         """
         # TODO: assert shape of fov_wgs84
         midleft = ((fov_wgs84[0] + fov_wgs84[1]) * 0.5).squeeze()
@@ -848,9 +853,11 @@ class MapNavNode(Node):
     def _distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
         """Returns distance between two points in meters.
 
+        The distance computation is based on latitude and longitude only and ignores altitude.
+
         :param latlon1: The first point
         :param latlon2: The second point
-        :return: The distance in meters
+        :return: The ground distance in meters between the two points
         """
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
         assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
@@ -876,7 +883,15 @@ class MapNavNode(Node):
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         """Returns map size with padding for rotation without clipping corners.
 
-        :return: Map size tuple (height, width) or None if the info is not available
+        Because the deep learning models used for predicting matching keypoints between camera image frames and
+        retrieved map rasters are not assumed to be rotation invariant, the map rasters are rotated based on camera yaw
+        so that they align with the camera images. To keep the scale of the map after rotation the same, black corners
+        would appear unless padding is used. Retrieved maps therefore have to squares with the side lengths matching the
+        diagnoal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
+        rotation.
+
+        :return: Padded map size tuple (height, width) or None if the info is not available. The height and width will
+        both be equal to the diagonal of the declared (:py:attr:`~_camera_info`) camera frame dimensions.
         """
         dim = self._img_dim()
         if dim is None:
@@ -889,6 +904,8 @@ class MapNavNode(Node):
 
     def _map_dim_with_padding(self) -> Optional[Dim]:
         """Returns map dimensions with padding for rotation without clipping corners.
+
+        This method is a wrapper for :meth:`~map_size_with_padding`.
 
         :return: Map dimensions or None if the info is not available
         """
@@ -915,6 +932,8 @@ class MapNavNode(Node):
     def _img_dim(self) -> Optional[Dim]:
         """Returns image dimensions as it is declared in the latest CameraInfo message.
 
+        This method is a wrapper for :meth:`~declared_img_size`.
+
         :return: Image dimensions or None if not available
         """
         declared_size = self._declared_img_size()
@@ -926,9 +945,12 @@ class MapNavNode(Node):
         return Dim(*declared_size)
 
     def _project_gimbal_fov(self, translation: np.ndarray) -> Optional[np.ndarray]:
-        """Returns field of view (FOV) BBox projected using gimbal attitude and camera intrinsics information.
+        """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
-        :param altitude_meters: Altitude of camera in meters  # TODO: why is altitude an arg but other info are retrieved inside the function?
+        The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
+        by :meth:`~_projected_field_of_view_center` when new coordinates for an outgoing WMS GetMap request are needed.
+
+        :param translation: Translation vector (cx, cy, altitude) in meter coordinates
         :return: Projected FOV bounding box in pixel coordinates or None if not available
         """
         assert_shape(translation, (3,))
@@ -971,9 +993,9 @@ class MapNavNode(Node):
         return dst_corners
 
     def _vehicle_local_position_ref_latlonalt_timestamp(self) -> Tuple[Optional[LatLonAlt], Optional[int]]:
-        """Returns vehicle local frame reference origin.
+        """Returns vehicle local frame reference origin and timestamp.
 
-        :return: Local reference frame origin location in WGS84 or None if not available
+        :return: Tuple of local reference frame origin in WGS84 and timestamp, or None if not available
         """
         if self._vehicle_local_position is None:
             self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
@@ -1004,6 +1026,9 @@ class MapNavNode(Node):
 
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
+
+        Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
+        for next WMS GetMap request.
 
         :param origin: Camera position  # TODO: why is this an argument but all else is not?
         :return: Center of the FOV or None if not available
@@ -1049,7 +1074,7 @@ class MapNavNode(Node):
         return map_center_latlon  # TODO: using principal point for updating map no good, too close to bottom fov. Principal point still needed but not for updating map.
 
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
-        """Gets latest map from WMS server for given location and radius and saves it.
+        """Instructs the WMS client to get a new map from the WMS server.
 
         :param center: WGS84 coordinates of map to be retrieved
         :param radius: Radius in meters of circle to be enclosed by the map raster
@@ -1095,7 +1120,9 @@ class MapNavNode(Node):
     def wms_pool_worker_callback(self, result: List[MapFrame]) -> None:
         """Handles result from WMS pool worker.
 
-        :param result: Results from the asynchronous call (a collection containing a single MapFrame)
+        Saves received :class:`util.MapFrame` to :py:attr:`~_map_frame.
+
+        :param result: Results from the asynchronous call (a collection containing a single :class:`util.MapFrame`)
         :return:
         """
         assert_len(result, 1)
@@ -1119,7 +1146,7 @@ class MapNavNode(Node):
     def _wms_pool_worker(center: LatLon, radius: Union[int, float], bbox: BBox,
                          map_size: Tuple[int, int], url: str, version: str, layer_str: str, srs_str: str, timeout: int)\
             -> MapFrame:
-        """Gets latest map from WMS server for given location and radius and returns it.
+        """Gets latest map from WMS server for given location, then creates a :class:`util.MapFrame` and returns it
 
         :param center: Center of the map to be retrieved
         :param radius: Radius in meters of the circle to be enclosed by the map
@@ -1164,6 +1191,9 @@ class MapNavNode(Node):
     def _superglue_init_worker(config: dict):
         """Initializes SuperGlue in a dedicated process.
 
+        The SuperGlue instance is stored into a global variable inside its own dedicated process to avoid
+        re-instantiating it every time the model is needed.
+
         :param config: SuperGlue config
         :return:
         """
@@ -1190,6 +1220,13 @@ class MapNavNode(Node):
 
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
+
+        For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
+        made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
+        saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
+        the :meth:`~_superglue_worker_callback` will use the stored inputs for post-processing the matches based on
+        the same snapshot of data that was used to make the call. It is assumed that the latest stored inputs are the
+        same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
 
         :param msg: The Image message from the PX4-ROS 2 bridge to decode
         :return:
@@ -1245,9 +1282,9 @@ class MapNavNode(Node):
         return camera_yaw
 
     def _get_camera_rpy(self) -> Optional[RPY]:
-        """Returns roll-pitch-yaw euler vector.
+        """Returns roll-pitch-yaw tuple in NED frame.
 
-        :return: An RPY tuple
+        :return: An :class:`util.RPY` tuple
         """
         gimbal_attitude = self._gimbal_attitude()
         if gimbal_attitude is None:
@@ -1294,6 +1331,10 @@ class MapNavNode(Node):
     def _camera_normal(self) -> Optional[np.ndarray]:
         """Returns camera normal unit vector.
 
+        The camera normal information is needed to determine which solution of :func:`cv2.decomposeHomography` is
+        correct. The homography decomposition is done inside :meth:`~_find_and_decompose_homography` as part of
+        :meth:`~_process_matches`.
+
         :return: Camera normal unit vector, or None if not available
         """
         nadir = np.array([0, 0, 1])
@@ -1317,12 +1358,16 @@ class MapNavNode(Node):
     def _pitch_index(self) -> int:
         """Returns the pitch index for used euler vectors.
 
+        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
+
         :return: Pitch index
         """
         return self.EULER_SEQUENCE.lower().find('y')
 
     def _yaw_index(self) -> int:
         """Returns the yaw index for used euler vectors.
+
+        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
 
         :return: Yaw index
         """

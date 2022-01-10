@@ -107,6 +107,5 @@ html_theme_options = {
     #'github_user': 'bitprophet',
     #'github_repo': 'alabaster',
     'description': description,
-    'font-family': 'Ubuntu',
-
+    'show_relbar_bottom': True
 }

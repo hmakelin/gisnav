@@ -57,7 +57,6 @@ project = package_name
 copyright = f'2021, {author}'
 author = author
 
-
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -109,3 +108,6 @@ html_theme_options = {
     'description': description,
     'show_relbar_bottom': True
 }
+
+# Make version number accessible in .rst files
+rst_epilog = f'.. |version| replace:: v{version}'

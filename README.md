@@ -70,8 +70,11 @@ This repository is structured as a `colcon` package:
 │       └── params.yml                      # Configurable ROS 2 parameters
 ├── docs
 │       ├── _static
-│       │        └── css
-│       │                └── styles.css     # Configuration files for API docs
+│       │        └── css                    # CSS styling files for API docs
+│       │                └── styles.css
+│       ├── pages                           # Sphinx documentation files
+│       │        └── api_documentation.rst
+│       │        └── indices_and_tables.rst
 │       ├── conf.py                         # Sphinx configuration file
 │       ├── index.rst                       # Sphinx API documentation template
 │       ├── make.bat

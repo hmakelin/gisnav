@@ -666,7 +666,8 @@ class MapNavNode(Node):
     def _declare_ros_params(self, config: dict) -> None:
         """Declares ROS parameters from a config file.
 
-        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults` if values are not provided.
+        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults` if values are not provided. Note that
+        some parameters are declared as read_only and cannot be changed at runtime.
 
         :param config: The value of the ros__parameters key from the parsed configuration file.
         :return:
@@ -734,7 +735,12 @@ class MapNavNode(Node):
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
 
-        :return: True if projected principal point should be used.
+        If this is set to false, map rasters are retrieved for the vehicle's global position instead. This is typically
+        fine as long as the camera is not aimed too far in to the horizon and has a relatively wide field of view. For
+        best results, this should be on to ensure the field of view is fully contained within the area of the retrieved
+        map raster.
+
+        :return: True if field of view projection should be used for updating map rasters
         """
         gimbal_projection_flag = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
@@ -745,6 +751,12 @@ class MapNavNode(Node):
 
     def _restrict_affine(self) -> bool:
         """Checks if homography matrix should be restricted to an affine transformation (nadir facing camera).
+
+        The field of view estimate is more stable if an affine transformation can be assumed. This also leads to the
+        estimated position of the vehicle being more stable. For a better positioning estimate a nadir-facing camera
+        should be assumed and the homography estimation restricted for 2D affine transformations. See
+        :meth:`~find_and_decompose_homography` for how this flag is used to determine how the homography matrix between
+        the image and map rasters is estimated.
 
         :return: True if homography matrix should be restricted to a 2D affine transformation.
         """

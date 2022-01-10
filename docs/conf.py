@@ -110,4 +110,4 @@ html_theme_options = {
 }
 
 # Make version number accessible in .rst files
-rst_epilog = f'.. |version| replace:: v{version}'
+rst_epilog = f'.. |version| replace:: **v{version}**'

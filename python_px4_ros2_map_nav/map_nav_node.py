@@ -887,7 +887,7 @@ class MapNavNode(Node):
         retrieved map rasters are not assumed to be rotation invariant, the map rasters are rotated based on camera yaw
         so that they align with the camera images. To keep the scale of the map after rotation the same, black corners
         would appear unless padding is used. Retrieved maps therefore have to squares with the side lengths matching the
-        diagnoal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
+        diagonal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
         rotation.
 
         :return: Padded map size tuple (height, width) or None if the info is not available. The height and width will

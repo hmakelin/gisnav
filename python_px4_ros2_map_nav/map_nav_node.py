@@ -94,6 +94,16 @@ class MapNavNode(Node):
     # Logs a warning if publish frequency is close to the bounds of desired publish frequency
     VVO_PUBLISH_FREQUENCY_WARNING_PADDING = 3
 
+    # ROS 2 QoS profiles for topics
+    # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
+    # If publishign for some reason stops, it can be assumed that something has gone very wrong
+    PUBLISH_QOS_PROFILE = rclpy.qos.QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST,
+                                               reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
+                                               depth=1)
+
+    # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
+    EKF2_TIMESTAMP_PADDING = 0  # 500000  # microseconds
+
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
     TOPIC_NAME_KEY = 'topic_name'
@@ -625,6 +635,23 @@ class MapNavNode(Node):
                                     'instead.')
             latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
 
+        # Try to get Lat and Lon estimate from previous visually estimated position
+        # TODO: get x and y it from _image_frame instead of latest published message!
+        #  Position/full image_frame needs to be saved even if publish never happens
+        if latlonalt.lat is None or latlonalt.lon is None:
+            if self._vehicle_visual_odometry is not None:
+                if self._local_origin is None:
+                    # TODO: compute it from latest position estimate? This should already have been done in _process_matches
+                    return  # TODO: remove this return statement once image_frame is saved and _local_frame is computed here
+                assert_type(get_args(Union[LatLon, LatLonAlt]), self._local_origin)
+                assert hasattr(self._vehicle_visual_odometry, 'x') and hasattr(self._vehicle_visual_odometry, 'y')
+                dx, dy = self._vehicle_visual_odometry.x, self._vehicle_visual_odometry.y
+                distance = math.sqrt(dx**2 + dy**2)
+                azmth = self._get_azimuth(dy, dx)  # NED, so flip x and y axes here
+                latlonalt = LatLonAlt(
+                    *(self._move_distance(self._local_origin, (azmth, distance)) + (latlonalt.alt, ))
+                )
+
         # If some of latlonalt are still None, try to get from provided initial guess and default alt
         if not all(latlonalt):
             # Warn, not debug, since this is a static guess
@@ -810,7 +837,7 @@ class MapNavNode(Node):
                                                      f'timestamp stored earlier for synchronization ' \
                                                      f'{self._time_sync.local}.'
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
-            return ekf2_timestamp_usec
+            return ekf2_timestamp_usec + self.EKF2_TIMESTAMP_PADDING  # TODO: remove the padding or set it 0?
 
 
     def _restrict_affine(self) -> bool:
@@ -866,7 +893,7 @@ class MapNavNode(Node):
         :param class_: Message definition class (e.g. px4_msgs.msg.VehicleVisualOdometry)
         :return: The publisher instance
         """
-        return self.create_publisher(class_, topic_name, 10)  # TODO: add explicit QoSProfile instead of depth
+        return self.create_publisher(class_, topic_name, self.PUBLISH_QOS_PROFILE)
 
     def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
         """Sets up an rclpy subscriber.
@@ -1077,6 +1104,8 @@ class MapNavNode(Node):
     @staticmethod
     def _get_azimuth(x: float, y: float) -> float:
         """Get azimuth of position x and y coordinates.
+
+        Note: in NED coordinates x is north, so here it would be y.
 
         :param x: Meters towards east
         :param y: Meters towards north
@@ -1614,6 +1643,11 @@ class MapNavNode(Node):
         """
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
+
+        if __debug__:
+            if self._vehicle_visual_odometry is not None:
+                # Should not be create message that is older than previous message that may already have been published
+                assert timestamp > self._vehicle_visual_odometry.timestamp
 
         # Timestamp
         msg.timestamp = timestamp  # now

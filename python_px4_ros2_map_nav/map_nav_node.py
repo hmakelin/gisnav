@@ -259,7 +259,7 @@ class MapNavNode(Node):
     @_local_origin.setter
     def _local_origin(self, value: Optional[LatLonAlt]) -> None:
         assert_type(get_args(Optional[LatLonAlt]), value)
-        self.___local_origin = value
+        self.__local_origin = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -410,16 +410,6 @@ class MapNavNode(Node):
     def _geod(self, value: Geod) -> None:
         assert_type(Geod, value)
         self.__geod = value
-
-    @property
-    def _local_origin(self) -> Optional[LatLonAlt]:
-        """Local frame origin WGS84 coordinates."""
-        return self.__local_origin
-
-    @_local_origin.setter
-    def _local_origin(self, value: Optional[LatLonAlt]) -> None:
-        assert_type(get_args(Optional[LatLonAlt]), value)
-        self.__local_origin = value
 
     @property
     def _share_dir(self) -> str:

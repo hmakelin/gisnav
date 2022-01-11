@@ -1701,9 +1701,9 @@ class MapNavNode(Node):
         assert_type(tuple, position)
         assert_type(tuple, rotation)
         assert_type(tuple, pose_covariances)
-        assert_len(3, position)
-        assert_len(4, rotation)
-        assert_len(21, pose_covariances)
+        assert_len(position, 3)
+        assert_len(rotation, 4)
+        assert_len(pose_covariances, 21)
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
 
@@ -2176,11 +2176,12 @@ class MapNavNode(Node):
         assert_type(int, image_frame.timestamp)
         assert_type(RPY, rpy)
         rpy_radians = tuple(map(lambda x: math.radians(x), rpy))
-        self._push_covariance_data(position, rpy_radians)
+        self._push_covariance_data(image_frame.position, rpy_radians)
         if not self._covariance_window_full():
             self.get_logger().warn('Not enough data to estimate covariances yet - skipping creating '
                                    'vehicle_visual_odometry message.')
             return
+        # TODO: does rpy.roll still have zero assumption? Would need to remove that assumption in _get_camera_rpy too
         covariance = np.cov(self._pose_covariance_data_window)
         covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
         assert_len(covariance_urt, 21)

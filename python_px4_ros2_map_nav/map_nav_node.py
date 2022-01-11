@@ -215,6 +215,8 @@ class MapNavNode(Node):
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
+        self._pose_covariance_data_window = None  # Windowed observations for computing pose cross-covariance matrix
+
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
         self._vehicle_local_position = None
@@ -272,6 +274,18 @@ class MapNavNode(Node):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(get_args(Optional[TimePair]), value)
         self.__time_sync = value
+
+    @property
+    def _pose_covariance_data_window(self) -> Optional[np.ndarray]:
+        """Windowed data for computing cross-covariance matrix of pose variables for :class:`VehicleVisualOdometry`
+        messages
+        """
+        return self.__pose_covariance_data_window
+
+    @_pose_covariance_data_window.setter
+    def _pose_covariance_data_window(self, value: Optional[np.ndarray]) -> None:
+        assert_type(get_args(Optional[np.ndarray]), value)
+        self.__pose_covariance_data_window = value
 
     @property
     def _wms_pool(self) -> Pool:

@@ -234,7 +234,12 @@ class MapNavNode(Node):
 
     @property
     def _local_origin(self) -> Optional[LatLonAlt]:
-        """Estimate of EKF2 local frame origin WGS84 coordinates."""
+        """Estimate of EKF2 local frame origin WGS84 coordinates.
+
+        This property is needed when :class:`px4_msgs.msg.VehicleGlobalPosition` nor
+        :class:`px4_msgs.msg.VehicleLocalPosition` contain global position reference information. The value is then
+        estimated from the current visual global position estimate and local position coordinates.
+        """
         return self.__local_origin
 
     @_config.setter

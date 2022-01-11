@@ -102,7 +102,7 @@ class MapNavNode(Node):
                                                depth=1)
 
     # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
-    EKF2_TIMESTAMP_PADDING = 0  # 500000  # microseconds
+    EKF2_TIMESTAMP_PADDING = 500000  # microseconds
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?

@@ -48,6 +48,14 @@ class Defaults:
     MISC_VISUALIZE_HOMOGRAPHY = False
     """Flag to enable matching keypoint and homography visualization"""
 
+    MISC_COVARIANCE_ESTIMATION_LENGTH = 20
+    """Determines how many observations are used to estimate the covariance matrices for 
+    :class:`px4_msgs.msg.VehicleVisualOdometry` messages.
+    
+    Too low a value may cause lead to too low an estimate of variance and cause instability in EKF2 local position
+    estimate.
+    """
+
     MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.worl
     """Initial guess of vehicle's rough global position
     

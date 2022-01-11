@@ -13,6 +13,7 @@ map_nav_node:
       export_projection: 'projection.json'
       max_pitch: 30  # Used by _should_match
       visualize_homography: True
+      covariance_estimation_length: 20
     map_update:
       initial_guess:  # Values from ksql_airport.world file
         lat: 37.523640

@@ -749,7 +749,9 @@ class MapNavNode(Node):
             ('export_projection', config.get(namespace, {}).get('export_projection', Defaults.MISC_EXPORT_PROJECTION)),
             ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
             ('visualize_homography', config.get(namespace, {})
-             .get('visualize_homography', Defaults.MISC_VISUALIZE_HOMOGRAPHY))
+             .get('visualize_homography', Defaults.MISC_VISUALIZE_HOMOGRAPHY)),
+            ('covariance_estimation_length', config.get(namespace, {})
+             .get('covariance_estimation_length', Defaults.MISC_COVARIANCE_ESTIMATION_LENGTH)),
         ])
 
         namespace = 'map_update'

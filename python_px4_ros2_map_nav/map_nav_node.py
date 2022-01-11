@@ -606,7 +606,7 @@ class MapNavNode(Node):
         # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
         if latlonalt.alt is None:
             self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
-                                   'instead.')
+                                    'instead.')
             latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
 
         # If some of latlonalt are still None, try to get from provided initial guess and default alt
@@ -649,7 +649,7 @@ class MapNavNode(Node):
         This callback publishes the :class:`px4_msgs.msg.VehicleVisualOdometry` message stored in
         :py:attr:`~_vehicle_visual_odometry`. The message is created and stored by the
         :meth:`~_create_vehicle_visual_odometry_msg` method when latest image-to-map matches are successfully processed
-        bt :meth:`~_process_matches`. The match processing is always triggered by new matching results arriving via
+        by :meth:`~_process_matches`. The match processing is always triggered by new matching results arriving via
         :meth:`~_superglue_pool_worker_callback`.
 
         :return:

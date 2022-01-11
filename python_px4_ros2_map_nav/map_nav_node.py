@@ -531,6 +531,44 @@ class MapNavNode(Node):
         assert_type(get_args(Optional[GimbalDeviceSetAttitude]), value)
         self.__gimbal_device_set_attitude = value
 
+    def _quaternion_to_xyz_rotations(self, q: tuple) -> Tuple[float, float, float]:
+        """Converts an attitude quaternion to rotations about x, y and z axes in NED frame.
+
+        Used e.g. to create input for :meth:`~_push_covariance_data`.
+
+        :param q: Attitude quaternion
+        :return: Tuple containint rotations in radians around x, y and z axes in NED frame
+        """
+        assert_type(tuple, q)
+        assert_len(q, 4)
+        raise NotImplementedError
+
+    def _push_covariance_data(self, position: tuple, rotation: tuple) -> None:
+        """Pushes position and rotation observations to :py:attr:`~_pose_covariance_data_window`
+
+        Pops the oldest observation from the window if needed.
+
+        :param position: Pose translation (x, y, z) from local frame origin
+        :param rotation: Rotations in radians about x, y and z axes, respectively
+        :return:
+        """
+        if self._pose_covariance_data_window is None:
+            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
+            self._pose_covariance_data_window = np.array(position + rotation).reshape(-1, 6)
+        else:
+            window_length = self.get_parameter('misc.covariance_estimation_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for estimating cross-covariances should be >0 ({window_length} ' \
+                                      f'provided).'
+            obs_count = len(self._pose_covariance_data_window)
+            assert 0 <= obs_count <= window_length
+            if obs_count == window_length:
+                # Pop oldest observation
+                self._pose_covariance_data_window = np.delete(self._pose_covariance_data_window, 0, 0)
+                assert_shape(self._pose_covariance_data_window, (19, 6))  # Newest obs still missing
+
+            # Add newest observation
+            self._pose_covariance_data_window = np.vstack((self._pose_covariance_data_window, position + rotation))
+
     def _setup_publish_timer(self) -> rclpy.timer.Timer:
         """Sets up a timer to control the publish rate of vehicle visual odometry.
 

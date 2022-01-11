@@ -403,7 +403,7 @@ class MapNavNode(Node):
 
     @property
     def _geod(self) -> Geod:
-        """Pyproj Geod for performing geodetic computations."""
+        """Stored pyproj Geod instance for performing geodetic computations."""
         return self.__geod
 
     @_geod.setter

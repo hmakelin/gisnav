@@ -2176,7 +2176,7 @@ class MapNavNode(Node):
         assert_type(int, image_frame.timestamp)
         assert_type(RPY, rpy)
         rpy_radians = tuple(map(lambda x: math.radians(x), rpy))
-        self._push_covariance_data(image_frame.position, rpy_radians)
+        self._push_covariance_data(local_position, rpy_radians)
         if not self._covariance_window_full():
             self.get_logger().warn('Not enough data to estimate covariances yet - skipping creating '
                                    'vehicle_visual_odometry message.')

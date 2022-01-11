@@ -251,7 +251,11 @@ class MapNavNode(Node):
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
-        """A :class:`python_px4_ros2_map_nav.util.TimePair` with local and foreign (EKF2) timestamps in microseconds"""
+        """A :class:`python_px4_ros2_map_nav.util.TimePair` with local and foreign (EKF2) timestamps in microseconds
+
+        The pair will contain the local system time and the EKF2 time received via the PX4-ROS 2 bridge which can
+        at any time be used to locally estimate the EKF2 system time.
+        """
         return self.__time_sync
 
     @_time_sync.setter
@@ -776,21 +780,37 @@ class MapNavNode(Node):
             self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
             return False
 
-    def _sync_timestamps(self, ekf2_timestamp: int) -> None:
+    def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.
 
-        :param ekf2_timestamp:
+        This synchronization is done in the :meth:`~vehicle_local_position_callback`. The sync is therefore expected
+        to be done at high frequency.
+
+        See :py:attr:`~_time_sync` for more information.
+
+        :param ekf2_timestamp_usec: The time since the EKF2 system start in microseconds
         :return:
         """
-        if
+        assert_type(int, ekf2_timestamp_usec)
+        now_usec = time.time() * 1e6
+        self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
-    def _get_ekf2_time(self):
+    def _get_ekf2_time(self) -> Optional[int]:
         """Returns current (estimated) EKF2 timestamp in microseconds
 
-        See :py:attr:`~_ekf2_timestamp_usec` for more information."""
-        now_sec = time.time()
-        if self._ekf2_timestamp_usec is not None:
-            now_usec = now_sec * 1e6
+        See :py:attr:`~_time_sync` for more information.
+
+        :return: Estimated EKF2 system time in microseconds or None if not available"""
+        if self._time_sync is None:
+            self.get_logger().warn('Could not estimate EKF2 timestamp.')
+            return None
+        else:
+            now_usec = time.time() * 1e6
+            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than ' \
+                                                     f'timestamp stored earlier for synchronization ' \
+                                                     f'{self._time_sync.local}.'
+            ekf2_timestamp_usec = self._time_sync.foreign + (now_usec - self._time_sync.local)
+            return ekf2_timestamp_usec
 
 
     def _restrict_affine(self) -> bool:

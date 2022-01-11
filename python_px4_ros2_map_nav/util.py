@@ -16,6 +16,7 @@ LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Dim = namedtuple('Dim', 'height width')
 RPY = namedtuple('RPY', 'roll pitch yaw')
+TimePair = namedtuple('TimePair', 'local foreign')
 
 
 def assert_type(type_: Any, value: object) -> None:

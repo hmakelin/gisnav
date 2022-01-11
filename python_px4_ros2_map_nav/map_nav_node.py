@@ -31,7 +31,7 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, BBox, Dim, get_bbox_center, \
-    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, \
+    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, TimePair, \
     create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
@@ -203,6 +203,8 @@ class MapNavNode(Node):
 
         self._local_origin = None  # Estimated EKF2 local frame origin WGS84 coordinates
 
+        self._time_sync = None  # For storing local and foreign (EKF2) timestamps
+
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
         self._vehicle_local_position = None
@@ -242,10 +244,20 @@ class MapNavNode(Node):
         """
         return self.__local_origin
 
-    @_config.setter
-    def __local_origin(self, value: Optional[LatLonAlt]) -> None:
+    @_local_origin.setter
+    def _local_origin(self, value: Optional[LatLonAlt]) -> None:
         assert_type(get_args(Optional[LatLonAlt]), value)
         self.___local_origin = value
+
+    @property
+    def _time_sync(self) -> Optional[TimePair]:
+        """A :class:`python_px4_ros2_map_nav.util.TimePair` with local and foreign (EKF2) timestamps in microseconds"""
+        return self.__time_sync
+
+    @_time_sync.setter
+    def _time_sync(self, value: Optional[TimePair]) -> None:
+        assert_type(get_args(Optional[TimePair]), value)
+        self.__time_sync = value
 
     @property
     def _wms_pool(self) -> Pool:
@@ -763,6 +775,23 @@ class MapNavNode(Node):
         else:
             self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
             return False
+
+    def _sync_timestamps(self, ekf2_timestamp: int) -> None:
+        """Synchronizes local timestamp with EKF2's system time.
+
+        :param ekf2_timestamp:
+        :return:
+        """
+        if
+
+    def _get_ekf2_time(self):
+        """Returns current (estimated) EKF2 timestamp in microseconds
+
+        See :py:attr:`~_ekf2_timestamp_usec` for more information."""
+        now_sec = time.time()
+        if self._ekf2_timestamp_usec is not None:
+            now_usec = now_sec * 1e6
+
 
     def _restrict_affine(self) -> bool:
         """Checks if homography matrix should be restricted to an affine transformation (nadir facing camera).

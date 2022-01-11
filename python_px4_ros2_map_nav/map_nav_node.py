@@ -233,6 +233,16 @@ class MapNavNode(Node):
         self.__config = value
 
     @property
+    def _local_origin(self) -> Optional[LatLonAlt]:
+        """Estimate of EKF2 local frame origin WGS84 coordinates."""
+        return self.__local_origin
+
+    @_config.setter
+    def __local_origin(self, value: Optional[LatLonAlt]) -> None:
+        assert_type(get_args(Optional[LatLonAlt]), value)
+        self.___local_origin = value
+
+    @property
     def _wms_pool(self) -> Pool:
         """Web Map Service client for fetching map rasters."""
         return self.__wms_pool

@@ -1627,8 +1627,8 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple) \
-            -> None:
+    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple,
+                                            pose_covariances: tuple) -> None:
         """Creates a :class:`px4_msgs.msg.VehicleVisualOdometry` message and saves it to
         :py:attr:`~_vehicle_visual_odometry`.
 
@@ -1641,8 +1641,16 @@ class MapNavNode(Node):
         :param timestamp: Timestamp to be included in the outgoing message
         :param position: Position tuple (x, y, z) to be published
         :param rotation: Rotation quaternion to be published
+        :param pose_covariances: Pose cross-covariances matrix to be published (length = 21)
         :return:
         """
+        assert_type(int, timestamp)
+        assert_type(tuple, position)
+        assert_type(tuple, rotation)
+        assert_type(tuple, pose_covariances)
+        assert_len(3, position)
+        assert_len(4, rotation)
+        assert_len(21, pose_covariances)
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
 
@@ -1677,7 +1685,9 @@ class MapNavNode(Node):
         else:
             msg.q = (float('nan'),) * 4  # float32
             msg.q_offset = (float('nan'),) * 4
-        msg.pose_covariance = (float('nan'),) * 21
+
+        # Pose covariance matrices
+        msg.pose_covariance = pose_covariances
 
         # Velocity frame of reference
         msg.velocity_frame = self.LOCAL_FRAME_NED  # uint8

@@ -531,17 +531,18 @@ class MapNavNode(Node):
         assert_type(get_args(Optional[GimbalDeviceSetAttitude]), value)
         self.__gimbal_device_set_attitude = value
 
-    def _quaternion_to_xyz_rotations(self, q: tuple) -> Tuple[float, float, float]:
-        """Converts an attitude quaternion to rotations about x, y and z axes in NED frame.
+    def _covariance_window_full(self) -> bool:
+        """Returns true if the covariance estimation window is full and a covariance matrix can be estimated
 
-        Used e.g. to create input for :meth:`~_push_covariance_data`.
-
-        :param q: Attitude quaternion
-        :return: Tuple containint rotations in radians around x, y and z axes in NED frame
+        :return: True if :py:attr:`~_pose_covariance_data_window` is full
         """
-        assert_type(tuple, q)
-        assert_len(q, 4)
-        raise NotImplementedError
+        window_length = self.get_parameter('misc.covariance_estimation_length').get_parameter_value().integer_value
+        obs_count = len(self._pose_covariance_data_window)
+        if self._pose_covariance_data_window is not None and obs_count == window_length:
+            return True
+        else:
+            assert 0 <= obs_count < window_length
+            return False
 
     def _push_covariance_data(self, position: tuple, rotation: tuple) -> None:
         """Pushes position and rotation observations to :py:attr:`~_pose_covariance_data_window`
@@ -1844,6 +1845,7 @@ class MapNavNode(Node):
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float
             camera_pitch - float
+            rpy - RPY camera roll-pitch-yaw  # TODO: added later because needed for covariance matrix - redundant with camera_yaw and camera_pitch
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
@@ -1861,6 +1863,7 @@ class MapNavNode(Node):
             'camera_normal': self._camera_normal(),
             'camera_yaw': self._camera_yaw(),
             'camera_pitch': self._camera_pitch(),
+            'rpy': self._get_camera_rpy(),
             # Image and map raster dimensions
             'map_dim_with_padding': self._map_dim_with_padding(),
             'img_dim': self._img_dim(),
@@ -2090,7 +2093,7 @@ class MapNavNode(Node):
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-                         map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+                         rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
             -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
@@ -2107,6 +2110,7 @@ class MapNavNode(Node):
         :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)
         :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
         :param camera_pitch: Camera pitch in degrees from time of match (from _match_inputs)
+        :param rpy: Camera roll, pitch and yaw in degrees from time of match (from _match_inputs)  # TODO: redundant with camera_yaw and camera_pitch, added bc needed for covariances
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param restrict_affine: Restrict affine flag from time of match (from _match_inputs)
@@ -2166,8 +2170,22 @@ class MapNavNode(Node):
 
         quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2])  # TODO: do not use hard-coded indices, prone to breaking
 
+        # Update covariance data window and check if covariance matrix is available
+        # Do not create message if covariance matrix not yet available
+        # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
         assert_type(int, image_frame.timestamp)
-        self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion)
+        assert_type(RPY, rpy)
+        rpy_radians = tuple(map(lambda x: math.radians(x), rpy))
+        self._push_covariance_data(position, rpy_radians)
+        if not self._covariance_window_full():
+            self.get_logger().warn('Not enough data to estimate covariances yet - skipping creating '
+                                   'vehicle_visual_odometry message.')
+            return
+        covariance = np.cov(self._pose_covariance_data_window)
+        covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
+        assert_len(covariance_urt, 21)
+
+        self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

@@ -201,7 +201,7 @@ class MapNavNode(Node):
         self._map_frame = None
         self._previous_map_frame = None
 
-        self._local_origin = None  # Local frame origin WGS84 coordinates
+        self._local_origin = None  # Estimated EKF2 local frame origin WGS84 coordinates
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None

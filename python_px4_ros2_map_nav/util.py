@@ -73,7 +73,7 @@ class ImageFrame(object):
         assert_type(int, timestamp)
         self._image = image
         self._frame_id = frame_id
-        self._stamp = timestamp
+        self._timestamp = timestamp
 
         # fov and position expected to be set only once and some time after instantiation, setter methods provided
         self._fov = None
@@ -92,7 +92,7 @@ class ImageFrame(object):
     @property
     def timestamp(self) -> int:
         """EKF2 timestamp."""
-        return self._stamp
+        return self._timestamp
 
     @property
     def fov(self) -> np.ndarray:

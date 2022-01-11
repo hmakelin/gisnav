@@ -809,7 +809,7 @@ class MapNavNode(Node):
             assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than ' \
                                                      f'timestamp stored earlier for synchronization ' \
                                                      f'{self._time_sync.local}.'
-            ekf2_timestamp_usec = self._time_sync.foreign + (now_usec - self._time_sync.local)
+            ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec
 
 
@@ -1335,7 +1335,7 @@ class MapNavNode(Node):
             map_cropped = inputs.get('map_cropped')
             assert_type(np.ndarray, map_cropped)
 
-            self.get_logger().debug(f'Matching image with timestamp {image_frame.stamp} to map.')
+            self.get_logger().debug(f'Matching image with timestamp {image_frame.timestamp} to map.')
             self._match(image_frame, map_cropped)
 
     def _camera_yaw(self) -> Optional[int]:  # TODO: int or float?
@@ -1459,11 +1459,15 @@ class MapNavNode(Node):
     def vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest VehicleLocalPosition message.
 
+        Uses the EKF2 system time in the message to synchronize local system time.
+
         :param msg: VehicleLocalPosition from the PX4-ROS 2 bridge
         :return:
         """
+        assert_type(int, msg.timestamp)
         self._vehicle_local_position = msg
-        self.get_logger().debug(f'VehicleLocalPosition: {msg}.')
+        self._sync_timestamps(self._vehicle_local_position.timestamp)
+
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude.

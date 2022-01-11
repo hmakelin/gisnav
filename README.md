@@ -95,6 +95,7 @@ This repository is structured as a `colcon` package:
 └── python_px4_ros2_map_nav
     ├── __init__.py
     ├── map_nav_node.py                     # Code for the ROS 2 node
+    ├── map_nav_node.py                     # Default parameter values for ROS
     ├── superglue.py                        # SuperGlue adapter code
     └── util.py                             # Static functions and other utilities
 ```

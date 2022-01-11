@@ -9,8 +9,6 @@ from typing import Any, Union, Tuple, get_args
 from functools import partial
 from collections import namedtuple, Sequence, Collection
 
-from builtin_interfaces.msg._time import Time  # Need this for type checking in ImageFrame  # TODO: get rid of this
-
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
@@ -59,37 +57,23 @@ def assert_shape(value: np.ndarray, shape: tuple):
     assert value.shape == shape, f'Unexpected shape: {value.shape} ({shape} expected).'
 
 
-def assert_first_stamp_greater(stamp1: Time, stamp2: Time) -> None:
-    """Asserts that the first stamp is higher (later in time) than the second stamp.
-
-    :param stamp1: First timestamp
-    :param stamp2: Second timestamp
-    :return:
-    """
-    assertion_error_msg = f'stamp2 {stamp2} was >= than current image frame timestamp {stamp1}.'
-    if stamp1.sec == stamp2.sec:
-        assert stamp1.nanosec > stamp2.nanosec, assertion_error_msg
-    else:
-        assert stamp1.sec > stamp2.sec, assertion_error_msg
-
-
 class ImageFrame(object):
     """Keeps image frame related data in one place and protects it from corruption."""
 
-    def __init__(self, image: np.ndarray, frame_id: str, stamp: Time) -> None:
+    def __init__(self, image: np.ndarray, frame_id: str, timestamp: int) -> None:
         """Initializer
 
         :param image: Image array
         :param frame_id: Frame id
-        :param stamp: Image timestamp
+        :param timestamp: Image timestamp (estimated EKF2 system time from when image was taken)
         """
         assert_type(np.ndarray, image)
         assert_ndim(image, 3)
         assert_type(str, frame_id)
-        assert_type(Time, stamp)
+        assert_type(int, timestamp)
         self._image = image
         self._frame_id = frame_id
-        self._stamp = stamp
+        self._stamp = timestamp
 
         # fov and position expected to be set only once and some time after instantiation, setter methods provided
         self._fov = None
@@ -106,8 +90,8 @@ class ImageFrame(object):
         return self._frame_id
 
     @property
-    def stamp(self) -> Time:
-        """ROS 2 timestamp."""
+    def timestamp(self) -> int:
+        """EKF2 timestamp."""
         return self._stamp
 
     @property

@@ -1056,23 +1056,23 @@ class MapNavNode(Node):
 
         return dst_corners
 
-    def _vehicle_local_position_ref_latlonalt_timestamp(self) -> Tuple[Optional[LatLonAlt], Optional[int]]:
-        """Returns vehicle local frame reference origin and timestamp.
+    def _vehicle_local_position_ref_latlonalt(self) -> Optional[LatLonAlt]:
+        """Returns vehicle local frame reference origin
 
-        :return: Tuple of local reference frame origin in WGS84 and timestamp, or None if not available
+        :return: Local reference frame origin in WGS84, or None if not available
         """
         if self._vehicle_local_position is None:
             self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
-            return None, None
+            return None
 
         if self._vehicle_local_position.xy_global is True and self._vehicle_local_position.z_global is True:
             assert_type(int, self._vehicle_local_position.timestamp)
             return LatLonAlt(self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon,
-                             self._vehicle_local_position.ref_alt), self._vehicle_local_position.timestamp
+                             self._vehicle_local_position.ref_alt)
         else:
             # TODO: z may not be needed - make a separate _ref_latlon method!
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
-            return None, None
+            return None
 
     @staticmethod
     def _get_azimuth(x: float, y: float) -> float:
@@ -1295,6 +1295,12 @@ class MapNavNode(Node):
         :param msg: The Image message from the PX4-ROS 2 bridge to decode
         :return:
         """
+        # Estimate EKF2 timestamp first to get best estimate
+        timestamp = self._get_ekf2_time()
+        if timestamp is None:
+            self.get_logger().warn('Image frame receieved but could not estimate EKF2 system time, skipping frame.')
+            return None
+
         self.get_logger().debug('Camera image callback triggered.')
         assert_type(Image, msg)
 
@@ -1308,7 +1314,7 @@ class MapNavNode(Node):
                                              f'shape {img_size}.'
 
         # Process image frame
-        image_frame = ImageFrame(cv_image, msg.header.frame_id, msg.header.stamp)
+        image_frame = ImageFrame(cv_image, msg.header.frame_id, timestamp)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
         if self._should_match():
@@ -1606,7 +1612,6 @@ class MapNavNode(Node):
         msg = VehicleVisualOdometry()
 
         # Timestamp
-        #now = int(time.time() * 1e6)  # uint64 time in microseconds  # TODO: should be time since system start?
         msg.timestamp = timestamp  # now
         msg.timestamp_sample = timestamp  # now  # uint64
 
@@ -1741,7 +1746,6 @@ class MapNavNode(Node):
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
-            timestamp - Local position message timestamp (to sync vehicle visual odom messages)
             map_cropped - np.ndarray Rotated and cropped map raster from map_frame.image
 
         :param image_frame: The image frame from the drone video
@@ -1761,8 +1765,7 @@ class MapNavNode(Node):
             # Should homography be restricted to 2D affine transformation
             'restrict_affine': self._restrict_affine(),
             # Vehicle local frame global reference position
-            'local_frame_origin_position': (self._vehicle_local_position_ref_latlonalt_timestamp())[0],
-            'timestamp': (self._vehicle_local_position_ref_latlonalt_timestamp())[1],
+            'local_frame_origin_position': (self._vehicle_local_position_ref_latlonalt())
         }
 
         # Get cropped and rotated map
@@ -1986,8 +1989,8 @@ class MapNavNode(Node):
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
                          map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
-                         local_frame_origin_position: Optional[LatLonAlt], timestamp: Optional[int],
-                         map_cropped: Optional[np.ndarray] = None) -> None:
+                         local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
+            -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
         message.
 
@@ -2006,7 +2009,6 @@ class MapNavNode(Node):
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param restrict_affine: Restrict affine flag from time of match (from _match_inputs)
         :param local_frame_origin_position: Local frame origin coordinates from time of match (from _match_inputs)
-        :param timestamp: Local position message timestamp from time of match (from _match_inputs)
         :param map_cropped: Optional map cropped image, visualizes matches if provided
 
         :return:
@@ -2062,11 +2064,8 @@ class MapNavNode(Node):
 
         quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2])  # TODO: do not use hard-coded indices, prone to breaking
 
-        if timestamp is None:
-            # Initialize timestamp for vvo
-            self.get_logger().debug('No ekf2 timestamp provided, using current time as timestamp.')
-            timestamp = int(time.time_ns() / 1000)  # time "since system start" in microseconds
-        self._create_vehicle_visual_odometry_msg(timestamp, local_position, quaternion)
+        assert_type(int, image_frame.timestamp)
+        self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

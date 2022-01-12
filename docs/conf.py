@@ -106,7 +106,8 @@ html_theme_options = {
     #'github_user': 'bitprophet',
     #'github_repo': 'alabaster',
     'description': description,
-    'show_relbar_bottom': True
+    'show_relbar_bottom': True,
+    'fixed_sidebar': True
 }
 
 # Make version number accessible in .rst files

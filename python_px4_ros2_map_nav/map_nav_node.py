@@ -1275,6 +1275,7 @@ class MapNavNode(Node):
 
     def wms_pool_worker_error_callback(self, e: BaseException) -> None:
         """Handles errors from WMS pool worker.
+
         :param e: Exception returned by the worker
         :return:
         """

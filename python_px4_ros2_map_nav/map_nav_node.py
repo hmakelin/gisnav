@@ -71,6 +71,7 @@ class MapNavNode(Node):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'
+    EULER_SEQUENCE_VEHICLE = 'xyz'  # TODO: remove or replace
 
     # Minimum matches for homography estimation, should be at least 4
     MINIMUM_MATCHES = 4
@@ -1437,6 +1438,9 @@ class MapNavNode(Node):
             return None
         assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
 
+        roll_index = self._roll_index()
+        assert roll_index != -1, 'Could not identify roll index in gimbal attitude, cannot return RPY.'
+
         pitch_index = self._pitch_index()
         assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
 
@@ -1469,7 +1473,77 @@ class MapNavNode(Node):
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
         roll = 0  # TODO remove zero roll assumption
+        #roll = gimbal_euler[roll_index] - 180
+        #print(f'roll {roll}')
         rpy = RPY(roll, pitch, yaw)
+        #print(f'camera rpy {rpy}')  # TODO: should do yaw = 180-yaw ?
+
+        return rpy
+
+    def _quat_to_rpy(self, q: np.ndarray) -> RPY:
+        """Converts the attitude quaternion to roll, pitch, yaw degrees in FRD frame.
+
+        :param q: Attitude quaternion np.ndarray (shape (4,))
+        :return: RPY tuple in degrees in FRD frame
+        """
+        assert_type(np.ndarray, q)
+        assert_shape(q, (4,))
+        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
+        euler = Rotation.from_quat(q).as_euler(self.EULER_SEQUENCE_VEHICLE, degrees=True)
+
+        # Fix axes to FRD frame # TODO: do not use hard coded indices
+        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
+        roll = euler[2]
+        pitch = -euler[1]
+        yaw = 180 - euler[0]
+
+        # TODO: should these be inclusive of upper bound?
+        assert -180 <= roll <= 180
+        assert -90 <= pitch <= 90
+        assert 0 <= yaw <= 360
+        rpy = RPY(roll, pitch, yaw)
+
+        return rpy
+
+    def _rpy_to_quat(self, rpy: RPY) -> np.ndarray:
+        """Converts roll, pitch, yaw tuple (in degrees in FRD frame) back to an attitude quaternion.
+
+        This method reverses the axes translations done in :meth:`~_quat_to_rpy`.
+
+        :param rpy: Roll, pitch and yaw in degrees in FRD frame
+        :return: Attitude quaternion
+        """
+        assert_type(RPY, rpy)
+
+        # Reverse axes transformations
+        roll = rpy.roll
+        pitch = -rpy.pitch
+        yaw = 180 - rpy.yaw
+
+        # Reverse the index order
+        euler = [yaw, pitch, roll]
+
+        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
+        q = Rotation.from_euler(self.EULER_SEQUENCE_VEHICLE, euler, degrees=True).as_quat()
+        q = np.array(q)
+        assert_shape(q, (4,))
+
+        return q
+
+    # TODO: try to refactor together with _camera_rpy!
+    def _get_vehicle_rpy(self):
+        """Returns vehicle roll, pitch and yaw in degrees in FRD frame.
+
+        :return: Vehicle RPY tuple in degrees in FRD frame
+        """
+        vehicle_attitude = self._vehicle_attitude
+        if vehicle_attitude is None:
+            self.get_logger().warn('Vehicle attitude not available, cannot return RPY.')
+            return None
+        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute RPY.'
+        rpy = self._quat_to_rpy(vehicle_attitude.q)
+
+        print(f'vehicle rpy {rpy}')
 
         return rpy
 
@@ -1499,6 +1573,15 @@ class MapNavNode(Node):
             self.get_logger().warn(f'Camera normal length: {camera_normal_length}, does not look like a unit vector?.')
 
         return camera_normal
+
+    def _roll_index(self) -> int:
+        """Returns the roll index for used euler vectors.
+
+        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
+
+        :return: Roll index
+        """
+        return self.EULER_SEQUENCE.lower().find('z')
 
     def _pitch_index(self) -> int:
         """Returns the pitch index for used euler vectors.
@@ -1671,7 +1754,7 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: tuple,
+    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: np.ndarray,
                                             pose_covariances: tuple) -> None:
         """Creates a :class:`px4_msgs.msg.VehicleVisualOdometry` message and saves it to
         :py:attr:`~_vehicle_visual_odometry`.
@@ -1684,16 +1767,16 @@ class MapNavNode(Node):
 
         :param timestamp: Timestamp to be included in the outgoing message
         :param position: Position tuple (x, y, z) to be published
-        :param rotation: Rotation quaternion to be published
+        :param rotation: Rotation quaternion to be published (np.ndarray of shape (4,))
         :param pose_covariances: Pose cross-covariances matrix to be published (length = 21)
         :return:
         """
         assert_type(int, timestamp)
         assert_type(tuple, position)
-        assert_type(tuple, rotation)
+        assert_type(np.ndarray, rotation)
         assert_type(tuple, pose_covariances)
         assert_len(position, 3)
-        assert_len(rotation, 4)
+        assert_shape(rotation, (4,))
         assert_len(pose_covariances, 21)
         assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
         msg = VehicleVisualOdometry()
@@ -1724,7 +1807,7 @@ class MapNavNode(Node):
         # Rotation is currently computed with assumed NED frame so it is asserted here just in case
         assert msg.local_frame is self.LOCAL_FRAME_NED, f'Published rotation logic requires that NED frame is used.'
         if rotation is not None:
-            msg.q = rotation
+            msg.q = np.float32(rotation)
             msg.q_offset = (0.0, ) * 4
         else:
             msg.q = (float('nan'),) * 4  # float32
@@ -1836,7 +1919,7 @@ class MapNavNode(Node):
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float
             camera_pitch - float
-            rpy - RPY camera roll-pitch-yaw  # TODO: added later because needed for covariance matrix - redundant with camera_yaw and camera_pitch
+            vehicle_rpy - RPY vehicle roll-pitch-yaw
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
@@ -1854,7 +1937,7 @@ class MapNavNode(Node):
             'camera_normal': self._camera_normal(),
             'camera_yaw': self._camera_yaw(),
             'camera_pitch': self._camera_pitch(),
-            'rpy': self._get_camera_rpy(),
+            'vehicle_rpy': self._get_vehicle_rpy(),
             # Image and map raster dimensions
             'map_dim_with_padding': self._map_dim_with_padding(),
             'img_dim': self._img_dim(),
@@ -2050,7 +2133,7 @@ class MapNavNode(Node):
 
         return lat_diff, lon_diff, -alt
 
-    def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray) -> Optional[Tuple[float]]:
+    def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray, vehicle_rpy: RPY) -> Optional[Tuple[float]]:
         """Computes attitude quaternion against NED frame for outgoing VehicleVisualOdometry message.
 
         Attitude estimate adjusts vehicle heading (used to rotate the map raster together with gimbal yaw) by the angle
@@ -2070,10 +2153,8 @@ class MapNavNode(Node):
         if self._vehicle_attitude is not None:
             fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr - ll).squeeze(), normalize=True))
             assert hasattr(self._vehicle_attitude, 'q')
-            euler = Rotation.from_quat(self._vehicle_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
-            vehicle_yaw = euler[self._yaw_index()] + fov_adjustment_angle
-            euler[self._yaw_index()] = vehicle_yaw
-            quaternion = tuple(Rotation.from_euler(self.EULER_SEQUENCE, euler, degrees=True).as_quat())
+            vehicle_yaw = vehicle_rpy.yaw + fov_adjustment_angle
+            quaternion = self._rpy_to_quat(RPY(vehicle_rpy.roll, vehicle_rpy.pitch, vehicle_yaw))
             assert_len(quaternion, 4)
             self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
             self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
@@ -2084,7 +2165,7 @@ class MapNavNode(Node):
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-                         rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+                         vehicle_rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
             -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
@@ -2101,7 +2182,7 @@ class MapNavNode(Node):
         :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)
         :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
         :param camera_pitch: Camera pitch in degrees from time of match (from _match_inputs)
-        :param rpy: Camera roll, pitch and yaw in degrees from time of match (from _match_inputs)  # TODO: redundant with camera_yaw and camera_pitch, added bc needed for covariances
+        :param vehicle_rpy: Vehicle roll, pitch and yaw in degrees from time of match (from _match_inputs)
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param restrict_affine: Restrict affine flag from time of match (from _match_inputs)
@@ -2159,15 +2240,15 @@ class MapNavNode(Node):
 
         assert camera_altitude is not None
 
-        quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2])  # TODO: do not use hard-coded indices, prone to breaking
+        assert_type(RPY, vehicle_rpy)
+        quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2], vehicle_rpy)  # TODO: do not use hard-coded indices, prone to breaking
 
         # Update covariance data window and check if covariance matrix is available
         # Do not create message if covariance matrix not yet available
         # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
         assert_type(int, image_frame.timestamp)
-        assert_type(RPY, rpy)
-        rpy_radians = tuple(map(lambda x: math.radians(x), rpy))
-        self._push_covariance_data(local_position, rpy_radians)
+        vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_rpy))
+        self._push_covariance_data(local_position, vehicle_rpy_radians)
         if not self._covariance_window_full():
             self.get_logger().warn('Not enough data to estimate covariances yet - skipping creating '
                                    'vehicle_visual_odometry message.')

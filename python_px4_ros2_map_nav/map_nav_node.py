@@ -2173,7 +2173,7 @@ class MapNavNode(Node):
                                    'vehicle_visual_odometry message.')
             return
         # TODO: does rpy.roll still have zero assumption? Would need to remove that assumption in _get_camera_rpy too
-        covariance = np.cov(self._pose_covariance_data_window)
+        covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
         covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
         assert_len(covariance_urt, 21)
 

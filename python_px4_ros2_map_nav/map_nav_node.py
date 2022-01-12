@@ -885,7 +885,6 @@ class MapNavNode(Node):
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec + self.EKF2_TIMESTAMP_PADDING  # TODO: remove the padding or set it 0?
 
-
     def _restrict_affine(self) -> bool:
         """Checks if homography matrix should be restricted to an affine transformation (nadir facing camera).
 
@@ -1374,7 +1373,7 @@ class MapNavNode(Node):
         # Estimate EKF2 timestamp first to get best estimate
         timestamp = self._get_ekf2_time()
         if timestamp is None:
-            self.get_logger().warn('Image frame receieved but could not estimate EKF2 system time, skipping frame.')
+            self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
             return None
 
         self.get_logger().debug('Camera image callback triggered.')
@@ -1390,6 +1389,8 @@ class MapNavNode(Node):
                                              f'shape {img_size}.'
 
         # Process image frame
+        #print(f'timestamp {timestamp}')
+        # TODO: save previous image frame and check that new timestamp is greater
         image_frame = ImageFrame(cv_image, msg.header.frame_id, timestamp)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
@@ -1481,21 +1482,21 @@ class MapNavNode(Node):
         return rpy
 
     def _quat_to_rpy(self, q: np.ndarray) -> RPY:
-        """Converts the attitude quaternion to roll, pitch, yaw degrees in FRD frame.
+        """Converts the attitude quaternion to roll, pitch, yaw degrees
 
         :param q: Attitude quaternion np.ndarray (shape (4,))
-        :return: RPY tuple in degrees in FRD frame
+        :return: RPY tuple in degrees
         """
         assert_type(np.ndarray, q)
         assert_shape(q, (4,))
         assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
         euler = Rotation.from_quat(q).as_euler(self.EULER_SEQUENCE_VEHICLE, degrees=True)
 
-        # Fix axes to FRD frame # TODO: do not use hard coded indices
+        # Fix axes # TODO: do not use hard coded indices
         assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
         roll = euler[2]
         pitch = -euler[1]
-        yaw = 180 - euler[0]
+        yaw = 180 - euler[0]  # North should be 0
 
         # TODO: should these be inclusive of upper bound?
         assert -180 <= roll <= 180
@@ -1506,11 +1507,11 @@ class MapNavNode(Node):
         return rpy
 
     def _rpy_to_quat(self, rpy: RPY) -> np.ndarray:
-        """Converts roll, pitch, yaw tuple (in degrees in FRD frame) back to an attitude quaternion.
+        """Converts roll, pitch, yaw tuple in degrees back to an attitude quaternion.
 
         This method reverses the axes translations done in :meth:`~_quat_to_rpy`.
 
-        :param rpy: Roll, pitch and yaw in degrees in FRD frame
+        :param rpy: Roll, pitch and yaw in degrees
         :return: Attitude quaternion
         """
         assert_type(RPY, rpy)
@@ -1532,9 +1533,11 @@ class MapNavNode(Node):
 
     # TODO: try to refactor together with _camera_rpy!
     def _get_vehicle_rpy(self):
-        """Returns vehicle roll, pitch and yaw in degrees in FRD frame.
+        """Returns vehicle roll, pitch and yaw.
 
-        :return: Vehicle RPY tuple in degrees in FRD frame
+        Yaw origin is North.
+
+        :return: Vehicle RPY tuple in degrees
         """
         vehicle_attitude = self._vehicle_attitude
         if vehicle_attitude is None:

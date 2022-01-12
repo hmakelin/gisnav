@@ -1484,6 +1484,8 @@ class MapNavNode(Node):
     def _quat_to_rpy(self, q: np.ndarray) -> RPY:
         """Converts the attitude quaternion to roll, pitch, yaw degrees
 
+        See also :meth:`~_rpy_to_quat` for a reverse transformation.
+
         :param q: Attitude quaternion np.ndarray (shape (4,))
         :return: RPY tuple in degrees
         """

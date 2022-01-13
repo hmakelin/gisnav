@@ -2379,8 +2379,8 @@ class MapNavNode(Node):
         vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_rpy))
         self._push_covariance_data(local_position, vehicle_rpy_radians)
         if not self._covariance_window_full():
-            self.get_logger().warn('Not enough data to estimate covariances yet - skipping creating '
-                                   'vehicle_visual_odometry message.')
+            self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
+                                   'Skipping creating vehicle_visual_odometry message for now.')
             return
         # TODO: does rpy.roll still have zero assumption? Would need to remove that assumption in _get_camera_rpy too
         covariance = np.cov(self._pose_covariance_data_window, rowvar=False)

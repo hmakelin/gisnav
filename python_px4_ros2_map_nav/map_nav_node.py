@@ -1935,6 +1935,7 @@ class MapNavNode(Node):
         self.get_logger().debug(f'Setting outgoing vehicle visual odometry message as:\n{msg}.')
         self._vehicle_visual_odometry = msg
 
+    # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:
         """Returns camera pitch in degrees relative to nadir.
 
@@ -2024,7 +2025,6 @@ class MapNavNode(Node):
             camera_info - CameraInfo
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float
-            camera_pitch - float
             vehicle_attitude - Rotation Vehicle attitude
             vehicle_rpy - RPY vehicle roll-pitch-yaw
             map_dim_with_padding - Dim map dimensions including padding for rotation
@@ -2043,7 +2043,6 @@ class MapNavNode(Node):
             'camera_info': self._camera_info,
             'camera_normal': self._camera_normal(),
             'camera_yaw': self._camera_yaw(),
-            'camera_pitch': self._camera_pitch(),
             'vehicle_attitude': self._get_vehicle_attitude(),
             'vehicle_rpy': self._get_vehicle_rpy(),
             # Image and map raster dimensions
@@ -2120,6 +2119,7 @@ class MapNavNode(Node):
         camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
         return camera_altitude
 
+    # TODO: this is "set" camera pitch, not real cmaera pitch so will not work in all cases
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if camera pitch exceeds given limit.
 
@@ -2273,7 +2273,7 @@ class MapNavNode(Node):
 
     # TODO: remove many redundant arguments (camera_pitch etc. when they are estimated visually, and vehicle_Rpy when vehicle_attitude is provided instead)
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
-                         camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
+                         camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float,
                          vehicle_attitude: Rotation, vehicle_rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
             -> None:
@@ -2290,7 +2290,6 @@ class MapNavNode(Node):
         :param camera_info: CameraInfo from time of match (from _match_inputs)
         :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)
         :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
-        :param camera_pitch: Camera pitch in degrees from time of match (from _match_inputs)
         :param vehicle_rpy: Vehicle roll, pitch and yaw in degrees from time of match (from _match_inputs)
         :param vehicle_attitude: Vehicle attitude
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)

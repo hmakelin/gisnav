@@ -1428,6 +1428,107 @@ class MapNavNode(Node):
         camera_yaw = rpy.yaw
         return camera_yaw
 
+    def _transform_rotation_axes(self, rotation: Rotation):
+        """Transform the axes of rotation so that they match the axes of PX4's rotations."""
+        # TODO: need to make the Rotation from rotation matrix from decomposeHomography compatible with vheicle attitude etc. Rotation
+        raise NotImplementedError
+
+    @staticmethod
+    def _estimate_gimbal_attitude(vehicle_ned_attitude: Rotation, gimbal_ned_attitude_estimate: Rotation):
+        """Estimates gimbal relative attitude in vehicle FRD body frame from visually estimate camera NED fixed frame
+        attitude
+
+        This method solves the relative gimbal attitude from visually estimated gimbal absolute attitude. When the
+        vehicle has started moving, the gimbal needs a short time to stabilize and before that happens there may be a
+        large inconsistency between gimbal settings and true attitude. The attitude cannot therefore be trusted from
+        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` and it is assumed :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus`
+        generally is not available.
+
+        Estimating the true gimbal attitude from visual information is important because small changes in true gimbal
+        attitude lead to large changes in estimated vehicle position.
+        """
+        gimbal_attitude = gimbal_ned_attitude_estimate * vehicle_ned_attitude.inv()
+        return gimbal_attitude
+
+    def _rotation_to_rpy(self, rotation: Rotation) -> RPY:
+        """Returns rotation as roll, pitch, and yaw (RPY) tuple in degrees
+
+        :return: Roll, pitch and yaw (RPY) tuple in degrees
+        """
+        # Convert to Euler angles and re-arrange axes
+        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
+        euler = rotation.as_euler(self.EULER_SEQUENCE_VEHICLE, degrees=True)
+        # TODO: these are different from quat_to_rpy and rpy_to_quat!
+        roll = euler[2]
+        pitch = euler[0]-90
+        yaw = -euler[1]
+
+        # TODO: should these be inclusive of upper bound?
+        #assert -180 <= roll <= 180
+        #assert -90 <= pitch <= 90
+        #assert 0 <= yaw <= 360
+
+        rpy = RPY(roll, pitch, yaw)
+        return rpy
+
+    def _get_vehicle_attitude(self) -> Optional[Rotation]:
+        """Returns vehicle attitude from :class:`px4_msgs.msg.VehicleAttitude` or None if not available
+
+        :return: Vehicle attitude or None if not available
+        """
+        if self._vehicle_attitude is None:
+            self.get_logger().warn('No VehicleAttitude message has been received yet.')
+            return None
+        else:
+            vehicle_attitude = Rotation.from_quat(self._vehicle_attitude.q)
+            return vehicle_attitude
+
+    def _get_gimbal_set_attitude(self) -> Optional[Rotation]:
+        """Returns gimbal set attitude from :class:`px4_msgs.msg.GimbalDeviceSetAttitude` or None if not available
+
+        :return: Vehicle attitude or None if not available
+        """
+        if self._vehicle_attitude is None:
+            self.get_logger().warn('No VehicleAttitude message has been received yet.')
+            return None
+        else:
+            vehicle_attitude = Rotation.from_quat(self._vehicle_attitude.q)
+            return vehicle_attitude
+
+    def _get_gimbal_set_compound_attitude(self) -> Optional[Rotation]:
+        """Returns gimbal set compound attitude or None if it cannot be computed
+
+        Compound attitude means this method compounds the vehicle body frame relative gimbal attitude from
+        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` with the NED frame fixed vehicle attitude from
+        :class:`px4_msgs.msg.VehicleAttitude`. This is the NED frame fixed attitude that the gimbal should have when it
+        is stabilized.
+
+        Because :class:`px4_msgs.msg.GimbalDeviceSetAttitude` is used for gimbal attitude instead of
+        :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus`, the output may not necessarily reflect actual camera attitude.
+        For example, it takes a fraction of a second for a stabilized gimbal to adjust when the vehicle starts moving.
+        When that happens the actual gimbal attitude does not match what is contained in the
+        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message until the gimbal has stabilized again.
+
+        Since :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` may often not be available so the actual camera attitude
+        must be visually estimated in order to also estimate the vehicle's position.
+
+        :return: Gimbal set compound attitude or None if it cannot be computed
+        """
+        # Get vehicle attitude
+        vehicle_attitude = self._get_vehicle_attitude()
+        if vehicle_attitude is None:
+            self.get_logger().warn('Vehicle attitude not available, cannot compute camera attitude.')
+            return None
+
+        # Get gimbal set attitude
+        gimbal_set_attitude = self._get_gimbal_set_attitude()
+        if gimbal_set_attitude is None:
+            self.get_logger().debug('Gimbal set attitude not available, cannot compute camera attitude.')
+            return None
+
+        gimbal_set_compound_attitude = vehicle_attitude * gimbal_set_attitude
+        return gimbal_set_compound_attitude
+
     def _get_camera_rpy(self) -> Optional[RPY]:
         """Returns roll-pitch-yaw tuple in NED frame.
 
@@ -1548,7 +1649,7 @@ class MapNavNode(Node):
         assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute RPY.'
         rpy = self._quat_to_rpy(vehicle_attitude.q)
 
-        print(f'vehicle rpy {rpy}')
+        #print(f'vehicle rpy {rpy}')
 
         return rpy
 
@@ -1924,6 +2025,7 @@ class MapNavNode(Node):
             camera_normal - np.ndarray Camera normal unit vector
             camera_yaw - float
             camera_pitch - float
+            vehicle_attitude - Rotation Vehicle attitude
             vehicle_rpy - RPY vehicle roll-pitch-yaw
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
@@ -1942,6 +2044,7 @@ class MapNavNode(Node):
             'camera_normal': self._camera_normal(),
             'camera_yaw': self._camera_yaw(),
             'camera_pitch': self._camera_pitch(),
+            'vehicle_attitude': self._get_vehicle_attitude(),
             'vehicle_rpy': self._get_vehicle_rpy(),
             # Image and map raster dimensions
             'map_dim_with_padding': self._map_dim_with_padding(),
@@ -2168,9 +2271,10 @@ class MapNavNode(Node):
             # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
             return None
 
+    # TODO: remove many redundant arguments (camera_pitch etc. when they are estimated visually, and vehicle_Rpy when vehicle_attitude is provided instead)
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float, camera_pitch: float,
-                         vehicle_rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
+                         vehicle_attitude: Rotation, vehicle_rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
             -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
@@ -2188,6 +2292,7 @@ class MapNavNode(Node):
         :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
         :param camera_pitch: Camera pitch in degrees from time of match (from _match_inputs)
         :param vehicle_rpy: Vehicle roll, pitch and yaw in degrees from time of match (from _match_inputs)
+        :param vehicle_attitude: Vehicle attitude
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param restrict_affine: Restrict affine flag from time of match (from _match_inputs)
@@ -2201,12 +2306,29 @@ class MapNavNode(Node):
             return None
 
         # Find and decompose homography matrix, do some sanity checks
+        # TODO: do we need to compute all positions for all 4 options because we don't know true camera normal??? Or just use best guess set gimbal attitude as we are now?
         k = camera_info.k.reshape([3, 3])
-        h, h_mask, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
-                                                              restrict_affine=restrict_affine)
-        assert_shape(h, (3, 3))
-        assert_shape(t, (3, 1))
-        assert_shape(r, (3, 3))
+        h, _, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,  # TODO: get real camera normal? How can we trust this if we don't know what the real pitch is?
+                                                         restrict_affine=restrict_affine)
+
+        # TODO: get rotation from rotation matrix and print it, test it out in simulator and go from there
+        # TODO: this is not the NED rotation, this needs to be inverse-rotated!
+        camera_rotation = Rotation.from_matrix(r)
+        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
+        camera_rpy = self._rotation_to_rpy(camera_rotation) # TODO: this is the rotation with pitch and roll but withoyt yaw because the map was rotated! So would need to add a yaw rotation to this thing!
+        self.get_logger().info(f'Visually estimated camera RPY: {camera_rpy}.')
+
+        # TODO: estimate camera_pitch from camera_rpy and replace the arg pitch with it and you're good!
+        camera_pitch = 90 + camera_rpy.pitch  #TODO: need to fix camera axes!
+        print(f'camera pitch process mathces {camera_pitch}')
+
+        # TODO: transform rotrpy axes and invert the yaw to get absolute Rotation in same frame as the other Rotations
+        # Estimate true gimbal rotation
+        #gimbal_attitude = self._estimate_gimbal_attitude(vehicle_attitude, camera_ned_rotation)
+        #gimbal_rpy = self._rotation_to_rpy(gimbal_attitude)
+        #self.get_logger().info(f'Visually estimated gimbal relative attitude: {gimbal_rpy}.')
+
+        # TODO: get camera_pitch, yaw etc. from visually estimated data, not the old arguments
 
         # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
         # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
@@ -2224,6 +2346,7 @@ class MapNavNode(Node):
         camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
+        # TODO: recompute this using new parameters, real yaw, real pitch etc.
         t_rotated = rotate_point(math.radians(camera_yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
         map_center = get_bbox_center(map_frame.bbox)
@@ -2246,6 +2369,8 @@ class MapNavNode(Node):
         assert camera_altitude is not None
 
         assert_type(RPY, vehicle_rpy)
+
+        # TODO: Replace this with the new way vehicle true attitude is computed above
         quaternion = self._compute_attitude_quaternion(fov_pix[1], fov_pix[2], vehicle_rpy)  # TODO: do not use hard-coded indices, prone to breaking
 
         # Update covariance data window and check if covariance matrix is available
@@ -2260,6 +2385,7 @@ class MapNavNode(Node):
             return
         # TODO: does rpy.roll still have zero assumption? Would need to remove that assumption in _get_camera_rpy too
         covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
+        #covariance = 20 * covariance  # TODO: remove this line, temporary hack to reduce drone zooming around in position mode (covariance is underestaimted when drone is stsill)
         covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
         assert_len(covariance_urt, 21)
 
@@ -2343,11 +2469,11 @@ def main(args=None):
     :param args: Any args for initializing the rclpy node
     :return:
     """
-    if __debug__:
-        pr = cProfile.Profile()
-        pr.enable()
-    else:
-        pr = None
+    #if __debug__:
+    #    pr = cProfile.Profile()  # TODO: re-enable
+    #    pr.enable()
+    #else:
+    pr = None
     try:
         rclpy.init(args=args)
         matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)

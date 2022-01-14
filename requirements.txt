@@ -7,3 +7,4 @@ OWSLib
 pyyaml
 pyproj
 geojson
+shapely

@@ -222,22 +222,31 @@ def visualize_homography(figure_name: str, img_arr: np.ndarray, map_arr: np.ndar
     return out
 
 
-def get_fov(img_arr: np.ndarray, h_mat: np.ndarray) -> np.ndarray:
+def get_fov_and_c(img_arr: np.ndarray, h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates field of view (FOV) corners from homography and image shape.
 
     :param img_arr: Image array
     :param h_mat: Homography matrix
-    :return: FOV corner coordinates
+    :return: Tuple of FOV corner coordinates and prinicpal point np.ndarrays
     """
     assert_type(np.ndarray, img_arr)
     assert_type(np.ndarray, h_mat)
     h, w, _ = img_arr.shape  # height before width in np.array shape
-    src_corners = create_src_corners(h, w)
+    src_fov = create_src_corners(h, w)
+
+    principal_point_src = np.array([[[w/2, h/2]]])
+    src_fov_and_c = np.vstack((src_fov, principal_point_src))
+
     assert_shape(h_mat, (3, 3))
-    assert_ndim(src_corners, 3)  # TODO: this is currently not assumed to be squeezed
-    dst_corners = cv2.perspectiveTransform(src_corners, h_mat)
-    assert_shape(src_corners, dst_corners.shape)
-    return dst_corners
+    assert_ndim(src_fov, 3)  # TODO: this is currently not assumed to be squeezed
+    dst_fov_and_c = cv2.perspectiveTransform(src_fov_and_c, h_mat)
+
+    dst_fov, principal_point_dst = np.vsplit(dst_fov_and_c, [-1])
+
+    assert_shape(dst_fov, src_fov.shape)
+    assert_shape(principal_point_dst, principal_point_src.shape)
+
+    return dst_fov, principal_point_dst
 
 
 def create_src_corners(h: int, w: int) -> np.ndarray:
@@ -267,22 +276,24 @@ def setup_sys_path() -> Tuple[str, str]:
     return share_dir, superglue_dir
 
 
-def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map_raster_bbox: BBox,
-                              map_raster_rotation: float, img_dim: Dim) \
-        -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_raster_rotation: float,
+                 img_dim: Dim) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Converts the input array from pixel coordinates to WGS 84.
+
+
+    Also returns the pixel coordinates for the intermediate outputs (uncropped, uncropped & unrotated) in case you want
+    to e.g. draw them on the respective images for debugging purposes.
 
     :param array: Numpy array in pixel coordinates (of e.g. rotated map raster field of view corners)
     :param map_raster_padded_dim: Size of the padded map raster image
     :param map_raster_bbox: The WGS84 bounding box of the padded map raster
-    :param map_raster_rotation: The rotation that was applied to the map raster before matching in degrees
+    :param map_raster_rotation: The rotation that was applied to the map raster before matching in radians
     :param img_dim: Size of the image
     :return: Tuple including FOV in WGS84 coordinates, and pixel coordinates for uncropped and unrotated maps
     """
     uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
     fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, array)
 
-    map_raster_rotation = math.radians(map_raster_rotation)
     rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
     fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
 
@@ -290,6 +301,56 @@ def convert_from_pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map
     fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
 
     return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
+
+def pix_to_wgs84_affine(map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_raster_rotation: float, img_dim: Dim) \
+        -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates 
+    along with intermediate transformations
+    
+    These transformations can be used to reverse the rotation and cropping that :func:`~rotate_and_crop_map` did to
+    the original map.
+
+    :param map_raster_padded_dim: Size of the padded map raster image
+    :param map_raster_bbox: The WGS84 bounding box of the padded map raster
+    :param map_raster_rotation: The rotation that was applied to the map raster before matching in radians
+    :param img_dim: Size of the image
+    :return: Tuple containing 2D affinre transformations from 1. pixel coordinates to WGS84, 2. from original unrotated 
+    and uncropped map pixel coordinates to WGS84, 3. from rotated map coordinates to unrotated map coordinates, and 4. 
+    from cropped map coordinates to uncropped (but still rotated) map pixel coordinates.
+    """
+    map_dim_arr = np.array(map_raster_padded_dim)
+    img_dim_arr = np.array(img_dim)
+    crop_padding = map_dim_arr - img_dim_arr
+    crop_translation = (crop_padding / 2)
+    pix_to_uncropped = np.identity(3)
+    # Invert order x<->y in translation vector since height comes first in Dim tuple (inputs should be Dims)
+    assert_type(Dim, map_raster_padded_dim)
+    assert_type(Dim, img_dim)
+    pix_to_uncropped[0:2][:, 2] = crop_translation[::-1]
+
+    rotation_center = map_dim_arr / 2
+    rotation = cv2.getRotationMatrix2D(rotation_center, np.degrees(map_raster_rotation), 1.0)
+    rotation_padding = np.array([[0, 0, 1]])
+    uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
+
+    src_corners = create_src_corners(*map_raster_padded_dim)
+    dst_corners = bbox_to_polygon(map_raster_bbox)
+    unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
+                                                     np.float32(dst_corners).squeeze())
+
+    pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped
+    return pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
+
+
+def bbox_to_polygon(bbox: BBox) -> np.ndarray:
+    """Converts BBox to a np.ndarray polygon format
+
+    :param bbox: BBox to convert
+    :return: bbox corners in np.ndarray"""
+    return np.array([[bbox.top, bbox.left],
+                     [bbox.bottom, bbox.left],
+                     [bbox.bottom, bbox.right],
+                     [bbox.top, bbox.right]]).reshape(-1, 1, 2)
 
 
 # TODO: takes in a np.ndarray but returns a Tuple --> Need to make consistent

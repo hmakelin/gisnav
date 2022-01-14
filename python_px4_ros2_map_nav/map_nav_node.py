@@ -10,6 +10,7 @@ import pstats
 import numpy as np
 import cv2
 import time
+import shapely
 
 # Import and configure torch for multiprocessing
 import torch
@@ -30,9 +31,10 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, convert_from_pix_to_wgs84, BBox, Dim, get_bbox_center, \
-    rotate_and_crop_map, visualize_homography, get_fov, LatLon, fov_center, get_angle, rotate_point, TimePair, \
-    create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame
+from python_px4_ros2_map_nav.util import setup_sys_path, pix_to_wgs84, BBox, Dim, get_bbox_center, \
+    rotate_and_crop_map, visualize_homography, get_fov_and_c, LatLon, fov_center, get_angle, rotate_point, TimePair, \
+    create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame, \
+    pix_to_wgs84_affine
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -72,9 +74,10 @@ class MapNavNode(Node):
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'
     EULER_SEQUENCE_VEHICLE = 'xyz'  # TODO: remove or replace
+    EULER_SEQUENCE_VISUAL = 'xyz'  # TODO: remove or replace
 
     # Minimum matches for homography estimation, should be at least 4
-    MINIMUM_MATCHES = 4
+    HOMOGRAPHY_MINIMUM_MATCHES = 4
 
     # Encoding of input video (input to CvBridge)
     IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
@@ -94,6 +97,9 @@ class MapNavNode(Node):
 
     # Logs a warning if publish frequency is close to the bounds of desired publish frequency
     VVO_PUBLISH_FREQUENCY_WARNING_PADDING = 3
+
+    # For logging a warning if fx and fy differ too much (assume they are the same)
+    FOCAL_LENGTH_DIFF_THRESHOLD = 0.05
 
     # ROS 2 QoS profiles for topics
     # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
@@ -556,7 +562,6 @@ class MapNavNode(Node):
             if obs_count == window_length:
                 # Pop oldest observation
                 self._pose_covariance_data_window = np.delete(self._pose_covariance_data_window, 0, 0)
-                assert_shape(self._pose_covariance_data_window, (19, 6))  # Newest obs still missing
 
             # Add newest observation
             self._pose_covariance_data_window = np.vstack((self._pose_covariance_data_window, position + rotation))
@@ -1450,26 +1455,56 @@ class MapNavNode(Node):
         gimbal_attitude = gimbal_ned_attitude_estimate * vehicle_ned_attitude.inv()
         return gimbal_attitude
 
-    def _rotation_to_rpy(self, rotation: Rotation) -> RPY:
-        """Returns rotation as roll, pitch, and yaw (RPY) tuple in degrees
+    # TODO: try to make static since its used in _process_matches
+    def _rotation_to_rpy(self, rotation: Rotation, degrees: bool = False) -> RPY:
+        """Returns rotation as roll, pitch, and yaw (RPY) tuple in radians
+
+        :param degrees: True to return RPY in degrees
+        :return: Roll, pitch and yaw (RPY) tuple in degrees
+        """
+        # Convert to Euler angles and re-arrange axes
+        assert self.EULER_SEQUENCE_VISUAL == 'xyz'
+        euler = rotation.as_euler(self.EULER_SEQUENCE_VISUAL)
+        # TODO: these are different from quat_to_rpy and rpy_to_quat which are used for px4's attitude quats!
+
+        roll = euler[2]
+        pitch = euler[0] - np.pi/2
+        yaw = -euler[1]
+
+        self.get_logger().info(f'_rotation_to_rpy: {roll, pitch, yaw}.')
+
+        # TODO: should these be inclusive of upper bound?
+        #assert -np.pi <= roll <= np.pi
+        #assert -np.pi/2 <= pitch <= np.pi/2
+        #assert 0 <= yaw <= 2*np.pi
+
+        rpy = RPY(roll, pitch, yaw)
+        if degrees:
+            rpy = RPY(*tuple(map(np.degrees(rpy))))
+
+        return rpy
+
+    # TODO: try to make static since its used in _process_matches
+    def _rpy_to_rotation(self, rpy: RPY) -> Rotation:
+        """Returns rotation from RPY tuple in radians
+
+        Reverses :meth:`~_rotation_to_rpy`
 
         :return: Roll, pitch and yaw (RPY) tuple in degrees
         """
         # Convert to Euler angles and re-arrange axes
-        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
-        euler = rotation.as_euler(self.EULER_SEQUENCE_VEHICLE, degrees=True)
+        assert self.EULER_SEQUENCE_VISUAL == 'xyz'
         # TODO: these are different from quat_to_rpy and rpy_to_quat!
-        roll = euler[2]
-        pitch = euler[0]-90
-        yaw = -euler[1]
+        # Reverse axes transformations
+        roll = rpy.roll
+        pitch = rpy.pitch + np.pi/2
+        yaw = -rpy.yaw
 
-        # TODO: should these be inclusive of upper bound?
-        #assert -180 <= roll <= 180
-        #assert -90 <= pitch <= 90
-        #assert 0 <= yaw <= 360
+        # Reverse the index order
+        euler = [pitch, yaw, roll]
 
-        rpy = RPY(roll, pitch, yaw)
-        return rpy
+        rotation = rotation.from_euler(self.EULER_SEQUENCE_VISUAL, euler)
+        return rotation
 
     def _get_vehicle_attitude(self) -> Optional[Rotation]:
         """Returns vehicle attitude from :class:`px4_msgs.msg.VehicleAttitude` or None if not available
@@ -2014,6 +2049,61 @@ class MapNavNode(Node):
 
         return h, h_mask, translation, rotation
 
+    @staticmethod
+    def _find_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, reproj_threshold: float = 1.0,
+                         restrict_affine: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+        """
+
+        :param mkp_img:
+        :param mkp_map:
+        :param reproj_threshold:
+        :param restrict_affine:
+        :return:
+        """
+        min_points = 4  # TODO: use self.MINIMIUM_MATCHES?
+        assert_type(np.ndarray, mkp_img)
+        assert_type(np.ndarray, mkp_map)
+        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
+
+        assert_type(bool, restrict_affine)
+        assert_type(float, reproj_threshold)
+        if not restrict_affine:
+            h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)
+        else:
+            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
+            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a 3x3 homography matrix
+
+        return h, h_mask
+
+    @staticmethod
+    def _decompose_homography(h: np.ndarray, k: np.ndarray, camera_normal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+
+        :param h:
+        :param k:
+        :param camera_normal: a
+        :return:
+        """
+        assert_type(np.ndarray, k)
+        assert_shape(k, (3, 3))
+        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
+
+        print('Decomposition')
+        print(Rs)
+        print(Ts)
+        print(Ns)
+
+        # Get the one where angle between plane normal and inverse of camera normal is smallest
+        # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
+        get_angle_partial = partial(get_angle, -camera_normal)
+        angles = list(map(get_angle_partial, Ns))
+        print(angles)
+        index_of_smallest_angle = angles.index(min(angles))
+        print(index_of_smallest_angle)
+        rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
+
+        return translation, rotation
+
     def _match_inputs(self, image_frame: ImageFrame) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
@@ -2022,14 +2112,12 @@ class MapNavNode(Node):
 
         The dictionary has the following data:
             map_frame - np.ndarray map_frame to match
-            camera_info - CameraInfo
-            camera_normal - np.ndarray Camera normal unit vector
-            camera_yaw - float
+            k - np.ndarray Camera intrinsics matrix of shape (3x3) from CameraInfo
+            camera_yaw - float Camera yaw in radians
+            gimbal_set_attitude - Rotation Gimbal set attitude
             vehicle_attitude - Rotation Vehicle attitude
-            vehicle_rpy - RPY vehicle roll-pitch-yaw
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
-            restrict_affine - bool flag indicating whether homography matrix should be restricted to 2D affine tform
             local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             map_cropped - np.ndarray Rotated and cropped map raster from map_frame.image
 
@@ -2039,18 +2127,12 @@ class MapNavNode(Node):
         data = {
             'image_frame': image_frame,
             'map_frame': self._map_frame,
-            # Camera information
-            'camera_info': self._camera_info,
-            'camera_normal': self._camera_normal(),
-            'camera_yaw': self._camera_yaw(),
+            'k': self._camera_info.k.reshape((3, 3)),
+            'camera_yaw': math.radians(self._camera_yaw()),  # TODO: refactor internal APIs to use radians to get rid of back and forth conversions
+            'gimbal_set_attitude': self._get_gimbal_set_attitude(),
             'vehicle_attitude': self._get_vehicle_attitude(),
-            'vehicle_rpy': self._get_vehicle_rpy(),
-            # Image and map raster dimensions
             'map_dim_with_padding': self._map_dim_with_padding(),
             'img_dim': self._img_dim(),
-            # Should homography be restricted to 2D affine transformation
-            'restrict_affine': self._restrict_affine(),
-            # Vehicle local frame global reference position
             'local_frame_origin_position': (self._vehicle_local_position_ref_latlonalt())
         }
 
@@ -2061,7 +2143,6 @@ class MapNavNode(Node):
         if all((camera_yaw, map_frame, img_dim)):
             assert hasattr(map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
-            camera_yaw = math.radians(camera_yaw)
             data['map_cropped'] = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
         else:
             data['map_cropped'] = None
@@ -2091,32 +2172,86 @@ class MapNavNode(Node):
         position = self._move_distance(center, (-azmth, scaled_dist))  # Invert azimuth, going the other way
         return position
 
-    def _compute_camera_distance(self, fov_wgs84: np.ndarray, focal_length: float, img_dim: Dim) -> float:
-        """Computes camera distance from projected principal point in meters.
+    def _estimate_camera_distance_to_c(self, fov_wgs84: np.ndarray, c_wgs84: np.ndarray, yaw: float, fx: float,
+                                       img_dim: Dim) -> Optional[float]:
+        """Returns estimated camera distance to principal point on ground in meters
+
+        Uses triangle similarity where the object of known distance is the line on ground inside the FOV that passes
+        through the principal point and is perpendicular to camera optical axis.
+
+        The computation is made a bit more complicated by possibility of roll in gimbal (e.g. when vehicle suddenly
+        starts moving, gimbal takes time to stabilize and it may have roll for a while). Roll is not directly used in
+        the computation, however, that information is included in the field of view.
 
         :param fov_wgs84: Field of view corners in WGS84 coordinates
-        :param focal_length: Camera focal length
+        :param c_wgs84: Principal point projected on ground in WGS84 coordinates
+        :param yaw: Gimbal yaw in radians
+        :param fx: Camera focal length (in width dimension)
         :param img_dim: Image dimensions
         :return: Distance to principal point on surface in meters
         """
         assert_type(np.ndarray, fov_wgs84)
-        assert_type(float, focal_length)
+        assert_type(np.ndarray, c_wgs84)
+        assert_type(float, fx)
+        assert_type(float, yaw)
         assert_type(Dim, img_dim)
-        fov_center_line_length = self._get_distance_of_fov_center(fov_wgs84)
-        camera_distance = fov_center_line_length * focal_length / img_dim.width
+        self.get_logger().info(f'Gimbal yaw used for estimating distance to c: {yaw}.')
+
+        # Estimate intersection between FOV and ground line that is perpendicular to camera optical axis
+        fov_shapely_poly = shapely.geometry.Polygon(fov_wgs84.tolist())
+        very_large_distance = 100e3  # Meters, shapely does not support lines of infinite length
+        c_shapely_line = shapely.geometry.LineString([self._move_distance(c, (yaw+np.pi/2, very_large_distance)),
+                                                      self._move_distance(c, (yaw-np.pi/2, very_large_distance))])
+        fov_c_line_intersection = list(fov_shapely_poly.intersection(c_shapely_line).coords)
+        self.get_logger().info(f'Fov and c line intersection: {fov_c_line_intersection}.')
+        if len(fov_c_line_intersection) != 2:
+            self.get_logger().info(f'Intersection between FOV and camera optical axis perpendicular line passing '
+                                   f'through c was not 2 {len(fov_c_line_intersection)}. Cannot estimate camera '
+                                   f'distance to projected principal point on ground (cannot estimate scale).')
+
+        # Length of the line inside FOV that passes through c is perpendicular to camera optical axis
+        fov_center_line_meter_length = self._distance(LatLon(*fov_c_line_intersection[0]),
+                                                LatLon(*fov_c_line_intersection[1]))
+        fov_center_line_pixel_length = 0  # TODO
+        assert fov_center_line_meter_length > 0
+
+        # TODO: use fx or fy? if roll high, fy might be more appropriate?
+
+        camera_distance = fov_center_line_meter_length * fx / fov_center_line_pixel_length
         assert_type(float, camera_distance)
         return camera_distance
 
-    @staticmethod
-    def _compute_camera_altitude(camera_distance: float, camera_pitch: Union[int, float]) -> float:
-        """Computes camera altitude based on distance to principal point and pitch in degrees.
+    def _compute_camera_altitude(self, camera_distance: float, camera_pitch: Union[int, float]) -> Optional[float]:
+        """Computes camera altitude in meters (positive) based on distance to principal point and pitch in degrees.
 
         :param camera_distance: Camera distance to projected principal point
         :param camera_pitch: Camera pitch in degrees
         :return:
         """
-        # TODO: use rotation from decomposeHomography for getting the pitch in this case (use visual info, not from sensors)
-        camera_altitude = math.cos(math.radians(camera_pitch)) * camera_distance
+        if camera_pitch >= 0:
+            self.get_logger().warn(f'Camera pitch {camera_pitch} is positive (not facing ground). Cannot compute '
+                                   f'camera altitude from distance.')
+            return None
+
+        if abs(camera_pitch) > 90:
+            self.get_logger().error(f'Absolute camera pitch {camera_pitch} is unexpectedly higher than 90 degrees. '
+                                    f'Cannot compute camera altitude from distance.')
+            return None
+
+        if camera_distance < 0:
+            self.get_logger().error(f'Camera distance {camera_distance} is unexpectedly negative. '
+                                    f'Cannot compute camera altitude from distance.')
+            return None
+
+        map_update_max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
+        match_max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
+        camera_pitch_from_nadir = 90 + camera_pitch
+        if camera_pitch_from_nadir > map_update_max_pitch or camera_pitch_from_nadir > match_max_pitch:
+            self.get_logger().warn(f'Camera pitch from nadir {camera_pitch_from_nadir} is higher than one of max pitch '
+                                   f'limits (map_update.max_pitch: {map_update_max_pitch}, misc.max_pitch). Are you '
+                                   f'sure you want to compute camera distance to principal point projected to ground?.')
+
+        camera_altitude = np.cos(np.radians(-camera_pitch)) * camera_distance  # Negate pitch to get positive altitude
         return camera_altitude
 
     # TODO: this is "set" camera pitch, not real cmaera pitch so will not work in all cases
@@ -2217,7 +2352,7 @@ class MapNavNode(Node):
         self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
         return local_origin
 
-    def _compute_local_frame_position(self, position: LatLonAlt, origin: LatLonAlt) -> Tuple[float, float, float]:
+    def _compute_local_frame_position(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
         """Computes position of WGS84 coordinates in local frame coordinates
 
         :param origin: WGS84 coordiantes of local frame origin
@@ -2237,7 +2372,9 @@ class MapNavNode(Node):
         lon_diff = math.copysign(dist[0], position.lon - origin.lon)
 
         alt = position.alt - origin.alt
-        assert alt >= 0
+        if alt < 0:
+            self.get_logger().warn(f'Computed altitude {alt} was negative. Cannot compute local frame position.')
+            return None
 
         return lat_diff, lon_diff, -alt
 
@@ -2272,7 +2409,7 @@ class MapNavNode(Node):
             return None
 
     # TODO: remove many redundant arguments (camera_pitch etc. when they are estimated visually, and vehicle_Rpy when vehicle_attitude is provided instead)
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
+    def _process_matches_old(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          camera_info: CameraInfo, camera_normal: np.ndarray, camera_yaw: float,
                          vehicle_attitude: Rotation, vehicle_rpy: RPY, map_dim_with_padding: Dim, img_dim: Dim, restrict_affine: bool,
                          local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
@@ -2288,8 +2425,8 @@ class MapNavNode(Node):
         :param image_frame: The drone image
         :param map_frame: The map raster
         :param camera_info: CameraInfo from time of match (from _match_inputs)
-        :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)
-        :param camera_yaw: Camera yaw in degrees from time of match (from _match_inputs)
+        :param camera_normal: Camera normal unit vector from time of match (from _match_inputs)  # TODO: this is currently set camera normal but not real camera normal! Affects homography decomposition!
+        :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # Maybe rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
         :param vehicle_rpy: Vehicle roll, pitch and yaw in degrees from time of match (from _match_inputs)
         :param vehicle_attitude: Vehicle attitude
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
@@ -2300,26 +2437,57 @@ class MapNavNode(Node):
 
         :return:
         """
-        if len(mkp_img) < self.MINIMUM_MATCHES:
-            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.MINIMUM_MATCHES} required. Skip frame.')
+        if len(mkp_img) < self.HOMOGRAPHY_MINIMUM_MATCHES:
+            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.HOMOGRAPHY_MINIMUM_MATCHES} required. '
+                                   f'Skipping frame.')
             return None
 
-        # Find and decompose homography matrix, do some sanity checks
-        # TODO: do we need to compute all positions for all 4 options because we don't know true camera normal??? Or just use best guess set gimbal attitude as we are now?
+        #  1. Homography & Pose Decomposition: Find and decompose homography matrix to get pose
         k = camera_info.k.reshape([3, 3])
-        h, _, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,  # TODO: get real camera normal? How can we trust this if we don't know what the real pitch is?
+        h, _, t, r = self._find_and_decompose_homography(mkp_img, mkp_map, k, camera_normal,
                                                          restrict_affine=restrict_affine)
 
-        # TODO: get rotation from rotation matrix and print it, test it out in simulator and go from there
-        # TODO: this is not the NED rotation, this needs to be inverse-rotated!
-        camera_rotation = Rotation.from_matrix(r)
-        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
-        camera_rpy = self._rotation_to_rpy(camera_rotation) # TODO: this is the rotation with pitch and roll but withoyt yaw because the map was rotated! So would need to add a yaw rotation to this thing!
-        self.get_logger().info(f'Visually estimated camera RPY: {camera_rpy}.')
+        # A: Transform homography from pixel space to WGS84 space
+        map_src_corners = create_src_corners(img_dim.height, img_dim.width)
+        map_dst_corners, _, __ = pix_to_wgs84(map_src_corners, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim, uncrop=False)
+        print(map_src_corners)
+        print(map_dst_corners)
+        m = cv2.getPerspectiveTransform(map_src_corners, map_dst_corners)
+        hm = m @ h  # Image pixels to WGS84
+        H = hm @ np.linalg.inv(m)  # Homography in WGS84 equivalent coordinates
+        T, R = self._decompose_homography(H, k, camera_normal)
 
-        # TODO: estimate camera_pitch from camera_rpy and replace the arg pitch with it and you're good!
-        camera_pitch = 90 + camera_rpy.pitch  #TODO: need to fix camera axes!
-        print(f'camera pitch process mathces {camera_pitch}')
+        # B: Compute field of view
+        fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
+        fov_wgs84, c_wgs84 = get_fov_and_c(image_frame.image, hm)
+
+        # 2. FOV: Compute camera field of view (FOV) & principal point in WGS84 coordinates
+        # Here we need to reverse the map cropping and rotation that was done earlier to get WGS84 coordinates
+        fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
+        fov_and_c_pix = np.vstack(fov_pix, c_pix)
+        fov_and_c_wgs84, _, __ = pix_to_wgs84(fov_and_c_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
+        fov_wgs84, c_wgs84 = np.vsplit(fov_and_c_wgs84, [-1])
+        image_frame.fov = fov_wgs84
+        if map_cropped is not None:
+            # Optional visualization of matched keypoints and field of view boundary
+            visualize_homography('Keypoint matches and FOV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
+
+        # 3. Gimbal Attitude: Compute gimbal attitude from estimated field of view
+        gimbal_attitude = Rotation.from_matrix(r)  # in rotated map frame
+        assert -np.pi <= camera_yaw <= np.pi  # should be radians
+        reverse_yaw_rotation = self._rpy_to_rotation(RPY(0, 0, -camera_yaw))
+        gimbal_attitude = gimbal_attitude.apply(reverse_yaw_rotation)  # in NED frame
+        gimbal_rpy = self._rotation_to_rpy(gimbal_attitude)
+        self.get_logger().info(f'Visually estimated camera RPY: {gimbal_rpy}.')
+
+        # 4. Estimate Scale: Estimate camera distance to what it is seeing to get altitude & scaling for translation
+        fx, fy = k[0][0], k[1][1]
+        if (fx - fy) / fx > self.FOCAL_LENGTH_DIFF_THRESHOLD:
+            self.get_logger().debug(f'Difference in focal lengths fx: {fx} and fy: {fy} is greater than set threshold '
+                                    f'{self.FOCAL_LENGTH_DIFF_THRESHOLD * 100}%.')
+        camera_distance = self._estimate_camera_distance_to_c(fov_wgs84, c_wgs84, gimbal_rpy.yaw, fx, img_dim)
+        camera_altitude = self._compute_camera_altitude(camera_distance, gimbal_rpy.pitch)
+        self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
         # TODO: transform rotrpy axes and invert the yaw to get absolute Rotation in same frame as the other Rotations
         # Estimate true gimbal rotation
@@ -2329,22 +2497,17 @@ class MapNavNode(Node):
 
         # TODO: get camera_pitch, yaw etc. from visually estimated data, not the old arguments
 
-        # This block 1. computes fov in WGS84 and attaches it to image_frame, and 3. visualizes homography
-        # Convert pixel field of view into WGS84 coordinates, save it to the image frame, visualize the pixels
-        fov_pix = get_fov(image_frame.image, h)
-        if map_cropped is not None:
-            visualize_homography('Matches and FoV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
-        fov_wgs84, fov_uncropped, fov_unrotated = convert_from_pix_to_wgs84(
-            fov_pix, map_dim_with_padding, map_frame.bbox, camera_yaw, img_dim)
-        image_frame.fov = fov_wgs84
+
 
         # Compute camera altitude, and distance to principal point using triangle similarity
         # TODO: _update_map or _project_gimbal_fov_center has similar logic used in gimbal fov projection, try to combine
         assert k[0][0] == k[1][1]
-        camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
-        camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
+        #camera_distance = self._compute_camera_distance(fov_wgs84, k[0][0], img_dim)
+        #camera_altitude = self._compute_camera_altitude(camera_distance, camera_pitch)
+        camera_altitude = self._compute_camera_altitude(fov_wgs84, k, gimbal_attitude)  # Need field of view in global coordinats
         self.get_logger().debug(f'Computed camera distance {camera_distance}, altitude {camera_altitude}.')
 
+        # Compute translation vector in NED frame by unrotating
         # TODO: recompute this using new parameters, real yaw, real pitch etc.
         t_rotated = rotate_point(math.radians(camera_yaw), Dim(0, 0), t)  # TODO: do checks on inputs that they are not none # Ugly API call, rotate around 0,0
         t_rotated = np.array((t_rotated[0][0], t_rotated[1][0])) # TODO: clean up rotate_point API!
@@ -2388,6 +2551,195 @@ class MapNavNode(Node):
         assert_len(covariance_urt, 21)
 
         self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
+
+        export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
+        if export_geojson is not None:
+            self._export_position(image_frame.position, image_frame.fov, export_geojson)
+
+    def _gimbal_is_stable(self, gimbal_attitude: Rotation) -> bool:
+        """Returns True if difference between gimbal and vehilce NED frame attitudes matches gimbal set attitude.
+
+        This is needed because :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` is assumed to be unknown.
+
+        :param gimbal_attitude: Gimbal attitude in NED frame
+        :return: True if gimbal has stabilized (gimbal attitude matches set attitude)
+        """
+        # TODO: need to make sure gimbal attitude is in same frame of reference as set_attitude (different sources so maybe not!)
+        set_attitude = self._gimbal_device_set_compound_attitude()
+        if __debug__:
+            difference = set_attitude * gimbal_attitude.inv()
+            difference_rpy = self._rotation_to_rpy(difference)
+            self.get_logger().info(f'Gimbal difference to stable: {difference_rpy}')
+        return set_attitude == gimbal_attitude
+
+    def _estimate_gimbal_relative_attitude(self, gimbal_attitude: Rotation) -> Optional[Rotation]:
+        """Estimates gimbal attitude in body frame."""
+        set_compound_attitude = self._gimbal_device_set_compound_attitude()
+        if set_compound_attitude is None:
+            self.get_logger().warn(f'Gimbal set compound attitude not available, cannot estimate gimbal attitude.')
+            return None
+        difference = set_compound_attitude * gimbal_attitude.inv()
+        set_attitude = self._get_gimbal_set_attitude()
+        if set_compound_attitude is None:
+            self.get_logger().warn(f'Gimbal set compound attitude not available, cannot estimate gimbal attitude.')
+            return None
+        attitude = set_attitude * difference
+
+        return attitude
+
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
+                         k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,
+                         vehicle_attitude: Rotation, map_dim_with_padding: Dim, img_dim: Dim,
+                         local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
+            -> None:
+        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
+        message.
+
+        Computes vehicle position and attitude in vehicle local frame. The API for this method is designed so that the
+        dictionary returned by :meth:`~_match_inputs` can be passed onto this method as keyword arguments (**kwargs).
+
+        :param mkp_img: Matching keypoints in drone image
+        :param mkp_map: Matching keypoints in map raster
+        :param image_frame: The drone image
+        :param map_frame: The map raster
+        :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
+        :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # Maybe rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
+        :param gimbal_set_attitude: Gimbal set attitude
+        :param vehicle_attitude: Vehicle attitude
+        :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
+        :param img_dim: Drone image dimensions from time of match (from _match_inputs)
+        :param local_frame_origin_position: Local frame origin coordinates from time of match (from _match_inputs)
+        :param map_cropped: Optional map cropped image, visualizes matches if provided
+
+        :return:
+        """
+        if len(mkp_img) < self.HOMOGRAPHY_MINIMUM_MATCHES:
+            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.HOMOGRAPHY_MINIMUM_MATCHES} required. '
+                                   f'Skipping frame.')
+            return None
+
+        assert_shape(k, (3, 3))
+
+        print(k)
+
+        # Transforms from rotated and cropped map pixel coordinates to WGS84
+        pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
+            map_dim_with_padding, map_frame.bbox, -camera_yaw, img_dim)
+
+        # Estimate extrinsic and homography matrices
+        padding = np.array([[0]]*len(mkp_img))
+        #mkp_img_3d = np.hstack((mkp_img, padding))  # Set all z-coordinates to zero
+        mkp_map_3d = np.hstack((mkp_map, padding))  # Set all z-coordinates to zero
+        dist_coeffs = np.zeros((4, 1))
+        #_, r, t, __ = cv2.solvePnPRansac(mkp_img_3d, mkp_map, k, dist_coeffs, iterationsCount=10)
+        _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, iterationsCount=10)
+        r, _ = cv2.Rodrigues(r)
+        e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
+        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
+        #pos2 = -r.T * t  # Inverse extrinsic (for computing camera position in object coordinates)
+        #h = k @ np.delete(e, 2, 1)  # Remove z-column (depth) and multiply by intrinsics to get homography matrix
+        h = np.linalg.inv(k @ np.delete(e, 2, 1))  # Remove z-column (depth) and multiply by intrinsics to get homography matrix
+        self.get_logger().info(f'Estimated translation: {t}.')
+        self.get_logger().info(f'Estimated position: {pos}.')
+        #self.get_logger().info(f'Estimated position 2: {pos2}.')
+
+
+        # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
+        h_wgs84 = pix_to_wgs84_ @ h
+        fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
+        fov_wgs84, c_wgs84 = get_fov_and_c(image_frame.image, h_wgs84)
+        if map_cropped is not None:
+            # Optional visualization of matched keypoints and field of view boundary
+            visualize_homography('Keypoint matches and FOV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
+        image_frame.fov = fov_wgs84
+        self.get_logger().info(f'Estimated c_pix: {c_pix}.')  # Should be 0,0
+        self.get_logger().info(f'Estimated c_wgs84: {c_wgs84}.')
+
+        # Compute altitude scaling:
+        # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
+        # find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
+        # of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
+        # the corresponding WGS84 latitude and latitude coordinates.
+        #distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
+        distance_in_pixels = img_dim.width
+        distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
+                                            LatLon(*fov_wgs84[2].squeeze().tolist()))
+        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
+        #print(f'pix dist {distance_in_pixels}')
+        #print(f'meter dist {distance_in_meters}')
+        self.get_logger().info(f'Estimated altitude scaling: {altitude_scaling}.')
+
+        # Translation in WGS84
+        #t_wgs84 = pix_to_wgs84_ @ np.append(-t[0:2], 1)  # z-component must be 1 when using pix_to_wgs84_
+        #t_wgs84[2] = altitude_scaling * t[2]
+
+        #t_horizontal = t[0:2]
+        #t_wgs84 = cv2.perspectiveTransform(-t_horizontal.reshape(-1, 1, 2), h_wgs84).reshape(t_horizontal.shape)
+        #t_wgs84 = np.append(t_wgs84, altitude_scaling * t[2])
+
+        t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
+        t_wgs84[2] = -pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
+
+        self.get_logger().info(f'Estimated translation in WGS84: {t_wgs84}.')
+        image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: should just ditch LatLonAlt and keep numpy arrays?
+        self.get_logger().info(f'Estimated latlon position: {image_frame.position}.')
+
+        # Check that we have everything we need to publish vehicle_visual_odometry
+        if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
+            self.get_logger().debug(f'Could not determine global position. Cannot create vehicle visual odometry '
+                                    f'message.')
+            return None
+
+        # If no GPS available, local frame origin must be computed (or retrieved from memory if it was computed earlier)
+        if local_frame_origin_position is None:
+            if self._local_origin is None:
+                self._local_origin = self._compute_local_frame_origin(image_frame.position)
+            local_frame_origin_position = self._local_origin
+
+        # Compute camera position in local frame
+        local_position = self._compute_local_frame_position(image_frame.position, local_frame_origin_position)
+        if local_position is None:
+            self.get_logger().debug(f'Could not determine local position. Cannot create vehicle visual odometry '
+                                    f'message.')
+            return None
+        self.get_logger().debug(f'Local frame position: {local_position}, origin ref position '
+                                f'{local_frame_origin_position}.')
+
+        # Convert estimated rotation to attitude quaternion for publishing
+        gimbal_attitude = Rotation.from_matrix(r)  # in rotated map frame
+        gimbal_rpy = self._rotation_to_rpy(gimbal_attitude)
+        assert -np.pi <= camera_yaw <= np.pi  # should be radians
+        quaternion = gimbal_attitude.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
+        self.get_logger().info(f'Visually estimated camera RPY: {gimbal_rpy}.')
+
+        # 8. Estimate vehicle attitude
+        # Challenge here is to figure out real gimbal attitude versus vehicle body frame
+        # We only know the gimbal set relative attitude but do not know real relative attitude vs. vehicle body
+        # This happens typically when there are large sudden changes to vehicle pitch or roll and gimbal has not yet stabilized
+        # Adjust gimbal_set_attitude by difference between what is visually seen and what the setting value is
+        # The difference can be either gimbal attitude not being at setting value, or vehicle true attitude not being
+        # local position message is telling us. Assume local position attitude numbers are accurate, gimbal_difference
+        # is due to gimbal not yet being stabilized.
+        gimbal_difference = vehicle_attitude * gimbal_set_attitude * gimbal_attitude.inv()
+        vehicle_attitude_estimate = gimbal_attitude * (gimbal_set_attitude * gimbal_difference).inv()
+
+        vehicle_estimate_rpy = self._rotation_to_rpy(vehicle_attitude_estimate)
+
+        if vehicle_estimate_rpy is not None:
+            # Update covariance data window and check if covariance matrix is available
+            # Do not create message if covariance matrix not yet available
+            # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
+            assert_type(int, image_frame.timestamp)
+            vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_estimate_rpy))
+            self._push_covariance_data(local_position, vehicle_rpy_radians)
+            if not self._covariance_window_full():
+                self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
+                                       'Skipping creating vehicle_visual_odometry message for now.')
+            else:
+                covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
+                covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
+                assert_len(covariance_urt, 21)
+                self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

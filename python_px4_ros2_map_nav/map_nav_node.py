@@ -2661,7 +2661,7 @@ class MapNavNode(Node):
         # of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
         # the corresponding WGS84 latitude and latitude coordinates.
         #distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        distance_in_pixels = img_dim.width
+        distance_in_pixels = img_dim.width  # TODO: use the above line or this line?
         distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
                                             LatLon(*fov_wgs84[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)

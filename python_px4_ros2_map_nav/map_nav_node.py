@@ -2408,37 +2408,6 @@ class MapNavNode(Node):
             # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
             return None
 
-    def _gimbal_is_stable(self, gimbal_attitude: Rotation) -> bool:
-        """Returns True if difference between gimbal and vehilce NED frame attitudes matches gimbal set attitude.
-
-        This is needed because :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` is assumed to be unknown.
-
-        :param gimbal_attitude: Gimbal attitude in NED frame
-        :return: True if gimbal has stabilized (gimbal attitude matches set attitude)
-        """
-        # TODO: need to make sure gimbal attitude is in same frame of reference as set_attitude (different sources so maybe not!)
-        set_attitude = self._gimbal_device_set_compound_attitude()
-        if __debug__:
-            difference = set_attitude * gimbal_attitude.inv()
-            difference_rpy = self._rotation_to_rpy(difference)
-            self.get_logger().info(f'Gimbal difference to stable: {difference_rpy}')
-        return set_attitude == gimbal_attitude
-
-    def _estimate_gimbal_relative_attitude(self, gimbal_attitude: Rotation) -> Optional[Rotation]:
-        """Estimates gimbal attitude in body frame."""
-        set_compound_attitude = self._gimbal_device_set_compound_attitude()
-        if set_compound_attitude is None:
-            self.get_logger().warn(f'Gimbal set compound attitude not available, cannot estimate gimbal attitude.')
-            return None
-        difference = set_compound_attitude * gimbal_attitude.inv()
-        set_attitude = self._get_gimbal_set_attitude()
-        if set_compound_attitude is None:
-            self.get_logger().warn(f'Gimbal set compound attitude not available, cannot estimate gimbal attitude.')
-            return None
-        attitude = set_attitude * difference
-
-        return attitude
-
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,
                          vehicle_attitude: Rotation, map_dim_with_padding: Dim, img_dim: Dim,

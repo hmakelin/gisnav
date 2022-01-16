@@ -2496,6 +2496,7 @@ class MapNavNode(Node):
         # If no GPS available, local frame origin must be computed (or retrieved from memory if it was computed earlier)
         if local_frame_origin_position is None:
             if self._local_origin is None:
+                # TODO: need to change some flag in outgoing VVO message if we are using our own local frame?
                 self._local_origin = self._compute_local_frame_origin(image_frame.position)
             local_frame_origin_position = self._local_origin
 
@@ -2509,24 +2510,20 @@ class MapNavNode(Node):
                                 f'{local_frame_origin_position}.')
 
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_attitude = Rotation.from_matrix(r)  # in rotated map frame
-        gimbal_rpy = self._rotation_to_rpy(gimbal_attitude)
+        gimbal_estimated_attitude = Rotation.from_matrix(r)  # in rotated map frame
+        gimbal_rpy = self._rotation_to_rpy(gimbal_estimated_attitude)
         assert -np.pi <= camera_yaw <= np.pi  # should be radians
-        quaternion = gimbal_attitude.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
         self.get_logger().info(f'Visually estimated camera RPY: {gimbal_rpy}.')
 
         # 8. Estimate vehicle attitude
-        # Challenge here is to figure out real gimbal attitude versus vehicle body frame
-        # We only know the gimbal set relative attitude but do not know real relative attitude vs. vehicle body
-        # This happens typically when there are large sudden changes to vehicle pitch or roll and gimbal has not yet stabilized
-        # Adjust gimbal_set_attitude by difference between what is visually seen and what the setting value is
-        # The difference can be either gimbal attitude not being at setting value, or vehicle true attitude not being
-        # local position message is telling us. Assume local position attitude numbers are accurate, gimbal_difference
-        # is due to gimbal not yet being stabilized.
-        gimbal_difference = vehicle_attitude * gimbal_set_attitude * gimbal_attitude.inv()
-        vehicle_attitude_estimate = gimbal_attitude * (gimbal_set_attitude * gimbal_difference).inv()
+        # If the gimbal has not yet stabilized, the max error in our vehicle attitude estimate is the difference between
+        # visually estimated gimbal attitude and what it should be if gimbal were stabilized at its attitude setting
+        vehicle_attitude_max_error = (vehicle_attitude * gimbal_set_attitude) * gimbal_estimated_attitude.inv()
+        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv()
 
         vehicle_estimate_rpy = self._rotation_to_rpy(vehicle_attitude_estimate)
+        self.get_logger().info(f'Visually estimated vehicle RPY: {vehicle_estimate_rpy}.')
+        quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
 
         if vehicle_estimate_rpy is not None:
             # Update covariance data window and check if covariance matrix is available

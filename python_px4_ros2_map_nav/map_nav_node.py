@@ -2660,13 +2660,10 @@ class MapNavNode(Node):
         # find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
         # of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
         # the corresponding WGS84 latitude and latitude coordinates.
-        #distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        distance_in_pixels = img_dim.width  # TODO: use the above line or this line?
+        distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
         distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
                                             LatLon(*fov_wgs84[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
-        #print(f'pix dist {distance_in_pixels}')
-        #print(f'meter dist {distance_in_meters}')
         self.get_logger().info(f'Estimated altitude scaling: {altitude_scaling}.')
 
         # Translation in WGS84
@@ -2678,7 +2675,7 @@ class MapNavNode(Node):
         #t_wgs84 = np.append(t_wgs84, altitude_scaling * t[2])
 
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
-        t_wgs84[2] = -pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
+        t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
         self.get_logger().info(f'Estimated translation in WGS84: {t_wgs84}.')
         image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: should just ditch LatLonAlt and keep numpy arrays?

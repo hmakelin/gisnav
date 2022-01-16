@@ -1467,18 +1467,19 @@ class MapNavNode(Node):
         euler = rotation.as_euler(self.EULER_SEQUENCE_VISUAL)
         # TODO: these are different from quat_to_rpy and rpy_to_quat which are used for px4's attitude quats!
 
-        roll = euler[2]
-        pitch = euler[0] - np.pi/2
-        yaw = -euler[1]
+        #roll = euler[2]
+        #pitch = euler[0] - np.pi/2
+        #yaw = -euler[1]
 
-        self.get_logger().info(f'_rotation_to_rpy: {roll, pitch, yaw}.')
+        #self.get_logger().info(f'_rotation_to_rpy: {roll, pitch, yaw}.')
 
         # TODO: should these be inclusive of upper bound?
         #assert -np.pi <= roll <= np.pi
         #assert -np.pi/2 <= pitch <= np.pi/2
         #assert 0 <= yaw <= 2*np.pi
 
-        rpy = RPY(roll, pitch, yaw)
+        #rpy = RPY(roll, pitch, yaw)
+        rpy = RPY(*euler)
         if degrees:
             rpy = RPY(*tuple(map(np.degrees(rpy))))
 
@@ -2430,7 +2431,7 @@ class MapNavNode(Node):
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param local_frame_origin_position: Local frame origin coordinates from time of match (from _match_inputs)
-        :param map_cropped: Optional map cropped image, visualizes matches if provided
+        :param map_cropped: Optional map cropped image # TODO: currently does not do anything here!
 
         :return:
         """
@@ -2461,9 +2462,6 @@ class MapNavNode(Node):
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
         fov_wgs84, c_wgs84 = get_fov_and_c(image_frame.image, h_wgs84)
-        if map_cropped is not None:
-            # Optional visualization of matched keypoints and field of view boundary
-            visualize_homography('Keypoint matches and FOV', image_frame.image, map_cropped, mkp_img, mkp_map, fov_pix)
         image_frame.fov = fov_wgs84
         self.get_logger().info(f'Estimated c_pix: {c_pix}.')  # Should be 0,0
         self.get_logger().info(f'Estimated c_wgs84: {c_wgs84}.')
@@ -2510,7 +2508,9 @@ class MapNavNode(Node):
                                 f'{local_frame_origin_position}.')
 
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(r)  # in rotated map frame
+        #gimbal_estimated_attitude = Rotation.from_matrix(r)  # in rotated map frame
+        #gimbal_estimated_attitude = Rotation.from_matrix(uncropped_to_unrotated @ pix_to_uncropped @ h @ r) # uncropped_to_unrotated @ r # in original map frame (NED)
+        gimbal_estimated_attitude = Rotation.from_matrix(-uncropped_to_unrotated @ r.T) # invert to get cropped and rotaed map system, then do uncropped_to_unrotated to get original map system
         gimbal_rpy = self._rotation_to_rpy(gimbal_estimated_attitude)
         assert -np.pi <= camera_yaw <= np.pi  # should be radians
         self.get_logger().info(f'Visually estimated camera RPY: {gimbal_rpy}.')
@@ -2521,9 +2521,21 @@ class MapNavNode(Node):
         vehicle_attitude_max_error = (vehicle_attitude * gimbal_set_attitude) * gimbal_estimated_attitude.inv()
         vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv()
 
+        self.get_logger().info(f'Estimate max error RPY: {self._rotation_to_rpy(vehicle_attitude_max_error)}.')
+
         vehicle_estimate_rpy = self._rotation_to_rpy(vehicle_attitude_estimate)
-        self.get_logger().info(f'Visually estimated vehicle RPY: {vehicle_estimate_rpy}.')
         quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
+
+        gimbal_rpy_text = f'Gimbal roll: {round(gimbal_rpy.roll, 3)}, pitch: {round(gimbal_rpy.pitch, 3)}, ' \
+                          f'yaw: {round(gimbal_rpy.yaw, 3)}.'
+        vehicle_rpy_text = f'Vehicle roll: {round(vehicle_estimate_rpy.roll, 3)}, pitch: ' \
+                           f'{round(vehicle_estimate_rpy.pitch, 3)}, yaw: {round(vehicle_estimate_rpy.yaw, 3)}.'
+
+        #if map_cropped is not None:
+        if __debug__:
+            # Visualization of matched keypoints and field of view boundary
+            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, vehicle_rpy_text, image_frame.image,
+                                 map_cropped, mkp_img, mkp_map, fov_pix)
 
         if vehicle_estimate_rpy is not None:
             # Update covariance data window and check if covariance matrix is available
@@ -2536,6 +2548,8 @@ class MapNavNode(Node):
                 self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
                                        'Skipping creating vehicle_visual_odometry message for now.')
             else:
+                # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
+                #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
                 covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
                 covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
                 assert_len(covariance_urt, 21)

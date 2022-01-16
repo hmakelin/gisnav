@@ -2620,29 +2620,21 @@ class MapNavNode(Node):
 
         assert_shape(k, (3, 3))
 
-        print(k)
-
         # Transforms from rotated and cropped map pixel coordinates to WGS84
         pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
             map_dim_with_padding, map_frame.bbox, -camera_yaw, img_dim)
 
         # Estimate extrinsic and homography matrices
         padding = np.array([[0]]*len(mkp_img))
-        #mkp_img_3d = np.hstack((mkp_img, padding))  # Set all z-coordinates to zero
         mkp_map_3d = np.hstack((mkp_map, padding))  # Set all z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
-        #_, r, t, __ = cv2.solvePnPRansac(mkp_img_3d, mkp_map, k, dist_coeffs, iterationsCount=10)
         _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
-        #pos2 = -r.T * t  # Inverse extrinsic (for computing camera position in object coordinates)
-        #h = k @ np.delete(e, 2, 1)  # Remove z-column (depth) and multiply by intrinsics to get homography matrix
-        h = np.linalg.inv(k @ np.delete(e, 2, 1))  # Remove z-column (depth) and multiply by intrinsics to get homography matrix
+        h = np.linalg.inv(k @ np.delete(e, 2, 1))  # Remove z-column (depth) and multiply by intrinsics, then invert to get homography matrix from img to map
         self.get_logger().info(f'Estimated translation: {t}.')
         self.get_logger().info(f'Estimated position: {pos}.')
-        #self.get_logger().info(f'Estimated position 2: {pos2}.')
-
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h
@@ -2667,13 +2659,6 @@ class MapNavNode(Node):
         self.get_logger().info(f'Estimated altitude scaling: {altitude_scaling}.')
 
         # Translation in WGS84
-        #t_wgs84 = pix_to_wgs84_ @ np.append(-t[0:2], 1)  # z-component must be 1 when using pix_to_wgs84_
-        #t_wgs84[2] = altitude_scaling * t[2]
-
-        #t_horizontal = t[0:2]
-        #t_wgs84 = cv2.perspectiveTransform(-t_horizontal.reshape(-1, 1, 2), h_wgs84).reshape(t_horizontal.shape)
-        #t_wgs84 = np.append(t_wgs84, altitude_scaling * t[2])
-
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 

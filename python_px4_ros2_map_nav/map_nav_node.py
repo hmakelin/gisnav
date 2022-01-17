@@ -1524,12 +1524,12 @@ class MapNavNode(Node):
 
         :return: Vehicle attitude or None if not available
         """
-        if self._vehicle_attitude is None:
+        if self._gimbal_device_set_attitude is None:
             self.get_logger().warn('No VehicleAttitude message has been received yet.')
             return None
         else:
-            vehicle_attitude = Rotation.from_quat(self._vehicle_attitude.q)
-            return vehicle_attitude
+            gimbal_set_attitude = Rotation.from_quat(self._gimbal_device_set_attitude.q)
+            return gimbal_set_attitude
 
     def _get_gimbal_set_compound_attitude(self) -> Optional[Rotation]:
         """Returns gimbal set compound attitude or None if it cannot be computed
@@ -2516,10 +2516,6 @@ class MapNavNode(Node):
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
-
-        gimbal_rpy = gimbal_estimated_attitude.as_euler('XYZ')  # Or just use XYZ?
-        gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
-
         # 8. Estimate vehicle attitude
         # If the gimbal has not yet stabilized, the max error in our vehicle attitude estimate is the difference between
         # visually estimated gimbal attitude and what it should be if gimbal were stabilized at its attitude setting
@@ -2529,18 +2525,30 @@ class MapNavNode(Node):
         self.get_logger().info(f'Estimate max error RPY: {self._rotation_to_rpy(vehicle_attitude_max_error)}.')
 
         vehicle_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')  # Or just use XYZ?
-        vehicle_estimate_rpy_deg = RPY(*vehicle_attitude_estimate.as_euler('XYZ', degrees=True))
         quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
 
-        gimbal_rpy_text = f'Gimbal roll: {round(gimbal_rpy_deg.roll, 3)}, pitch: {round(gimbal_rpy_deg.pitch, 3)}, ' \
-                          f'yaw: {round(gimbal_rpy_deg.yaw, 3)}.'
-        vehicle_rpy_text = f'Vehicle roll: {round(vehicle_estimate_rpy_deg.roll, 3)}, pitch: ' \
-                           f'{round(vehicle_estimate_rpy_deg.pitch, 3)}, yaw: {round(vehicle_estimate_rpy_deg.yaw, 3)}.'
-
-        #if map_cropped is not None:
+        # noinspection PyUnreachableCode
         if __debug__:
             # Visualization of matched keypoints and field of view boundary
-            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, vehicle_rpy_text, image_frame.image,
+            number_str_len = 7
+            accuracy = 2
+            gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
+            gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
+                              f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                              f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+
+            g_set_rpy_deg = RPY(*gimbal_set_attitude.as_euler('xyz', degrees=True))  # intrinsic
+            g_set_rpy_deg = f'G. set roll: {str(round(g_set_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
+                                 f'pitch: {str(round(g_set_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                                 f'yaw: {str(round(g_set_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+
+            vehicle_rpy_deg = RPY(*vehicle_attitude_estimate.as_euler('XYZ', degrees=True))
+            vehicle_rpy_text = f'Vehicle roll: {str(round(vehicle_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
+                               f'pitch: {str(round(vehicle_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                               f'yaw: {str(round(vehicle_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+
+            display_text = f'{gimbal_rpy_text}\n{g_set_rpy_deg}\n{vehicle_rpy_text}'
+            visualize_homography('Keypoint matches and FOV', display_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
         if vehicle_estimate_rpy is not None:

@@ -1464,7 +1464,7 @@ class MapNavNode(Node):
         """
         # Convert to Euler angles and re-arrange axes
         assert self.EULER_SEQUENCE_VISUAL == 'xyz'
-        euler = rotation.as_euler(self.EULER_SEQUENCE_VISUAL)
+        euler = rotation.as_euler('XYZ')  # self.EULER_SEQUENCE_VISUAL)
         # TODO: these are different from quat_to_rpy and rpy_to_quat which are used for px4's attitude quats!
 
         #roll = euler[2]
@@ -1481,7 +1481,7 @@ class MapNavNode(Node):
         #rpy = RPY(roll, pitch, yaw)
         rpy = RPY(*euler)
         if degrees:
-            rpy = RPY(*tuple(map(np.degrees(rpy))))
+            rpy = RPY(*tuple(map(np.degrees, rpy)))
 
         return rpy
 
@@ -2448,7 +2448,7 @@ class MapNavNode(Node):
 
         # Estimate extrinsic and homography matrices
         padding = np.array([[0]]*len(mkp_img))
-        mkp_map_3d = np.hstack((mkp_map, padding))  # Set all z-coordinates to zero
+        mkp_map_3d = np.hstack((mkp_map, padding))  # Set all world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
         _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
@@ -2508,28 +2508,34 @@ class MapNavNode(Node):
                                 f'{local_frame_origin_position}.')
 
         # Convert estimated rotation to attitude quaternion for publishing
-        #gimbal_estimated_attitude = Rotation.from_matrix(r)  # in rotated map frame
-        #gimbal_estimated_attitude = Rotation.from_matrix(uncropped_to_unrotated @ pix_to_uncropped @ h @ r) # uncropped_to_unrotated @ r # in original map frame (NED)
-        gimbal_estimated_attitude = Rotation.from_matrix(-uncropped_to_unrotated @ r.T) # invert to get cropped and rotaed map system, then do uncropped_to_unrotated to get original map system
-        gimbal_rpy = self._rotation_to_rpy(gimbal_estimated_attitude)
-        assert -np.pi <= camera_yaw <= np.pi  # should be radians
-        self.get_logger().info(f'Visually estimated camera RPY: {gimbal_rpy}.')
+        gimbal_estimated_attitude = Rotation.from_matrix(r.T)  # in rotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
+        gimbal_estimated_attitude *= Rotation.from_rotvec(camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
+
+        # Re-arrange axes from unrotated (original) map pixel frame to NED frame
+        rotvec = gimbal_estimated_attitude.as_rotvec()
+        gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
+
+
+        gimbal_rpy = gimbal_estimated_attitude.as_euler('XYZ')  # Or just use XYZ?
+        gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
 
         # 8. Estimate vehicle attitude
         # If the gimbal has not yet stabilized, the max error in our vehicle attitude estimate is the difference between
         # visually estimated gimbal attitude and what it should be if gimbal were stabilized at its attitude setting
         vehicle_attitude_max_error = (vehicle_attitude * gimbal_set_attitude) * gimbal_estimated_attitude.inv()
-        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv()
+        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv() * Rotation.from_rotvec(np.pi * np.array([1, 0, 0]))  # Roll 180  gimbal
 
         self.get_logger().info(f'Estimate max error RPY: {self._rotation_to_rpy(vehicle_attitude_max_error)}.')
 
-        vehicle_estimate_rpy = self._rotation_to_rpy(vehicle_attitude_estimate)
+        vehicle_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')  # Or just use XYZ?
+        vehicle_estimate_rpy_deg = RPY(*vehicle_attitude_estimate.as_euler('XYZ', degrees=True))
         quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
 
-        gimbal_rpy_text = f'Gimbal roll: {round(gimbal_rpy.roll, 3)}, pitch: {round(gimbal_rpy.pitch, 3)}, ' \
-                          f'yaw: {round(gimbal_rpy.yaw, 3)}.'
-        vehicle_rpy_text = f'Vehicle roll: {round(vehicle_estimate_rpy.roll, 3)}, pitch: ' \
-                           f'{round(vehicle_estimate_rpy.pitch, 3)}, yaw: {round(vehicle_estimate_rpy.yaw, 3)}.'
+        gimbal_rpy_text = f'Gimbal roll: {round(gimbal_rpy_deg.roll, 3)}, pitch: {round(gimbal_rpy_deg.pitch, 3)}, ' \
+                          f'yaw: {round(gimbal_rpy_deg.yaw, 3)}.'
+        vehicle_rpy_text = f'Vehicle roll: {round(vehicle_estimate_rpy_deg.roll, 3)}, pitch: ' \
+                           f'{round(vehicle_estimate_rpy_deg.pitch, 3)}, yaw: {round(vehicle_estimate_rpy_deg.yaw, 3)}.'
 
         #if map_cropped is not None:
         if __debug__:

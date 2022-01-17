@@ -192,14 +192,14 @@ def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
     return cv2.KeyPoint(pt[0], pt[1], sz)
 
 
-def visualize_homography(figure_name: str, top_left_text: str, bottom_left_text: str, img_arr: np.ndarray,
+def visualize_homography(figure_name: str, top_text: str, bottom_text: str, img_arr: np.ndarray,
                          map_arr: np.ndarray, kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) \
         -> np.ndarray:
     """Visualizes a homography including keypoint matches and field of view.
 
     :param figure_name: Display name of visualization
-    :param top_left_text: Display text on top left of image
-    :param bottom_left_text: Display text on bottom left of image
+    :param top_text: Display text on top left of image
+    :param bottom_text: Display text on top left of image under the first one
     :param img_arr: Image array
     :param map_arr: Map array
     :param kp_img: Image keypoints
@@ -223,10 +223,9 @@ def visualize_homography(figure_name: str, top_left_text: str, bottom_left_text:
     # Add text
     font = cv2.FONT_HERSHEY_SIMPLEX
     top_left = (10, 30)
-    #bottom_left = (10, min(img_arr.shape) - 20)  # TODO: assumes height is the smaller dimension
     bottom_left = (10, 60)
-    cv2.putText(out, top_left_text, top_left, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, 2)
-    cv2.putText(out, bottom_left_text, bottom_left, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, 2)
+    cv2.putText(out, top_text, top_left, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
+    cv2.putText(out, bottom_text, bottom_left, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
 
     cv2.imshow(figure_name, out)
     cv2.waitKey(1)

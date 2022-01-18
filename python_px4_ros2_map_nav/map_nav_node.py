@@ -2409,6 +2409,24 @@ class MapNavNode(Node):
             # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
             return None
 
+    @staticmethod
+    def _typhoon_h480_gimbal_set_attitude_to_frd(gimbal_set_attitude: Rotation) -> Rotation:
+        """Converts gimbal_set_attitude from :class:`px4_msgs.msg.GimbalDeviceSetAttitude` to the vehicle FRD frame
+        based on conversions defined in the typhoon_h480.sdf file.
+
+        In short, both roll and pitch control channels are used to control pitch, while roll and yaw have no controls.
+        Roll is fixed at 0 degrees while yaw has an offset of 180 degrees. The pitch control channel is inverted while
+        the roll control channel is not.
+
+        TODO: check yaw scaling (scaling MNT_RANGE_YAW = 360.0f / 2 = 180 degrees?)
+
+        :return: Gimbal set attitude in vehicle FRD frame
+        """
+        rpy = RPY(*gimbal_set_attitude.as_euler('XYZ'))
+        euler = [0, rpy.roll - rpy.pitch, np.pi]
+        gimbal_set_attitude = Rotation.from_euler('XYZ', euler)
+        return gimbal_set_attitude
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,
                          vehicle_attitude: Rotation, map_dim_with_padding: Dim, img_dim: Dim,
@@ -2516,13 +2534,9 @@ class MapNavNode(Node):
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
-        # 8. Estimate vehicle attitude
-        # If the gimbal has not yet stabilized, the max error in our vehicle attitude estimate is the difference between
-        # visually estimated gimbal attitude and what it should be if gimbal were stabilized at its attitude setting
-        vehicle_attitude_max_error = (vehicle_attitude * gimbal_set_attitude) * gimbal_estimated_attitude.inv()
-        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv() * Rotation.from_rotvec(np.pi * np.array([1, 0, 0]))  # Roll 180  gimbal
-
-        self.get_logger().info(f'Estimate max error RPY: {self._rotation_to_rpy(vehicle_attitude_max_error)}.')
+        # Estimate vehicle attitude
+        gimbal_set_attitude = self._typhoon_h480_gimbal_set_attitude_to_frd(gimbal_set_attitude)
+        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv()
 
         vehicle_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')  # Or just use XYZ?
         quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
@@ -2537,10 +2551,10 @@ class MapNavNode(Node):
                               f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                               f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
 
-            g_set_rpy_deg = RPY(*gimbal_set_attitude.as_euler('xyz', degrees=True))  # intrinsic
+            g_set_rpy_deg = RPY(*gimbal_set_attitude.as_euler('XYZ', degrees=True))
             g_set_rpy_deg = f'G. set roll: {str(round(g_set_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                                 f'pitch: {str(round(g_set_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                                 f'yaw: {str(round(g_set_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+                            f'pitch: {str(round(g_set_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                            f'yaw: {str(round(g_set_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
 
             vehicle_rpy_deg = RPY(*vehicle_attitude_estimate.as_euler('XYZ', degrees=True))
             vehicle_rpy_text = f'Vehicle roll: {str(round(vehicle_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \

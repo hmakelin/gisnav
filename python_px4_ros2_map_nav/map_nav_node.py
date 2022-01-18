@@ -31,8 +31,8 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import setup_sys_path, BBox, Dim, rotate_and_crop_map, visualize_homography,\
-    get_fov_and_c, LatLon, fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type,\
-    assert_ndim, assert_len, assert_shape, MapFrame, pix_to_wgs84_affine
+    get_fov_and_c, LatLon, fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine
+from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude

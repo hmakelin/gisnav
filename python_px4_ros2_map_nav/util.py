@@ -297,52 +297,6 @@ def bbox_to_polygon(bbox: BBox) -> np.ndarray:
                      [bbox.top, bbox.right]]).reshape(-1, 1, 2)
 
 
-# TODO: takes in a np.ndarray but returns a Tuple --> Need to make consistent
-def rotate_point(radians: float, img_dim: Dim, pt: np.ndarray) -> Tuple[float, float]:
-    """Rotates point around center of image by radians, counter-clockwise.
-
-    :param radians: Rotation in radians
-    :param img_dim: Image dimensions
-    :param pt: Point to rotate
-    :return: Rotated point
-    """
-    cx = img_dim[0] / 2
-    cy = img_dim[1] / 2  # Should be same as cx (assuming image or map raster is square)
-    cos_rads = math.cos(radians)
-    sin_rads = math.sin(radians)
-    x = cx + cos_rads * (pt[0] - cx) - sin_rads * (pt[1] - cy)
-    y = cy + sin_rads * (pt[0] - cx) + cos_rads * (pt[1] - cy)
-    return x, y
-
-
-def convert_pix_to_wgs84(img_dim: Dim, bbox: BBox, pt: np.ndarray) -> LatLon:
-    """Converts a pixel inside an image to WGS84 coordinate based on the image's bounding box.
-
-    In cv2, y is 0 at top and increases downwards. x axis is 'normal' with x=0 at left.
-
-    :param img_dim: Image dimensions
-    :param bbox: Map bounding box
-    :param pt: Pixel (x,y) inside the image
-    :return: WGS84 coordinate
-    """
-    assert_type(Dim, img_dim)
-    assert_type(BBox, bbox)
-    assert_type(np.ndarray, pt)
-    assert_shape(pt, (2,))
-    lat = bbox.bottom + (bbox.top - bbox.bottom) * (img_dim.height - pt[1]) / img_dim.height
-    lon = bbox.left + (bbox.right - bbox.left) * pt[0] / img_dim.width
-    return LatLon(lat, lon)
-
-
-def get_bbox_center(bbox: BBox) -> LatLon:
-    """Returns bounding box center coordinates.
-
-    :param bbox: The bounding box
-    :return: WGS84 coordinates of bounding box center
-    """
-    return LatLon(bbox.bottom + (bbox.top - bbox.bottom) / 2, bbox.left + (bbox.right - bbox.left) / 2)
-
-
 def rotate_and_crop_map(map_: np.ndarray, radians: float, dimensions: Dim, visualize: bool = False) -> np.ndarray:
     """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
@@ -385,38 +339,3 @@ def crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
     assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
                                                                             'map raster. '
     return img_cropped
-
-
-def uncrop_pixel_coordinates(cropped_dimensions: Dim, dimensions: Dim, pt: np.ndarray) -> np.ndarray:
-    """Adjusts the pt x and y coordinates for the original size provided by dimensions.
-
-    :param cropped_dimensions: Dimensions of cropped image
-    :param dimensions: Dimensions of original image
-    :param pt: Pixel (x,y) coordinates in cropped image
-    :return: Pixel (x,y) coordinates in original uncropped image
-    """
-    assert_type(np.ndarray, pt)
-    assert_shape(pt, (2,))
-    assert_type(Dim, cropped_dimensions)
-    assert_type(Dim, dimensions)
-    pt_out = pt + 0.5*np.array([dimensions.width-cropped_dimensions.width, dimensions.height-cropped_dimensions.height])
-    assert_shape(pt_out, pt.shape)
-    return pt_out
-
-
-def get_angle(vec1: np.ndarray, vec2: np.ndarray, normalize=False):
-    """Returns angle in radians between two vectors.
-
-    :param vec1: First vector
-    :param vec2: Second vector
-    :param normalize: Set to True to normalize the vector lengths  # TODO: what's the purpose of this option?
-    :return: Angle in radians between the two vectors
-    """
-    """"""
-    # TODO: assert that inputs are vectors
-    if normalize:
-        vec1 /= np.linalg.norm(vec1)
-        vec2 /= np.linalg.norm(vec2)
-    dot_product = np.dot(vec1, vec2)
-    angle = np.arccos(dot_product)
-    return angle

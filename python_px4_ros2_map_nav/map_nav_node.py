@@ -1394,7 +1394,6 @@ class MapNavNode(Node):
                                              f'shape {img_size}.'
 
         # Process image frame
-        #print(f'timestamp {timestamp}')
         # TODO: save previous image frame and check that new timestamp is greater
         image_frame = ImageFrame(cv_image, msg.header.frame_id, timestamp)
 
@@ -1611,10 +1610,7 @@ class MapNavNode(Node):
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
         roll = 0  # TODO remove zero roll assumption
-        #roll = gimbal_euler[roll_index] - 180
-        #print(f'roll {roll}')
         rpy = RPY(roll, pitch, yaw)
-        #print(f'camera rpy {rpy}')  # TODO: should do yaw = 180-yaw ?
 
         return rpy
 
@@ -1684,8 +1680,6 @@ class MapNavNode(Node):
             return None
         assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute RPY.'
         rpy = self._quat_to_rpy(vehicle_attitude.q)
-
-        #print(f'vehicle rpy {rpy}')
 
         return rpy
 
@@ -2089,18 +2083,11 @@ class MapNavNode(Node):
         assert_shape(k, (3, 3))
         num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
 
-        print('Decomposition')
-        print(Rs)
-        print(Ts)
-        print(Ns)
-
         # Get the one where angle between plane normal and inverse of camera normal is smallest
         # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
         get_angle_partial = partial(get_angle, -camera_normal)
         angles = list(map(get_angle_partial, Ns))
-        print(angles)
         index_of_smallest_angle = angles.index(min(angles))
-        print(index_of_smallest_angle)
         rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
 
         return translation, rotation
@@ -2473,16 +2460,12 @@ class MapNavNode(Node):
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
         h = np.linalg.inv(k @ np.delete(e, 2, 1))  # Remove z-column (depth) and multiply by intrinsics, then invert to get homography matrix from img to map
-        self.get_logger().info(f'Estimated translation: {t}.')
-        self.get_logger().info(f'Estimated position: {pos}.')
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
         fov_wgs84, c_wgs84 = get_fov_and_c(image_frame.image, h_wgs84)
         image_frame.fov = fov_wgs84
-        self.get_logger().info(f'Estimated c_pix: {c_pix}.')  # Should be 0,0
-        self.get_logger().info(f'Estimated c_wgs84: {c_wgs84}.')
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -2493,15 +2476,12 @@ class MapNavNode(Node):
         distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
                                             LatLon(*fov_wgs84[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
-        self.get_logger().info(f'Estimated altitude scaling: {altitude_scaling}.')
 
         # Translation in WGS84
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
-        self.get_logger().info(f'Estimated translation in WGS84: {t_wgs84}.')
         image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: should just ditch LatLonAlt and keep numpy arrays?
-        self.get_logger().info(f'Estimated latlon position: {image_frame.position}.')
 
         # Check that we have everything we need to publish vehicle_visual_odometry
         if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
@@ -2534,11 +2514,9 @@ class MapNavNode(Node):
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
-        # Estimate vehicle attitude
-        gimbal_set_attitude = self._typhoon_h480_gimbal_set_attitude_to_frd(gimbal_set_attitude)
-        vehicle_attitude_estimate = gimbal_estimated_attitude * gimbal_set_attitude.inv()
-
-        vehicle_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')  # Or just use XYZ?
+        # TODO: figure out a way to get vehicle attitude from gimbal attitude
+        vehicle_attitude_estimate = vehicle_attitude
+        vehicle_attitude_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')
         quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
 
         # noinspection PyUnreachableCode
@@ -2551,26 +2529,15 @@ class MapNavNode(Node):
                               f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                               f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
 
-            g_set_rpy_deg = RPY(*gimbal_set_attitude.as_euler('XYZ', degrees=True))
-            g_set_rpy_deg = f'G. set roll: {str(round(g_set_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                            f'pitch: {str(round(g_set_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                            f'yaw: {str(round(g_set_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-
-            vehicle_rpy_deg = RPY(*vehicle_attitude_estimate.as_euler('XYZ', degrees=True))
-            vehicle_rpy_text = f'Vehicle roll: {str(round(vehicle_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                               f'pitch: {str(round(vehicle_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                               f'yaw: {str(round(vehicle_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-
-            display_text = f'{gimbal_rpy_text}\n{g_set_rpy_deg}\n{vehicle_rpy_text}'
-            visualize_homography('Keypoint matches and FOV', display_text, image_frame.image,
+            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
-        if vehicle_estimate_rpy is not None:
+        if vehicle_attitude_estimate_rpy is not None:
             # Update covariance data window and check if covariance matrix is available
             # Do not create message if covariance matrix not yet available
             # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
             assert_type(int, image_frame.timestamp)
-            vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_estimate_rpy))
+            vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_attitude_estimate_rpy))
             self._push_covariance_data(local_position, vehicle_rpy_radians)
             if not self._covariance_window_full():
                 self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
@@ -2579,7 +2546,7 @@ class MapNavNode(Node):
                 # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
                 #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
                 covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
-                covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
+                covariance_urt = list(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
                 assert_len(covariance_urt, 21)
                 self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
 

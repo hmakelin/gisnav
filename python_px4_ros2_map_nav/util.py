@@ -6,7 +6,6 @@ import os
 import math
 
 from typing import Union, Tuple, get_args
-from functools import partial
 from collections import namedtuple
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape

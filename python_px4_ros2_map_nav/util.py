@@ -246,32 +246,6 @@ def setup_sys_path() -> Tuple[str, str]:
     return share_dir, superglue_dir
 
 
-def pix_to_wgs84(array: np.ndarray, map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_raster_rotation: float,
-                 img_dim: Dim) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Converts the input array from pixel coordinates to WGS 84.
-
-
-    Also returns the pixel coordinates for the intermediate outputs (uncropped, uncropped & unrotated) in case you want
-    to e.g. draw them on the respective images for debugging purposes.
-
-    :param array: Numpy array in pixel coordinates (of e.g. rotated map raster field of view corners)
-    :param map_raster_padded_dim: Size of the padded map raster image
-    :param map_raster_bbox: The WGS84 bounding box of the padded map raster
-    :param map_raster_rotation: The rotation that was applied to the map raster before matching in radians
-    :param img_dim: Size of the image
-    :return: Tuple including FOV in WGS84 coordinates, and pixel coordinates for uncropped and unrotated maps
-    """
-    uncrop = partial(uncrop_pixel_coordinates, img_dim, map_raster_padded_dim)
-    fov_in_pix_uncropped = np.apply_along_axis(uncrop, 2, array)
-
-    rotate = partial(rotate_point, map_raster_rotation, map_raster_padded_dim)   # why not negative here?
-    fov_in_pix_unrotated = np.apply_along_axis(rotate, 2, fov_in_pix_uncropped)
-
-    convert = partial(convert_pix_to_wgs84, map_raster_padded_dim, map_raster_bbox)
-    fov_in_wgs84 = np.apply_along_axis(convert, 2, fov_in_pix_unrotated)
-
-    return fov_in_wgs84, fov_in_pix_uncropped, fov_in_pix_unrotated  # TODO: only return wgs84
-
 def pix_to_wgs84_affine(map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_raster_rotation: float, img_dim: Dim) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates 

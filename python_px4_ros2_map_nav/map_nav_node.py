@@ -10,7 +10,6 @@ import pstats
 import numpy as np
 import cv2
 import time
-import shapely
 
 # Import and configure torch for multiprocessing
 import torch
@@ -31,10 +30,9 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, pix_to_wgs84, BBox, Dim, get_bbox_center, \
-    rotate_and_crop_map, visualize_homography, get_fov_and_c, LatLon, fov_center, get_angle, rotate_point, TimePair, \
-    create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type, assert_ndim, assert_len, assert_shape, MapFrame, \
-    pix_to_wgs84_affine
+from python_px4_ros2_map_nav.util import setup_sys_path, BBox, Dim, rotate_and_crop_map, visualize_homography,\
+    get_fov_and_c, LatLon, fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, assert_type,\
+    assert_ndim, assert_len, assert_shape, MapFrame, pix_to_wgs84_affine
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
@@ -73,8 +71,6 @@ class MapNavNode(Node):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
     # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
     EULER_SEQUENCE = 'YXZ'
-    EULER_SEQUENCE_VEHICLE = 'xyz'  # TODO: remove or replace
-    EULER_SEQUENCE_VISUAL = 'xyz'  # TODO: remove or replace
 
     # Minimum matches for homography estimation, should be at least 4
     HOMOGRAPHY_MINIMUM_MATCHES = 4
@@ -89,7 +85,7 @@ class MapNavNode(Node):
     PYPROJ_ELLIPSOID = 'WGS84'
 
     # Default name of config file
-    CONFIG_FILE_DEFAULT = "params.yml"
+    CONFIG_FILE_DEFAULT = "typhoon_h480__ksql_airport.yml"
 
     # Minimum and maximum publish frequencies for EKF2 fusion
     MINIMUM_PUBLISH_FREQUENCY = 30
@@ -791,14 +787,11 @@ class MapNavNode(Node):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('affine_threshold', config.get(namespace, {}).get('affine_threshold', Defaults.MISC_AFFINE_THRESHOLD)),
             ('publish_frequency', config.get(namespace, {})
              .get('publish_frequency', Defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
             ('export_projection', config.get(namespace, {}).get('export_projection', Defaults.MISC_EXPORT_PROJECTION)),
             ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
-            ('visualize_homography', config.get(namespace, {})
-             .get('visualize_homography', Defaults.MISC_VISUALIZE_HOMOGRAPHY)),
             ('covariance_estimation_length', config.get(namespace, {})
              .get('covariance_estimation_length', Defaults.MISC_COVARIANCE_ESTIMATION_LENGTH)),
         ])
@@ -890,29 +883,6 @@ class MapNavNode(Node):
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec + self.EKF2_TIMESTAMP_PADDING  # TODO: remove the padding or set it 0?
 
-    def _restrict_affine(self) -> bool:
-        """Checks if homography matrix should be restricted to an affine transformation (nadir facing camera).
-
-        The field of view estimate is more stable if an affine transformation can be assumed. This also leads to the
-        estimated position of the vehicle being more stable. For a better positioning estimate a nadir-facing camera
-        should be assumed and the homography estimation restricted for 2D affine transformations. See implementation of
-        :meth:`~_find_and_decompose_homography` for how this flag is used to determine how the homography matrix between
-        the image and map rasters is estimated.
-
-        :return: True if homography matrix should be restricted to a 2D affine transformation.
-        """
-        restrict_affine_threshold = self.get_parameter('misc.affine_threshold').get_parameter_value().integer_value
-        assert_type(get_args(Union[int, float]), restrict_affine_threshold)
-        camera_pitch = self._camera_pitch()
-        if camera_pitch is not None:
-            if abs(camera_pitch) <= restrict_affine_threshold:
-                return True
-            else:
-                return False
-        else:
-            self.get_logger().warn(f'Could not get camera pitch - cannot assume affine 2D transformation.')
-            return False
-
     def _setup_topics(self) -> None:
         """Creates and stores publishers and subscribers for microRTPS bridge topics.
 
@@ -975,21 +945,6 @@ class MapNavNode(Node):
         ul = self._move_distance(latlon, (-45, corner_distance))
         lr = self._move_distance(latlon, (135, corner_distance))
         return BBox(ul.lon, lr.lat, lr.lon, ul.lat)
-
-    def _get_distance_of_fov_center(self, fov_wgs84: np.ndarray) -> float:
-        """Calculate distance between middle of sides of field of view (FOV) based on triangle similarity.
-
-        This is used when estimating camera distance from estimated principal point using triangle similarity in
-        :meth:`~_compute_camera_distance`.
-
-        :param fov_wgs84: The WGS84 corner coordinates of the FOV
-        :return: Camera distance in meters from its principal point projected onto ground
-        """
-        # TODO: assert shape of fov_wgs84
-        midleft = ((fov_wgs84[0] + fov_wgs84[1]) * 0.5).squeeze()
-        midright = ((fov_wgs84[2] + fov_wgs84[3]) * 0.5).squeeze()
-        _, __, dist = self._geod.inv(midleft[1], midleft[0], midright[1], midright[0])  # TODO: use distance method here
-        return dist
 
     def _distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
         """Returns distance between two points in meters.
@@ -1432,80 +1387,6 @@ class MapNavNode(Node):
         camera_yaw = rpy.yaw
         return camera_yaw
 
-    def _transform_rotation_axes(self, rotation: Rotation):
-        """Transform the axes of rotation so that they match the axes of PX4's rotations."""
-        # TODO: need to make the Rotation from rotation matrix from decomposeHomography compatible with vheicle attitude etc. Rotation
-        raise NotImplementedError
-
-    @staticmethod
-    def _estimate_gimbal_attitude(vehicle_ned_attitude: Rotation, gimbal_ned_attitude_estimate: Rotation):
-        """Estimates gimbal relative attitude in vehicle FRD body frame from visually estimate camera NED fixed frame
-        attitude
-
-        This method solves the relative gimbal attitude from visually estimated gimbal absolute attitude. When the
-        vehicle has started moving, the gimbal needs a short time to stabilize and before that happens there may be a
-        large inconsistency between gimbal settings and true attitude. The attitude cannot therefore be trusted from
-        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` and it is assumed :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus`
-        generally is not available.
-
-        Estimating the true gimbal attitude from visual information is important because small changes in true gimbal
-        attitude lead to large changes in estimated vehicle position.
-        """
-        gimbal_attitude = gimbal_ned_attitude_estimate * vehicle_ned_attitude.inv()
-        return gimbal_attitude
-
-    # TODO: try to make static since its used in _process_matches
-    def _rotation_to_rpy(self, rotation: Rotation, degrees: bool = False) -> RPY:
-        """Returns rotation as roll, pitch, and yaw (RPY) tuple in radians
-
-        :param degrees: True to return RPY in degrees
-        :return: Roll, pitch and yaw (RPY) tuple in degrees
-        """
-        # Convert to Euler angles and re-arrange axes
-        assert self.EULER_SEQUENCE_VISUAL == 'xyz'
-        euler = rotation.as_euler('XYZ')  # self.EULER_SEQUENCE_VISUAL)
-        # TODO: these are different from quat_to_rpy and rpy_to_quat which are used for px4's attitude quats!
-
-        #roll = euler[2]
-        #pitch = euler[0] - np.pi/2
-        #yaw = -euler[1]
-
-        #self.get_logger().info(f'_rotation_to_rpy: {roll, pitch, yaw}.')
-
-        # TODO: should these be inclusive of upper bound?
-        #assert -np.pi <= roll <= np.pi
-        #assert -np.pi/2 <= pitch <= np.pi/2
-        #assert 0 <= yaw <= 2*np.pi
-
-        #rpy = RPY(roll, pitch, yaw)
-        rpy = RPY(*euler)
-        if degrees:
-            rpy = RPY(*tuple(map(np.degrees, rpy)))
-
-        return rpy
-
-    # TODO: try to make static since its used in _process_matches
-    def _rpy_to_rotation(self, rpy: RPY) -> Rotation:
-        """Returns rotation from RPY tuple in radians
-
-        Reverses :meth:`~_rotation_to_rpy`
-
-        :return: Roll, pitch and yaw (RPY) tuple in degrees
-        """
-        # Convert to Euler angles and re-arrange axes
-        assert self.EULER_SEQUENCE_VISUAL == 'xyz'
-        # TODO: these are different from quat_to_rpy and rpy_to_quat!
-        # Reverse axes transformations
-        roll = rpy.roll
-        pitch = rpy.pitch + np.pi/2
-        yaw = -rpy.yaw
-
-        # Reverse the index order
-        euler = [pitch, yaw, roll]
-
-        rotation = rotation.from_euler(self.EULER_SEQUENCE_VISUAL, euler)
-        return rotation
-
     def _get_vehicle_attitude(self) -> Optional[Rotation]:
         """Returns vehicle attitude from :class:`px4_msgs.msg.VehicleAttitude` or None if not available
 
@@ -1529,40 +1410,6 @@ class MapNavNode(Node):
         else:
             gimbal_set_attitude = Rotation.from_quat(self._gimbal_device_set_attitude.q)
             return gimbal_set_attitude
-
-    def _get_gimbal_set_compound_attitude(self) -> Optional[Rotation]:
-        """Returns gimbal set compound attitude or None if it cannot be computed
-
-        Compound attitude means this method compounds the vehicle body frame relative gimbal attitude from
-        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` with the NED frame fixed vehicle attitude from
-        :class:`px4_msgs.msg.VehicleAttitude`. This is the NED frame fixed attitude that the gimbal should have when it
-        is stabilized.
-
-        Because :class:`px4_msgs.msg.GimbalDeviceSetAttitude` is used for gimbal attitude instead of
-        :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus`, the output may not necessarily reflect actual camera attitude.
-        For example, it takes a fraction of a second for a stabilized gimbal to adjust when the vehicle starts moving.
-        When that happens the actual gimbal attitude does not match what is contained in the
-        :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message until the gimbal has stabilized again.
-
-        Since :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` may often not be available so the actual camera attitude
-        must be visually estimated in order to also estimate the vehicle's position.
-
-        :return: Gimbal set compound attitude or None if it cannot be computed
-        """
-        # Get vehicle attitude
-        vehicle_attitude = self._get_vehicle_attitude()
-        if vehicle_attitude is None:
-            self.get_logger().warn('Vehicle attitude not available, cannot compute camera attitude.')
-            return None
-
-        # Get gimbal set attitude
-        gimbal_set_attitude = self._get_gimbal_set_attitude()
-        if gimbal_set_attitude is None:
-            self.get_logger().debug('Gimbal set attitude not available, cannot compute camera attitude.')
-            return None
-
-        gimbal_set_compound_attitude = vehicle_attitude * gimbal_set_attitude
-        return gimbal_set_compound_attitude
 
     def _get_camera_rpy(self) -> Optional[RPY]:
         """Returns roll-pitch-yaw tuple in NED frame.
@@ -1613,102 +1460,6 @@ class MapNavNode(Node):
         rpy = RPY(roll, pitch, yaw)
 
         return rpy
-
-    def _quat_to_rpy(self, q: np.ndarray) -> RPY:
-        """Converts the attitude quaternion to roll, pitch, yaw degrees
-
-        See also :meth:`~_rpy_to_quat` for a reverse transformation.
-
-        :param q: Attitude quaternion np.ndarray (shape (4,))
-        :return: RPY tuple in degrees
-        """
-        assert_type(np.ndarray, q)
-        assert_shape(q, (4,))
-        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
-        euler = Rotation.from_quat(q).as_euler(self.EULER_SEQUENCE_VEHICLE, degrees=True)
-
-        # Fix axes # TODO: do not use hard coded indices
-        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
-        roll = euler[2]
-        pitch = -euler[1]
-        yaw = 180 - euler[0]  # North should be 0
-
-        # TODO: should these be inclusive of upper bound?
-        assert -180 <= roll <= 180
-        assert -90 <= pitch <= 90
-        assert 0 <= yaw <= 360
-        rpy = RPY(roll, pitch, yaw)
-
-        return rpy
-
-    def _rpy_to_quat(self, rpy: RPY) -> np.ndarray:
-        """Converts roll, pitch, yaw tuple in degrees back to an attitude quaternion.
-
-        This method reverses the axes translations done in :meth:`~_quat_to_rpy`.
-
-        :param rpy: Roll, pitch and yaw in degrees
-        :return: Attitude quaternion
-        """
-        assert_type(RPY, rpy)
-
-        # Reverse axes transformations
-        roll = rpy.roll
-        pitch = -rpy.pitch
-        yaw = 180 - rpy.yaw
-
-        # Reverse the index order
-        euler = [yaw, pitch, roll]
-
-        assert self.EULER_SEQUENCE_VEHICLE == 'xyz'
-        q = Rotation.from_euler(self.EULER_SEQUENCE_VEHICLE, euler, degrees=True).as_quat()
-        q = np.array(q)
-        assert_shape(q, (4,))
-
-        return q
-
-    # TODO: try to refactor together with _camera_rpy!
-    def _get_vehicle_rpy(self):
-        """Returns vehicle roll, pitch and yaw.
-
-        Yaw origin is North.
-
-        :return: Vehicle RPY tuple in degrees
-        """
-        vehicle_attitude = self._vehicle_attitude
-        if vehicle_attitude is None:
-            self.get_logger().warn('Vehicle attitude not available, cannot return RPY.')
-            return None
-        assert hasattr(vehicle_attitude, 'q'), 'Vehicle attitude quaternion not available - cannot compute RPY.'
-        rpy = self._quat_to_rpy(vehicle_attitude.q)
-
-        return rpy
-
-    def _camera_normal(self) -> Optional[np.ndarray]:
-        """Returns camera normal unit vector.
-
-        The camera normal information is needed to determine which solution of :func:`cv2.decomposeHomography` is
-        correct. The homography decomposition is done inside :meth:`~_find_and_decompose_homography` as part of
-        :meth:`~_process_matches`.
-
-        :return: Camera normal unit vector, or None if not available
-        """
-        nadir = np.array([0, 0, 1])
-        rpy = self._get_camera_rpy()
-        if rpy is None:
-            self.get_logger().warn('Could not get RPY - cannot compute camera normal.')
-            return None
-        assert_type(RPY, rpy)
-
-        r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True)
-        camera_normal = r.apply(nadir)
-        assert_shape(camera_normal, nadir.shape)
-
-        camera_normal_length = np.linalg.norm(camera_normal)
-        # TODO: is this arbitrary check needed?
-        if abs(camera_normal_length - 1) >= 0.001:
-            self.get_logger().warn(f'Camera normal length: {camera_normal_length}, does not look like a unit vector?.')
-
-        return camera_normal
 
     def _roll_index(self) -> int:
         """Returns the roll index for used euler vectors.
@@ -1761,7 +1512,6 @@ class MapNavNode(Node):
         assert_type(int, msg.timestamp)
         self._vehicle_local_position = msg
         self._sync_timestamps(self._vehicle_local_position.timestamp)
-
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude.
@@ -1998,100 +1748,6 @@ class MapNavNode(Node):
                 self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    @staticmethod
-    def _find_and_decompose_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, k: np.ndarray,
-                                       camera_normal: np.ndarray, reproj_threshold: float = 1.0,
-                                       restrict_affine: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
-                                                                               np.ndarray]:
-        """Processes matching keypoints from img and map and returns homography matrix, mask, translation and rotation.
-
-        Depending on whether :param restrict_affine: applies, either :func:`cv2.findHomography` or
-        :func:`cv2.estimateAffinePartial2D` is used for homography estimation. Homography matrix is decompose using
-        :func:`cv2.decomposeHomographyMat` to extract camera translation and rotation information, i.e. to determine
-        camera position.
-
-        :param mkp_img: Matching keypoints from image
-        :param mkp_map: Matching keypoints from map
-        :param k: Camera intrinsics matrix
-        :param camera_normal: Camera normal unit vector
-        :param reproj_threshold: RANSAC reprojection threshold parameter
-        :param restrict_affine: Flag indicating whether homography should be restricted to 2D affine transformation
-        :return: Tuple containing homography matrix, RANSAC inlier mask, translation and rotation
-        """
-        min_points = 4  # TODO: use self.MINIMIUM_MATCHES?
-        assert_type(np.ndarray, mkp_img)
-        assert_type(np.ndarray, mkp_map)
-        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
-
-        assert_type(bool, restrict_affine)
-        assert_type(float, reproj_threshold)
-        if not restrict_affine:
-            h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)
-        else:
-            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
-            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a homography matrix
-
-        assert_type(np.ndarray, k)
-        assert_shape(k, (3, 3))
-        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
-
-        # Get the one where angle between plane normal and inverse of camera normal is smallest
-        # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
-        get_angle_partial = partial(get_angle, -camera_normal)
-        angles = list(map(get_angle_partial, Ns))
-        index_of_smallest_angle = angles.index(min(angles))
-        rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
-
-        return h, h_mask, translation, rotation
-
-    @staticmethod
-    def _find_homography(mkp_img: np.ndarray, mkp_map: np.ndarray, reproj_threshold: float = 1.0,
-                         restrict_affine: bool = False) -> Tuple[np.ndarray, np.ndarray]:
-        """
-
-        :param mkp_img:
-        :param mkp_map:
-        :param reproj_threshold:
-        :param restrict_affine:
-        :return:
-        """
-        min_points = 4  # TODO: use self.MINIMIUM_MATCHES?
-        assert_type(np.ndarray, mkp_img)
-        assert_type(np.ndarray, mkp_map)
-        assert len(mkp_img) >= min_points and len(mkp_map) >= min_points, 'Four points needed to estimate homography.'
-
-        assert_type(bool, restrict_affine)
-        assert_type(float, reproj_threshold)
-        if not restrict_affine:
-            h, h_mask = cv2.findHomography(mkp_img, mkp_map, cv2.RANSAC, reproj_threshold)
-        else:
-            h, h_mask = cv2.estimateAffinePartial2D(mkp_img, mkp_map)
-            h = np.vstack((h, np.array([0, 0, 1])))  # Make it into a 3x3 homography matrix
-
-        return h, h_mask
-
-    @staticmethod
-    def _decompose_homography(h: np.ndarray, k: np.ndarray, camera_normal: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-
-        :param h:
-        :param k:
-        :param camera_normal: a
-        :return:
-        """
-        assert_type(np.ndarray, k)
-        assert_shape(k, (3, 3))
-        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(h, k)
-
-        # Get the one where angle between plane normal and inverse of camera normal is smallest
-        # Plane is defined by Z=0 and "up" is in the negative direction on the z-axis in this case
-        get_angle_partial = partial(get_angle, -camera_normal)
-        angles = list(map(get_angle_partial, Ns))
-        index_of_smallest_angle = angles.index(min(angles))
-        rotation, translation = Rs[index_of_smallest_angle], Ts[index_of_smallest_angle]
-
-        return translation, rotation
-
     def _match_inputs(self, image_frame: ImageFrame) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
@@ -2136,78 +1792,6 @@ class MapNavNode(Node):
             data['map_cropped'] = None
 
         return data
-
-    def _compute_camera_position(self, t: np.ndarray, center: LatLon, scaling: float) -> LatLon:
-        """Returns camera position based on translation vector and map raster center coordinates.
-
-        NOTE:
-        The map center coordinates are the coordinates of the center of map_cropped. The cropping and rotation of
-        map_cropped is implemented so that its center coordinates match the uncropped, unrotated map's center
-        coordinates. Input arg center can therefore be given as the center of the original map's bounding box as long
-        as the cropping and rotation implementation remains unchanged.
-
-        :param t: Camera translation vector
-        :param center: Map center WGS84 coordinates
-        :param scaling: Scaling factor for translation vector (i.e. positive altitude in meters)
-        :return: WGS84 coordinates of camera
-        """
-        assert_type(np.ndarray, t)
-        assert_shape(t, (2,))
-        azmth = self._get_azimuth(t[0], t[1])
-        dist = math.sqrt(t[0] ** 2 + t[1] ** 2)
-        scaled_dist = scaling*dist
-        assert scaling > 0
-        position = self._move_distance(center, (-azmth, scaled_dist))  # Invert azimuth, going the other way
-        return position
-
-    def _estimate_camera_distance_to_c(self, fov_wgs84: np.ndarray, c_wgs84: np.ndarray, yaw: float, fx: float,
-                                       img_dim: Dim) -> Optional[float]:
-        """Returns estimated camera distance to principal point on ground in meters
-
-        Uses triangle similarity where the object of known distance is the line on ground inside the FOV that passes
-        through the principal point and is perpendicular to camera optical axis.
-
-        The computation is made a bit more complicated by possibility of roll in gimbal (e.g. when vehicle suddenly
-        starts moving, gimbal takes time to stabilize and it may have roll for a while). Roll is not directly used in
-        the computation, however, that information is included in the field of view.
-
-        :param fov_wgs84: Field of view corners in WGS84 coordinates
-        :param c_wgs84: Principal point projected on ground in WGS84 coordinates
-        :param yaw: Gimbal yaw in radians
-        :param fx: Camera focal length (in width dimension)
-        :param img_dim: Image dimensions
-        :return: Distance to principal point on surface in meters
-        """
-        assert_type(np.ndarray, fov_wgs84)
-        assert_type(np.ndarray, c_wgs84)
-        assert_type(float, fx)
-        assert_type(float, yaw)
-        assert_type(Dim, img_dim)
-        self.get_logger().info(f'Gimbal yaw used for estimating distance to c: {yaw}.')
-
-        # Estimate intersection between FOV and ground line that is perpendicular to camera optical axis
-        fov_shapely_poly = shapely.geometry.Polygon(fov_wgs84.tolist())
-        very_large_distance = 100e3  # Meters, shapely does not support lines of infinite length
-        c_shapely_line = shapely.geometry.LineString([self._move_distance(c, (yaw+np.pi/2, very_large_distance)),
-                                                      self._move_distance(c, (yaw-np.pi/2, very_large_distance))])
-        fov_c_line_intersection = list(fov_shapely_poly.intersection(c_shapely_line).coords)
-        self.get_logger().info(f'Fov and c line intersection: {fov_c_line_intersection}.')
-        if len(fov_c_line_intersection) != 2:
-            self.get_logger().info(f'Intersection between FOV and camera optical axis perpendicular line passing '
-                                   f'through c was not 2 {len(fov_c_line_intersection)}. Cannot estimate camera '
-                                   f'distance to projected principal point on ground (cannot estimate scale).')
-
-        # Length of the line inside FOV that passes through c is perpendicular to camera optical axis
-        fov_center_line_meter_length = self._distance(LatLon(*fov_c_line_intersection[0]),
-                                                LatLon(*fov_c_line_intersection[1]))
-        fov_center_line_pixel_length = 0  # TODO
-        assert fov_center_line_meter_length > 0
-
-        # TODO: use fx or fy? if roll high, fy might be more appropriate?
-
-        camera_distance = fov_center_line_meter_length * fx / fov_center_line_pixel_length
-        assert_type(float, camera_distance)
-        return camera_distance
 
     def _compute_camera_altitude(self, camera_distance: float, camera_pitch: Union[int, float]) -> Optional[float]:
         """Computes camera altitude in meters (positive) based on distance to principal point and pitch in degrees.
@@ -2305,11 +1889,6 @@ class MapNavNode(Node):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-
-        visualize_homography_ = self.get_parameter('misc.visualize_homography').get_parameter_value().bool_value
-        if not visualize_homography_:
-            # _process_matches will not visualize homography if map_cropped is None
-            self._stored_inputs['map_cropped'] = None
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
     def _compute_local_frame_origin(self, position: Union[LatLon, LatLonAlt]):
@@ -2365,54 +1944,6 @@ class MapNavNode(Node):
             return None
 
         return lat_diff, lon_diff, -alt
-
-    def _compute_attitude_quaternion(self, ll: np.ndarray, lr: np.ndarray, vehicle_rpy: RPY) -> Optional[Tuple[float]]:
-        """Computes attitude quaternion against NED frame for outgoing VehicleVisualOdometry message.
-
-        Attitude estimate adjusts vehicle heading (used to rotate the map raster together with gimbal yaw) by the angle
-        of the estimated field of view bottom side to the x-axis vector. This adjustment angle is expected to be very
-        small in most cases as the FOV should align well with the rotated map raster.
-
-        :param ll: Lower left corner pixel coordinates of estimated field of view
-        :param lr: Lower right corner pixel coordinates of estimated field of view
-        :return: Quaternion tuple, or None if attitude information is not available
-        """
-        # TODO: Seems like when gimbal (camera) is nadir facing, PX4 automatically rotates it back to face vehicle
-        #  heading. However, GimbalDeviceSetAttitude stays the same so this will give an estimate for vehicle heading
-        #  that is off by camera_yaw in this case. No problems with nadir-facing camera only if there is no gimbal yaw.
-        #  Need to log a warning or even an error in these cases!
-        assert_type(np.ndarray, ll)
-        assert_type(np.ndarray, lr)
-        if self._vehicle_attitude is not None:
-            fov_adjustment_angle = math.degrees(get_angle(np.float32([1, 0]), (lr - ll).squeeze(), normalize=True))
-            assert hasattr(self._vehicle_attitude, 'q')
-            vehicle_yaw = vehicle_rpy.yaw + fov_adjustment_angle
-            quaternion = self._rpy_to_quat(RPY(vehicle_rpy.roll, vehicle_rpy.pitch, vehicle_yaw))
-            assert_len(quaternion, 4)
-            self.get_logger().debug(f'Heading adjustment angle: {fov_adjustment_angle}.')
-            self.get_logger().debug(f'Vehicle yaw: {vehicle_yaw}.')
-            return quaternion
-        else:
-            # TODO: when does this happen? When do we not have this info? Should have it always, at least pitch and roll?
-            return None
-
-    @staticmethod
-    def _typhoon_h480_gimbal_set_attitude_to_frd(gimbal_set_attitude: Rotation) -> Rotation:
-        """Converts gimbal_set_attitude from :class:`px4_msgs.msg.GimbalDeviceSetAttitude` to the vehicle FRD frame
-        based on conversions defined in the typhoon_h480.sdf file.
-
-        In short, both roll and pitch control channels are used to control pitch, while roll and yaw have no controls.
-        Roll is fixed at 0 degrees while yaw has an offset of 180 degrees. The pitch control channel is inverted while
-        the roll control channel is not.
-
-        TODO: check yaw scaling (scaling MNT_RANGE_YAW = 360.0f / 2 = 180 degrees?)
-
-        :return: Gimbal set attitude in vehicle FRD frame
-        """
-        rpy = RPY(*gimbal_set_attitude.as_euler('XYZ'))
-        euler = [0, rpy.roll - rpy.pitch, np.pi]
-        gimbal_set_attitude = Rotation.from_euler('XYZ', euler)
-        return gimbal_set_attitude
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,

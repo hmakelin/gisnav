@@ -27,9 +27,6 @@ class Defaults:
     WMS_REQUEST_TIMEOUT = 5
     """WMS client request timeout in seconds"""
 
-    MISC_AFFINE_THRESHOLD = 5
-    """Threshold in degrees from nadir for restricting homography to 2D affine transformation"""
-
     MISC_PUBLISH_FREQUENCY = 40
     """Publishing frequency for outgoing :class:`px4_msgs.msg.VehicleVisualOdometry` messages"""
 
@@ -44,9 +41,6 @@ class Defaults:
     
     See also :py:attr:`~MAP_UPDATE_MAP_PITCH`.
     """
-
-    MISC_VISUALIZE_HOMOGRAPHY = False
-    """Flag to enable matching keypoint and homography visualization"""
 
     MISC_COVARIANCE_ESTIMATION_LENGTH = 20
     """Determines how many observations are used to estimate the covariance matrices for 

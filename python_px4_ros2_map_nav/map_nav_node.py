@@ -58,9 +58,9 @@ def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
     :param timeout_: WMS request timeout seconds
     :return: The cached WMS client
     """
-    assert_type(str, url)
-    assert_type(str, version_)
-    assert_type(int, timeout_)
+    assert_type(url, str)
+    assert_type(version_, str)
+    assert_type(timeout_, int)
     try:
         return WebMapService(url, version=version_, timeout=timeout_)
     except Exception as e:
@@ -166,19 +166,19 @@ class MapNavNode(Node):
         :param superglue_directory: Path of the directory with SuperGlue related files
         :param config: Path to the config file in the share folder
         """
-        assert_type(str, node_name)
+        assert_type(node_name, str)
         super().__init__(node_name)
         self.name = node_name
-        assert_type(str, share_directory)
-        assert_type(str, superglue_directory)
-        assert_type(str, config)
+        assert_type(share_directory, str)
+        assert_type(superglue_directory, str)
+        assert_type(config, str)
         self._share_dir = share_directory
         self._superglue_dir = superglue_directory
 
         # Setup config and declare ROS parameters
         self._config = self._load_config(config)
         params = self._config.get(node_name, {}).get('ros__parameters')
-        assert_type(dict, params)
+        assert_type(params, dict)
         self._declare_ros_params(params)
 
         # WMS client and requests in a separate process
@@ -236,7 +236,7 @@ class MapNavNode(Node):
 
     @name.setter
     def name(self, value: str) -> None:
-        assert_type(str, value)
+        assert_type(value, str)
         self._name = value
 
     @property
@@ -246,7 +246,7 @@ class MapNavNode(Node):
 
     @_config.setter
     def _config(self, value: dict) -> None:
-        assert_type(dict, value)
+        assert_type(value, dict)
         self.__config = value
 
     @property
@@ -261,7 +261,7 @@ class MapNavNode(Node):
 
     @_local_origin.setter
     def _local_origin(self, value: Optional[LatLonAlt]) -> None:
-        assert_type(get_args(Optional[LatLonAlt]), value)
+        assert_type(value, get_args(Optional[LatLonAlt]))
         self.__local_origin = value
 
     @property
@@ -275,7 +275,7 @@ class MapNavNode(Node):
 
     @_time_sync.setter
     def _time_sync(self, value: Optional[TimePair]) -> None:
-        assert_type(get_args(Optional[TimePair]), value)
+        assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
 
     @property
@@ -287,7 +287,7 @@ class MapNavNode(Node):
 
     @_pose_covariance_data_window.setter
     def _pose_covariance_data_window(self, value: Optional[np.ndarray]) -> None:
-        assert_type(get_args(Optional[np.ndarray]), value)
+        assert_type(value, get_args(Optional[np.ndarray]))
         self.__pose_covariance_data_window = value
 
     @property
@@ -297,7 +297,7 @@ class MapNavNode(Node):
 
     @_wms_pool.setter
     def _wms_pool(self, value: Pool) -> None:
-        assert_type(Pool, value)
+        assert_type(value, Pool)
         self.__wms_pool = value
 
     @property
@@ -307,7 +307,7 @@ class MapNavNode(Node):
 
     @_wms_results.setter
     def _wms_results(self, value: Optional[AsyncResult]) -> None:
-        assert_type(get_args(Optional[AsyncResult]), value)
+        assert_type(value, get_args(Optional[AsyncResult]))
         self.__wms_results = value
 
     @property
@@ -317,7 +317,7 @@ class MapNavNode(Node):
 
     @_map_update_timer.setter
     def _map_update_timer(self, value: rclpy.timer.Timer) -> None:
-        assert_type(rclpy.timer.Timer, value)
+        assert_type(value, rclpy.timer.Timer)
         self.__map_update_timer = value
 
     @property
@@ -341,7 +341,7 @@ class MapNavNode(Node):
 
     @_stored_inputs.setter
     def _stored_inputs(self, value: Optional[dict]) -> None:
-        assert_type(get_args(Optional[dict]), value)
+        assert_type(value, get_args(Optional[dict]))
         self.__stored_inputs = value
 
     @property
@@ -351,7 +351,7 @@ class MapNavNode(Node):
 
     @_superglue_results.setter
     def _superglue_results(self, value: Optional[AsyncResult]) -> None:
-        assert_type(get_args(Optional[AsyncResult]), value)
+        assert_type(value, get_args(Optional[AsyncResult]))
         self.__superglue_results = value
 
     @property
@@ -361,7 +361,7 @@ class MapNavNode(Node):
 
     @_superglue.setter
     def _superglue(self, value: SuperGlue) -> None:
-        assert_type(SuperGlue, value)
+        assert_type(value, SuperGlue)
         self.__superglue = value
 
     @property
@@ -371,7 +371,7 @@ class MapNavNode(Node):
 
     @_publish_timer.setter
     def _publish_timer(self, value: rclpy.timer.Timer) -> None:
-        assert_type(rclpy.timer.Timer, value)
+        assert_type(value, rclpy.timer.Timer)
         self.__timer = value
 
     @property
@@ -381,7 +381,7 @@ class MapNavNode(Node):
 
     @_publish_timestamp.setter
     def _publish_timestamp(self, value: Optional[int]) -> None:
-        assert_type(get_args(Optional[int]), value)
+        assert_type(value, get_args(Optional[int]))
         self.__publish_timestamp = value
 
     @property
@@ -391,7 +391,7 @@ class MapNavNode(Node):
 
     @_topics.setter
     def _topics(self, value: dict) -> None:
-        assert_type(dict, value)
+        assert_type(value, dict)
         self.__topics = value
 
     @property
@@ -401,7 +401,7 @@ class MapNavNode(Node):
 
     @_vehicle_visual_odometry.setter
     def _vehicle_visual_odometry(self, value: Optional[VehicleVisualOdometry]) -> None:
-        assert_type(get_args(Optional[VehicleVisualOdometry]), value)
+        assert_type(value, get_args(Optional[VehicleVisualOdometry]))
         self.__vehicle_visual_odometry = value
 
     @property
@@ -411,7 +411,7 @@ class MapNavNode(Node):
 
     @_geod.setter
     def _geod(self, value: Geod) -> None:
-        assert_type(Geod, value)
+        assert_type(value, Geod)
         self.__geod = value
 
     @property
@@ -421,7 +421,7 @@ class MapNavNode(Node):
 
     @_share_dir.setter
     def _share_dir(self, value: str) -> None:
-        assert_type(str, value)
+        assert_type(value, str)
         self.__share_dir = value
 
     @property
@@ -431,7 +431,7 @@ class MapNavNode(Node):
 
     @_superglue_dir.setter
     def _superglue_dir(self, value: str) -> None:
-        assert_type(str, value)
+        assert_type(value, str)
         self.__superglue_dir = value
 
     @property
@@ -441,7 +441,7 @@ class MapNavNode(Node):
 
     @_map_frame.setter
     def _map_frame(self, value: Optional[MapFrame]) -> None:
-        assert_type(get_args(Optional[MapFrame]), value)
+        assert_type(value, get_args(Optional[MapFrame]))
         self.__map_frame = value
 
     @property
@@ -451,7 +451,7 @@ class MapNavNode(Node):
 
     @_cv_bridge.setter
     def _cv_bridge(self, value: CvBridge) -> None:
-        assert_type(CvBridge, value)
+        assert_type(value, CvBridge)
         self.__cv_bridge = value
 
     @property
@@ -461,7 +461,7 @@ class MapNavNode(Node):
 
     @_previous_map_frame.setter
     def _previous_map_frame(self, value: Optional[MapFrame]) -> None:
-        assert_type(get_args(Optional[MapFrame]), value)
+        assert_type(value, get_args(Optional[MapFrame]))
         self.__previous_map_frame = value
 
     @property
@@ -471,7 +471,7 @@ class MapNavNode(Node):
 
     @_camera_info.setter
     def _camera_info(self, value: Optional[CameraInfo]) -> None:
-        assert_type(get_args(Optional[CameraInfo]), value)
+        assert_type(value, get_args(Optional[CameraInfo]))
         self.__camera_info = value
 
     @property
@@ -481,7 +481,7 @@ class MapNavNode(Node):
 
     @_vehicle_local_position.setter
     def _vehicle_local_position(self, value: Optional[VehicleLocalPosition]) -> None:
-        assert_type(get_args(Optional[VehicleLocalPosition]), value)
+        assert_type(value, get_args(Optional[VehicleLocalPosition]))
         self.__vehicle_local_position = value
 
     @property
@@ -491,7 +491,7 @@ class MapNavNode(Node):
 
     @_vehicle_global_position.setter
     def _vehicle_global_position(self, value: Optional[VehicleGlobalPosition]) -> None:
-        assert_type(get_args(Optional[VehicleGlobalPosition]), value)
+        assert_type(value, get_args(Optional[VehicleGlobalPosition]))
         self.__vehicle_global_position = value
 
     @property
@@ -501,7 +501,7 @@ class MapNavNode(Node):
 
     @_vehicle_attitude.setter
     def _vehicle_attitude(self, value: Optional[VehicleAttitude]) -> None:
-        assert_type(get_args(Optional[VehicleAttitude]), value)
+        assert_type(value, get_args(Optional[VehicleAttitude]))
         self.__vehicle_attitude = value
 
     @property
@@ -511,7 +511,7 @@ class MapNavNode(Node):
 
     @_gimbal_device_attitude_status.setter
     def _gimbal_device_attitude_status(self, value: Optional[GimbalDeviceAttitudeStatus]) -> None:
-        assert_type(get_args(Optional[GimbalDeviceAttitudeStatus]), value)
+        assert_type(value, get_args(Optional[GimbalDeviceAttitudeStatus]))
         self.__gimbal_device_attitude_status = value
 
     @property
@@ -521,7 +521,7 @@ class MapNavNode(Node):
 
     @_gimbal_device_set_attitude.setter
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
-        assert_type(get_args(Optional[GimbalDeviceSetAttitude]), value)
+        assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
 
     def _covariance_window_full(self) -> bool:
@@ -572,7 +572,7 @@ class MapNavNode(Node):
         :return: The timer instance
         """
         frequency = self.get_parameter('misc.publish_frequency').get_parameter_value().integer_value
-        assert_type(int, frequency)
+        assert_type(frequency, int)
         if not 0 <= frequency:
             error_msg = f'Publish frequency must be >0 Hz ({frequency} provided).'
             self.get_logger().error(error_msg)
@@ -596,7 +596,7 @@ class MapNavNode(Node):
         :return: The timer instance
         """
         timer_period = self.get_parameter('map_update.update_delay').get_parameter_value().integer_value
-        assert_type(int, timer_period)
+        assert_type(timer_period, int)
         if not 0 <= timer_period:
             error_msg = f'Map update delay must be >0 seconds ({timer_period} provided).'
             self.get_logger().error(error_msg)
@@ -617,9 +617,9 @@ class MapNavNode(Node):
                    hasattr(self._vehicle_global_position, 'alt')
             lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
                             self._vehicle_global_position.alt
-            assert_type(get_args(Union[int, float]), lat)
-            assert_type(get_args(Union[int, float]), lon)
-            assert_type(get_args(Union[int, float]), alt)
+            assert_type(lat, get_args(Union[int, float]))
+            assert_type(lon, get_args(Union[int, float]))
+            assert_type(alt, get_args(Union[int, float]))
         return LatLonAlt(lat, lon, alt)
 
     def _alt_from_vehicle_local_position(self) -> Optional[float]:
@@ -672,7 +672,7 @@ class MapNavNode(Node):
         """
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
         latlonalt = self._latlonalt_from_vehicle_global_position()
-        assert_type(LatLonAlt, latlonalt)
+        assert_type(latlonalt, LatLonAlt)
 
         # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
         if latlonalt.alt is None:
@@ -688,7 +688,7 @@ class MapNavNode(Node):
                 if self._local_origin is None:
                     # TODO: compute it from latest position estimate? This should already have been done in _process_matches
                     return  # TODO: remove this return statement once image_frame is saved and _local_frame is computed here
-                assert_type(get_args(Union[LatLon, LatLonAlt]), self._local_origin)
+                assert_type(self._local_origin, get_args(Union[LatLon, LatLonAlt]))
                 assert hasattr(self._vehicle_visual_odometry, 'x') and hasattr(self._vehicle_visual_odometry, 'y')
                 dx, dy = self._vehicle_visual_odometry.x, self._vehicle_visual_odometry.y
                 distance = math.sqrt(dx**2 + dy**2)
@@ -743,7 +743,7 @@ class MapNavNode(Node):
         :return:
         """
         if self._vehicle_visual_odometry is not None:
-            assert_type(VehicleVisualOdometry, self._vehicle_visual_odometry)
+            assert_type(self._vehicle_visual_odometry, VehicleVisualOdometry)
             now = time.time_ns()
             if self._publish_timestamp is not None:
                 assert now > self._publish_timestamp
@@ -824,7 +824,7 @@ class MapNavNode(Node):
         :param yaml_file: Path to the yaml file
         :return: The loaded yaml file as dictionary
         """
-        assert_type(str, yaml_file)
+        assert_type(yaml_file, str)
         with open(os.path.join(self._share_dir, yaml_file), 'r') as f:
             try:
                 config = yaml.safe_load(f)
@@ -862,7 +862,7 @@ class MapNavNode(Node):
         :param ekf2_timestamp_usec: The time since the EKF2 system start in microseconds
         :return:
         """
-        assert_type(int, ekf2_timestamp_usec)
+        assert_type(ekf2_timestamp_usec, int)
         now_usec = time.time() * 1e6
         self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
@@ -896,12 +896,12 @@ class MapNavNode(Node):
 
             publish = topic.get(self.PUBLISH_KEY, None)
             if publish is not None:
-                assert_type(bool, publish)
+                assert_type(publish, bool)
                 self._topics.get(self.PUBLISH_KEY).update({topic_name: self._create_publisher(topic_name, class_)})
 
             subscribe = topic.get(self.SUBSCRIBE_KEY, None)
             if subscribe is not None:
-                assert_type(bool, subscribe)
+                assert_type(subscribe, bool)
                 self._topics.get(self.SUBSCRIBE_KEY).update({topic_name: self._create_subscriber(topic_name, class_)})
 
         self.get_logger().info(f'Topics setup complete:\n{self._topics}.')
@@ -939,8 +939,8 @@ class MapNavNode(Node):
         if radius_meters is None:
             radius_meters = self.get_parameter('map_update.map_radius_meters_default')\
                 .get_parameter_value().integer_value
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
-        assert_type(get_args(Union[int, float]), radius_meters)
+        assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(radius_meters, get_args(Union[int, float]))
         corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
         ul = self._move_distance(latlon, (-45, corner_distance))
         lr = self._move_distance(latlon, (135, corner_distance))
@@ -955,8 +955,8 @@ class MapNavNode(Node):
         :param latlon2: The second point
         :return: The ground distance in meters between the two points
         """
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon1)
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon2)
+        assert_type(latlon1, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(latlon2, get_args(Union[LatLon, LatLonAlt]))
         _, __, dist = self._geod.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
         return dist
 
@@ -968,11 +968,11 @@ class MapNavNode(Node):
         :param azmth_dist: Tuple containing azimuth in degrees and distance in meters: (azimuth, distance)
         :return: The point that is given meters away in the azimuth direction from origin
         """
-        assert_type(tuple, azmth_dist)
-        assert_type(get_args(Union[LatLon, LatLonAlt]), latlon)
+        assert_type(azmth_dist, tuple)
+        assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
         azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
-        assert_type(get_args(Union[int, float]), azmth)
-        assert_type(get_args(Union[int, float]), dist)
+        assert_type(azmth, get_args(Union[int, float]))
+        assert_type(dist, get_args(Union[int, float]))
         lon, lat, azmth = self._geod.fwd(latlon.lon, latlon.lat, azmth, dist)
         return LatLon(lat, lon)
 
@@ -993,9 +993,9 @@ class MapNavNode(Node):
         if dim is None:
             self.get_logger().warn(f'Dimensions not available - returning None as map size.')
             return None
-        assert_type(Dim, dim)
+        assert_type(dim, Dim)
         diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
-        assert_type(int, diagonal)  # TODO: What if this is float?
+        assert_type(diagonal, int)  # TODO: What if this is float?
         return diagonal, diagonal
 
     def _map_dim_with_padding(self) -> Optional[Dim]:
@@ -1009,7 +1009,7 @@ class MapNavNode(Node):
         if map_size is None:
             self.get_logger().warn(f'Map size with padding not available - returning None as map dimensions.')
             return None
-        assert_type(tuple, map_size)
+        assert_type(map_size, tuple)
         assert_len(map_size, 2)
         return Dim(*map_size)
 
@@ -1036,7 +1036,7 @@ class MapNavNode(Node):
         if declared_size is None:
             self.get_logger().warn('CDeclared size not available - returning None as image dimensions.')
             return None
-        assert_type(tuple, declared_size)
+        assert_type(declared_size, tuple)
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
@@ -1098,7 +1098,7 @@ class MapNavNode(Node):
             return None
 
         if self._vehicle_local_position.xy_global is True and self._vehicle_local_position.z_global is True:
-            assert_type(int, self._vehicle_local_position.timestamp)
+            assert_type(self._vehicle_local_position.timestamp, int)
             return LatLonAlt(self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon,
                              self._vehicle_local_position.ref_alt)
         else:
@@ -1179,14 +1179,14 @@ class MapNavNode(Node):
         :return:
         """
         self.get_logger().info(f'Updating map at {center}, radius {radius} meters.')
-        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
-        assert_type(get_args(Union[int, float]), radius)
+        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(radius, get_args(Union[int, float]))
         max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
         # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
         assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
 
         bbox = self._get_bbox(center, radius)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
-        assert_type(BBox, bbox)
+        assert_type(bbox, BBox)
 
         map_size = self._map_size_with_padding()
         if map_size is None:
@@ -1198,10 +1198,10 @@ class MapNavNode(Node):
         version = self.get_parameter('wms.version').get_parameter_value().string_value
         layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
-        assert_type(str, url)
-        assert_type(str, version)
-        assert_type(str, layer_str)
-        assert_type(str, srs_str)
+        assert_type(url, str)
+        assert_type(version, str)
+        assert_type(layer_str, str)
+        assert_type(srs_str, str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
             if self._wms_results is not None:
@@ -1226,7 +1226,7 @@ class MapNavNode(Node):
         assert_len(result, 1)
         result = result[0]
         self.get_logger().info(f'WMS callback for bbox: {result.bbox}.')
-        assert_type(MapFrame, result)
+        assert_type(result, MapFrame)
         if self._map_frame is not None:
             self._previous_map_frame = self._map_frame
         self._map_frame = result
@@ -1260,17 +1260,17 @@ class MapNavNode(Node):
         """
         """"""
         # TODO: computation of bbox could be pushed in here - would just need to make Matcher._get_bbox pickle-able
-        assert_type(str, url)
-        assert_type(str, version)
-        assert_type(int, timeout)
+        assert_type(url, str)
+        assert_type(version, str)
+        assert_type(timeout, int)
         wms_client = _cached_wms_client(url, version, timeout)
         assert wms_client is not None
-        assert_type(BBox, bbox)
+        assert_type(bbox, BBox)
         assert(all(isinstance(x, int) for x in map_size))
-        assert_type(str, layer_str)
-        assert_type(str, srs_str)
-        assert_type(LatLon, center)
-        assert_type(get_args(Union[int, float]), radius)
+        assert_type(layer_str, str)
+        assert_type(srs_str, str)
+        assert_type(center, LatLon)
+        assert_type(radius, get_args(Union[int, float]))
         try:
             map_ = wms_client.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size, format='image/png',
                                      transparent=True)
@@ -1281,7 +1281,7 @@ class MapNavNode(Node):
         # Decode response from WMS server
         map_ = np.frombuffer(map_.read(), np.uint8)
         map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)
-        assert_type(np.ndarray, map_)
+        assert_type(map_, np.ndarray)
         assert_ndim(map_, 3)
         map_frame = MapFrame(center, radius, bbox, map_)
         return map_frame
@@ -1297,7 +1297,7 @@ class MapNavNode(Node):
         :return:
         """
         superglue_conf = config.get('superglue', None)
-        assert_type(dict, superglue_conf)
+        assert_type(superglue_conf, dict)
         global superglue
         superglue = SuperGlue(superglue_conf)
 
@@ -1310,8 +1310,8 @@ class MapNavNode(Node):
         :return: Tuple of two lists containing matching keypoints in img and map, respectively
         """
         """"""
-        assert_type(np.ndarray, img)
-        assert_type(np.ndarray, map_)
+        assert_type(img, np.ndarray)
+        assert_type(map_, np.ndarray)
         try:
             return superglue.match(img, map_)
         except Exception as e:
@@ -1337,7 +1337,7 @@ class MapNavNode(Node):
             return None
 
         self.get_logger().debug('Camera image callback triggered.')
-        assert_type(Image, msg)
+        assert_type(msg, Image)
 
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
 
@@ -1369,7 +1369,7 @@ class MapNavNode(Node):
 
             self._stored_inputs = inputs
             map_cropped = inputs.get('map_cropped')
-            assert_type(np.ndarray, map_cropped)
+            assert_type(map_cropped, np.ndarray)
 
             self.get_logger().debug(f'Matching image with timestamp {image_frame.timestamp} to map.')
             self._match(image_frame, map_cropped)
@@ -1383,7 +1383,7 @@ class MapNavNode(Node):
         if rpy is None:
             self.get_logger().warn(f'Could not get camera RPY - cannot return yaw.')
             return None
-        assert_type(RPY, rpy)
+        assert_type(rpy, RPY)
         camera_yaw = rpy.yaw
         return camera_yaw
 
@@ -1509,7 +1509,7 @@ class MapNavNode(Node):
         :param msg: VehicleLocalPosition from the PX4-ROS 2 bridge
         :return:
         """
-        assert_type(int, msg.timestamp)
+        assert_type(msg.timestamp, int)
         self._vehicle_local_position = msg
         self._sync_timestamps(self._vehicle_local_position.timestamp)
 
@@ -1519,7 +1519,7 @@ class MapNavNode(Node):
         :param altitude: Altitude of camera in meters
         :return: Suitable map radius in meters
         """
-        assert_type(get_args(Union[int, float]), altitude)
+        assert_type(altitude, get_args(Union[int, float]))
         max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
 
         camera_info = self._camera_info
@@ -1575,8 +1575,8 @@ class MapNavNode(Node):
         :param radius: Radius in meters of new map candidate
         :return: True if previous map frame is too close.
         """
-        assert_type(get_args(Union[int, float]), radius)
-        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+        assert_type(radius, get_args(Union[int, float]))
+        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         if self._previous_map_frame is not None:
             if not (abs(self._distance(center, self._previous_map_frame.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
@@ -1597,8 +1597,8 @@ class MapNavNode(Node):
         :param radius: Radius in meters of new map candidate
         :return: True if map should be updated
         """
-        assert_type(get_args(Union[int, float]), radius)
-        assert_type(get_args(Union[LatLon, LatLonAlt]), center)
+        assert_type(radius, get_args(Union[int, float]))
+        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
 
         # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
         if self._wms_results_pending() or self._previous_map_frame_too_close(center, radius):
@@ -1657,10 +1657,10 @@ class MapNavNode(Node):
         :param pose_covariances: Pose cross-covariances matrix to be published (length = 21)
         :return:
         """
-        assert_type(int, timestamp)
-        assert_type(tuple, position)
-        assert_type(np.ndarray, rotation)
-        assert_type(tuple, pose_covariances)
+        assert_type(timestamp, int)
+        assert_type(position, tuple)
+        assert_type(rotation, np.ndarray)
+        assert_type(pose_covariances, tuple)
         assert_len(position, 3)
         assert_shape(rotation, (4,))
         assert_len(pose_covariances, 21)
@@ -1728,7 +1728,7 @@ class MapNavNode(Node):
         if rpy is None:
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
             return None
-        assert_type(RPY, rpy)
+        assert_type(rpy, RPY)
         return rpy.pitch
 
     def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
@@ -1836,7 +1836,7 @@ class MapNavNode(Node):
         :param max_pitch: The limit for the pitch over which it will be considered too high
         :return: True if pitch is too high
         """
-        assert_type(get_args(Union[int, float]), max_pitch)
+        assert_type(max_pitch, get_args(Union[int, float]))
         camera_pitch = self._camera_pitch()
         if camera_pitch is not None:
             if abs(camera_pitch) > max_pitch:
@@ -1911,8 +1911,8 @@ class MapNavNode(Node):
         assert self._local_origin is None, f'self._local_origin was {self.__local_origin}. You should not try to ' \
                                            f'recompute the local origin if it has already been done.'
         x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
-        assert_type(float, x)
-        assert_type(float, y)
+        assert_type(x, float)
+        assert_type(y, float)
         azmth = self._get_azimuth(x, y)
         dist = math.sqrt(x ** 2 + y ** 2)
         local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (0,)))
@@ -1926,8 +1926,8 @@ class MapNavNode(Node):
         :param position: WGS84 coordinates and altitude in meters of estimated camera position
         :return: Tuple containing x, y and z coordinates (meters) in local frame
         """
-        assert_type(LatLonAlt, position)
-        assert_type(LatLonAlt, origin)
+        assert_type(position, LatLonAlt)
+        assert_type(origin, LatLonAlt)
 
         lats_orig = (origin.lat, origin.lat)
         lons_orig = (origin.lon, origin.lon)
@@ -2067,7 +2067,7 @@ class MapNavNode(Node):
             # Update covariance data window and check if covariance matrix is available
             # Do not create message if covariance matrix not yet available
             # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
-            assert_type(int, image_frame.timestamp)
+            assert_type(image_frame.timestamp, int)
             vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_attitude_estimate_rpy))
             self._push_covariance_data(local_position, vehicle_rpy_radians)
             if not self._covariance_window_full():
@@ -2095,9 +2095,9 @@ class MapNavNode(Node):
         :param filename: Name of file to write into
         :return:
         """
-        assert_type(get_args(Union[LatLon, LatLonAlt]), position)
-        assert_type(np.ndarray, fov)
-        assert_type(str, filename)
+        assert_type(position, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(fov, np.ndarray)
+        assert_type(filename, str)
         point = Feature(geometry=Point((position.lon, position.lat)))  # TODO: add name/description properties
         corners = np.flip(fov.squeeze()).tolist()
         corners = [tuple(x) for x in corners]
@@ -2142,12 +2142,12 @@ class MapNavNode(Node):
         """
         if self._publish_timer is not None:
             self.get_logger().info('Destroying publish timer.')
-            assert_type(rclpy.timer.Timer, self._publish_timer)
+            assert_type(self._publish_timer, rclpy.timer.Timer)
             self._publish_timer.destroy()
 
         if self._publish_timer is not None:
             self.get_logger().info('Destroying map update timer.')
-            assert_type(rclpy.timer.Timer, self._map_update_timer)
+            assert_type(self._map_update_timer, rclpy.timer.Timer)
             self._map_update_timer.destroy()
 
 

@@ -3,11 +3,11 @@ from typing import Any, Union, Sequence, Collection
 import numpy as np
 
 
-def assert_type(type_: Any, value: object) -> None:
+def assert_type(value: object, type_: Any) -> None:
     """Asserts that inputs are of same type.
 
-    :param type_: Type to be asserted
     :param value: Object to check
+    :param type_: Type to be asserted
     :return:
     """
     assert isinstance(value, type_), f'Type {type(value)} provided when {type_} was expected.'

@@ -28,10 +28,10 @@ class ImageFrame(object):
         :param frame_id: Frame id
         :param timestamp: Image timestamp (estimated EKF2 system time from when image was taken)
         """
-        assert_type(np.ndarray, image)
+        assert_type(image, np.ndarray)
         assert_ndim(image, 3)
-        assert_type(str, frame_id)
-        assert_type(int, timestamp)
+        assert_type(frame_id, str)
+        assert_type(timestamp, int)
         self._image = image
         self._frame_id = frame_id
         self._timestamp = timestamp
@@ -64,7 +64,7 @@ class ImageFrame(object):
     def fov(self, value: np.ndarray) -> None:
         if self._fov is not None:
             raise AttributeError("Modification of property not allowed.")
-        assert_type(np.ndarray, value)
+        assert_type(value, np.ndarray)
         assert_shape(value, (4, 1, 2))
         self._fov = value
 
@@ -77,7 +77,7 @@ class ImageFrame(object):
     def position(self, value: LatLonAlt) -> None:
         if self._position is not None:
             raise AttributeError("Modification of property not allowed.")
-        assert_type(LatLonAlt, value)
+        assert_type(value, LatLonAlt)
         self._position = value
 
 
@@ -92,10 +92,10 @@ class MapFrame(object):
         :param bbox: The bounding box of the map
         :param image: Map raster
         """
-        assert_type(BBox, bbox)
-        assert_type(LatLon, center)
-        assert_type(get_args(Union[int, float]), radius)
-        assert_type(np.ndarray, image)
+        assert_type(bbox, BBox)
+        assert_type(center, LatLon)
+        assert_type(radius, get_args(Union[int, float]))
+        assert_type(image, np.ndarray)
         assert_ndim(image, 3)
         self._bbox = bbox
         self._center = center
@@ -130,7 +130,7 @@ def fov_center(fov_wgs84: np.ndarray) -> BBox:
     :param fov_wgs84: FOV corners in WGS84 coordinates
     :return: The LatLon center
     """
-    assert_type(np.ndarray, fov_wgs84)
+    assert_type(fov_wgs84, np.ndarray)
     assert_shape(fov_wgs84, (4, 2))
     left, bottom, right, top = 180, 90, -180, -90
     for pt in fov_wgs84:
@@ -148,7 +148,7 @@ def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
     :param sz: Keypoint size
     :return:
     """
-    assert_type(np.ndarray, pt)
+    assert_type(pt, np.ndarray)
     assert_shape(pt, (2,))
     return cv2.KeyPoint(pt[0], pt[1], sz)
 
@@ -198,8 +198,8 @@ def get_fov_and_c(img_arr: np.ndarray, h_mat: np.ndarray) -> Tuple[np.ndarray, n
     :param h_mat: Homography matrix
     :return: Tuple of FOV corner coordinates and prinicpal point np.ndarrays
     """
-    assert_type(np.ndarray, img_arr)
-    assert_type(np.ndarray, h_mat)
+    assert_type(img_arr, np.ndarray)
+    assert_type(h_mat, np.ndarray)
     h, w, _ = img_arr.shape  # height before width in np.array shape
     src_fov = create_src_corners(h, w)
 
@@ -225,8 +225,8 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     :param w: Source image width
     :return: Source image corner pixel coordinates
     """
-    assert_type(int, h)
-    assert_type(int, w)
+    assert_type(h, int)
+    assert_type(w, int)
     assert h > 0 and w > 0, f'Height {h} and width {w} are both expected to be positive.'
     return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
 
@@ -267,8 +267,8 @@ def pix_to_wgs84_affine(map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_r
     crop_translation = (crop_padding / 2)
     pix_to_uncropped = np.identity(3)
     # Invert order x<->y in translation vector since height comes first in Dim tuple (inputs should be Dims)
-    assert_type(Dim, map_raster_padded_dim)
-    assert_type(Dim, img_dim)
+    assert_type(map_raster_padded_dim, Dim)
+    assert_type(img_dim, Dim)
     pix_to_uncropped[0:2][:, 2] = crop_translation[::-1]
 
     rotation_center = map_dim_arr / 2

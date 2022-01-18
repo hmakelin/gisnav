@@ -2048,7 +2048,7 @@ class MapNavNode(Node):
         # TODO: figure out a way to get vehicle attitude from gimbal attitude
         vehicle_attitude_estimate = vehicle_attitude
         vehicle_attitude_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')
-        quaternion = vehicle_attitude_estimate.as_quat()  # TODO: may have to transform axis to make this compatible with EKF2 frame of reference
+        quaternion = vehicle_attitude_estimate.as_quat()
 
         # noinspection PyUnreachableCode
         if __debug__:

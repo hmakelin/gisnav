@@ -2546,7 +2546,7 @@ class MapNavNode(Node):
                 # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
                 #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
                 covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
-                covariance_urt = list(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
+                covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
                 assert_len(covariance_urt, 21)
                 self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
 

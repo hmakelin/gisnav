@@ -37,6 +37,9 @@ from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
     GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
 from sensor_msgs.msg import CameraInfo, Image
+from mavros_msgs.msg import HilGPS
+from std_msgs.msg import Header
+from geographic_msgs.msg import GeoPoint
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()
@@ -228,6 +231,8 @@ class MapNavNode(Node):
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
         self._vehicle_visual_odometry = None  # To be published by _timer_callback (see _timer property)
+
+        self._mock_gps = self._create_publisher('/mavros/hil/gps', HilGPS)
 
     @property
     def name(self) -> dict:
@@ -1640,6 +1645,31 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
+    def _create_hil_gps_msg(self, latlonalt: LatLonAlt, time_usec_: int):
+        msg = HilGPS()
+        geo = GeoPoint()
+        header = Header()
+        header.stamp = self.get_clock().now().to_msg()
+        msg.header = header
+
+        msg.fix_type = 3
+
+        geo.latitude = latlonalt.lat
+        geo.longitude = latlonalt.lon
+        geo.altitude = latlonalt.alt  # positive for up
+        msg.geo = geo
+
+        msg.eph = np.iinfo(np.uint16).max
+        msg.epv = np.iinfo(np.uint16).max
+        msg.vel = np.iinfo(np.uint16).max
+        msg.vn = 0  # TODO
+        msg.ve = 0
+        msg.vd = 0
+        msg.cog = np.iinfo(np.uint16).max
+        msg.satellites_visible = np.iinfo(np.uint8).max
+
+        self._mock_gps.publish(msg)
+
     def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: np.ndarray,
                                             pose_covariances: tuple) -> None:
         """Creates a :class:`px4_msgs.msg.VehicleVisualOdometry` message and saves it to
@@ -2080,6 +2110,8 @@ class MapNavNode(Node):
                 covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
                 assert_len(covariance_urt, 21)
                 self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
+
+        self._create_hil_gps_msg(image_frame.position, image_frame.timestamp)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

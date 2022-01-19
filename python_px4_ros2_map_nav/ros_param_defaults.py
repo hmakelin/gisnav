@@ -27,6 +27,11 @@ class Defaults:
     WMS_REQUEST_TIMEOUT = 5
     """WMS client request timeout in seconds"""
 
+    MISC_MOCK_GPS = True
+    """Indicates that estimated vehicle position, velocity and heading should be published as a mock GPS message.
+    
+    Otherwise estimates will be published as vehicle visual odometry."""
+
     MISC_PUBLISH_FREQUENCY = 40
     """Publishing frequency for outgoing :class:`px4_msgs.msg.VehicleVisualOdometry` messages"""
 

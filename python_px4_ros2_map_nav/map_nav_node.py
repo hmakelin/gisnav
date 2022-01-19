@@ -35,11 +35,8 @@ from python_px4_ros2_map_nav.util import setup_sys_path, BBox, Dim, rotate_and_c
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
-    GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude
+    GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
-from mavros_msgs.msg import HilGPS
-from std_msgs.msg import Header
-from geographic_msgs.msg import GeoPoint
 
 # Add the share folder to Python path
 share_dir, superglue_dir = setup_sys_path()
@@ -117,6 +114,7 @@ class MapNavNode(Node):
     SUBSCRIBE_KEY = 'subscribe'  # Used as key in both Matcher.TOPICS and Matcher._topics
     PUBLISH_KEY = 'publish'  # Used as key in both Matcher.TOPICS and Matcher._topics
     VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME = 'VehicleVisualOdometry_PubSubTopic'  # TODO: Used when publishing, do this in some bette way
+    VEHICLE_GPS_POSITION_TOPIC_NAME = 'VehicleGpsPosition_PubSubTopic'
     TOPICS = [
         {
             TOPIC_NAME_KEY: 'VehicleLocalPosition_PubSubTopic',
@@ -156,6 +154,11 @@ class MapNavNode(Node):
         {
             TOPIC_NAME_KEY: VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME,
             CLASS_KEY: VehicleVisualOdometry,
+            PUBLISH_KEY: True
+        },
+        {
+            TOPIC_NAME_KEY: VEHICLE_GPS_POSITION_TOPIC_NAME,
+            CLASS_KEY: VehicleGpsPosition,
             PUBLISH_KEY: True
         }
     ]
@@ -231,8 +234,6 @@ class MapNavNode(Node):
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
         self._vehicle_visual_odometry = None  # To be published by _timer_callback (see _timer property)
-
-        self._mock_gps = self._create_publisher('/mavros/hil/gps', HilGPS)
 
     @property
     def name(self) -> dict:
@@ -792,6 +793,7 @@ class MapNavNode(Node):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
+            ('mock_gps', config.get(namespace, {}).get('mock_gps', Defaults.MISC_MOCK_GPS)),
             ('publish_frequency', config.get(namespace, {})
              .get('publish_frequency', Defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
@@ -1645,28 +1647,38 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_hil_gps_msg(self, latlonalt: LatLonAlt, time_usec_: int):
-        msg = HilGPS()
-        geo = GeoPoint()
-        header = Header()
-        header.stamp = self.get_clock().now().to_msg()
-        msg.header = header
+    def _create_mock_gps_msg(self, latlonalt: LatLonAlt) -> None:
+        """Creates a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position.
 
+        Currently also publishes the message directly but plan is to move publishing under a separate timer.
+
+        Does not yet take eph, epv, velocities nor heading as argument. Plan is to use these too in the message in the
+        future.
+
+        :param latlonalt: Estimated vehicle position
+        :return:
+        """
+        msg = VehicleGpsPosition()
+        msg.timestamp = self._get_ekf2_time() + self.EKF2_TIMESTAMP_PADDING
         msg.fix_type = 3
-
-        geo.latitude = latlonalt.lat
-        geo.longitude = latlonalt.lon
-        geo.altitude = latlonalt.alt  # positive for up
-        msg.geo = geo
-
-        msg.eph = np.iinfo(np.uint16).max
-        msg.epv = np.iinfo(np.uint16).max
-        msg.vel = np.iinfo(np.uint16).max
-        msg.vn = 0  # TODO
-        msg.ve = 0
-        msg.vd = 0
-        msg.cog = np.iinfo(np.uint16).max
-        msg.satellites_visible = np.iinfo(np.uint8).max
+        msg.lat = int(latlonalt.lat * 1e7)
+        msg.lon = int(latlonalt.lon * 1e7)
+        msg.alt = int(latlonalt.alt * 1e3)
+        msg.eph = 10.0  # TODO Need to compute the "real" standard deviation
+        msg.epv = 10.0
+        msg.hdop = 5.
+        msg.vdop = 5.
+        msg.vel_m_s = 0.
+        msg.vel_n_m_s = 0.
+        msg.vel_e_m_s = 0.
+        msg.vel_d_m_s = 0.
+        msg.cog_rad = 0.
+        msg.vel_ned_valid = False
+        msg.satellites_used = np.iinfo(np.uint8).max
+        msg.time_utc_usec = int(time.time() * 1e6)
+        msg.heading = np.nan
+        msg.heading_offset = np.nan
+        msg.selected = 1
 
         self._mock_gps.publish(msg)
 
@@ -2042,7 +2054,15 @@ class MapNavNode(Node):
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
-        image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: should just ditch LatLonAlt and keep numpy arrays?
+        image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+
+        mock_gps = self.get_parameter('misc.mock_gps').get_parameter_value().bool_value
+        if mock_gps:
+            self._create_mock_gps_msg(image_frame.position)
+            return
+        else:
+            # TODO: put the other stuff below under this else branch to prevent accidentally mixing things up
+            pass
 
         # Check that we have everything we need to publish vehicle_visual_odometry
         if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
@@ -2110,8 +2130,6 @@ class MapNavNode(Node):
                 covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
                 assert_len(covariance_urt, 21)
                 self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
-
-        self._create_hil_gps_msg(image_frame.position, image_frame.timestamp)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

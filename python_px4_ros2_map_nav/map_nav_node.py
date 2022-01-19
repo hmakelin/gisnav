@@ -794,6 +794,8 @@ class MapNavNode(Node):
         namespace = 'misc'
         self.declare_parameters(namespace, [
             ('mock_gps', config.get(namespace, {}).get('mock_gps', Defaults.MISC_MOCK_GPS)),
+            ('mock_gps_selection', config.get(namespace, {})
+             .get('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION)),
             ('publish_frequency', config.get(namespace, {})
              .get('publish_frequency', Defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
@@ -1647,7 +1649,7 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_mock_gps_msg(self, latlonalt: LatLonAlt) -> None:
+    def _create_mock_gps_msg(self, latlonalt: LatLonAlt, selection: int) -> None:
         """Creates a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position.
 
         Currently also publishes the message directly but plan is to move publishing under a separate timer.
@@ -1656,8 +1658,10 @@ class MapNavNode(Node):
         future.
 
         :param latlonalt: Estimated vehicle position
+        :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
+        # TODO: check inputs?
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time() + self.EKF2_TIMESTAMP_PADDING
         msg.fix_type = 3
@@ -1678,7 +1682,7 @@ class MapNavNode(Node):
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.heading = np.nan
         msg.heading_offset = np.nan
-        msg.selected = 1
+        msg.selected = selection
 
         self._mock_gps.publish(msg)
 
@@ -2058,7 +2062,8 @@ class MapNavNode(Node):
 
         mock_gps = self.get_parameter('misc.mock_gps').get_parameter_value().bool_value
         if mock_gps:
-            self._create_mock_gps_msg(image_frame.position)
+            mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
+            self._create_mock_gps_msg(image_frame.position, mock_gps_selection)
             return
         else:
             # TODO: put the other stuff below under this else branch to prevent accidentally mixing things up

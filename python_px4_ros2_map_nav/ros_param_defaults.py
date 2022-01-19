@@ -32,6 +32,11 @@ class Defaults:
     
     Otherwise estimates will be published as vehicle visual odometry."""
 
+    MISC_MOCK_GPS_SELECTION = 1
+    """GPS selection to include in mock GPS messages.
+    
+    Applies if :py:attr:`~MISC_MOCK_GPS` is enabled."""
+
     MISC_PUBLISH_FREQUENCY = 40
     """Publishing frequency for outgoing :class:`px4_msgs.msg.VehicleVisualOdometry` messages"""
 

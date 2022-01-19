@@ -8,6 +8,7 @@ map_nav_node:
       request_timeout: 5
     misc:
       mock_gps: True
+      mock_gps_selection: 1  # Applies if mock_gps: True, does nothing otherwise
       publish_frequency: 40  # Hz
       export_position: 'position.json'
       export_projection: 'projection.json'

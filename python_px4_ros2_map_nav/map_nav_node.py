@@ -1677,9 +1677,12 @@ class MapNavNode(Node):
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time() + self.EKF2_TIMESTAMP_PADDING
         msg.fix_type = 3
+        msg.s_variance_m_s = 5.  # TODO: estimate better values
+        msg.c_variance_rad = 0.5
         msg.lat = int(latlonalt.lat * 1e7)
         msg.lon = int(latlonalt.lon * 1e7)
         msg.alt = int(latlonalt.alt * 1e3)
+        msg.alt_ellipsoid = msg.alt
         msg.eph = 10.0  # TODO Need to compute the "real" standard deviation
         msg.epv = 10.0
         msg.hdop = 5.
@@ -1687,8 +1690,8 @@ class MapNavNode(Node):
         msg.vel_m_s = np.linalg.norm(velocities)
         msg.vel_n_m_s = velocities[0]
         msg.vel_e_m_s = velocities[1]
-        msg.vel_d_m_s = -velocities[2]  # TODO: check that sign inversion is correct
-        msg.cog_rad = np.arctan2(velocities[0], velocities[1])  # TODO: check that correct
+        msg.vel_d_m_s = velocities[2]
+        msg.cog_rad = np.arctan2(velocities[1], velocities[0])  # x (north) mapped to y, y (east) mapped to x
         msg.vel_ned_valid = False
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
@@ -1696,7 +1699,8 @@ class MapNavNode(Node):
         msg.heading_offset = np.nan
         msg.selected = selection
 
-        self._mock_gps.publish(msg)
+        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME)\
+            .publish(msg)
 
     def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: np.ndarray,
                                             pose_covariances: tuple) -> None:
@@ -1997,11 +2001,11 @@ class MapNavNode(Node):
         lon_diff = math.copysign(dist[0], position.lon - origin.lon)
 
         alt = position.alt - origin.alt
-        if alt < 0:
-            self.get_logger().warn(f'Computed altitude {alt} was negative. Cannot compute local frame position.')
-            return None
+        #if alt < 0:
+        #    self.get_logger().warn(f'Computed altitude {alt} was negative. Cannot compute local frame position.')
+        #    return None
 
-        return lat_diff, lon_diff, -alt
+        return lat_diff, lon_diff, alt
 
     def _estimate_velocities(self, current_position: ImageFrame, previous_position: ImageFrame) -> np.ndarray:
         """Estimates x, y and z velocities in m/s from current and previous position.
@@ -2010,7 +2014,7 @@ class MapNavNode(Node):
         :param previous_position: Previous estimated position
         :return: Tuple of x, y and z velocity in m/s
         """
-        time_diff_sec = (current_position.timestamp - previous_position)
+        time_diff_sec = (current_position.timestamp - previous_position.timestamp) / 1e6
         diff_position = np.array(self._compute_local_frame_position(current_position.position,
                                                                     previous_position.position))
         velocities = diff_position / time_diff_sec
@@ -2138,32 +2142,26 @@ class MapNavNode(Node):
         if mock_gps:
             mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
             if self._previous_image_frame is not None:
-                velocities = self._estimate_velocities(image_frame.position, self._previous_image_frame.position)
+                velocities = self._estimate_velocities(image_frame, self._previous_image_frame)
                 self._create_mock_gps_msg(image_frame.position, velocities, mock_gps_selection)
-            self._previous_image_frame = image_frame
-            return
         else:
-            # TODO: put the other stuff below under this else branch to prevent accidentally mixing things up
-
-            pass
-
-        if vehicle_attitude_estimate_rpy is not None:
-            # Update covariance data window and check if covariance matrix is available
-            # Do not create message if covariance matrix not yet available
-            # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
-            assert_type(image_frame.timestamp, int)
-            vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_attitude_estimate_rpy))
-            self._push_covariance_data(local_position, vehicle_rpy_radians)
-            if not self._covariance_window_full():
-                self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
-                                       'Skipping creating vehicle_visual_odometry message for now.')
-            else:
-                # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
-                #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
-                covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
-                covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
-                assert_len(covariance_urt, 21)
-                self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
+            if vehicle_attitude_estimate_rpy is not None:
+                # Update covariance data window and check if covariance matrix is available
+                # Do not create message if covariance matrix not yet available
+                # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
+                assert_type(image_frame.timestamp, int)
+                vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_attitude_estimate_rpy))
+                self._push_covariance_data(local_position, vehicle_rpy_radians)
+                if not self._covariance_window_full():
+                    self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
+                                           'Skipping creating vehicle_visual_odometry message for now.')
+                else:
+                    # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
+                    #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
+                    covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
+                    covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
+                    assert_len(covariance_urt, 21)
+                    self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:

@@ -219,6 +219,7 @@ class MapNavNode(Node):
         # self._image_frame = None  # Not currently used / needed
         self._map_frame = None
         self._previous_map_frame = None
+        self._previous_image_frame = None
 
         self._local_origin = None  # Estimated EKF2 local frame origin WGS84 coordinates
 
@@ -469,6 +470,16 @@ class MapNavNode(Node):
     def _previous_map_frame(self, value: Optional[MapFrame]) -> None:
         assert_type(value, get_args(Optional[MapFrame]))
         self.__previous_map_frame = value
+
+    @property
+    def _previous_image_frame(self) -> Optional[ImageFrame]:
+        """The previous image frame which is needed for computing the velocity estimate."""
+        return self.__previous_image_frame
+
+    @_previous_image_frame.setter
+    def _previous_image_frame(self, value: Optional[ImageFrame]) -> None:
+        assert_type(value, get_args(Optional[ImageFrame]))
+        self.__previous_image_frame = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:
@@ -1649,7 +1660,7 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_mock_gps_msg(self, latlonalt: LatLonAlt, selection: int) -> None:
+    def _create_mock_gps_msg(self, latlonalt: LatLonAlt, velocities: np.ndarray, selection: int) -> None:
         """Creates a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position.
 
         Currently also publishes the message directly but plan is to move publishing under a separate timer.
@@ -1658,6 +1669,7 @@ class MapNavNode(Node):
         future.
 
         :param latlonalt: Estimated vehicle position
+        :param velocities: Estimated vehicle velocities (vx, vy, vz) in meters per second
         :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
@@ -1672,11 +1684,11 @@ class MapNavNode(Node):
         msg.epv = 10.0
         msg.hdop = 5.
         msg.vdop = 5.
-        msg.vel_m_s = 0.
-        msg.vel_n_m_s = 0.
-        msg.vel_e_m_s = 0.
-        msg.vel_d_m_s = 0.
-        msg.cog_rad = 0.
+        msg.vel_m_s = np.linalg.norm(velocities)
+        msg.vel_n_m_s = velocities[0]
+        msg.vel_e_m_s = velocities[1]
+        msg.vel_d_m_s = -velocities[2]  # TODO: check that sign inversion is correct
+        msg.cog_rad = np.arctan2(velocities[0], velocities[1])  # TODO: check that correct
         msg.vel_ned_valid = False
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
@@ -1991,6 +2003,19 @@ class MapNavNode(Node):
 
         return lat_diff, lon_diff, -alt
 
+    def _estimate_velocities(self, current_position: ImageFrame, previous_position: ImageFrame) -> np.ndarray:
+        """Estimates x, y and z velocities in m/s from current and previous position.
+
+        :param current_position: Current estimated position
+        :param previous_position: Previous estimated position
+        :return: Tuple of x, y and z velocity in m/s
+        """
+        time_diff_sec = (current_position.timestamp - previous_position)
+        diff_position = np.array(self._compute_local_frame_position(current_position.position,
+                                                                    previous_position.position))
+        velocities = diff_position / time_diff_sec
+        return velocities
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
                          k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,
                          vehicle_attitude: Rotation, map_dim_with_padding: Dim, img_dim: Dim,
@@ -2060,15 +2085,6 @@ class MapNavNode(Node):
 
         image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
 
-        mock_gps = self.get_parameter('misc.mock_gps').get_parameter_value().bool_value
-        if mock_gps:
-            mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-            self._create_mock_gps_msg(image_frame.position, mock_gps_selection)
-            return
-        else:
-            # TODO: put the other stuff below under this else branch to prevent accidentally mixing things up
-            pass
-
         # Check that we have everything we need to publish vehicle_visual_odometry
         if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
             self.get_logger().debug(f'Could not determine global position. Cannot create vehicle visual odometry '
@@ -2118,6 +2134,19 @@ class MapNavNode(Node):
             visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
+        mock_gps = self.get_parameter('misc.mock_gps').get_parameter_value().bool_value
+        if mock_gps:
+            mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
+            if self._previous_image_frame is not None:
+                velocities = self._estimate_velocities(image_frame.position, self._previous_image_frame.position)
+                self._create_mock_gps_msg(image_frame.position, velocities, mock_gps_selection)
+            self._previous_image_frame = image_frame
+            return
+        else:
+            # TODO: put the other stuff below under this else branch to prevent accidentally mixing things up
+
+            pass
+
         if vehicle_attitude_estimate_rpy is not None:
             # Update covariance data window and check if covariance matrix is available
             # Do not create message if covariance matrix not yet available
@@ -2139,6 +2168,8 @@ class MapNavNode(Node):
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
             self._export_position(image_frame.position, image_frame.fov, export_geojson)
+
+        self._previous_image_frame = image_frame
 
     def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.

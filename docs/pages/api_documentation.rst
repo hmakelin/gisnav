@@ -48,3 +48,12 @@ ros_param_defaults module
    :undoc-members:
    :show-inheritance:
 
+assertions module
+---------------------------------------
+.. automodule:: python_px4_ros2_map_nav.assertions
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+

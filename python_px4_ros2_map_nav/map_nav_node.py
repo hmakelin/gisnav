@@ -94,9 +94,6 @@ class MapNavNode(Node):
     # Logs a warning if publish frequency is close to the bounds of desired publish frequency
     VVO_PUBLISH_FREQUENCY_WARNING_PADDING = 3
 
-    # For logging a warning if fx and fy differ too much (assume they are the same)
-    FOCAL_LENGTH_DIFF_THRESHOLD = 0.05
-
     # ROS 2 QoS profiles for topics
     # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
     # If publishign for some reason stops, it can be assumed that something has gone very wrong

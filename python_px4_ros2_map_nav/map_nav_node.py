@@ -1690,9 +1690,9 @@ class MapNavNode(Node):
             return False
 
         # Check condition (3) - whether vehicle altitude is too low
-        min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().double_value
+        min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
         altitude = self._alt_from_vehicle_local_position()
-        if altitude is None or altitude < min_alt:
+        if not isinstance(min_alt, int) or altitude < min_alt:
             self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
                                    f'could not be determined. Skipping matching.')
             return False

@@ -646,10 +646,11 @@ class MapNavNode(Node):
 
         :return:
         """
+        read_only = ParameterDescriptor(read_only=True)
         namespace = 'wms'
         self.declare_parameters(namespace, [
-            ('url', Defaults.WMS_URL, ParameterDescriptor(read_only=True)),
-            ('version', Defaults.WMS_VERSION, ParameterDescriptor(read_only=True)),
+            ('url', Defaults.WMS_URL, read_only),
+            ('version', Defaults.WMS_VERSION, read_only),
             ('layer', Defaults.WMS_LAYER),
             ('srs', Defaults.WMS_SRS),
             ('request_timeout', Defaults.WMS_REQUEST_TIMEOUT)
@@ -668,7 +669,7 @@ class MapNavNode(Node):
         namespace = 'map_update'
         self.declare_parameters(namespace, [
             ('initial_guess', None),
-            ('update_delay', Defaults.MAP_UPDATE_UPDATE_DELAY, ParameterDescriptor(read_only=True)),
+            ('update_delay', Defaults.MAP_UPDATE_UPDATE_DELAY, read_only),
             ('default_altitude', Defaults.MAP_UPDATE_DEFAULT_ALTITUDE),
             ('gimbal_projection', Defaults.MAP_UPDATE_GIMBAL_PROJECTION),
             ('max_map_radius', Defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT),
@@ -679,12 +680,12 @@ class MapNavNode(Node):
 
         namespace = 'superglue'
         self.declare_parameters(namespace, [
-            ('superpoint.nms_radius', SuperGlue.DEFAULT_SUPERPOINT_NMS_RADIUS),
-            ('superpoint.keypoint_threshold', SuperGlue.DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD),
-            ('superpoint.max_keypoints', SuperGlue.DEFAULT_SUPERPOINT_MAX_KEYPOINTS),
-            ('superglue.weights', SuperGlue.DEFAULT_SUPERGLUE_WEIGHTS),
-            ('superpoint.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS),
-            ('superpoint.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD)
+            ('superpoint.nms_radius', SuperGlue.DEFAULT_SUPERPOINT_NMS_RADIUS, read_only),
+            ('superpoint.keypoint_threshold', SuperGlue.DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD, read_only),
+            ('superpoint.max_keypoints', SuperGlue.DEFAULT_SUPERPOINT_MAX_KEYPOINTS, read_only),
+            ('superglue.weights', SuperGlue.DEFAULT_SUPERGLUE_WEIGHTS, read_only),
+            ('superpoint.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS, read_only),
+            ('superpoint.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD, read_only)
         ])
 
     def _use_gimbal_projection(self) -> bool:

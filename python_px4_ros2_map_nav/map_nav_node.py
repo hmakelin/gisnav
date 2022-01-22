@@ -680,7 +680,7 @@ class MapNavNode(Node):
             ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
             ('variance_estimation_length', config.get(namespace, {})
              .get('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH)),
-            ('min_match_altitude', config.get(namespace, {}).get('min_match_altitude', Defaults.MIN_MATCH_ALTITUDE))
+            ('min_match_altitude', config.get(namespace, {}).get('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE))
         ])
 
         namespace = 'map_update'

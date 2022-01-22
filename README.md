@@ -43,7 +43,9 @@ cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
 
 ### 4. Run the node
 ```
-ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info
+cd $HOME/px4_ros_com_ros2
+ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
+    src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
 ```
 
 ## Advanced Configuration
@@ -95,7 +97,8 @@ This repository is structured as a `colcon` package:
 └── python_px4_ros2_map_nav
     ├── __init__.py
     ├── map_nav_node.py                     # Code for the ROS 2 node
-    ├── map_nav_node.py                     # Default parameter values for ROS
+    ├── ros_params_defaults.py              # Default values for ROS parameters
+    ├── assertions.py                       # Helper assertion functions
     ├── superglue.py                        # SuperGlue adapter code
     └── util.py                             # Static functions and other utilities
 ```

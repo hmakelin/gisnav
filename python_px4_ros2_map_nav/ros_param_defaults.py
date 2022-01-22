@@ -50,10 +50,10 @@ class Defaults:
     MISC_MIN_MATCH_ALTITUDE = 50
     """Minimum altitude in meters under which matches against map will not be attempted."""
 
-    MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.world
+    MAP_UPDATE_INITIAL_GUESS = None
     """Initial guess of vehicle's rough global position
     
-    The default value is the starting position defined in the ksql_airport.world file. This position is used when no
+    Cannot provide arbitrary default initial guess for vehicle. This position is used when no
     information regarding vehicle's global position has been received via the PX4-ROS 2 bridge (i.e. via
     :class:`px4_msgs.msg.VehicleGlobalPosition` or :class:`px4_msgs.msg.VehicleLocalPosition` message). This may happen
     for example when GPS fusion is turned off in PX4's EKF2_AID_MASK parameter.

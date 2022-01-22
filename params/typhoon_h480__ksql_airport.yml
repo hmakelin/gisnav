@@ -14,9 +14,7 @@ map_nav_node:
       variance_estimation_length: 20
       min_match_altitude: 50
     map_update:
-      initial_guess:  # Values from ksql_airport.world file
-        lat: 37.523640
-        lon: -122.255122
+      initial_guess: [37.523640, -122.255122] # Values from ksql_airport.world file
       update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
       default_altitude: 130
       gimbal_projection: True
@@ -25,12 +23,12 @@ map_nav_node:
       map_radius_meters_default: 400
       update_map_center_threshold: 50
       update_map_radius_threshold: 50
-  superglue:  # Recommended outdoor config from SuperGlue repo's README.md
-    superpoint:
-      nms_radius: 3
-      keypoint_threshold: 0.005
-      max_keypoints: 2048
-    superglue:
-      weights: 'outdoor'
-      sinkhorn_iterations: 20
-      match_threshold: 0.2
+    superglue:  # Recommended outdoor params from SuperGlue repo's README.md
+      superpoint:
+        nms_radius: 3
+        keypoint_threshold: 0.005
+        max_keypoints: 2048
+      superglue:
+        weights: 'outdoor'
+        sinkhorn_iterations: 20
+        match_threshold: 0.2

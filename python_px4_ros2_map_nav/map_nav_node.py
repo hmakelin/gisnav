@@ -81,9 +81,6 @@ class MapNavNode(Node):
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
 
-    # Default name of config file
-    CONFIG_FILE_DEFAULT = "typhoon_h480__ksql_airport.yml"
-
     # ROS 2 QoS profiles for topics
     # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
     # If publishign for some reason stops, it can be assumed that something has gone very wrong
@@ -144,29 +141,23 @@ class MapNavNode(Node):
         }
     ]
 
-    def __init__(self, node_name: str, share_directory: str, superglue_directory: str,
-                 config: str = CONFIG_FILE_DEFAULT) -> None:
+    def __init__(self, node_name: str, share_directory: str, superglue_directory: str) -> None:
         """Initializes the ROS 2 node.
 
         :param node_name: Name of the node
         :param share_directory: Path of the share directory with configuration and other files
         :param superglue_directory: Path of the directory with SuperGlue related files
-        :param config: Path to the config file in the share folder
         """
         assert_type(node_name, str)
         super().__init__(node_name)
         self.name = node_name
         assert_type(share_directory, str)
         assert_type(superglue_directory, str)
-        assert_type(config, str)
         self._share_dir = share_directory
         self._superglue_dir = superglue_directory
 
-        # Setup config and declare ROS parameters
-        self._config = self._load_config(config)
-        params = self._config.get(node_name, {}).get('ros__parameters')
-        assert_type(params, dict)
-        self._declare_ros_params(params)
+        # Setup params and declare ROS parameters
+        self._declare_ros_params()
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -189,8 +180,15 @@ class MapNavNode(Node):
         self._stored_inputs = None  # Must check for None when using this
         self._superglue_results = None  # Must check for None when using this
         # Do not increase the process count, it should be 1
+        superglue_parameters = self.get_parameters_by_prefix('superglue.superglue')
+        superpoint_parameters = self.get_parameters_by_prefix('superglue.superpoint')
+        parameters = {'superglue': superglue_parameters, 'superpoint': superpoint_parameters}
+        for branch in ['superglue', 'superpoint']:
+            for k, v in parameters[branch].items():
+                if isinstance(v, rclpy.parameter.Parameter):
+                    parameters[branch][k] = v.value
         self._superglue_pool = torch.multiprocessing.Pool(1, initializer=self._superglue_init_worker,
-                                                          initargs=(self._config.get(self.name, {}), ))
+                                                          initargs=(parameters, ))
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -203,7 +201,7 @@ class MapNavNode(Node):
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
-        self._estimation_history = None  # Windowed observations for computing position error
+        self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
@@ -222,16 +220,6 @@ class MapNavNode(Node):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
-
-    @property
-    def _config(self) -> dict:
-        """ROS parameters and other configuration info."""
-        return self.__config
-
-    @_config.setter
-    def _config(self, value: dict) -> None:
-        assert_type(value, dict)
-        self.__config = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -584,9 +572,13 @@ class MapNavNode(Node):
         If some of the initial guess values are not provided, a None is returned in their place within the tuple.
 
         :return: A lat, lon, alt tuple"""
-        return self.get_parameter('map_update.initial_guess.lat').get_parameter_value().double_value, \
-               self.get_parameter('map_update.initial_guess.lon').get_parameter_value().double_value, \
-               self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
+        initial_guess = self.get_parameter('map_update.initial_guess').get_parameter_value().double_array_value
+        if not (len(initial_guess) == 2 and all(isinstance(x, float) for x in initial_guess)):
+            lat, lon = None, None
+        else:
+            lat, lon = initial_guess[0], initial_guess[1]
+
+        return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
     # TODO: update docstring - local position stuff was removed
     def _map_update_timer_callback(self) -> None:
@@ -652,74 +644,55 @@ class MapNavNode(Node):
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')
 
-    def _declare_ros_params(self, config: dict) -> None:
-        """Declares ROS parameters from a config file.
+    def _declare_ros_params(self) -> None:
+        """Declares ROS parameters
 
-        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults` if values are not provided. Note that
-        some parameters are declared as read_only and cannot be changed at runtime.
+        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults`. Note that some parameters are declared
+        as read_only and cannot be changed at runtime.
 
-        :param config: The value of the ros__parameters key from the parsed configuration file.
         :return:
         """
+        read_only = ParameterDescriptor(read_only=True)
         namespace = 'wms'
         self.declare_parameters(namespace, [
-            ('url', config.get(namespace, {}).get('url', Defaults.WMS_URL), ParameterDescriptor(read_only=True)),
-            ('version', config.get(namespace, {})
-             .get('version', Defaults.WMS_VERSION), ParameterDescriptor(read_only=True)),
-            ('layer', config.get(namespace, {}).get('layer', Defaults.WMS_LAYER)),
-            ('srs', config.get(namespace, {}).get('srs', Defaults.WMS_SRS)),
-            ('request_timeout', config.get(namespace, {}).get('request_timeout', Defaults.WMS_REQUEST_TIMEOUT))
+            ('url', Defaults.WMS_URL, read_only),
+            ('version', Defaults.WMS_VERSION, read_only),
+            ('layer', Defaults.WMS_LAYER),
+            ('srs', Defaults.WMS_SRS),
+            ('request_timeout', Defaults.WMS_REQUEST_TIMEOUT)
         ])
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('mock_gps_selection', config.get(namespace, {})
-             .get('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION)),
-            ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
-            ('export_projection', config.get(namespace, {}).get('export_projection', Defaults.MISC_EXPORT_PROJECTION)),
-            ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
-            ('variance_estimation_length', config.get(namespace, {})
-             .get('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH)),
-            ('min_match_altitude', config.get(namespace, {}).get('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE))
+            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),
+            ('export_position', Defaults.MISC_EXPORT_POSITION),
+            ('export_projection', Defaults.MISC_EXPORT_PROJECTION),
+            ('max_pitch', Defaults.MISC_MAX_PITCH),
+            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),
+            ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE)
         ])
 
         namespace = 'map_update'
         self.declare_parameters(namespace, [
-            ('initial_guess.lat', config.get(namespace, {}).get('initial_guess', {})
-             .get('lat', Defaults.MAP_UPDATE_INITIAL_GUESS.lat)),
-            ('initial_guess.lon', config.get(namespace, {}).get('initial_guess', {})
-             .get('lon', Defaults.MAP_UPDATE_INITIAL_GUESS.lon)),
-            ('update_delay', config.get(namespace, {})
-             .get('update_delay', Defaults.MAP_UPDATE_UPDATE_DELAY), ParameterDescriptor(read_only=True)),
-            ('default_altitude', config.get(namespace, {})
-             .get('default_altitude', Defaults.MAP_UPDATE_DEFAULT_ALTITUDE)),
-            ('gimbal_projection', config.get(namespace, {})
-             .get('gimbal_projection', Defaults.MAP_UPDATE_GIMBAL_PROJECTION)),
-            ('max_map_radius', config.get(namespace, {}).get('max_map_radius', Defaults.MAP_UPDATE_MAX_MAP_RADIUS)),
-            ('map_radius_meters_default', config.get(namespace, {})
-             .get('map_radius_meters_default', Defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT)),
-            ('update_map_center_threshold', config.get(namespace, {})
-             .get('update_map_center_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_CENTER_THRESHOLD)),
-            ('update_map_radius_threshold', config.get(namespace, {})
-             .get('update_map_radius_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_RADIUS_THRESHOLD)),
-            ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH))
+            ('initial_guess', None),
+            ('update_delay', Defaults.MAP_UPDATE_UPDATE_DELAY, read_only),
+            ('default_altitude', Defaults.MAP_UPDATE_DEFAULT_ALTITUDE),
+            ('gimbal_projection', Defaults.MAP_UPDATE_GIMBAL_PROJECTION),
+            ('max_map_radius', Defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT),
+            ('update_map_center_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_CENTER_THRESHOLD),
+            ('update_map_radius_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_RADIUS_THRESHOLD),
+            ('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH)
         ])
 
-    def _load_config(self, yaml_file: str) -> dict:
-        """Loads config from the provided YAML file.
-
-        :param yaml_file: Path to the yaml file
-        :return: The loaded yaml file as dictionary
-        """
-        assert_type(yaml_file, str)
-        with open(os.path.join(self._share_dir, yaml_file), 'r') as f:
-            try:
-                config = yaml.safe_load(f)
-                self.get_logger().info(f'Loaded config:\n{config}.')
-                return config
-            except Exception as e:
-                self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
-                                        f'\n{e}\n{traceback.print_exc()}')
+        namespace = 'superglue'
+        self.declare_parameters(namespace, [
+            ('superpoint.nms_radius', SuperGlue.DEFAULT_SUPERPOINT_NMS_RADIUS, read_only),
+            ('superpoint.keypoint_threshold', SuperGlue.DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD, read_only),
+            ('superpoint.max_keypoints', SuperGlue.DEFAULT_SUPERPOINT_MAX_KEYPOINTS, read_only),
+            ('superglue.weights', SuperGlue.DEFAULT_SUPERGLUE_WEIGHTS, read_only),
+            ('superglue.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS, read_only),
+            ('superglue.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD, read_only)
+        ])
 
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
@@ -1174,19 +1147,18 @@ class MapNavNode(Node):
         return map_frame
 
     @staticmethod
-    def _superglue_init_worker(config: dict):
+    def _superglue_init_worker(parameters: dict):
         """Initializes SuperGlue in a dedicated process.
 
         The SuperGlue instance is stored into a global variable inside its own dedicated process to avoid
         re-instantiating it every time the model is needed.
 
-        :param config: SuperGlue config
+        :param parameters: SuperGlue params
         :return:
         """
-        superglue_conf = config.get('superglue', None)
-        assert_type(superglue_conf, dict)
+        assert_type(parameters, dict)
         global superglue
-        superglue = SuperGlue(superglue_conf)
+        superglue = SuperGlue(parameters)
 
     @staticmethod
     def _superglue_pool_worker(img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

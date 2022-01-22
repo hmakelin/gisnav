@@ -13,10 +13,17 @@ from models.utils import frame2tensor
 class SuperGlue:
     """Matches img to map, see code in match_pairs.py for further examples."""
 
+    DEFAULT_SUPERPOINT_NMS_RADIUS = 3
+    DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD = 0.005
+    DEFAULT_SUPERPOINT_MAX_KEYPOINTS = 2048
+    DEFAULT_SUPERGLUE_WEIGHTS = 'outdoor'
+    DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS = 20
+    DEFAULT_SUPERGLUE_MATCH_THRESHOLD = 0.2
+
     def __init__(self, config: dict, logger: rclpy.impl.rcutils_logger.RcutilsLogger = None):
         """Initializer
 
-        :param config: Dict with SuperGlue config parameters.
+        :param config: Dict with SuperGlue params parameters.
         :param logger: Path to directory where to store output visualization.
         """
         self._config = config
@@ -24,7 +31,7 @@ class SuperGlue:
         self._logger = logger
         if self._logger is not None:
             self._logger.debug('SuperGlue using device {}'.format(self._device))
-            self._logger.debug('SuperGlue using config {}'.format(self._config))
+            self._logger.debug('SuperGlue using params {}'.format(self._config))
         self._matching = Matching(self._config).eval().to(self._device)
 
     def match(self, img: np.ndarray, map_: np.ndarray, confidence: float = 0.3) -> Tuple[np.ndarray, np.ndarray]:

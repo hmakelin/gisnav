@@ -1540,7 +1540,7 @@ class MapNavNode(Node):
         """
         # TODO: check inputs?
         msg = VehicleGpsPosition()
-        msg.timestamp = self._get_ekf2_time() + self.EKF2_TIMESTAMP_PADDING
+        msg.timestamp = self._get_ekf2_time()
         msg.fix_type = 3
         msg.s_variance_m_s = var[6]
         msg.c_variance_rad = var[7]

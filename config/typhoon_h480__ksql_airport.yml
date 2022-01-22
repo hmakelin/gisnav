@@ -7,13 +7,11 @@ map_nav_node:
       srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
       request_timeout: 5
     misc:
-      mock_gps: True
-      mock_gps_selection: 1  # Applies if mock_gps: True, does nothing otherwise
-      publish_frequency: 40  # Hz
+      mock_gps_selection: 1
       export_position: 'position.json'
       export_projection: 'projection.json'
       max_pitch: 30  # Used by _should_match
-      covariance_estimation_length: 20
+      variance_estimation_length: 20
     map_update:
       initial_guess:  # Values from ksql_airport.world file
         lat: 37.523640

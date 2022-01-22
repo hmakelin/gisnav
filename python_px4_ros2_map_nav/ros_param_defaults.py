@@ -27,18 +27,10 @@ class Defaults:
     WMS_REQUEST_TIMEOUT = 5
     """WMS client request timeout in seconds"""
 
-    MISC_MOCK_GPS = True
-    """Indicates that estimated vehicle position, velocity and heading should be published as a mock GPS message.
-    
-    Otherwise estimates will be published as vehicle visual odometry."""
-
     MISC_MOCK_GPS_SELECTION = 1
     """GPS selection to include in mock GPS messages.
     
     Applies if :py:attr:`~MISC_MOCK_GPS` is enabled."""
-
-    MISC_PUBLISH_FREQUENCY = 40
-    """Publishing frequency for outgoing :class:`px4_msgs.msg.VehicleVisualOdometry` messages"""
 
     MISC_EXPORT_POSITION = 'position.json'
     """Filename for exporting GeoJSON containing estimated field of view and position"""
@@ -52,15 +44,10 @@ class Defaults:
     See also :py:attr:`~MAP_UPDATE_MAP_PITCH`.
     """
 
-    MISC_COVARIANCE_ESTIMATION_LENGTH = 20
-    """Determines how many observations are used to estimate the covariance matrices for 
-    :class:`px4_msgs.msg.VehicleVisualOdometry` messages.
-    
-    Too low a value may cause lead to too low an estimate of variance and cause instability in EKF2 local position
-    estimate.
-    """
+    MISC_VARIANCE_ESTIMATION_LENGTH = 20
+    """Determines how many observations are used to estimate the variance and SD for the position estimate."""
 
-    MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.worl
+    MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.world
     """Initial guess of vehicle's rough global position
     
     The default value is the starting position defined in the ksql_airport.world file. This position is used when no

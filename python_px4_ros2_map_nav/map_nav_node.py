@@ -34,8 +34,8 @@ from python_px4_ros2_map_nav.util import setup_sys_path, BBox, Dim, rotate_and_c
     get_fov_and_c, LatLon, fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
-from px4_msgs.msg import VehicleVisualOdometry, VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, \
-    GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude, VehicleGpsPosition
+from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
+    GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
 
 # Add the share folder to Python path
@@ -78,21 +78,11 @@ class MapNavNode(Node):
     # Encoding of input video (input to CvBridge)
     IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
 
-    # Local frame reference for px4_msgs.msg.VehicleVisualOdometry messages
-    LOCAL_FRAME_NED = 0
-
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
 
     # Default name of config file
     CONFIG_FILE_DEFAULT = "typhoon_h480__ksql_airport.yml"
-
-    # Minimum and maximum publish frequencies for EKF2 fusion
-    MINIMUM_PUBLISH_FREQUENCY = 30
-    MAXIMUM_PUBLISH_FREQUENCY = 50
-
-    # Logs a warning if publish frequency is close to the bounds of desired publish frequency
-    VVO_PUBLISH_FREQUENCY_WARNING_PADDING = 3
 
     # ROS 2 QoS profiles for topics
     # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
@@ -110,7 +100,6 @@ class MapNavNode(Node):
     CLASS_KEY = 'class'
     SUBSCRIBE_KEY = 'subscribe'  # Used as key in both Matcher.TOPICS and Matcher._topics
     PUBLISH_KEY = 'publish'  # Used as key in both Matcher.TOPICS and Matcher._topics
-    VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME = 'VehicleVisualOdometry_PubSubTopic'  # TODO: Used when publishing, do this in some bette way
     VEHICLE_GPS_POSITION_TOPIC_NAME = 'VehicleGpsPosition_PubSubTopic'
     TOPICS = [
         {
@@ -147,11 +136,6 @@ class MapNavNode(Node):
             TOPIC_NAME_KEY: 'image_raw',
             CLASS_KEY: Image,
             SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME,
-            CLASS_KEY: VehicleVisualOdometry,
-            PUBLISH_KEY: True
         },
         {
             TOPIC_NAME_KEY: VEHICLE_GPS_POSITION_TOPIC_NAME,
@@ -195,8 +179,7 @@ class MapNavNode(Node):
         self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
         self._setup_topics()
 
-        # Setup vehicle visual odometry publisher timer
-        self._publish_timer = self._setup_publish_timer()
+        # Time of publication of mock GPS message  # TODO: currently not used
         self._publish_timestamp = None
 
         # Converts image_raw to cv2 compatible image
@@ -218,11 +201,9 @@ class MapNavNode(Node):
         self._previous_map_frame = None
         self._previous_image_frame = None
 
-        self._local_origin = None  # Estimated EKF2 local frame origin WGS84 coordinates
-
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
-        self._pose_covariance_data_window = None  # Windowed observations for computing pose cross-covariance matrix
+        self._estimation_history = None  # Windowed observations for computing position error
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
@@ -231,7 +212,6 @@ class MapNavNode(Node):
         self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
-        self._vehicle_visual_odometry = None  # To be published by _timer_callback (see _timer property)
 
     @property
     def name(self) -> dict:
@@ -254,21 +234,6 @@ class MapNavNode(Node):
         self.__config = value
 
     @property
-    def _local_origin(self) -> Optional[LatLonAlt]:
-        """Estimate of EKF2 local frame origin WGS84 coordinates.
-
-        This property is needed when :class:`px4_msgs.msg.VehicleGlobalPosition` nor
-        :class:`px4_msgs.msg.VehicleLocalPosition` contain global position reference information. The value is then
-        estimated from the current visual global position estimate and local position coordinates.
-        """
-        return self.__local_origin
-
-    @_local_origin.setter
-    def _local_origin(self, value: Optional[LatLonAlt]) -> None:
-        assert_type(value, get_args(Optional[LatLonAlt]))
-        self.__local_origin = value
-
-    @property
     def _time_sync(self) -> Optional[TimePair]:
         """A :class:`python_px4_ros2_map_nav.util.TimePair` with local and foreign (EKF2) timestamps in microseconds
 
@@ -283,16 +248,14 @@ class MapNavNode(Node):
         self.__time_sync = value
 
     @property
-    def _pose_covariance_data_window(self) -> Optional[np.ndarray]:
-        """Windowed data for computing cross-covariance matrix of pose variables for :class:`VehicleVisualOdometry`
-        messages
-        """
-        return self.__pose_covariance_data_window
+    def _estimation_history(self) -> Optional[np.ndarray]:
+        """Windowed data for estimating position error"""
+        return self.__estimation_history
 
-    @_pose_covariance_data_window.setter
-    def _pose_covariance_data_window(self, value: Optional[np.ndarray]) -> None:
+    @_estimation_history.setter
+    def _estimation_history(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
-        self.__pose_covariance_data_window = value
+        self.__estimation_history = value
 
     @property
     def _wms_pool(self) -> Pool:
@@ -369,18 +332,8 @@ class MapNavNode(Node):
         self.__superglue = value
 
     @property
-    def _publish_timer(self) -> rclpy.timer.Timer:
-        """Timer for controlling publish frequency of outgoing VehicleVisualOdometry messages."""
-        return self.__timer
-
-    @_publish_timer.setter
-    def _publish_timer(self, value: rclpy.timer.Timer) -> None:
-        assert_type(value, rclpy.timer.Timer)
-        self.__timer = value
-
-    @property
     def _publish_timestamp(self) -> Optional[int]:
-        """Timestamp in of when last VehicleVisualOdometry message was published."""
+        """Timestamp in of when last :class:`px4_msgs.msg.VehicleGpsPosition` message was published."""
         return self.__publish_timestamp
 
     @_publish_timestamp.setter
@@ -397,16 +350,6 @@ class MapNavNode(Node):
     def _topics(self, value: dict) -> None:
         assert_type(value, dict)
         self.__topics = value
-
-    @property
-    def _vehicle_visual_odometry(self) -> Optional[VehicleVisualOdometry]:
-        """Outgoing VehicleVisualOdometry message waiting to be published."""
-        return self.__vehicle_visual_odometry
-
-    @_vehicle_visual_odometry.setter
-    def _vehicle_visual_odometry(self, value: Optional[VehicleVisualOdometry]) -> None:
-        assert_type(value, get_args(Optional[VehicleVisualOdometry]))
-        self.__vehicle_visual_odometry = value
 
     @property
     def _geod(self) -> Geod:
@@ -538,67 +481,47 @@ class MapNavNode(Node):
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
 
-    def _covariance_window_full(self) -> bool:
-        """Returns true if the covariance estimation window is full and a covariance matrix can be estimated
+    def _variance_window_full(self) -> bool:
+        """Returns true if the variance estimation window is full.
 
-        :return: True if :py:attr:`~_pose_covariance_data_window` is full
+        :return: True if :py:attr:`~_estimation_history` is full
         """
-        window_length = self.get_parameter('misc.covariance_estimation_length').get_parameter_value().integer_value
-        obs_count = len(self._pose_covariance_data_window)
-        if self._pose_covariance_data_window is not None and obs_count == window_length:
+        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+        obs_count = len(self._estimation_history)
+        if self._estimation_history is not None and obs_count == window_length:
             return True
         else:
             assert 0 <= obs_count < window_length
             return False
 
-    def _push_covariance_data(self, position: tuple, rotation: tuple) -> None:
-        """Pushes position and rotation observations to :py:attr:`~_pose_covariance_data_window`
+    def _push_estimates(self, position: np.ndarray, velocity: np.ndarray, speed: np.ndarray, course: np.ndarray) \
+            -> None:
+        """Pushes position, velocity, speed and course estimates to :py:attr:`~_estimation_history`
 
-        Pops the oldest observation from the window if needed.
+        Pops the oldest estimate from the window if needed.
 
-        :param position: Pose translation (x, y, z) from local frame origin
-        :param rotation: Rotations in radians about x, y and z axes, respectively
+        :param position: Pose translation (x, y, z) in WGS84
+        :param position: Velocity (vx, vy, vz) in meters/second
+        :param speed: Speed in meters per second (norm of velocity vector)
+        :param course: Movement of direction of vehicle in radians in NED frame (not 'heading')
         :return:
         """
-        if self._pose_covariance_data_window is None:
+        new_row = np.concatenate((position, velocity, speed, course))
+        if self._estimation_history is None:
             # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            self._pose_covariance_data_window = np.array(position + rotation).reshape(-1, 6)
+            self._estimation_history = new_row.reshape(-1, 8)
         else:
-            window_length = self.get_parameter('misc.covariance_estimation_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for estimating cross-covariances should be >0 ({window_length} ' \
+            window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
                                       f'provided).'
-            obs_count = len(self._pose_covariance_data_window)
+            obs_count = len(self._estimation_history)
             assert 0 <= obs_count <= window_length
             if obs_count == window_length:
-                # Pop oldest observation
-                self._pose_covariance_data_window = np.delete(self._pose_covariance_data_window, 0, 0)
+                # Pop oldest values
+                self._estimation_history = np.delete(self._estimation_history, 0, 0)
 
-            # Add newest observation
-            self._pose_covariance_data_window = np.vstack((self._pose_covariance_data_window, position + rotation))
-
-    def _setup_publish_timer(self) -> rclpy.timer.Timer:
-        """Sets up a timer to control the publish rate of vehicle visual odometry.
-
-        At regular intervals, this timer is intended to publish the VehicleVisualOdometry message stored at
-        :py:attr:`~_vehicle_visual_odometry`. The message is generated by :meth:`~_create_vehicle_visual_odometry_msg`.
-        The timer is needed so that the publishing frequency can be set to whatever is required for EKF2 fusion.
-
-        :return: The timer instance
-        """
-        frequency = self.get_parameter('misc.publish_frequency').get_parameter_value().integer_value
-        assert_type(frequency, int)
-        if not 0 <= frequency:
-            error_msg = f'Publish frequency must be >0 Hz ({frequency} provided).'
-            self.get_logger().error(error_msg)
-            raise ValueError(error_msg)
-        if not self.MINIMUM_PUBLISH_FREQUENCY <= frequency <= self.MAXIMUM_PUBLISH_FREQUENCY:
-            warn_msg = f'Publish frequency should be between {self.MINIMUM_PUBLISH_FREQUENCY} and ' \
-                       f'{self.MAXIMUM_PUBLISH_FREQUENCY} Hz ({frequency} provided) for EKF2 filter.'
-            self.get_logger().warn(warn_msg)
-        timer_period = 1.0 / frequency
-        self.get_logger().debug(f'Setting up publish timer with period {timer_period} / frequency {frequency} Hz.')
-        timer = self.create_timer(timer_period, self._vehicle_visual_odometry_timer_callback)
-        return timer
+            # Add newest values
+            self._estimation_history = np.vstack((self._estimation_history, new_row))
 
     def _setup_map_update_timer(self) -> rclpy.timer.Timer:
         """Sets up a timer to throttle map update requests.
@@ -665,6 +588,7 @@ class MapNavNode(Node):
                self.get_parameter('map_update.initial_guess.lon').get_parameter_value().double_value, \
                self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
+    # TODO: update docstring - local position stuff was removed
     def _map_update_timer_callback(self) -> None:
         """Attempts to update the stored map at regular intervals.
 
@@ -687,29 +611,6 @@ class MapNavNode(Node):
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
         latlonalt = self._latlonalt_from_vehicle_global_position()
         assert_type(latlonalt, LatLonAlt)
-
-        # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
-        if latlonalt.alt is None:
-            self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
-                                    'instead.')
-            latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
-
-        # Try to get Lat and Lon estimate from previous visually estimated position
-        # TODO: get x and y it from _image_frame instead of latest published message!
-        #  Position/full image_frame needs to be saved even if publish never happens
-        if latlonalt.lat is None or latlonalt.lon is None:
-            if self._vehicle_visual_odometry is not None:
-                if self._local_origin is None:
-                    # TODO: compute it from latest position estimate? This should already have been done in _process_matches
-                    return  # TODO: remove this return statement once image_frame is saved and _local_frame is computed here
-                assert_type(self._local_origin, get_args(Union[LatLon, LatLonAlt]))
-                assert hasattr(self._vehicle_visual_odometry, 'x') and hasattr(self._vehicle_visual_odometry, 'y')
-                dx, dy = self._vehicle_visual_odometry.x, self._vehicle_visual_odometry.y
-                distance = math.sqrt(dx**2 + dy**2)
-                azmth = self._get_azimuth(dy, dx)  # NED, so flip x and y axes here
-                latlonalt = LatLonAlt(
-                    *(self._move_distance(self._local_origin, (azmth, distance)) + (latlonalt.alt, ))
-                )
 
         # If some of latlonalt are still None, try to get from provided initial guess and default alt
         if not all(latlonalt):
@@ -745,41 +646,6 @@ class MapNavNode(Node):
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')
 
-    def _vehicle_visual_odometry_timer_callback(self) -> None:
-        """Publishes the vehicle visual odometry message at given intervals.
-
-        This callback publishes the :class:`px4_msgs.msg.VehicleVisualOdometry` message stored in
-        :py:attr:`~_vehicle_visual_odometry`. The message is created and stored by the
-        :meth:`~_create_vehicle_visual_odometry_msg` method when latest image-to-map matches are successfully processed
-        by :meth:`~_process_matches`. The match processing is always triggered by new matching results arriving via
-        :meth:`~_superglue_pool_worker_callback`.
-
-        :return:
-        """
-        if self._vehicle_visual_odometry is not None:
-            assert_type(self._vehicle_visual_odometry, VehicleVisualOdometry)
-            now = time.time_ns()
-            if self._publish_timestamp is not None:
-                assert now > self._publish_timestamp
-                hz = 1e9 / (now - self._publish_timestamp)
-                self.get_logger().debug(
-                    f'Publishing vehicle visual odometry message:\n{self._vehicle_visual_odometry}. '
-                    f'Publish frequency {hz} Hz.')
-
-                # Warn if we are close to the bounds of acceptable frequency range
-                warn_padding = self.VVO_PUBLISH_FREQUENCY_WARNING_PADDING
-                if not self.MINIMUM_PUBLISH_FREQUENCY + warn_padding < hz < self.MAXIMUM_PUBLISH_FREQUENCY - warn_padding:
-                    self.get_logger().warn(f'Publish frequency {hz} Hz is close to or outside of bounds of required '
-                                           f'frequency range of [{self.MINIMUM_PUBLISH_FREQUENCY}, '
-                                           f'{self.MAXIMUM_PUBLISH_FREQUENCY}] Hz for EKF2 fusion.')
-
-            self._publish_timestamp = now
-            self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_VISUAL_ODOMETRY_TOPIC_NAME)\
-                .publish(self._vehicle_visual_odometry)
-        else:
-            self.get_logger().debug('Vehicle visual odometry publishing timer triggered but there was nothing to '
-                                    'publish.')
-
     def _declare_ros_params(self, config: dict) -> None:
         """Declares ROS parameters from a config file.
 
@@ -801,16 +667,13 @@ class MapNavNode(Node):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('mock_gps', config.get(namespace, {}).get('mock_gps', Defaults.MISC_MOCK_GPS)),
             ('mock_gps_selection', config.get(namespace, {})
              .get('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION)),
-            ('publish_frequency', config.get(namespace, {})
-             .get('publish_frequency', Defaults.MISC_PUBLISH_FREQUENCY), ParameterDescriptor(read_only=True)),
             ('export_position', config.get(namespace, {}).get('export_position', Defaults.MISC_EXPORT_POSITION)),
             ('export_projection', config.get(namespace, {}).get('export_projection', Defaults.MISC_EXPORT_PROJECTION)),
             ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
-            ('covariance_estimation_length', config.get(namespace, {})
-             .get('covariance_estimation_length', Defaults.MISC_COVARIANCE_ESTIMATION_LENGTH)),
+            ('variance_estimation_length', config.get(namespace, {})
+             .get('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH)),
         ])
 
         namespace = 'map_update'
@@ -927,7 +790,7 @@ class MapNavNode(Node):
         """Sets up an rclpy publisher.
 
         :param topic_name: Name of the microRTPS topic
-        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleVisualOdometry)
+        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleGpsPosition)
         :return: The publisher instance
         """
         return self.create_publisher(class_, topic_name, self.PUBLISH_QOS_PROFILE)
@@ -1375,9 +1238,8 @@ class MapNavNode(Node):
             inputs = self._match_inputs(image_frame)
             for k, v in inputs.items():
                 if v is None:
-                    if k not in ['local_frame_origin_position', 'timestamp']:  # TODO: use self._local_origin here to get rid of this clause?
-                        self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
-                        return
+                    self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
+                    return
 
             camera_yaw = inputs.get('camera_yaw', None)
             map_frame = inputs.get('map_frame', None)
@@ -1657,16 +1519,16 @@ class MapNavNode(Node):
         """
         self._vehicle_attitude = msg
 
-    def _create_mock_gps_msg(self, latlonalt: LatLonAlt, velocities: np.ndarray, selection: int) -> None:
-        """Creates a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position.
-
-        Currently also publishes the message directly but plan is to move publishing under a separate timer.
-
-        Does not yet take eph, epv, velocities nor heading as argument. Plan is to use these too in the message in the
-        future.
+    def _publish_mock_gps_msg(self, latlonalt: np.ndarray, velocities: np.ndarray, speed: float, course: float,
+                              sd: np.ndarray, var: np.ndarray,  selection: int) -> None:
+        """Publishes a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position, velocities and errors.
 
         :param latlonalt: Estimated vehicle position
         :param velocities: Estimated vehicle velocities (vx, vy, vz) in meters per second
+        :param speed: Speed (norm of velocity vector) of vehicle in meters per second
+        :param course: Direction of movement of vehicle (not heading) in radians in NED frame
+        :param sd: Estimated x, y, z position and velocity standard deviations
+        :param var: Estimated x, y, z position and velocity variances
         :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
@@ -1674,22 +1536,22 @@ class MapNavNode(Node):
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time() + self.EKF2_TIMESTAMP_PADDING
         msg.fix_type = 3
-        msg.s_variance_m_s = 5.  # TODO: estimate better values
-        msg.c_variance_rad = 0.5
-        msg.lat = int(latlonalt.lat * 1e7)
-        msg.lon = int(latlonalt.lon * 1e7)
-        msg.alt = int(latlonalt.alt * 1e3)
+        msg.s_variance_m_s = var[6]
+        msg.c_variance_rad = var[7]
+        msg.lat = int(latlonalt[0] * 1e7)
+        msg.lon = int(latlonalt[1] * 1e7)
+        msg.alt = int(latlonalt[2] * 1e3)
         msg.alt_ellipsoid = msg.alt
-        msg.eph = 10.0  # TODO Need to compute the "real" standard deviation
-        msg.epv = 10.0
+        msg.eph = max(sd[0:2])
+        msg.epv = sd[2]
         msg.hdop = 5.
         msg.vdop = 5.
-        msg.vel_m_s = np.linalg.norm(velocities)
+        msg.vel_m_s = speed
         msg.vel_n_m_s = velocities[0]
         msg.vel_e_m_s = velocities[1]
         msg.vel_d_m_s = velocities[2]
-        msg.cog_rad = np.arctan2(velocities[1], velocities[0])  # x (north) mapped to y, y (east) mapped to x
-        msg.vel_ned_valid = False
+        msg.cog_rad = course
+        msg.vel_ned_valid = True
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.heading = np.nan
@@ -1698,81 +1560,6 @@ class MapNavNode(Node):
 
         self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME)\
             .publish(msg)
-
-    def _create_vehicle_visual_odometry_msg(self, timestamp: int, position: tuple, rotation: np.ndarray,
-                                            pose_covariances: tuple) -> None:
-        """Creates a :class:`px4_msgs.msg.VehicleVisualOdometry` message and saves it to
-        :py:attr:`~_vehicle_visual_odometry`.
-
-        The :py:attr:`~_vehicle_visual_odometry` value is periodically accessed by :meth:`~_publish_timer_callback` to
-        publish the message over the PX4-ROS 2 bridge back to the EKF2 filter.
-
-        See https://docs.px4.io/v1.12/en/advanced_config/tuning_the_ecl_ekf.html#external-vision-system for supported
-        EKF2_AID_MASK values when using an external vision system.
-
-        :param timestamp: Timestamp to be included in the outgoing message
-        :param position: Position tuple (x, y, z) to be published
-        :param rotation: Rotation quaternion to be published (np.ndarray of shape (4,))
-        :param pose_covariances: Pose cross-covariances matrix to be published (length = 21)
-        :return:
-        """
-        assert_type(timestamp, int)
-        assert_type(position, tuple)
-        assert_type(rotation, np.ndarray)
-        assert_type(pose_covariances, tuple)
-        assert_len(position, 3)
-        assert_shape(rotation, (4,))
-        assert_len(pose_covariances, 21)
-        assert VehicleVisualOdometry is not None, 'VehicleVisualOdometry definition not found (was None).'
-        msg = VehicleVisualOdometry()
-
-        if __debug__:
-            if self._vehicle_visual_odometry is not None:
-                # Should not be create message that is older than previous message that may already have been published
-                assert timestamp > self._vehicle_visual_odometry.timestamp
-
-        # Timestamp
-        msg.timestamp = timestamp  # now
-        msg.timestamp_sample = timestamp  # now  # uint64
-
-        # Position and linear velocity local frame of reference
-        msg.local_frame = self.LOCAL_FRAME_NED  # uint8
-
-        # Position
-        if position is not None:
-            assert len(
-                position) == 3, f'Unexpected length for position estimate: {len(position)} (3 expected).'  # TODO: can also be length 2 if altitude is not published, handle that
-            assert all(isinstance(x, float) for x in position), f'Position contained non-float elements.'
-            msg.x, msg.y, msg.z = position  # float32 North, East, Down
-        else:
-            self.get_logger().warn('Position tuple was None - publishing NaN as position.')
-            msg.x, msg.y, msg.z = (float('nan'),) * 3  # float32 North, East, Down
-
-        # Attitude quaternions
-        # Rotation is currently computed with assumed NED frame so it is asserted here just in case
-        assert msg.local_frame is self.LOCAL_FRAME_NED, f'Published rotation logic requires that NED frame is used.'
-        if rotation is not None:
-            msg.q = np.float32(rotation)
-            msg.q_offset = (0.0, ) * 4
-        else:
-            msg.q = (float('nan'),) * 4  # float32
-            msg.q_offset = (float('nan'),) * 4
-
-        # Pose covariance matrices
-        msg.pose_covariance = pose_covariances
-
-        # Velocity frame of reference
-        msg.velocity_frame = self.LOCAL_FRAME_NED  # uint8
-
-        # Velocity
-        msg.vx, msg.vy, msg.vz = (float('nan'),) * 3  # float32 North, East, Down
-
-        # Angular velocity - not used
-        msg.rollspeed, msg.pitchspeed, msg.yawspeed = (float('nan'),) * 3  # float32
-        msg.velocity_covariance = (float('nan'),) * 21  # float32 North, East, Down
-
-        self.get_logger().debug(f'Setting outgoing vehicle visual odometry message as:\n{msg}.')
-        self._vehicle_visual_odometry = msg
 
     # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:
@@ -1817,11 +1604,9 @@ class MapNavNode(Node):
             map_frame - np.ndarray map_frame to match
             k - np.ndarray Camera intrinsics matrix of shape (3x3) from CameraInfo
             camera_yaw - float Camera yaw in radians
-            gimbal_set_attitude - Rotation Gimbal set attitude
             vehicle_attitude - Rotation Vehicle attitude
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
-            local_frame_origin_position - LatLonAlt origin of local frame global frame WGS84
             map_cropped - np.ndarray Rotated and cropped map raster from map_frame.image
 
         :param image_frame: The image frame from the drone video
@@ -1832,11 +1617,9 @@ class MapNavNode(Node):
             'map_frame': self._map_frame,
             'k': self._camera_info.k.reshape((3, 3)),
             'camera_yaw': math.radians(self._camera_yaw()),  # TODO: refactor internal APIs to use radians to get rid of back and forth conversions
-            'gimbal_set_attitude': self._get_gimbal_set_attitude(),
             'vehicle_attitude': self._get_vehicle_attitude(),
             'map_dim_with_padding': self._map_dim_with_padding(),
-            'img_dim': self._img_dim(),
-            'local_frame_origin_position': (self._vehicle_local_position_ref_latlonalt())
+            'img_dim': self._img_dim()
         }
 
         # Get cropped and rotated map
@@ -1950,40 +1733,12 @@ class MapNavNode(Node):
         assert_len(mkp_img, len(mkp_map))
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
-    def _compute_local_frame_origin(self, position: Union[LatLon, LatLonAlt]):
-        """Computes local frame global coordinates from local frame coordinates and their known global coordinates.
+    def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
+        """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
 
-        VehicleLocalPosition does not include the reference coordinates for the local frame if e.g. GPS is turned off.
-        This function computes the reference coordinates by translating the inverse of current local coordinates from
-        current estimated global position.
-
-        :param position: WGS84 coordinates of current vehicle local position
-        :return:
-        """
-        assert self._vehicle_local_position is not None
-        assert np.isnan(self._vehicle_local_position.ref_lat), \
-            f'_vehicle_local_position.ref_lat was {self._vehicle_local_position.ref_lat}. You should not try to ' \
-            f'compute the local origin unless it is not provided in VehicleLocalPosition'
-        assert np.isnan(self._vehicle_local_position.ref_lon), \
-            f'_vehicle_local_position.ref_lon was {self._vehicle_local_position.ref_lon}. You should not try to ' \
-            f'compute the local origin unless it is not provided in VehicleLocalPosition'
-        assert self._local_origin is None, f'self._local_origin was {self.__local_origin}. You should not try to ' \
-                                           f'recompute the local origin if it has already been done.'
-        x, y = -self._vehicle_local_position.x, -self._vehicle_local_position.y
-        assert_type(x, float)
-        assert_type(y, float)
-        azmth = self._get_azimuth(x, y)
-        dist = math.sqrt(x ** 2 + y ** 2)
-        local_origin = LatLonAlt(*(self._move_distance(position, (azmth, dist)) + (0,)))
-        self.get_logger().info(f'Local frame origin set at {local_origin}, this should happen only once.')
-        return local_origin
-
-    def _compute_local_frame_position(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
-        """Computes position of WGS84 coordinates in local frame coordinates
-
-        :param origin: WGS84 coordiantes of local frame origin
-        :param position: WGS84 coordinates and altitude in meters of estimated camera position
-        :return: Tuple containing x, y and z coordinates (meters) in local frame
+        :param origin: WGS84 coordinates of origin
+        :param position: WGS84 coordinates of position
+        :return: Tuple containing x, y and z coordinates (meters)
         """
         assert_type(position, LatLonAlt)
         assert_type(origin, LatLonAlt)
@@ -1998,9 +1753,6 @@ class MapNavNode(Node):
         lon_diff = math.copysign(dist[0], position.lon - origin.lon)
 
         alt = position.alt - origin.alt
-        #if alt < 0:
-        #    self.get_logger().warn(f'Computed altitude {alt} was negative. Cannot compute local frame position.')
-        #    return None
 
         return lat_diff, lon_diff, alt
 
@@ -2012,21 +1764,20 @@ class MapNavNode(Node):
         :return: Tuple of x, y and z velocity in m/s
         """
         time_diff_sec = (current_position.timestamp - previous_position.timestamp) / 1e6
-        diff_position = np.array(self._compute_local_frame_position(current_position.position,
-                                                                    previous_position.position))
+        diff_position = np.array(self._compute_xyz_distances(current_position.position,
+                                                             previous_position.position))
         velocities = diff_position / time_diff_sec
         return velocities
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
-                         k: np.ndarray, camera_yaw: float, gimbal_set_attitude: Rotation,
-                         vehicle_attitude: Rotation, map_dim_with_padding: Dim, img_dim: Dim,
-                         local_frame_origin_position: Optional[LatLonAlt], map_cropped: Optional[np.ndarray] = None)\
+                         k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
+                         img_dim: Dim, map_cropped: Optional[np.ndarray] = None)\
             -> None:
-        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleVisualOdometry`
+        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 
-        Computes vehicle position and attitude in vehicle local frame. The API for this method is designed so that the
-        dictionary returned by :meth:`~_match_inputs` can be passed onto this method as keyword arguments (**kwargs).
+        The API for this method is designed so that the dictionary returned by :meth:`~_match_inputs` can be passed
+        onto this method as keyword arguments (**kwargs).
 
         :param mkp_img: Matching keypoints in drone image
         :param mkp_map: Matching keypoints in map raster
@@ -2034,13 +1785,10 @@ class MapNavNode(Node):
         :param map_frame: The map raster
         :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
         :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # Maybe rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
-        :param gimbal_set_attitude: Gimbal set attitude
         :param vehicle_attitude: Vehicle attitude
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
-        :param local_frame_origin_position: Local frame origin coordinates from time of match (from _match_inputs)
-        :param map_cropped: Optional map cropped image # TODO: currently does not do anything here!
-
+        :param map_cropped: Optional map cropped image
         :return:
         """
         if len(mkp_img) < self.HOMOGRAPHY_MINIMUM_MATCHES:
@@ -2084,29 +1832,13 @@ class MapNavNode(Node):
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
-        image_frame.position = LatLonAlt(*t_wgs84.squeeze().tolist())  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+        position = t_wgs84.squeeze().tolist()
+        image_frame.position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
 
-        # Check that we have everything we need to publish vehicle_visual_odometry
+        # Check that we have everything we need to publish vehicle_gps_position
         if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
-            self.get_logger().debug(f'Could not determine global position. Cannot create vehicle visual odometry '
-                                    f'message.')
+            self.get_logger().debug('Could not determine global position. Cannot create mock GPS position message.')
             return None
-
-        # If no GPS available, local frame origin must be computed (or retrieved from memory if it was computed earlier)
-        if local_frame_origin_position is None:
-            if self._local_origin is None:
-                # TODO: need to change some flag in outgoing VVO message if we are using our own local frame?
-                self._local_origin = self._compute_local_frame_origin(image_frame.position)
-            local_frame_origin_position = self._local_origin
-
-        # Compute camera position in local frame
-        local_position = self._compute_local_frame_position(image_frame.position, local_frame_origin_position)
-        if local_position is None:
-            self.get_logger().debug(f'Could not determine local position. Cannot create vehicle visual odometry '
-                                    f'message.')
-            return None
-        self.get_logger().debug(f'Local frame position: {local_position}, origin ref position '
-                                f'{local_frame_origin_position}.')
 
         # Convert estimated rotation to attitude quaternion for publishing
         gimbal_estimated_attitude = Rotation.from_matrix(r.T)  # in rotated map pixel frame
@@ -2135,30 +1867,19 @@ class MapNavNode(Node):
             visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
-        mock_gps = self.get_parameter('misc.mock_gps').get_parameter_value().bool_value
-        if mock_gps:
-            mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-            if self._previous_image_frame is not None:
-                velocities = self._estimate_velocities(image_frame, self._previous_image_frame)
-                self._create_mock_gps_msg(image_frame.position, velocities, mock_gps_selection)
-        else:
-            if vehicle_attitude_estimate_rpy is not None:
-                # Update covariance data window and check if covariance matrix is available
-                # Do not create message if covariance matrix not yet available
-                # TODO: move this stuff into dedicated method to declutter _process_matches a bit more
-                assert_type(image_frame.timestamp, int)
-                vehicle_rpy_radians = tuple(map(lambda x: math.radians(x), vehicle_attitude_estimate_rpy))
-                self._push_covariance_data(local_position, vehicle_rpy_radians)
-                if not self._covariance_window_full():
-                    self.get_logger().warn('Not enough data to estimate covariances yet, should be working on it, please wait. '
-                                           'Skipping creating vehicle_visual_odometry message for now.')
-                else:
-                    # TODO: adjust RPY for (vehicle_attitude_max_error/2) in attitude (assume uniform distribution)
-                    #  Or is this linear? Add random error between 0 and max? np.random.rand(1)*vehicle_attitude_max_error?
-                    covariance = np.cov(self._pose_covariance_data_window, rowvar=False)
-                    covariance_urt = tuple(covariance[np.triu_indices(6)])  # Transform URT to flat vector of length 21
-                    assert_len(covariance_urt, 21)
-                    self._create_vehicle_visual_odometry_msg(image_frame.timestamp, local_position, quaternion, covariance_urt)
+        mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
+        if self._previous_image_frame is not None:
+            velocities = self._estimate_velocities(image_frame, self._previous_image_frame)
+            speed = np.linalg.norm(velocities)
+            course = np.arctan2(velocities[1], velocities[0])
+            self._push_estimates(position, velocities, np.array([speed]), np.array([course]))
+            if self._variance_window_full():
+                sd = np.std(self._estimation_history, axis=0)
+                var = np.var(self._estimation_history, axis=0)
+                self._publish_mock_gps_msg(position, velocities, speed, course, sd, var, mock_gps_selection)
+            else:
+                self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
+                                        'message yet...')
 
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
@@ -2217,16 +1938,11 @@ class MapNavNode(Node):
             self._wms_pool.terminate()
 
     def destroy_timers(self):
-        """Destroys the vehicle visual odometry publish and map update timers.
+        """Destroys the map update timer.
 
         :return:
         """
-        if self._publish_timer is not None:
-            self.get_logger().info('Destroying publish timer.')
-            assert_type(self._publish_timer, rclpy.timer.Timer)
-            self._publish_timer.destroy()
-
-        if self._publish_timer is not None:
+        if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')
             assert_type(self._map_update_timer, rclpy.timer.Timer)
             self._map_update_timer.destroy()

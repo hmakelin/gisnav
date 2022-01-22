@@ -180,9 +180,15 @@ class MapNavNode(Node):
         self._stored_inputs = None  # Must check for None when using this
         self._superglue_results = None  # Must check for None when using this
         # Do not increase the process count, it should be 1
-        superglue_parameters = self.get_parameters_by_prefix('superglue')
+        superglue_parameters = self.get_parameters_by_prefix('superglue.superglue')
+        superpoint_parameters = self.get_parameters_by_prefix('superglue.superpoint')
+        parameters = {'superglue': superglue_parameters, 'superpoint': superpoint_parameters}
+        for branch in ['superglue', 'superpoint']:
+            for k, v in parameters[branch].items():
+                if isinstance(v, rclpy.parameter.Parameter):
+                    parameters[branch][k] = v.value
         self._superglue_pool = torch.multiprocessing.Pool(1, initializer=self._superglue_init_worker,
-                                                          initargs=(superglue_parameters, ))
+                                                          initargs=(parameters, ))
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -684,8 +690,8 @@ class MapNavNode(Node):
             ('superpoint.keypoint_threshold', SuperGlue.DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD, read_only),
             ('superpoint.max_keypoints', SuperGlue.DEFAULT_SUPERPOINT_MAX_KEYPOINTS, read_only),
             ('superglue.weights', SuperGlue.DEFAULT_SUPERGLUE_WEIGHTS, read_only),
-            ('superpoint.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS, read_only),
-            ('superpoint.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD, read_only)
+            ('superglue.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS, read_only),
+            ('superglue.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD, read_only)
         ])
 
     def _use_gimbal_projection(self) -> bool:

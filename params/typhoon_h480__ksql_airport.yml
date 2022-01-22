@@ -25,7 +25,7 @@ map_nav_node:
       map_radius_meters_default: 400
       update_map_center_threshold: 50
       update_map_radius_threshold: 50
-  superglue:  # Recommended outdoor config from SuperGlue repo's README.md
+  superglue:  # Recommended outdoor params from SuperGlue repo's README.md
     superpoint:
       nms_radius: 3
       keypoint_threshold: 0.005

@@ -81,7 +81,7 @@ class MapNavNode(Node):
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
 
-    # Default name of config file
+    # Default name of params file
     CONFIG_FILE_DEFAULT = "typhoon_h480__ksql_airport.yml"
 
     # ROS 2 QoS profiles for topics
@@ -151,7 +151,7 @@ class MapNavNode(Node):
         :param node_name: Name of the node
         :param share_directory: Path of the share directory with configuration and other files
         :param superglue_directory: Path of the directory with SuperGlue related files
-        :param config: Path to the config file in the share folder
+        :param config: Path to the params file in the share folder
         """
         assert_type(node_name, str)
         super().__init__(node_name)
@@ -162,7 +162,7 @@ class MapNavNode(Node):
         self._share_dir = share_directory
         self._superglue_dir = superglue_directory
 
-        # Setup config and declare ROS parameters
+        # Setup params and declare ROS parameters
         self._config = self._load_config(config)
         params = self._config.get(node_name, {}).get('ros__parameters')
         assert_type(params, dict)
@@ -653,7 +653,7 @@ class MapNavNode(Node):
                                     'or previous results are not ready.')
 
     def _declare_ros_params(self, config: dict) -> None:
-        """Declares ROS parameters from a config file.
+        """Declares ROS parameters from a params file.
 
         Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults` if values are not provided. Note that
         some parameters are declared as read_only and cannot be changed at runtime.
@@ -706,7 +706,7 @@ class MapNavNode(Node):
         ])
 
     def _load_config(self, yaml_file: str) -> dict:
-        """Loads config from the provided YAML file.
+        """Loads params from the provided YAML file.
 
         :param yaml_file: Path to the yaml file
         :return: The loaded yaml file as dictionary
@@ -715,10 +715,10 @@ class MapNavNode(Node):
         with open(os.path.join(self._share_dir, yaml_file), 'r') as f:
             try:
                 config = yaml.safe_load(f)
-                self.get_logger().info(f'Loaded config:\n{config}.')
+                self.get_logger().info(f'Loaded params:\n{config}.')
                 return config
             except Exception as e:
-                self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
+                self.get_logger().error(f'Could not load params file {yaml_file} because of exception:'
                                         f'\n{e}\n{traceback.print_exc()}')
 
     def _use_gimbal_projection(self) -> bool:
@@ -1180,7 +1180,7 @@ class MapNavNode(Node):
         The SuperGlue instance is stored into a global variable inside its own dedicated process to avoid
         re-instantiating it every time the model is needed.
 
-        :param config: SuperGlue config
+        :param config: SuperGlue params
         :return:
         """
         superglue_conf = config.get('superglue', None)

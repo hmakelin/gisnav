@@ -612,6 +612,12 @@ class MapNavNode(Node):
         latlonalt = self._latlonalt_from_vehicle_global_position()
         assert_type(latlonalt, LatLonAlt)
 
+        # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
+        if latlonalt.alt is None:
+            self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
+                                    'instead.')
+            latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
+
         # If some of latlonalt are still None, try to get from provided initial guess and default alt
         if not all(latlonalt):
             # Warn, not debug, since this is a static guess

@@ -680,6 +680,7 @@ class MapNavNode(Node):
             ('max_pitch', config.get(namespace, {}).get('max_pitch', Defaults.MISC_MAX_PITCH)),
             ('variance_estimation_length', config.get(namespace, {})
              .get('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH)),
+            ('min_match_altitude', config.get(namespace, {}).get('min_match_altitude', Defaults.MIN_MATCH_ALTITUDE))
         ])
 
         namespace = 'map_update'
@@ -1701,8 +1702,8 @@ class MapNavNode(Node):
     def _should_match(self) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
-        Match should be attempted if (1) there are no pending match results, and (2) camera pitch is not too high (e.g.
-        facing horizon instead of nadir).
+        Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.
+        facing horizon instead of nadir), and (3) drone is not flying too low.
 
         :return: True if matching should be attempted
         """
@@ -1714,6 +1715,14 @@ class MapNavNode(Node):
         max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
         if self._camera_pitch_too_high(max_pitch):
             self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')
+            return False
+
+        # Check condition (3) - whether vehicle altitude is too low
+        min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().double_value
+        altitude = self._alt_from_vehicle_local_position()
+        if altitude is None or altitude < min_alt:
+            self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
+                                   f'could not be determined. Skipping matching.')
             return False
 
         return True

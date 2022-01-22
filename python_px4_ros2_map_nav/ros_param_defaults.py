@@ -47,6 +47,9 @@ class Defaults:
     MISC_VARIANCE_ESTIMATION_LENGTH = 20
     """Determines how many observations are used to estimate the variance and SD for the position estimate."""
 
+    MISC_MIN_MATCH_ALTITUDE = 50
+    """Minimum altitude in meters under which matches against map will not be attempted."""
+
     MAP_UPDATE_INITIAL_GUESS = LatLon(37.523640, -122.255122)  # ksql_airport.world
     """Initial guess of vehicle's rough global position
     

@@ -64,44 +64,6 @@ pip3 install -r requirements-dev.txt
 make html
 ```
 
-## Repository Structure
-This repository is structured as a `colcon` package:
-```
-.
-├── config
-│       └── params.yml                      # Configurable ROS 2 parameters
-├── docs
-│       ├── _static
-│       │        └── css                    # CSS styling files for API docs
-│       │                └── styles.css
-│       ├── pages                           # Sphinx documentation files
-│       │        └── api_documentation.rst
-│       │        └── indices_and_tables.rst
-│       ├── conf.py                         # Sphinx configuration file
-│       ├── index.rst                       # Sphinx API documentation template
-│       ├── make.bat
-│       └── Makefile
-├── LICENSE.md
-├── package.xml                             # Package metadata, also used by setup.py
-├── README.md
-├── requirements.txt                        # Python dependencies, used by setup.py
-├── requirements-dev.txt                    # Python dependencies for development tools
-├── resource
-│        └── python_px4_ros2_map_nav
-├── setup.cfg
-├── setup.py
-├── test
-│        ├── test_copyright.py              # Boilerplate tests
-│        ├── test_flake8.py                 # Boilerplate tests
-│        └── test_pep257.py                 # Boilerplate tests
-└── python_px4_ros2_map_nav
-    ├── __init__.py
-    ├── map_nav_node.py                     # Code for the ROS 2 node
-    ├── ros_params_defaults.py              # Default values for ROS parameters
-    ├── assertions.py                       # Helper assertion functions
-    ├── superglue.py                        # SuperGlue adapter code
-    └── util.py                             # Static functions and other utilities
-```
 ## License
 This software is released under the MIT license. See the `LICENSE.md` in this repository for more information. Also see
 the [SuperGlue license file](https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/LICENSE) for SuperGlue

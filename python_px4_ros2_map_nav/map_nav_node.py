@@ -1,15 +1,18 @@
 """Module that contains the MapNavNode ROS 2 node."""
+import sys
 import rclpy
-import os
 import traceback
-import yaml
 import math
-import cProfile
-import io
-import pstats
 import numpy as np
 import cv2
 import time
+import importlib
+import os
+import yaml
+
+from ament_index_python.packages import get_package_share_directory
+PACKAGE_NAME = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
+share_dir = get_package_share_directory(PACKAGE_NAME)
 
 # Import and configure torch for multiprocessing
 import torch
@@ -30,20 +33,14 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
-from python_px4_ros2_map_nav.util import setup_sys_path, BBox, Dim, rotate_and_crop_map, visualize_homography,\
-    get_fov_and_c, LatLon, fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine
+from python_px4_ros2_map_nav.util import BBox, Dim, rotate_and_crop_map, visualize_homography, get_fov_and_c, LatLon, \
+    fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
+from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
-
-# Add the share folder to Python path
-share_dir, superglue_dir = setup_sys_path()
-
-# Import this after util.setup_sys_path has been called
-from python_px4_ros2_map_nav.superglue import SuperGlue
-
 
 @lru_cache(maxsize=1)
 def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
@@ -141,22 +138,16 @@ class MapNavNode(Node):
         }
     ]
 
-    def __init__(self, node_name: str, share_directory: str, superglue_directory: str) -> None:
+    def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
 
         :param node_name: Name of the node
-        :param share_directory: Path of the share directory with configuration and other files
-        :param superglue_directory: Path of the directory with SuperGlue related files
         """
         assert_type(node_name, str)
         super().__init__(node_name)
         self.name = node_name
-        assert_type(share_directory, str)
-        assert_type(superglue_directory, str)
-        self._share_dir = share_directory
-        self._superglue_dir = superglue_directory
 
-        # Setup params and declare ROS parameters
+        # Setup config and declare ROS parameters
         self._declare_ros_params()
 
         # WMS client and requests in a separate process
@@ -176,19 +167,24 @@ class MapNavNode(Node):
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # Setup SuperGlue
+        # Setup matching
         self._stored_inputs = None  # Must check for None when using this
-        self._superglue_results = None  # Must check for None when using this
+        self._matching_results = None  # Must check for None when using this
+        class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
+        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
+        if class_path is None or matcher_params_file is None:
+            msg = f'Class path {class_path} or init args {matcher_params_file} for matcher was None.'
+            self.get_logger.error(msg)
+            raise ValueError(msg)
+        module_name, class_name = class_path.rsplit('.', 1)
+        # noinspection PyTypeChecker
+        self._kp_matcher = self._import_class(class_name, module_name)
+        #assert_type(kp_matcher, KeypointMatcher)  # TODO: seems like it recognizes it as an ABCMeta class
+        args = self._load_config(matcher_params_file)['args']
+
         # Do not increase the process count, it should be 1
-        superglue_parameters = self.get_parameters_by_prefix('superglue.superglue')
-        superpoint_parameters = self.get_parameters_by_prefix('superglue.superpoint')
-        parameters = {'superglue': superglue_parameters, 'superpoint': superpoint_parameters}
-        for branch in ['superglue', 'superpoint']:
-            for k, v in parameters[branch].items():
-                if isinstance(v, rclpy.parameter.Parameter):
-                    parameters[branch][k] = v.value
-        self._superglue_pool = torch.multiprocessing.Pool(1, initializer=self._superglue_init_worker,
-                                                          initargs=(parameters, ))
+        # TODO: need to use torch pool? Torch not needed in general case?
+        self._matching_pool = torch.multiprocessing.Pool(1, initializer=self._kp_matcher.initializer, initargs=args)
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -212,7 +208,7 @@ class MapNavNode(Node):
         self._gimbal_device_set_attitude = None
 
     @property
-    def name(self) -> dict:
+    def name(self) -> str:
         """Node name."""
         return self._name
 
@@ -220,6 +216,16 @@ class MapNavNode(Node):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
+
+    @property
+    def _kp_matcher(self) -> KeypointMatcher:
+        """Dynamically loaded keypoint matcher"""
+        return self.__kp_matcher
+
+    @_kp_matcher.setter
+    def _kp_matcher(self, value: KeypointMatcher) -> None:
+        #assert_type(value, KeypointMatcher)  # TODO: fix this
+        self.__kp_matcher = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -276,15 +282,15 @@ class MapNavNode(Node):
         self.__map_update_timer = value
 
     @property
-    def _superglue_pool(self) -> torch.multiprocessing.Pool:
-        """Pool for running SuperGlue in dedicated process."""
-        return self.__superglue_pool
+    def _matching_pool(self) -> torch.multiprocessing.Pool:
+        """Pool for running a :class:`~keypoint_matcher.KeypointMatcher` in dedicated process"""
+        return self.__matching_pool
 
-    @_superglue_pool.setter
-    def _superglue_pool(self, value: torch.multiprocessing.Pool) -> None:
+    @_matching_pool.setter
+    def _matching_pool(self, value: torch.multiprocessing.Pool) -> None:
         # TODO assert type
         #assert_type(torch.multiprocessing.Pool, value)
-        self.__superglue_pool = value
+        self.__matching_pool = value
 
     @property
     def _stored_inputs(self) -> dict:
@@ -300,24 +306,14 @@ class MapNavNode(Node):
         self.__stored_inputs = value
 
     @property
-    def _superglue_results(self) -> Optional[AsyncResult]:
-        """Asynchronous results from a SuperGlue process."""
-        return self.__superglue_results
+    def _matching_results(self) -> Optional[AsyncResult]:
+        """Asynchronous results from a matching process."""
+        return self.__matching_results
 
-    @_superglue_results.setter
-    def _superglue_results(self, value: Optional[AsyncResult]) -> None:
+    @_matching_results.setter
+    def _matching_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(value, get_args(Optional[AsyncResult]))
-        self.__superglue_results = value
-
-    @property
-    def _superglue(self) -> SuperGlue:
-        """SuperGlue graph neural network (GNN) estimator for matching keypoints between images."""
-        return self.__superglue
-
-    @_superglue.setter
-    def _superglue(self, value: SuperGlue) -> None:
-        assert_type(value, SuperGlue)
-        self.__superglue = value
+        self.__matching_results = value
 
     @property
     def _publish_timestamp(self) -> Optional[int]:
@@ -348,26 +344,6 @@ class MapNavNode(Node):
     def _geod(self, value: Geod) -> None:
         assert_type(value, Geod)
         self.__geod = value
-
-    @property
-    def _share_dir(self) -> str:
-        """Path to share directory"""
-        return self.__share_dir
-
-    @_share_dir.setter
-    def _share_dir(self, value: str) -> None:
-        assert_type(value, str)
-        self.__share_dir = value
-
-    @property
-    def _superglue_dir(self) -> str:
-        """Path to SuperGlue directory."""
-        return self.__superglue_dir
-
-    @_superglue_dir.setter
-    def _superglue_dir(self, value: str) -> None:
-        assert_type(value, str)
-        self.__superglue_dir = value
 
     @property
     def _map_frame(self) -> Optional[MapFrame]:
@@ -468,6 +444,22 @@ class MapNavNode(Node):
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
+
+    def _load_config(self, yaml_file: str) -> dict:
+        """Loads config from the provided YAML file.
+
+        :param yaml_file: Path to the yaml file
+        :return: The loaded yaml file as dictionary
+        """
+        assert_type(yaml_file, str)
+        with open(os.path.join(get_package_share_directory(PACKAGE_NAME), yaml_file), 'r') as f:
+            try:
+                config = yaml.safe_load(f)
+                self.get_logger().info(f'Loaded config:\n{config}.')
+                return config
+            except Exception as e:
+                self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
+                                        f'\n{e}\n{traceback.print_exc()}')
 
     def _variance_window_full(self) -> bool:
         """Returns true if the variance estimation window is full.
@@ -644,6 +636,20 @@ class MapNavNode(Node):
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')
 
+    def _import_class(self, class_name: str, module_name: str) -> object:
+        """Dynamically imports class from given module if not yet imported
+
+        :param class_name: Name of the class to import
+        :param module_name: Name of module that contains the class
+        :return: Imported class
+        """
+        if module_name not in sys.modules:
+            self.get_logger().info(f'Importing module {module_name}.')
+            importlib.import_module(module_name)
+        imported_class = getattr(sys.modules[module_name], class_name, None)
+        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
+        return imported_class
+
     def _declare_ros_params(self) -> None:
         """Declares ROS parameters
 
@@ -684,14 +690,10 @@ class MapNavNode(Node):
             ('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH)
         ])
 
-        namespace = 'superglue'
+        namespace = 'matcher'
         self.declare_parameters(namespace, [
-            ('superpoint.nms_radius', SuperGlue.DEFAULT_SUPERPOINT_NMS_RADIUS, read_only),
-            ('superpoint.keypoint_threshold', SuperGlue.DEFAULT_SUPERPOINT_KEYPOINT_THRESHOLD, read_only),
-            ('superpoint.max_keypoints', SuperGlue.DEFAULT_SUPERPOINT_MAX_KEYPOINTS, read_only),
-            ('superglue.weights', SuperGlue.DEFAULT_SUPERGLUE_WEIGHTS, read_only),
-            ('superglue.sinkhorn_iterations', SuperGlue.DEFAULT_SUPERGLUE_SINKHORN_ITERATIONS, read_only),
-            ('superglue.match_threshold', SuperGlue.DEFAULT_SUPERGLUE_MATCH_THRESHOLD, read_only)
+            ('class', Defaults.MATCHER_CLASS, read_only),
+            ('params_file', Defaults.MATCHER_PARAMS_FILE, read_only)
         ])
 
     def _use_gimbal_projection(self) -> bool:
@@ -1146,43 +1148,13 @@ class MapNavNode(Node):
         map_frame = MapFrame(center, radius, bbox, map_)
         return map_frame
 
-    @staticmethod
-    def _superglue_init_worker(parameters: dict):
-        """Initializes SuperGlue in a dedicated process.
-
-        The SuperGlue instance is stored into a global variable inside its own dedicated process to avoid
-        re-instantiating it every time the model is needed.
-
-        :param parameters: SuperGlue params
-        :return:
-        """
-        assert_type(parameters, dict)
-        global superglue
-        superglue = SuperGlue(parameters)
-
-    @staticmethod
-    def _superglue_pool_worker(img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Finds matching keypoints between input images.
-
-        :param img: The first image
-        :param map_: The second image
-        :return: Tuple of two lists containing matching keypoints in img and map, respectively
-        """
-        """"""
-        assert_type(img, np.ndarray)
-        assert_type(map_, np.ndarray)
-        try:
-            return superglue.match(img, map_)
-        except Exception as e:
-            raise e  # TODO: need to do anything here or just pass it on?
-
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
         For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
         made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
         saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
-        the :meth:`~_superglue_worker_callback` will use the stored inputs for post-processing the matches based on
+        the :meth:`~_matching_worker_callback` will use the stored inputs for post-processing the matches based on
         the same snapshot of data that was used to make the call. It is assumed that the latest stored inputs are the
         same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
 
@@ -1213,7 +1185,7 @@ class MapNavNode(Node):
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
         if self._should_match():
-            assert self._superglue_results is None or self._superglue_results.ready()
+            assert self._matching_results is None or self._matching_results.ready()
             inputs = self._match_inputs(image_frame)
             for k, v in inputs.items():
                 if v is None:
@@ -1680,7 +1652,7 @@ class MapNavNode(Node):
         :return: True if matching should be attempted
         """
         # Check condition (1) - that a request is not already running
-        if not (self._superglue_results is None or self._superglue_results.ready()):  # TODO: handle timeouts, failures for _superglue_results
+        if not (self._matching_results is None or self._matching_results.ready()):  # TODO: handle timeouts, failures for matching results
             return False
 
         # Check condition (2) - whether camera pitch is too large
@@ -1699,15 +1671,15 @@ class MapNavNode(Node):
 
         return True
 
-    def superglue_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for SuperGlue worker.
+    def matching_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for matching worker.
 
         :return:
         """
-        self.get_logger().error(f'SuperGlue process returned and error:\n{e}\n{traceback.print_exc()}')
+        self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
 
-    def superglue_worker_callback(self, results) -> None:
-        """Callback for SuperGlue worker.
+    def matching_worker_callback(self, results) -> None:
+        """Callback for matching worker.
 
         Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
         are needed so that the post-processing is done using the same state information that was used for initiating
@@ -1907,12 +1879,12 @@ class MapNavNode(Node):
         :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
         """
-        assert self._superglue_results is None or self._superglue_results.ready()
-        self._superglue_results = self._superglue_pool.starmap_async(
-            self._superglue_pool_worker,
+        assert self._matching_results is None or self._matching_results.ready()
+        self._matching_results = self._matching_pool.starmap_async(
+            self._kp_matcher.worker,
             [(image_frame.image, map_cropped)],
-            callback=self.superglue_worker_callback,
-            error_callback=self.superglue_worker_error_callback
+            callback=self.matching_worker_callback,
+            error_callback=self.matching_worker_error_callback
         )
 
     def terminate_wms_pool(self):
@@ -1933,40 +1905,3 @@ class MapNavNode(Node):
             self.get_logger().info('Destroying map update timer.')
             assert_type(self._map_update_timer, rclpy.timer.Timer)
             self._map_update_timer.destroy()
-
-
-def main(args=None):
-    """Starts and terminates the ROS 2 node.
-
-    Also starts cProfile profiling in debugging mode.
-
-    :param args: Any args for initializing the rclpy node
-    :return:
-    """
-    #if __debug__:
-    #    pr = cProfile.Profile()  # TODO: re-enable
-    #    pr.enable()
-    #else:
-    pr = None
-    try:
-        rclpy.init(args=args)
-        matcher = MapNavNode('map_nav_node', share_dir, superglue_dir)
-        rclpy.spin(matcher)
-    except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
-        if pr is not None:
-            # Print out profiling stats
-            pr.disable()
-            s = io.StringIO()
-            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats()
-            print(s.getvalue())
-    finally:
-        matcher.destroy_timers()
-        matcher.terminate_wms_pool()
-        matcher.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

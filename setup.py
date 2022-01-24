@@ -33,11 +33,11 @@ else:
 setup(
     name=package_name,
     version=version,
-    packages=[package_name],
+    packages=[package_name, package_name + '.keypoint_matchers'],
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name), glob('params/*.yml')),
+        (os.path.join('share', package_name), glob('config/*.yml')),
         (os.path.join('share', package_name, 'SuperGluePretrainedNetwork/models'),
          glob('SuperGluePretrainedNetwork/models/*.py', recursive=True)),
         (os.path.join('share', package_name, 'SuperGluePretrainedNetwork/models/weights'),
@@ -56,7 +56,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'map_nav_node = python_px4_ros2_map_nav.map_nav_node:main'
+            'map_nav_node = python_px4_ros2_map_nav.__main__:main'
         ],
     },
 )

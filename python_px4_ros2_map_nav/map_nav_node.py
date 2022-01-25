@@ -195,6 +195,10 @@ class MapNavNode(Node):
         self._previous_map_frame = None
         self._previous_image_frame = None
 
+        # Stored solution for the PnP problem
+        self._r = None
+        self._t = None
+
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
@@ -216,6 +220,26 @@ class MapNavNode(Node):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
+
+    @property
+    def _r(self) -> Optional[np.ndarray]:
+        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches`."""
+        return self.__r
+
+    @_r.setter
+    def _r(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__r = value
+
+    @property
+    def _t(self) -> Optional[np.ndarray]:
+        """Translation vector, solution to the PnP problem in :meth:`~_process_matches`."""
+        return self.__t
+
+    @_t.setter
+    def _t(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__t = value
 
     @property
     def _kp_matcher(self) -> KeypointMatcher:
@@ -1715,6 +1739,32 @@ class MapNavNode(Node):
 
         return lat_diff, lon_diff, alt
 
+    def _store_extrinsic_guess(self, r: np.ndarray, t: np.ndarray) -> None:
+        """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
+
+        Assumes previous solution to the PnP problem will be close to the new solution. See also
+        :meth:`~_retrieve_extrinsic_guess`.
+
+        :param r: Rotation vector
+        :param t: Translation vector
+        :return:
+        """
+        self._r = r
+        self._t = t
+
+    def _retrieve_extrinsic_guess(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """Retrieves stored rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in
+         :meth:`~_process_matches`.
+
+        Assumes previous solution to the PnP problem will be close to the new solution. See also
+        :meth:`~_store_extrinsic_guess`.
+
+        # TODO: require that timestamp of previous solution is not too old
+
+        :return: Tuple with stored rotation and translation vectors, or tuple of Nones if not available
+        """
+        return self._r, self._t
+
     def _estimate_velocities(self, current_position: ImageFrame, previous_position: ImageFrame) -> np.ndarray:
         """Estimates x, y and z velocities in m/s from current and previous position.
 
@@ -1765,7 +1815,11 @@ class MapNavNode(Node):
         padding = np.array([[0]]*len(mkp_img))
         mkp_map_3d = np.hstack((mkp_map, padding))  # Set all world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
-        _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, iterationsCount=10)
+        r, t = self._retrieve_extrinsic_guess()
+        use_guess = True if r is not None and t is not None else False
+        _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
+                                         iterationsCount=10)
+        self._store_extrinsic_guess(r, t)
         r, _ = cv2.Rodrigues(r)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)

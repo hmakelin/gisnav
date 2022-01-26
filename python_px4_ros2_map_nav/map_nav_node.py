@@ -941,6 +941,13 @@ class MapNavNode(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
             return None
 
+        # Adjust pitch for projection so # TODO: this assumes 180 deg roll?
+        pitch = -(90 + rpy.pitch)
+        if pitch < 0:
+            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
+            pitch = 180 + pitch
+        rpy = (rpy.roll, pitch, rpy.yaw)
+
         r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(translation, axis=1)))
         assert_shape(e, (3, 4))
@@ -1018,18 +1025,29 @@ class MapNavNode(Node):
         :return: Center of the FOV or None if not available
         """
         if self._camera_info is not None:
-            pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls
+            pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls  # TODO: this logic uses old pitch origin (nadir=0)
             if pitch is None:
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None
-            assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
+
+            print(f'pitch1: {pitch}')
+
+            #pitch = -(90 + pitch)  # TODO: redundant logn _project_gimbal_fov - use pitch directly instead of tehse transformations
+            #if pitch < 0:
+            #    # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
+            #    pitch = 180 + pitch
+            assert -90 <= pitch <= 0
+            pitch = 90 + pitch
+            print(f'pitch2: {pitch}')
+                
+            #assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
             pitch_rad = math.radians(pitch)
             assert origin.alt is not None
             assert hasattr(origin, 'alt')
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
-            translation = np.array([-cx, -cy, origin.alt])
+            translation = np.array([cx, cy, origin.alt])
             gimbal_fov_pix = self._project_gimbal_fov(translation)
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
@@ -1266,26 +1284,20 @@ class MapNavNode(Node):
             return gimbal_set_attitude
 
     def _get_camera_rpy(self) -> Optional[RPY]:
-        """Returns roll-pitch-yaw tuple in NED frame.
+        """Returns roll-pitch-yaw tuple in NED frame of camera attitude setting.
+
+        True camera attitude may be different if gimbal has not yet stabilized.
 
         :return: An :class:`util.RPY` tuple
         """
-        gimbal_attitude = self._gimbal_attitude()
-        if gimbal_attitude is None:
+        gimbal_set_attitude = self._get_gimbal_set_attitude()
+        if gimbal_set_attitude is None:
             self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
             return None
-        assert hasattr(gimbal_attitude, 'q'), 'Gimbal attitude quaternion not available - cannot compute RPY.'
+        assert_type(gimbal_set_attitude, Rotation)
+        gimbal_euler = gimbal_set_attitude.as_euler('XYZ', degrees=True)
+        print(f'gimbal euler: {gimbal_euler}')
 
-        roll_index = self._roll_index()
-        assert roll_index != -1, 'Could not identify roll index in gimbal attitude, cannot return RPY.'
-
-        pitch_index = self._pitch_index()
-        assert pitch_index != -1, 'Could not identify pitch index in gimbal attitude, cannot return RPY.'
-
-        yaw_index = self._yaw_index()
-        assert yaw_index != -1, 'Could not identify yaw index in gimbal attitude, cannot return RPY.'
-
-        gimbal_euler = Rotation.from_quat(gimbal_attitude.q).as_euler(self.EULER_SEQUENCE, degrees=True)
         if self._vehicle_local_position is None:
             self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
             return None
@@ -1293,54 +1305,21 @@ class MapNavNode(Node):
         heading = self._vehicle_local_position.heading
         heading = math.degrees(heading)
         assert -180 <= heading <= 180, f'Unexpected heading value: {heading} degrees ([-180, 180] expected).'
-        gimbal_yaw = gimbal_euler[yaw_index]
-        assert -180 <= gimbal_yaw <= 180, f'Unexpected gimbal yaw value: {gimbal_yaw} ([-180, 180] expected).'
-
-        pitch = -(90 + gimbal_euler[pitch_index])  # TODO: ensure abs(pitch) <= 90?
-        if pitch < 0:
-            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
-            assert self.EULER_SEQUENCE == 'YXZ'  # Tested with 'YXZ' this configuration
-            gimbal_yaw = 180 - gimbal_yaw
-            pitch = 180 + pitch
 
         self.get_logger().debug('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().debug('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
-        yaw = heading + gimbal_yaw
+        gimbal_yaw = gimbal_euler[2]
+        yaw = heading - gimbal_yaw
         yaw = yaw % 360
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
         roll = 0  # TODO remove zero roll assumption
+        pitch = gimbal_euler[1]
         rpy = RPY(roll, pitch, yaw)
 
+        print(rpy)
         return rpy
-
-    def _roll_index(self) -> int:
-        """Returns the roll index for used euler vectors.
-
-        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
-
-        :return: Roll index
-        """
-        return self.EULER_SEQUENCE.lower().find('z')
-
-    def _pitch_index(self) -> int:
-        """Returns the pitch index for used euler vectors.
-
-        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
-
-        :return: Pitch index
-        """
-        return self.EULER_SEQUENCE.lower().find('y')
-
-    def _yaw_index(self) -> int:
-        """Returns the yaw index for used euler vectors.
-
-        Index is determined by the :py:attr:`~EULER_SEQUENCE` constant.
-
-        :return: Yaw index
-        """
-        return self.EULER_SEQUENCE.lower().find('x')
 
     def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
@@ -1533,8 +1512,8 @@ class MapNavNode(Node):
         msg.heading_offset = np.nan
         msg.selected = selection
 
-        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME)\
-            .publish(msg)
+        #self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME)\
+        #    .publish(msg)
 
     # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:
@@ -1656,11 +1635,12 @@ class MapNavNode(Node):
         assert_type(max_pitch, get_args(Union[int, float]))
         camera_pitch = self._camera_pitch()
         if camera_pitch is not None:
-            if abs(camera_pitch) > max_pitch:
+            #if abs(camera_pitch) > max_pitch:
+            if camera_pitch + 90 > max_pitch:
                 self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch}.')
                 return True
-            if camera_pitch < 0:
-                self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
+            #if camera_pitch < 0:
+            #    self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
         else:
             self.get_logger().warn(f'Could not determine camera pitch.')
             return True

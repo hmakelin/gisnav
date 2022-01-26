@@ -1030,18 +1030,10 @@ class MapNavNode(Node):
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None
 
-            print(f'pitch1: {pitch}')
+            pitch_from_nadir = 90 + pitch
 
-            #pitch = -(90 + pitch)  # TODO: redundant logn _project_gimbal_fov - use pitch directly instead of tehse transformations
-            #if pitch < 0:
-            #    # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
-            #    pitch = 180 + pitch
-            assert -90 <= pitch <= 0
-            pitch = 90 + pitch
-            print(f'pitch2: {pitch}')
-                
             #assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
-            pitch_rad = math.radians(pitch)
+            pitch_rad = math.radians(pitch_from_nadir)
             assert origin.alt is not None
             assert hasattr(origin, 'alt')
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
@@ -1295,8 +1287,7 @@ class MapNavNode(Node):
             self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
             return None
         assert_type(gimbal_set_attitude, Rotation)
-        gimbal_euler = gimbal_set_attitude.as_euler('XYZ', degrees=True)
-        print(f'gimbal euler: {gimbal_euler}')
+        gimbal_euler = gimbal_set_attitude.as_euler('xyz', degrees=True)
 
         if self._vehicle_local_position is None:
             self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
@@ -1309,16 +1300,15 @@ class MapNavNode(Node):
         self.get_logger().debug('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().debug('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
 
-        gimbal_yaw = gimbal_euler[2]
+        gimbal_yaw = gimbal_euler[0] - 180
         yaw = heading - gimbal_yaw
         yaw = yaw % 360
         if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
             yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
         roll = 0  # TODO remove zero roll assumption
-        pitch = gimbal_euler[1]
+        pitch = -gimbal_euler[1]
         rpy = RPY(roll, pitch, yaw)
 
-        print(rpy)
         return rpy
 
     def camera_info_callback(self, msg: CameraInfo) -> None:

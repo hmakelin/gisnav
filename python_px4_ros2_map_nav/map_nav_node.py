@@ -1482,12 +1482,12 @@ class MapNavNode(Node):
         :param image_frame: The image frame from the drone video
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
+        camera_yaw = self._camera_yaw()
         data = {
             'image_frame': image_frame,
             'map_frame': self._map_frame,
             'k': self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-            # TODO: check for None before radians conversion
-            'camera_yaw': math.radians(self._camera_yaw()),  # TODO: refactor internal APIs to use radians to get rid of back and forth conversions
+            'camera_yaw': math.radians(camera_yaw) if camera_yaw is not None else None,
             'vehicle_attitude': self._get_vehicle_attitude(),
             'map_dim_with_padding': self._map_dim_with_padding(),
             'img_dim': self._img_dim()

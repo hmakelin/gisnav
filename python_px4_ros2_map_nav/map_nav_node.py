@@ -1483,6 +1483,7 @@ class MapNavNode(Node):
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
         camera_yaw = self._camera_yaw()
+        img_dim = self._img_dim()
         data = {
             'image_frame': image_frame,
             'map_frame': self._map_frame,
@@ -1490,17 +1491,14 @@ class MapNavNode(Node):
             'camera_yaw': math.radians(camera_yaw) if camera_yaw is not None else None,
             'vehicle_attitude': self._get_vehicle_attitude(),
             'map_dim_with_padding': self._map_dim_with_padding(),
-            'img_dim': self._img_dim()
+            'img_dim': img_dim
         }
 
         # Get cropped and rotated map
-        camera_yaw = data.get('camera_yaw', None)
-        map_frame = data.get('map_frame', None)
-        img_dim = data.get('img_dim', None)
-        if all((camera_yaw, map_frame, img_dim)):
-            assert hasattr(map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
+        if all((camera_yaw, self._map_frame, img_dim)):
+            assert hasattr(self._map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
             assert -180 <= camera_yaw <= 180, f'Unexpected gimbal yaw value: {camera_yaw} ([-180, 180] expected).'
-            data['map_cropped'] = rotate_and_crop_map(map_frame.image, camera_yaw, img_dim)
+            data['map_cropped'] = rotate_and_crop_map(self._map_frame.image, camera_yaw, img_dim)
         else:
             data['map_cropped'] = None
 

@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import math
 
-from typing import Union, Tuple, get_args
+from typing import Optional, Union, Tuple, get_args
 from collections import namedtuple
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
@@ -307,6 +307,24 @@ def rotate_and_crop_map(map_: np.ndarray, radians: float, dimensions: Dim, visua
         cv2.waitKey(1)
     assert map_cropped.shape[0:2] == dimensions, f'Cropped shape {map_cropped.shape} did not match dims {dimensions}.'
     return map_cropped
+
+
+def inv_homography_from_k_and_e(k: np.ndarray, e: np.ndarray) -> Optional[np.ndarray]:
+    """Returns inverted homography based on the intrinsic and extrinsic matrices of the camera
+
+    Used to project image pixels to world plane (ground)
+    
+    :param k: Camera intrinsics
+    :param e: Camera extrinsics
+    :return: Homography matrix (assumes world Z coordinate as zero), or None if inversion cannot be done
+    """
+    e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
+    h = k @ e
+    try:
+        h_inv = np.linalg.inv(h)
+    except np.linalg.LinAlgError as _:
+        return None
+    return h_inv
 
 
 def crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:

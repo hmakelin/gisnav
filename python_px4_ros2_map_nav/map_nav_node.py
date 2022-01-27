@@ -33,7 +33,7 @@ from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial, lru_cache
 from python_px4_ros2_map_nav.util import BBox, Dim, rotate_and_crop_map, visualize_homography, get_fov_and_c, LatLon, \
-    fov_center, TimePair, create_src_corners, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine
+    fov_center, TimePair, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine, inv_homography_from_k_and_e
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -934,7 +934,7 @@ class MapNavNode(Node):
         assert_shape(translation, (3,))
         rpy = self._get_camera_rpy()
         if rpy is None:
-            self.get_logger().warn('Could not get RPY - cannot project gimbal fov.')
+            self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
             return None
 
         # Adjust pitch for projection so # TODO: this assumes 180 deg roll?
@@ -949,26 +949,27 @@ class MapNavNode(Node):
         assert_shape(e, (3, 4))
 
         if self._camera_info is None:
-            self.get_logger().warn('Could not get camera info - cannot project gimbal fov.')
+            self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
             return None
-        h, w = self._img_dim()
-        # TODO: assert h w not none and integers? and divisible by 2?
 
         # Intrinsic matrix
         k = np.array(self._camera_info.k).reshape([3, 3])
 
         # Project image corners to z=0 plane (ground)
-        e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
-        p = np.matmul(k, e)
-        try:
-            p_inv = np.linalg.inv(p)
-        except np.linalg.LinAlgError as e:
-            self.get_logger().error(f'Could not invert the projection matrix: {p}. RPY was {rpy}. Trace:'
-                                    f'\n{e},\n{traceback.print_exc()}.')
+        h = inv_homography_from_k_and_e(k, e)
+        if h is None:
+            self.get_logger().warn('Could not invert homography matrix - cannot project gimbal FOV.')
             return None
 
-        dst_corners, _ = get_fov_and_c((h, w), p_inv)
-        dst_corners = dst_corners.squeeze()
+        img_dim = self._img_dim()
+        if img_dim is None:
+            self.get_logger().warn('Could determine image dimensions- cannot project gimbal FOV.')
+            return None
+        else:
+            assert_type(h, np.ndarray)
+            # noinspection PyTypeChecker
+            dst_corners, _ = get_fov_and_c(img_dim, h)
+            dst_corners = dst_corners.squeeze()
 
         return dst_corners
 
@@ -1784,7 +1785,10 @@ class MapNavNode(Node):
         r, _ = cv2.Rodrigues(r)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
-        h = np.linalg.inv(k @ np.delete(e, 2, 1))  # Remove z-column (depth) and multiply by intrinsics, then invert to get homography matrix from img to map
+        h = inv_homography_from_k_and_e(k, e)
+        if h is None:
+            self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
+            return None
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h

@@ -1,4 +1,4 @@
-"""Helper functions for transforming between image pixel and WGS84 coordinates"""
+"""Helper functions for transforming between image pixel, WGS84 and other coordinates"""
 import math
 from typing import Tuple, Optional
 
@@ -9,7 +9,7 @@ from python_px4_ros2_map_nav.assertions import assert_type, assert_shape, assert
 from python_px4_ros2_map_nav.util import BBox, LatLon, Dim
 
 
-def fov_center(fov_wgs84: np.ndarray) -> BBox:
+def fov_center(fov_wgs84: np.ndarray) -> LatLon:
     # TODO: logic very similar to fov_to_bbox, combine?
     """Returns Field of View center coordinates (WGS84).
 

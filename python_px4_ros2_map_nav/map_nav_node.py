@@ -26,41 +26,20 @@ from pyproj import Geod
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from owslib.wms import WebMapService
 from geojson import Point, Polygon, Feature, FeatureCollection, dump
 
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
-from functools import partial, lru_cache
+from functools import partial
 from python_px4_ros2_map_nav.util import BBox, Dim, rotate_and_crop_map, visualize_homography, get_fov_and_c, LatLon, \
     fov_center, TimePair, RPY, LatLonAlt, ImageFrame, MapFrame, pix_to_wgs84_affine, inv_homography_from_k_and_e
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
+from python_px4_ros2_map_nav.wms import WMSClient
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
-
-@lru_cache(maxsize=1)
-def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
-    """Returns a cached WMS client.
-
-    The WMS requests are intended to be handled in a dedicated process (to avoid blocking the main thread), so this
-    function is lru_cache'd to avoid recurrent instantiations every time a WMS request is sent. For example usage, see
-    :meth:`python_px4_ros2_map_nav.MapNavNode._wms_pool_worker` method.
-
-    :param url: WMS server endpoint url
-    :param version_: WMS server version
-    :param timeout_: WMS request timeout seconds
-    :return: The cached WMS client
-    """
-    assert_type(url, str)
-    assert_type(version_, str)
-    assert_type(timeout_, int)
-    try:
-        return WebMapService(url, version=version_, timeout=timeout_)
-    except Exception as e:
-        raise e  # TODO: handle gracefully (e.g. ConnectionRefusedError)
 
 
 class MapNavNode(Node):
@@ -148,7 +127,13 @@ class MapNavNode(Node):
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
-        self._wms_pool = Pool(1)  # Do not increase the process count, it should be 1
+        url = self.get_parameter('wms.url').get_parameter_value().string_value
+        version = self.get_parameter('wms.version').get_parameter_value().string_value
+        timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
+        assert_type(url, str)
+        assert_type(version, str)
+        assert_type(timeout, int)
+        self._wms_pool = Pool(1, initializer=WMSClient.initializer, initargs=(url, version, timeout))  # Do not increase the process count, it should be 1
 
         # Setup map update timer
         self._map_update_timer = self._setup_map_update_timer()
@@ -1082,22 +1067,16 @@ class MapNavNode(Node):
             return None
 
         # Build and send WMS request
-        url = self.get_parameter('wms.url').get_parameter_value().string_value
-        version = self.get_parameter('wms.version').get_parameter_value().string_value
         layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
-        assert_type(url, str)
-        assert_type(version, str)
         assert_type(layer_str, str)
         assert_type(srs_str, str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
             if self._wms_results is not None:
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
-            timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
             self._wms_results = self._wms_pool.starmap_async(
-                self._wms_pool_worker, [(LatLon(center.lat, center.lon), radius, bbox, map_size, url, version,  # TODO: conersion of center to LatLon may be redundant?
-                                         layer_str, srs_str, timeout)],
+                WMSClient.worker, [(center, radius, bbox, map_size, layer_str, srs_str)],
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
@@ -1128,51 +1107,6 @@ class MapNavNode(Node):
         :return:
         """
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
-
-    @staticmethod
-    def _wms_pool_worker(center: LatLon, radius: Union[int, float], bbox: BBox,
-                         map_size: Tuple[int, int], url: str, version: str, layer_str: str, srs_str: str, timeout: int)\
-            -> MapFrame:
-        """Gets latest map from WMS server for given location, then creates a :class:`util.MapFrame` and returns it
-
-        :param center: Center of the map to be retrieved
-        :param radius: Radius in meters of the circle to be enclosed by the map
-        :param bbox: Bounding box of the map
-        :param map_size: Map size tuple (height, width)
-        :param url: WMS server url
-        :param version: WMS server version
-        :param layer_str: WMS server layer
-        :param srs_str: WMS server SRS
-        :param timeout: WMS client request timeout in seconds
-        :return: MapFrame containing the map raster and supporting metadata
-        """
-        """"""
-        # TODO: computation of bbox could be pushed in here - would just need to make Matcher._get_bbox pickle-able
-        assert_type(url, str)
-        assert_type(version, str)
-        assert_type(timeout, int)
-        wms_client = _cached_wms_client(url, version, timeout)
-        assert wms_client is not None
-        assert_type(bbox, BBox)
-        assert(all(isinstance(x, int) for x in map_size))
-        assert_type(layer_str, str)
-        assert_type(srs_str, str)
-        assert_type(center, LatLon)
-        assert_type(radius, get_args(Union[int, float]))
-        try:
-            map_ = wms_client.getmap(layers=[layer_str], srs=srs_str, bbox=bbox, size=map_size, format='image/png',
-                                     transparent=True)
-            # TODO: what will map_ be if the reqeust times out? will an error be raised?
-        except Exception as e:
-            raise e  # TODO: need to do anything here or just pass it on?
-
-        # Decode response from WMS server
-        map_ = np.frombuffer(map_.read(), np.uint8)
-        map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)
-        assert_type(map_, np.ndarray)
-        assert_ndim(map_, 3)
-        map_frame = MapFrame(center, radius, bbox, map_)
-        return map_frame
 
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
@@ -1551,7 +1485,8 @@ class MapNavNode(Node):
         data = {
             'image_frame': image_frame,
             'map_frame': self._map_frame,
-            'k': self._camera_info.k.reshape((3, 3)),
+            'k': self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
+            # TODO: check for None before radians conversion
             'camera_yaw': math.radians(self._camera_yaw()),  # TODO: refactor internal APIs to use radians to get rid of back and forth conversions
             'vehicle_attitude': self._get_vehicle_attitude(),
             'map_dim_with_padding': self._map_dim_with_padding(),

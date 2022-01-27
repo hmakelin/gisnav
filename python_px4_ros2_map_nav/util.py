@@ -82,7 +82,8 @@ class ImageFrame(object):
 class MapFrame(object):
     """Keeps map frame related data in one place and protects it from corruption."""
 
-    def __init__(self, center: LatLon, radius: Union[int, float], bbox: BBox, image: np.ndarray) -> None:
+    def __init__(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float], bbox: BBox, image: np.ndarray) \
+            -> None:
         """Initializer
 
         :param center: WGS84 coordinates of map center
@@ -91,12 +92,12 @@ class MapFrame(object):
         :param image: Map raster
         """
         assert_type(bbox, BBox)
-        assert_type(center, LatLon)
+        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         assert_type(radius, get_args(Union[int, float]))
         assert_type(image, np.ndarray)
         assert_ndim(image, 3)
         self._bbox = bbox
-        self._center = center
+        self._center = LatLon(center.lat, center.lon)
         self._radius = radius
         self._image = image
 

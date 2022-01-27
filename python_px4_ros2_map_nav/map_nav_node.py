@@ -932,7 +932,7 @@ class MapNavNode(Node):
         :return: Projected FOV bounding box in pixel coordinates or None if not available
         """
         assert_shape(translation, (3,))
-        rpy = self._get_camera_rpy()
+        rpy = self._get_camera_set_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
             return None
@@ -1235,7 +1235,7 @@ class MapNavNode(Node):
 
         :return: Camera yaw in degrees, or None if not available
         """
-        rpy = self._get_camera_rpy()
+        rpy = self._get_camera_set_rpy()
         if rpy is None:
             self.get_logger().warn(f'Could not get camera RPY - cannot return yaw.')
             return None
@@ -1267,7 +1267,7 @@ class MapNavNode(Node):
             gimbal_set_attitude = Rotation.from_quat(self._gimbal_device_set_attitude.q)
             return gimbal_set_attitude
 
-    def _get_camera_rpy(self) -> Optional[RPY]:
+    def _get_camera_set_rpy(self) -> Optional[RPY]:
         """Returns roll-pitch-yaw tuple in NED frame of camera attitude setting.
 
         True camera attitude may be different if gimbal has not yet stabilized.
@@ -1506,7 +1506,7 @@ class MapNavNode(Node):
 
         :return: Camera pitch in degrees, or None if not available
         """
-        rpy = self._get_camera_rpy()
+        rpy = self._get_camera_set_rpy()
         if rpy is None:
             self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
             return None

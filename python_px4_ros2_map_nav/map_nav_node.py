@@ -12,7 +12,6 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 PACKAGE_NAME = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
-share_dir = get_package_share_directory(PACKAGE_NAME)
 
 # Import and configure torch for multiprocessing
 import torch

@@ -65,9 +65,6 @@ def _cached_wms_client(url: str, version_: str, timeout_: int) -> WebMapService:
 
 class MapNavNode(Node):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
-    # scipy Rotations: {‘X’, ‘Y’, ‘Z’} for intrinsic, {‘x’, ‘y’, ‘z’} for extrinsic rotations
-    EULER_SEQUENCE = 'YXZ'
-
     # Minimum matches for homography estimation, should be at least 4
     HOMOGRAPHY_MINIMUM_MATCHES = 4
 

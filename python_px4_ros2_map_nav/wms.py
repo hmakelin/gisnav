@@ -84,7 +84,6 @@ class WMSClient:
         :param srs_str: WMS server SRS
         :return: MapFrame containing the map raster and supporting metadata
         """
-        """"""
         assert wms_client is not None
         assert_type(bbox, BBox)
         assert (all(isinstance(x, int) for x in map_size))
@@ -102,7 +101,12 @@ class WMSClient:
                  transparent_: bool) -> np.ndarray:
         """Performs a WMS GetMap request with the supplied keyword arguments
 
-        :param kwargs: Keyword arguments for :func:`owslib.wms.WebMapService.getmap function call
+        :param layer_str: WMS server layer
+        :param srs_str: WMS server SRS
+        :param bbox_: Bounding box of the map
+        :param size_: Map size tuple (height, width)
+        :param format_: Requested image format
+        :param transparent_: Requested image background transparency
         :return: Map raster
         """
         try:

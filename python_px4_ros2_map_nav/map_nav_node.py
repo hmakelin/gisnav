@@ -958,8 +958,6 @@ class MapNavNode(Node):
         k = np.array(self._camera_info.k).reshape([3, 3])
 
         # Project image corners to z=0 plane (ground)
-        src_corners = create_src_corners(h, w)
-        assert_shape(src_corners, (4, 1, 2))
         e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
         p = np.matmul(k, e)
         try:
@@ -969,11 +967,8 @@ class MapNavNode(Node):
                                     f'\n{e},\n{traceback.print_exc()}.')
             return None
 
-        assert_shape(p_inv, (3, 3))
-
-        dst_corners = cv2.perspectiveTransform(src_corners, p_inv)  # TODO: use util.get_fov here?
-        assert_shape(dst_corners, src_corners.shape)
-        dst_corners = dst_corners.squeeze()  # TODO: See get_fov usage elsewhere -where to do squeeze if at all?
+        dst_corners, _ = get_fov_and_c((h, w), p_inv)
+        dst_corners = dst_corners.squeeze()
 
         return dst_corners
 
@@ -1793,8 +1788,8 @@ class MapNavNode(Node):
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h
-        fov_pix, c_pix = get_fov_and_c(image_frame.image, h)
-        fov_wgs84, c_wgs84 = get_fov_and_c(image_frame.image, h_wgs84)
+        fov_pix, c_pix = get_fov_and_c(img_dim, h)
+        fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
         image_frame.fov = fov_wgs84
 
         # Compute altitude scaling:

@@ -6,7 +6,7 @@ import math
 from typing import Union, Tuple, get_args
 from collections import namedtuple
 
-from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
+from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -189,16 +189,17 @@ def visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarra
     return out
 
 
-def get_fov_and_c(img_arr: np.ndarray, h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates field of view (FOV) corners from homography and image shape.
 
-    :param img_arr: Image array
+    :param img_arr_shape: Image array shape tuple (height, width)
     :param h_mat: Homography matrix
     :return: Tuple of FOV corner coordinates and prinicpal point np.ndarrays
     """
-    assert_type(img_arr, np.ndarray)
+    assert_type(img_arr_shape, tuple)
+    assert_len(img_arr_shape, 2)
     assert_type(h_mat, np.ndarray)
-    h, w, _ = img_arr.shape  # height before width in np.array shape
+    h, w = img_arr_shape  # height before width in np.array shape
     src_fov = create_src_corners(h, w)
 
     principal_point_src = np.array([[[w/2, h/2]]])

@@ -1,8 +1,6 @@
 """Module containing utility functions for map_nav_node."""
 import cv2
 import numpy as np
-import sys
-import os
 import math
 
 from typing import Union, Tuple, get_args
@@ -229,20 +227,6 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     assert_type(w, int)
     assert h > 0 and w > 0, f'Height {h} and width {w} are both expected to be positive.'
     return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-
-
-def setup_sys_path() -> Tuple[str, str]:
-    """Adds the package share directory to the path so that SuperGlue can be imported.
-
-    :return: Tuple containing share directory and superglue directory paths
-    """
-    if 'get_package_share_directory' not in sys.modules:
-        from ament_index_python.packages import get_package_share_directory
-    package_name = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
-    share_dir = get_package_share_directory(package_name)
-    superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')  # todo: set this stuff up in the superglue adapter module
-    sys.path.append(os.path.abspath(superglue_dir))
-    return share_dir, superglue_dir
 
 
 def pix_to_wgs84_affine(map_raster_padded_dim: Dim, map_raster_bbox: BBox, map_raster_rotation: float, img_dim: Dim) \

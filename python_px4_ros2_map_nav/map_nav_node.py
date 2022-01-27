@@ -945,9 +945,9 @@ class MapNavNode(Node):
         if pitch < 0:
             # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
             pitch = 180 + pitch
-        rpy = (rpy.roll, pitch, rpy.yaw)
+        rpy = (pitch, rpy.roll, rpy.yaw)
 
-        r = Rotation.from_euler(self.EULER_SEQUENCE, list(rpy), degrees=True).as_matrix()
+        r = Rotation.from_euler('XYZ', list(rpy), degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(translation, axis=1)))
         assert_shape(e, (3, 4))
 

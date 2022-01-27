@@ -179,3 +179,18 @@ def crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
     assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
                                                                             'map raster. '
     return img_cropped
+
+
+def get_azimuth(x: float, y: float) -> float:
+    """Get azimuth of position x and y coordinates.
+
+    Note: in NED coordinates x is north, so here it would be y.
+
+    :param x: Meters towards east
+    :param y: Meters towards north
+    :return: Azimuth in degrees
+    """
+    rads = math.atan2(y, x)
+    rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
+    rads = -rads + math.pi/2  # Clockwise from north
+    return math.degrees(rads)

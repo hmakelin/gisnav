@@ -34,7 +34,7 @@ from functools import partial
 from python_px4_ros2_map_nav.util import BBox, Dim, visualize_homography, LatLon, \
     TimePair, RPY, LatLonAlt, ImageFrame, MapFrame
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e
+    inv_homography_from_k_and_e, get_azimuth
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -978,22 +978,6 @@ class MapNavNode(Node):
             self.get_logger().warn('No valid global reference for local frame origin - returning None.')
             return None
 
-    @staticmethod
-    def _get_azimuth(x: float, y: float) -> float:
-        """Get azimuth of position x and y coordinates.
-
-        Note: in NED coordinates x is north, so here it would be y.
-
-        :param x: Meters towards east
-        :param y: Meters towards north
-
-        :return: Azimuth in degrees
-        """
-        rads = math.atan2(y, x)
-        rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
-        rads = -rads + math.pi/2  # Clockwise from north
-        return math.degrees(rads)
-
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
@@ -1023,7 +1007,7 @@ class MapNavNode(Node):
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
-                azmths = list(map(lambda x: self._get_azimuth(x[0], x[1]), gimbal_fov_pix))
+                azmths = list(map(lambda x: get_azimuth(x[0], x[1]), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
                 to_wgs84 = partial(self._move_distance, origin)

@@ -10,7 +10,6 @@ from python_px4_ros2_map_nav.util import BBox, LatLon, Dim
 
 
 def fov_center(fov_wgs84: np.ndarray) -> LatLon:
-    # TODO: logic very similar to fov_to_bbox, combine?
     """Returns Field of View center coordinates (WGS84).
 
     :param fov_wgs84: FOV corners in WGS84 coordinates

@@ -34,7 +34,7 @@ from functools import partial
 from python_px4_ros2_map_nav.util import BBox, Dim, visualize_homography, LatLon, \
     TimePair, RPY, LatLonAlt, ImageFrame, MapFrame
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e, get_azimuth
+    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -924,12 +924,8 @@ class MapNavNode(Node):
             self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
             return None
 
-        # Adjust pitch for projection so # TODO: this assumes 180 deg roll?
-        pitch = -(90 + rpy.pitch)
-        if pitch < 0:
-            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
-            pitch = 180 + pitch
-        rpy = (pitch, rpy.roll, rpy.yaw)
+        # Need coordinates in image frame
+        rpy = axes_ned_to_image(rpy)
 
         r = Rotation.from_euler('XYZ', list(rpy), degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(translation, axis=1)))
@@ -992,7 +988,6 @@ class MapNavNode(Node):
             if pitch is None:
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None
-
             pitch_from_nadir = 90 + pitch
 
             #assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert

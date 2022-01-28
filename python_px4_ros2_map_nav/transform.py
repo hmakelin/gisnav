@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_shape, assert_len, assert_ndim
-from python_px4_ros2_map_nav.util import BBox, LatLon, Dim
+from python_px4_ros2_map_nav.util import BBox, LatLon, Dim, RPY
 
 
 def fov_center(fov_wgs84: np.ndarray) -> LatLon:
@@ -193,3 +193,18 @@ def get_azimuth(x: float, y: float) -> float:
     rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
     rads = -rads + math.pi/2  # Clockwise from north
     return math.degrees(rads)
+
+
+def axes_ned_to_image(rpy: RPY, degrees: bool = True) -> RPY:
+    """Converts roll-pitch-yaw euler angles from NED to image frame"""
+    straight_angle = 180 if degrees else np.pi
+    right_angle = 90 if degrees else np.pi / 2
+    pitch = -rpy.pitch - right_angle
+    if pitch < 0:
+        # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
+        pitch += straight_angle
+    roll = pitch
+    pitch = rpy.roll
+    yaw = rpy.yaw
+    rpy = RPY(roll, pitch, yaw)
+    return rpy

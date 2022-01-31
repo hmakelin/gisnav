@@ -121,11 +121,12 @@ class MapNavNode(Node):
         :param node_name: Name of the node
         """
         assert_type(node_name, str)
-        super().__init__(node_name)
+        super().__init__(node_name, allow_undeclared_parameters=True,
+                         automatically_declare_parameters_from_overrides=True)
         self.name = node_name
 
         # Setup config and declare ROS parameters
-        self._declare_ros_params()
+        #self._declare_ros_params()  # TODO: fix params declarations so that they work with params file arg
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this

@@ -29,6 +29,8 @@ def setup_sys_path() -> Tuple[str, str]:
 _, __ = setup_sys_path()
 
 # Assumes models has been added to path (see import statements in map_nav_node.py)
+#from SuperGluePretrainedNetwork.models.matching import Matching
+#from SuperGluePretrainedNetwork.models.utils import frame2tensor
 from models.matching import Matching
 from models.utils import frame2tensor
 

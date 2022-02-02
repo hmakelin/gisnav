@@ -46,6 +46,10 @@ class LoFTRMatcher(KeypointMatcher):
         CUDA = 'cuda'
 
     WEIGHTS_PATH = 'LoFTR/weights/outdoor_ds.ckpt'
+    """Path to model weights - for LoFTR these need to be downloaded separately (see LoFTR README.md)"""
+
+    CONFIDENCE_THRESHOLD = 0.7
+    """Confidence threshold for filtering out bad matches"""
 
     def __init__(self, params: dict) -> None:
         """Initializes instance attributes
@@ -132,6 +136,11 @@ class LoFTRMatcher(KeypointMatcher):
             self._model(batch)
             mkp_img = batch['mkpts0_f'].cpu().numpy()
             mkp_map = batch['mkpts1_f'].cpu().numpy()
+            conf = batch['mconf'].cpu().numpy()
+
+        valid = conf > self.CONFIDENCE_THRESHOLD
+        mkp_img = mkp_img[valid, :]
+        mkp_map = mkp_map[valid, :]
 
         return mkp_img, mkp_map
 

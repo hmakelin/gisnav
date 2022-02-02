@@ -1,0 +1,2 @@
+args:
+  - 'dummy_argument'  # Not used but passed on to initializer anyway since it needs a list/tuple

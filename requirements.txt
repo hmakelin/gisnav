@@ -8,3 +8,6 @@ pyyaml
 pyproj
 geojson
 shapely
+einops
+kornia
+yacs

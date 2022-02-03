@@ -1,6 +1,8 @@
 """Module containing utility functions for map_nav_node."""
 import cv2
 import numpy as np
+import os
+import xml.etree.ElementTree as ET
 
 from typing import Union, get_args
 from collections import namedtuple
@@ -119,6 +121,30 @@ class MapFrame(object):
     def image(self) -> np.ndarray:
         """Map image raster."""
         return self._image
+
+
+class PackageInfo:
+    """Helper class to parse package.xml info"""
+
+    def __init__(self, package_file: str):
+        """Parses package.xml in current folder
+
+        :param abs_path: Absolute path to package.xml file
+        """
+        # Parse info from package.xml
+        if os.path.isfile(package_file):
+            tree = ET.parse(package_file)
+            root = tree.getroot()
+            self.package_name = root.find('name').text
+            self.version = root.find('version').text
+            self.description = root.find('description').text
+            self.author = root.find('author').text
+            self.author_email = root.find('author').attrib.get('email', '')
+            self.maintainer = root.find('maintainer').text
+            self.maintainer_email = root.find('maintainer').attrib.get('email', '')
+            self.license_name = root.find('license').text
+        else:
+            raise FileNotFoundError(f'Could not find package file at {package_file}.')
 
 
 def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:

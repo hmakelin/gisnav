@@ -15,26 +15,9 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 # -- Version information -----------------------------------------------------
-# TODO: same logic as in setup.py - make util function?
-import xml.etree.ElementTree as ET
+from python_px4_ros2_map_nav.util import PackageInfo
+package_info = PackageInfo(os.path.abspath('../package.xml'))
 
-folder = os.path.dirname(os.path.realpath(__file__))
-
-# Parse info from package.xml
-package_file = os.path.join(folder, '../package.xml')
-if os.path.isfile(package_file):
-    tree = ET.parse(package_file)
-    root = tree.getroot()
-    package_name = root.find('name').text
-    version = root.find('version').text
-    description = root.find('description').text
-    author = root.find('author').text
-    author_email = root.find('author').attrib.get('email', '')
-    maintainer = root.find('maintainer').text
-    maintainer_email = root.find('maintainer').attrib.get('email', '')
-    license_name = root.find('license').text
-else:
-    raise FileNotFoundError(f'Could not find package file at {package_file}.')
 
 #version_string = f'v{version}'
 #rst_prolog = f"""
@@ -47,15 +30,15 @@ else:
 # TODO: same logic as in setup_sys_path
 if 'get_package_share_directory' not in sys.modules:
     from ament_index_python.packages import get_package_share_directory
-share_dir = get_package_share_directory(package_name)
+share_dir = get_package_share_directory(package_info.package_name)
 superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
 sys.path.append(os.path.abspath(superglue_dir))
 
 # -- Project information -----------------------------------------------------
 
-project = package_name
-copyright = f'2021, {author}'
-author = author
+project = package_info.package_name
+copyright = f'2021, {package_info.author}'
+author = package_info.author
 
 # -- General configuration ---------------------------------------------------
 
@@ -105,10 +88,10 @@ html_theme_options = {
     #'logo': 'logo.png',
     #'github_user': 'bitprophet',
     #'github_repo': 'alabaster',
-    'description': description,
+    'description': package_info.description,
     'show_relbar_bottom': True,
     'fixed_sidebar': True
 }
 
 # Make version number accessible in .rst files
-rst_epilog = f'.. |version| replace:: **v{version}**'
+rst_epilog = f'.. |version| replace:: **v{package_info.version}**'

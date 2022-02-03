@@ -1,6 +1,8 @@
 import os
 from glob import glob
 from setuptools import setup
+from ament_index_python.packages import get_package_share_directory
+
 import xml.etree.ElementTree as ET
 
 folder = os.path.dirname(os.path.realpath(__file__))
@@ -40,17 +42,17 @@ setup(
         'LoFTR.loftr.backbone',
         'LoFTR.loftr.loftr_module',
         'LoFTR.loftr.utils',
+        'SuperGluePretrainedNetwork.models',
     ],
     package_dir={
-        'LoFTR': 'LoFTR/src'
+        'LoFTR': 'LoFTR/src',
+    },
+    package_data={
+        'SuperGluePretrainedNetwork.models': ['weights/*.pth'],
     },
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'SuperGluePretrainedNetwork', 'models'),
-         glob('SuperGluePretrainedNetwork/models/*.py', recursive=True)),
-        (os.path.join('share', package_name, 'SuperGluePretrainedNetwork', 'models', 'weights'),
-         glob('SuperGluePretrainedNetwork/models/weights/*.pth', recursive=True)),
         (os.path.join('share', package_name, 'LoFTR', 'weights'), glob('LoFTR/weights/*.ckpt')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yml')),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch*')),

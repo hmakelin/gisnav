@@ -9,30 +9,8 @@ from typing import Tuple
 from enum import Enum
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
-
-
-# Add the share folder to Python path
-def setup_sys_path() -> Tuple[str, str]:
-    """Adds the package share directory to the path so that SuperGlue can be imported.
-
-    :return: Tuple containing share directory and superglue directory paths
-    """
-    if 'get_package_share_directory' not in sys.modules:
-        from ament_index_python.packages import get_package_share_directory
-    package_name = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
-    share_dir = get_package_share_directory(package_name)
-    superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
-    sys.path.append(os.path.abspath(superglue_dir))
-    return share_dir, superglue_dir
-
-
-_, __ = setup_sys_path()
-
-# Assumes models has been added to path (see import statements in map_nav_node.py)
-#from SuperGluePretrainedNetwork.models.matching import Matching
-#from SuperGluePretrainedNetwork.models.utils import frame2tensor
-from models.matching import Matching
-from models.utils import frame2tensor
+from SuperGluePretrainedNetwork.models.matching import Matching
+from SuperGluePretrainedNetwork.models.utils import frame2tensor
 
 
 class SuperGlue(KeypointMatcher):

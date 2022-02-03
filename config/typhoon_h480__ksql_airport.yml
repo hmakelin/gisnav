@@ -26,7 +26,7 @@ map_nav_node:
       update_map_center_threshold: 50
       update_map_radius_threshold: 50
     matcher:
-      #class: 'python_px4_ros2_map_nav.keypoint_matchers.superglue.SuperGlue'  # Imported dynamically
-      #params_file: 'config/superglue_params.yml' # For parsing args for matcher's static initializer method
-      class: 'python_px4_ros2_map_nav.keypoint_matchers.loftr.LoFTRMatcher'
-      params_file: 'config/loftr_params.yml'
+      class: 'python_px4_ros2_map_nav.keypoint_matchers.superglue.SuperGlue'  # Imported dynamically
+      params_file: 'config/superglue_params.yml' # For parsing args for matcher's static initializer method
+      #class: 'python_px4_ros2_map_nav.keypoint_matchers.loftr.LoFTRMatcher'
+      #params_file: 'config/loftr_params.yml'

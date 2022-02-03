@@ -1,7 +1,6 @@
 import os
 from glob import glob
 from setuptools import setup
-from ament_index_python.packages import get_package_share_directory
 
 import xml.etree.ElementTree as ET
 

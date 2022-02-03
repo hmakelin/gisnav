@@ -1410,8 +1410,7 @@ class MapNavNode(Node):
         msg.heading_offset = np.nan
         msg.selected = selection
 
-        #self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME)\
-        #    .publish(msg)
+        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME).publish(msg)
 
     # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:

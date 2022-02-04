@@ -15,8 +15,8 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 # -- Version information -----------------------------------------------------
-from python_px4_ros2_map_nav.util import PackageInfo
-package_info = PackageInfo(os.path.abspath('../package.xml'))
+from python_px4_ros2_map_nav.data_classes import parse_package_data
+package_data = parse_package_data(os.path.abspath('../package.xml'))
 
 
 #version_string = f'v{version}'
@@ -30,15 +30,15 @@ package_info = PackageInfo(os.path.abspath('../package.xml'))
 # TODO: same logic as in setup_sys_path
 if 'get_package_share_directory' not in sys.modules:
     from ament_index_python.packages import get_package_share_directory
-share_dir = get_package_share_directory(package_info.package_name)
+share_dir = get_package_share_directory(package_data.package_name)
 superglue_dir = os.path.join(share_dir, 'SuperGluePretrainedNetwork')
 sys.path.append(os.path.abspath(superglue_dir))
 
 # -- Project information -----------------------------------------------------
 
-project = package_info.package_name
-copyright = f'2021, {package_info.author}'
-author = package_info.author
+project = package_data.package_name
+copyright = f'2021, {package_data.author}'
+author = package_data.author
 
 # -- General configuration ---------------------------------------------------
 
@@ -88,10 +88,10 @@ html_theme_options = {
     #'logo': 'logo.png',
     #'github_user': 'bitprophet',
     #'github_repo': 'alabaster',
-    'description': package_info.description,
+    'description': package_data.description,
     'show_relbar_bottom': True,
     'fixed_sidebar': True
 }
 
 # Make version number accessible in .rst files
-rst_epilog = f'.. |version| replace:: **v{package_info.version}**'
+rst_epilog = f'.. |version| replace:: **v{package_data.version}**'

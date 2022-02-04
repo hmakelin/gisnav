@@ -31,8 +31,8 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from python_px4_ros2_map_nav.util import BBox, Dim, visualize_homography, LatLon, \
-    TimePair, RPY, LatLonAlt, ImageFrame, MapFrame
+from python_px4_ros2_map_nav.data_classes import BBox, Dim, visualize_homography, LatLon, \
+    TimePair, RPY, LatLonAlt, ImageData, MapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
@@ -354,13 +354,13 @@ class MapNavNode(Node):
         self.__geod = value
 
     @property
-    def _map_frame(self) -> Optional[MapFrame]:
+    def _map_frame(self) -> Optional[MapData]:
         """The map raster from the WMS server response along with supporting metadata."""
         return self.__map_frame
 
     @_map_frame.setter
-    def _map_frame(self, value: Optional[MapFrame]) -> None:
-        assert_type(value, get_args(Optional[MapFrame]))
+    def _map_frame(self, value: Optional[MapData]) -> None:
+        assert_type(value, get_args(Optional[MapData]))
         self.__map_frame = value
 
     @property
@@ -374,23 +374,23 @@ class MapNavNode(Node):
         self.__cv_bridge = value
 
     @property
-    def _previous_map_frame(self) -> Optional[MapFrame]:
+    def _previous_map_frame(self) -> Optional[MapData]:
         """The previous map frame which is compared to current map frame to determine need for another update."""
         return self.__previous_map_frame
 
     @_previous_map_frame.setter
-    def _previous_map_frame(self, value: Optional[MapFrame]) -> None:
-        assert_type(value, get_args(Optional[MapFrame]))
+    def _previous_map_frame(self, value: Optional[MapData]) -> None:
+        assert_type(value, get_args(Optional[MapData]))
         self.__previous_map_frame = value
 
     @property
-    def _previous_image_frame(self) -> Optional[ImageFrame]:
+    def _previous_image_frame(self) -> Optional[ImageData]:
         """The previous image frame which is needed for computing the velocity estimate."""
         return self.__previous_image_frame
 
     @_previous_image_frame.setter
-    def _previous_image_frame(self, value: Optional[ImageFrame]) -> None:
-        assert_type(value, get_args(Optional[ImageFrame]))
+    def _previous_image_frame(self, value: Optional[ImageData]) -> None:
+        assert_type(value, get_args(Optional[ImageData]))
         self.__previous_image_frame = value
 
     @property
@@ -1064,7 +1064,7 @@ class MapNavNode(Node):
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
 
-    def wms_pool_worker_callback(self, result: List[MapFrame]) -> None:
+    def wms_pool_worker_callback(self, result: List[MapData]) -> None:
         """Handles result from WMS pool worker.
 
         Saves received :class:`util.MapFrame` to :py:attr:`~_map_frame.
@@ -1075,7 +1075,7 @@ class MapNavNode(Node):
         assert_len(result, 1)
         result = result[0]
         self.get_logger().info(f'WMS callback for bbox: {result.bbox}.')
-        assert_type(result, MapFrame)
+        assert_type(result, MapData)
         if self._map_frame is not None:
             self._previous_map_frame = self._map_frame
         self._map_frame = result
@@ -1123,7 +1123,8 @@ class MapNavNode(Node):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        image_frame = ImageFrame(cv_image, msg.header.frame_id, timestamp)
+        image_frame = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
+                                position=None)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
         if self._should_match():
@@ -1445,7 +1446,7 @@ class MapNavNode(Node):
                 self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _match_inputs(self, image_frame: ImageFrame) -> dict:
+    def _match_inputs(self, image_frame: ImageData) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
@@ -1642,7 +1643,7 @@ class MapNavNode(Node):
         """
         return self._r, self._t
 
-    def _estimate_velocities(self, current_position: ImageFrame, previous_position: ImageFrame) -> np.ndarray:
+    def _estimate_velocities(self, current_position: ImageData, previous_position: ImageData) -> np.ndarray:
         """Estimates x, y and z velocities in m/s from current and previous position.
 
         :param current_position: Current estimated position
@@ -1655,7 +1656,7 @@ class MapNavNode(Node):
         velocities = diff_position / time_diff_sec
         return velocities
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageFrame, map_frame: MapFrame,
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageData, map_frame: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
                          img_dim: Dim, map_cropped: Optional[np.ndarray] = None)\
             -> None:
@@ -1726,10 +1727,11 @@ class MapNavNode(Node):
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
         position = t_wgs84.squeeze().tolist()
-        image_frame.position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+        position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+        image_frame.position = position
 
         # Check that we have everything we need to publish vehicle_gps_position
-        if not all(image_frame.position) or any(map(np.isnan, image_frame.position)):
+        if not all(position) or any(map(np.isnan, position)):
             self.get_logger().debug('Could not determine global position. Cannot create mock GPS position message.')
             return None
 
@@ -1765,11 +1767,11 @@ class MapNavNode(Node):
             velocities = self._estimate_velocities(image_frame, self._previous_image_frame)
             speed = np.linalg.norm(velocities)
             course = np.arctan2(velocities[1], velocities[0])
-            self._push_estimates(position, velocities, np.array([speed]), np.array([course]))
+            self._push_estimates(image_frame.position, velocities, np.array([speed]), np.array([course]))
             if self._variance_window_full():
                 sd = np.std(self._estimation_history, axis=0)
                 var = np.var(self._estimation_history, axis=0)
-                self._publish_mock_gps_msg(position, velocities, speed, course, sd, var, mock_gps_selection)
+                self._publish_mock_gps_msg(image_frame.position, velocities, speed, course, sd, var, mock_gps_selection)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
                                         'message yet...')
@@ -1806,7 +1808,7 @@ class MapNavNode(Node):
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
 
-    def _match(self, image_frame: ImageFrame, map_cropped: np.ndarray) -> None:
+    def _match(self, image_frame: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.
 
         :param image_frame: The image frame to match

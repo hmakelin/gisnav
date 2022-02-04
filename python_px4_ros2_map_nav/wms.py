@@ -6,7 +6,7 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.util import BBox, LatLon, LatLonAlt, MapFrame, get_args
+from python_px4_ros2_map_nav.data_classes import BBox, LatLon, LatLonAlt, MapData, get_args
 
 
 class WMSClient:
@@ -73,7 +73,7 @@ class WMSClient:
 
     @staticmethod
     def worker(center: Union[LatLon, LatLonAlt], radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
-               layer_str: str, srs_str: str) -> MapFrame:
+               layer_str: str, srs_str: str) -> MapData:
         """Gets latest map from WMS server for given location, then creates a :class:`util.MapFrame` and returns it
 
         :param center: Center of the map to be retrieved
@@ -94,7 +94,7 @@ class WMSClient:
         # TODO: handle exception from getmap request
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
-        map_frame = MapFrame(center, radius, bbox, map_)
+        map_frame = MapData(center=center, radius=radius, bbox=bbox, image=map_)
         return map_frame
 
     def _get_map(self, layer_str: str, srs_str: str, bbox_: BBox, size_: Tuple[int, int], format_: str,

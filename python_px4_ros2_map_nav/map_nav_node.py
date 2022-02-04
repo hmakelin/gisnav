@@ -237,7 +237,7 @@ class MapNavNode(Node):
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
-        """A :class:`python_px4_ros2_map_nav.util.TimePair` with local and foreign (EKF2) timestamps in microseconds
+        """A :class:`python_px4_ros2_map_nav.data_classes.TimePair` with local and foreign (EKF2) timestamps in microseconds
 
         The pair will contain the local system time and the EKF2 time received via the PX4-ROS 2 bridge. The pair can
         then at any time be used to locally estimate the EKF2 system time.

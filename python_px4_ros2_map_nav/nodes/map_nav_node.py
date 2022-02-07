@@ -21,6 +21,7 @@ except RuntimeError:
     pass
 torch.set_num_threads(1)
 
+from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool, AsyncResult  # Used for WMS client process, not for torch
 from pyproj import Geod
 from typing import Optional, Union, Tuple, get_args, List
@@ -44,7 +45,7 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
 from sensor_msgs.msg import CameraInfo, Image
 
 
-class MapNavNode(Node):
+class MapNavNode(Node, ABC):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
     # Minimum matches for homography estimation, should be at least 4
     HOMOGRAPHY_MINIMUM_MATCHES = 4
@@ -55,65 +56,20 @@ class MapNavNode(Node):
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
 
-    # ROS 2 QoS profiles for topics
-    # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
-    # If publishign for some reason stops, it can be assumed that something has gone very wrong
-    PUBLISH_QOS_PROFILE = rclpy.qos.QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST,
-                                               reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
-                                               depth=1)
-
     # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
     EKF2_TIMESTAMP_PADDING = 500000  # microseconds
 
     # Maps properties to microRTPS bridge topics and message definitions
     # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
-    TOPIC_NAME_KEY = 'topic_name'
-    CLASS_KEY = 'class'
-    SUBSCRIBE_KEY = 'subscribe'  # Used as key in both Matcher.TOPICS and Matcher._topics
-    PUBLISH_KEY = 'publish'  # Used as key in both Matcher.TOPICS and Matcher._topics
-    VEHICLE_GPS_POSITION_TOPIC_NAME = 'VehicleGpsPosition_PubSubTopic'
-    TOPICS = [
-        {
-            TOPIC_NAME_KEY: 'VehicleLocalPosition_PubSubTopic',
-            CLASS_KEY: VehicleLocalPosition,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'VehicleGlobalPosition_PubSubTopic',
-            CLASS_KEY: VehicleGlobalPosition,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'VehicleAttitude_PubSubTopic',
-            CLASS_KEY: VehicleAttitude,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'GimbalDeviceAttitudeStatus_PubSubTopic',
-            CLASS_KEY: GimbalDeviceAttitudeStatus,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'GimbalDeviceSetAttitude_PubSubTopic',
-            CLASS_KEY: GimbalDeviceSetAttitude,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'camera_info',
-            CLASS_KEY: CameraInfo,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: 'image_raw',
-            CLASS_KEY: Image,
-            SUBSCRIBE_KEY: True
-        },
-        {
-            TOPIC_NAME_KEY: VEHICLE_GPS_POSITION_TOPIC_NAME,
-            CLASS_KEY: VehicleGpsPosition,
-            PUBLISH_KEY: True
-        }
-    ]
+    TOPICS = {
+        'VehicleLocalPosition_PubSubTopic': VehicleLocalPosition,
+        'VehicleGlobalPosition_PubSubTopic': VehicleGlobalPosition,
+        'VehicleAttitude_PubSubTopic': VehicleAttitude,
+        'GimbalDeviceAttitudeStatus_PubSubTopic': GimbalDeviceAttitudeStatus,
+        'GimbalDeviceSetAttitude_PubSubTopic': GimbalDeviceSetAttitude,
+        'camera_info': CameraInfo,
+        'image_raw': Image,
+    }
 
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
@@ -141,9 +97,9 @@ class MapNavNode(Node):
         # Setup map update timer
         self._map_update_timer = self._setup_map_update_timer()
 
-        # Dict for storing all microRTPS bridge subscribers and publishers
-        self._topics = {self.PUBLISH_KEY: {}, self.SUBSCRIBE_KEY: {}}
-        self._setup_topics()
+        # Dict for storing all microRTPS bridge subscribers
+        self._topics = {}  # TODO: combine with self.TOPICS
+        self._setup_subscribers()
 
         # Time of publication of mock GPS message  # TODO: currently not used
         self._publish_timestamp = None
@@ -184,8 +140,6 @@ class MapNavNode(Node):
         self._t = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
-
-        self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._camera_info = None
@@ -248,16 +202,6 @@ class MapNavNode(Node):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
-
-    @property
-    def _estimation_history(self) -> Optional[np.ndarray]:
-        """Windowed data for estimating position error"""
-        return self.__estimation_history
-
-    @_estimation_history.setter
-    def _estimation_history(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__estimation_history = value
 
     @property
     def _wms_pool(self) -> Pool:
@@ -469,48 +413,6 @@ class MapNavNode(Node):
                 self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
                                         f'\n{e}\n{traceback.print_exc()}')
 
-    def _variance_window_full(self) -> bool:
-        """Returns true if the variance estimation window is full.
-
-        :return: True if :py:attr:`~_estimation_history` is full
-        """
-        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-        obs_count = len(self._estimation_history)
-        if self._estimation_history is not None and obs_count == window_length:
-            return True
-        else:
-            assert 0 <= obs_count < window_length
-            return False
-
-    def _push_estimates(self, position: np.ndarray, velocity: np.ndarray, speed: np.ndarray, course: np.ndarray) \
-            -> None:
-        """Pushes position, velocity, speed and course estimates to :py:attr:`~_estimation_history`
-
-        Pops the oldest estimate from the window if needed.
-
-        :param position: Pose translation (x, y, z) in WGS84
-        :param position: Velocity (vx, vy, vz) in meters/second
-        :param speed: Speed in meters per second (norm of velocity vector)
-        :param course: Movement of direction of vehicle in radians in NED frame (not 'heading')
-        :return:
-        """
-        new_row = np.concatenate((position, velocity, speed, course))
-        if self._estimation_history is None:
-            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            self._estimation_history = new_row.reshape(-1, 8)
-        else:
-            window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
-                                      f'provided).'
-            obs_count = len(self._estimation_history)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest values
-                self._estimation_history = np.delete(self._estimation_history, 0, 0)
-
-            # Add newest values
-            self._estimation_history = np.vstack((self._estimation_history, new_row))
-
     def _setup_map_update_timer(self) -> rclpy.timer.Timer:
         """Sets up a timer to throttle map update requests.
 
@@ -678,11 +580,11 @@ class MapNavNode(Node):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),
-            ('export_position', Defaults.MISC_EXPORT_POSITION),
-            ('export_projection', Defaults.MISC_EXPORT_PROJECTION),
+            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),  # TODO: move to separate config file? mock_gps_node
+            ('export_position', Defaults.MISC_EXPORT_POSITION),   # TODO: move to separate config file? mock_gps_node
+            ('export_projection', Defaults.MISC_EXPORT_PROJECTION),  # TODO: move to separate config file? mock_gps_node
             ('max_pitch', Defaults.MISC_MAX_PITCH),
-            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),
+            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),  # TODO: move to separate config file? mock_gps_node
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE)
         ])
 
@@ -753,37 +655,17 @@ class MapNavNode(Node):
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec + self.EKF2_TIMESTAMP_PADDING  # TODO: remove the padding or set it 0?
 
-    def _setup_topics(self) -> None:
-        """Creates and stores publishers and subscribers for microRTPS bridge topics.
+    def _setup_subscribers(self) -> None:
+        """Creates and stores subscribers for microRTPS bridge topics.
 
         :return:
         """
-        for topic in self.TOPICS:
-            topic_name = topic.get(self.TOPIC_NAME_KEY, None)
-            class_ = topic.get(self.CLASS_KEY, None)
-            assert topic_name is not None, f'Topic name not provided in topic: {topic}.'
-            assert class_ is not None, f'Class not provided in topic: {topic}.'
+        for topic_name, class_ in self.TOPICS.items():
+            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {class_}.'
+            assert class_ is not None, f'Class not provided for topic: {topic_name}, {class_}.'
+            self._topics.update({topic_name: self._create_subscriber(topic_name, class_)})
 
-            publish = topic.get(self.PUBLISH_KEY, None)
-            if publish is not None:
-                assert_type(publish, bool)
-                self._topics.get(self.PUBLISH_KEY).update({topic_name: self._create_publisher(topic_name, class_)})
-
-            subscribe = topic.get(self.SUBSCRIBE_KEY, None)
-            if subscribe is not None:
-                assert_type(subscribe, bool)
-                self._topics.get(self.SUBSCRIBE_KEY).update({topic_name: self._create_subscriber(topic_name, class_)})
-
-        self.get_logger().info(f'Topics setup complete:\n{self._topics}.')
-
-    def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
-        """Sets up an rclpy publisher.
-
-        :param topic_name: Name of the microRTPS topic
-        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleGpsPosition)
-        :return: The publisher instance
-        """
-        return self.create_publisher(class_, topic_name, self.PUBLISH_QOS_PROFILE)
+        self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
     def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
         """Sets up an rclpy subscriber.
@@ -1124,7 +1006,7 @@ class MapNavNode(Node):
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         image_frame = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-                                position=None)
+                                position=None, attitude=None, c=None)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
         if self._should_match():
@@ -1228,7 +1110,7 @@ class MapNavNode(Node):
         """
         self.get_logger().debug(f'Camera info received:\n{msg}.')
         self._camera_info = msg
-        camera_info_topic = self._topics.get(self.SUBSCRIBE_KEY, {}).get('camera_info', None)
+        camera_info_topic = self._topics.get('camera_info', None)
         if camera_info_topic is not None:
             self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
             camera_info_topic.destroy()
@@ -1371,47 +1253,6 @@ class MapNavNode(Node):
         :return:
         """
         self._vehicle_attitude = msg
-
-    def _publish_mock_gps_msg(self, latlonalt: np.ndarray, velocities: np.ndarray, speed: float, course: float,
-                              sd: np.ndarray, var: np.ndarray,  selection: int) -> None:
-        """Publishes a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position, velocities and errors.
-
-        :param latlonalt: Estimated vehicle position
-        :param velocities: Estimated vehicle velocities (vx, vy, vz) in meters per second
-        :param speed: Speed (norm of velocity vector) of vehicle in meters per second
-        :param course: Direction of movement of vehicle (not heading) in radians in NED frame
-        :param sd: Estimated x, y, z position and velocity standard deviations
-        :param var: Estimated x, y, z position and velocity variances
-        :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
-        :return:
-        """
-        # TODO: check inputs?
-        msg = VehicleGpsPosition()
-        msg.timestamp = self._get_ekf2_time()
-        msg.fix_type = 3
-        msg.s_variance_m_s = var[6]
-        msg.c_variance_rad = var[7]
-        msg.lat = int(latlonalt[0] * 1e7)
-        msg.lon = int(latlonalt[1] * 1e7)
-        msg.alt = int(latlonalt[2] * 1e3)
-        msg.alt_ellipsoid = msg.alt
-        msg.eph = max(sd[0:2])
-        msg.epv = sd[2]
-        msg.hdop = 5.
-        msg.vdop = 5.
-        msg.vel_m_s = speed
-        msg.vel_n_m_s = velocities[0]
-        msg.vel_e_m_s = velocities[1]
-        msg.vel_d_m_s = velocities[2]
-        msg.cog_rad = course
-        msg.vel_ned_valid = True
-        msg.satellites_used = np.iinfo(np.uint8).max
-        msg.time_utc_usec = int(time.time() * 1e6)
-        msg.heading = np.nan
-        msg.heading_offset = np.nan
-        msg.selected = selection
-
-        self._topics.get(self.PUBLISH_KEY).get(self.VEHICLE_GPS_POSITION_TOPIC_NAME).publish(msg)
 
     # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:
@@ -1711,6 +1552,7 @@ class MapNavNode(Node):
         fov_pix, c_pix = get_fov_and_c(img_dim, h)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
         image_frame.fov = fov_wgs84
+        image_frame.c = c_wgs84
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -1743,6 +1585,7 @@ class MapNavNode(Node):
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
+        image_frame.attitude = gimbal_estimated_attitude
 
         # TODO: figure out a way to get vehicle attitude from gimbal attitude
         vehicle_attitude_estimate = vehicle_attitude
@@ -1762,51 +1605,8 @@ class MapNavNode(Node):
             visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
-        mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-        if self._previous_image_frame is not None:
-            velocities = self._estimate_velocities(image_frame, self._previous_image_frame)
-            speed = np.linalg.norm(velocities)
-            course = np.arctan2(velocities[1], velocities[0])
-            self._push_estimates(image_frame.position, velocities, np.array([speed]), np.array([course]))
-            if self._variance_window_full():
-                sd = np.std(self._estimation_history, axis=0)
-                var = np.var(self._estimation_history, axis=0)
-                self._publish_mock_gps_msg(image_frame.position, velocities, speed, course, sd, var, mock_gps_selection)
-            else:
-                self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
-                                        'message yet...')
-
-        export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
-        if export_geojson is not None:
-            self._export_position(image_frame.position, image_frame.fov, export_geojson)
-
+        self.publish(image_frame)
         self._previous_image_frame = image_frame
-
-    def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str) -> None:
-        """Exports the computed position and field of view (FOV) into a geojson file.
-
-        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
-
-        :param position: Computed camera position
-        :param: fov: Field of view of camera
-        :param filename: Name of file to write into
-        :return:
-        """
-        assert_type(position, get_args(Union[LatLon, LatLonAlt]))
-        assert_type(fov, np.ndarray)
-        assert_type(filename, str)
-        point = Feature(geometry=Point((position.lon, position.lat)))  # TODO: add name/description properties
-        corners = np.flip(fov.squeeze()).tolist()
-        corners = [tuple(x) for x in corners]
-        corners = Feature(geometry=Polygon([corners]))  # TODO: add name/description properties
-        features = [point, corners]
-        feature_collection = FeatureCollection(features)
-        try:
-            with open(filename, 'w') as f:
-                dump(feature_collection, f)
-        except Exception as e:
-            self.get_logger().error(f'Could not write file {filename} because of exception:'
-                                    f'\n{e}\n{traceback.print_exc()}')
 
     def _match(self, image_frame: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.
@@ -1822,6 +1622,14 @@ class MapNavNode(Node):
             callback=self.matching_worker_callback,
             error_callback=self.matching_worker_error_callback
         )
+
+    @abstractmethod
+    def publish(self, image_frame: ImageData) -> None:
+        """Publishes or exports computed image data
+
+        This method should be implemented by an extending class to adapt for any given use case.
+        """
+        pass
 
     def terminate_wms_pool(self):
         """Terminates the WMS Pool.

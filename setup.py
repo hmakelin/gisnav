@@ -20,6 +20,7 @@ setup(
     packages=[
         package_data.package_name,
         package_data.package_name + '.keypoint_matchers',
+        package_data.package_name + '.nodes',
         'LoFTR.loftr',
         'LoFTR.loftr.backbone',
         'LoFTR.loftr.loftr_module',

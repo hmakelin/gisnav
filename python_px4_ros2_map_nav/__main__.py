@@ -3,7 +3,7 @@ import cProfile
 import pstats
 import rclpy
 
-from python_px4_ros2_map_nav.map_nav_node import MapNavNode
+from python_px4_ros2_map_nav.nodes.mock_gps_node import MockGPSNode
 
 
 def main(args=None):
@@ -21,7 +21,7 @@ def main(args=None):
     pr = None
     try:
         rclpy.init(args=args)
-        matcher = MapNavNode('map_nav_node')
+        matcher = MockGPSNode('map_nav_node')
         rclpy.spin(matcher)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')

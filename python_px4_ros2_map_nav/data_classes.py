@@ -26,6 +26,8 @@ class ImageData:
     timestamp: int
     fov: np.ndarray
     position: LatLonAlt
+    attitude: np.ndarray
+    c: np.ndarray
 
 
 @dataclass(frozen=True)

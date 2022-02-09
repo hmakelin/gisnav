@@ -1605,8 +1605,24 @@ class MapNavNode(Node, ABC):
             visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
-        self.publish(image_frame)
-        self._previous_image_frame = image_frame
+        if self._good_match(image_frame):
+            self.publish(image_frame)
+            self._previous_image_frame = image_frame
+        else:
+            self.get_logger().warn('Position estimate was not good, skipping this match.')
+
+    def _good_match(self, image_data: ImageData) -> bool:
+        """Uses heuristics for determining whether position estimate is good or not.
+
+        :param image_data: Image data containing the position estimate
+        :return: True if match is good
+        """
+        alt = image_date.position[2]
+        if alt < 0:
+            self.get_logger().warn(f'Match altitude {alt} was negative, bad match..')
+            return False
+
+        return True
 
     def _match(self, image_frame: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.

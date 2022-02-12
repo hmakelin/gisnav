@@ -1617,7 +1617,7 @@ class MapNavNode(Node, ABC):
         :param image_data: Image data containing the position estimate
         :return: True if match is good
         """
-        alt = image_date.position[2]
+        alt = image_data.position[2]
         if alt < 0:
             self.get_logger().warn(f'Match altitude {alt} was negative, bad match..')
             return False

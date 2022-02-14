@@ -31,20 +31,15 @@ class MockGPSNode(MapNavNode):
                                                                       VehicleGpsPosition)
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
-
     # TODO: pass previous_image_Frame as argument? accessing a private attribute may not be that obvious for a method that's supposed to be extended
     def publish(self, image_data: ImageData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
         if self._previous_image_frame is not None:
-            velocities = self._estimate_velocities(image_data, self._previous_image_frame)
-            speed = np.linalg.norm(velocities)
-            course = np.arctan2(velocities[1], velocities[0])
-            self._push_estimates(image_data.position, velocities, np.array([speed]), np.array([course]))
+            self._push_estimates(np.array(image_data.position))
             if self._variance_window_full():
                 sd = np.std(self._estimation_history, axis=0)
-                var = np.var(self._estimation_history, axis=0)
-                self._publish_mock_gps_msg(image_data.position, velocities, speed, course, sd, var, mock_gps_selection)
+                self._publish_mock_gps_msg(image_data.position, sd, mock_gps_selection)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
                                         'message yet...')
@@ -75,22 +70,17 @@ class MockGPSNode(MapNavNode):
             assert 0 <= obs_count < window_length
             return False
 
-    def _push_estimates(self, position: np.ndarray, velocity: np.ndarray, speed: np.ndarray, course: np.ndarray) \
-            -> None:
-        """Pushes position, velocity, speed and course estimates to :py:attr:`~_estimation_history`
+    def _push_estimates(self, position: np.ndarray) -> None:
+        """Pushes position estimates to :py:attr:`~_estimation_history`
 
         Pops the oldest estimate from the window if needed.
 
         :param position: Pose translation (x, y, z) in WGS84
-        :param position: Velocity (vx, vy, vz) in meters/second
-        :param speed: Speed in meters per second (norm of velocity vector)
-        :param course: Movement of direction of vehicle in radians in NED frame (not 'heading')
         :return:
         """
-        new_row = np.concatenate((position, velocity, speed, course))
         if self._estimation_history is None:
             # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            self._estimation_history = new_row.reshape(-1, 8)
+            self._estimation_history = position.reshape(-1, 3)  # TODO Hard coded value?
         else:
             window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
             assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
@@ -102,19 +92,14 @@ class MockGPSNode(MapNavNode):
                 self._estimation_history = np.delete(self._estimation_history, 0, 0)
 
             # Add newest values
-            self._estimation_history = np.vstack((self._estimation_history, new_row))
+            self._estimation_history = np.vstack((self._estimation_history, position))
 
     # TODO: get camera_yaw/course estimate?
-    def _publish_mock_gps_msg(self, latlonalt: np.ndarray, velocities: np.ndarray, speed: float, course: float,
-                              sd: np.ndarray, var: np.ndarray,  selection: int) -> None:
+    def _publish_mock_gps_msg(self, latlonalt: np.ndarray, sd: np.ndarray, selection: int) -> None:
         """Publishes a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position, velocities and errors.
 
         :param latlonalt: Estimated vehicle position
-        :param velocities: Estimated vehicle velocities (vx, vy, vz) in meters per second
-        :param speed: Speed (norm of velocity vector) of vehicle in meters per second
-        :param course: Direction of movement of vehicle (not heading) in radians in NED frame
-        :param sd: Estimated x, y, z position and velocity standard deviations
-        :param var: Estimated x, y, z position and velocity variances
+        :param sd: Estimated x, y, z position standard deviations
         :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
@@ -122,22 +107,22 @@ class MockGPSNode(MapNavNode):
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time()
         msg.fix_type = 3
-        msg.s_variance_m_s = var[6]
-        msg.c_variance_rad = var[7]
+        msg.s_variance_m_s = np.nan
+        msg.c_variance_rad = np.nan
         msg.lat = int(latlonalt[0] * 1e7)
         msg.lon = int(latlonalt[1] * 1e7)
         msg.alt = int(latlonalt[2] * 1e3)
         msg.alt_ellipsoid = msg.alt
         msg.eph = max(sd[0:2])
         msg.epv = sd[2]
-        msg.hdop = 5.
-        msg.vdop = 5.
-        msg.vel_m_s = np.nan  # speed
-        msg.vel_n_m_s = np.nan  # velocities[0]
-        msg.vel_e_m_s = np.nan  # velocities[1]
-        msg.vel_d_m_s = np.nan  # velocities[2]
-        msg.cog_rad = np.nan  # course
-        msg.vel_ned_valid = False  # True
+        msg.hdop = 0.0
+        msg.vdop = 0.0
+        msg.vel_m_s = np.nan
+        msg.vel_n_m_s = np.nan
+        msg.vel_e_m_s = np.nan
+        msg.vel_d_m_s = np.nan
+        msg.cog_rad = np.nan
+        msg.vel_ned_valid = False
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.heading = np.nan

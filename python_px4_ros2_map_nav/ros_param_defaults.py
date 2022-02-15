@@ -49,6 +49,12 @@ class Defaults:
     MISC_MIN_MATCH_ALTITUDE = 80
     """Minimum altitude in meters under which matches against map will not be attempted."""
 
+    MISC_BLUR_THRESHOLD = 2
+    """Threshold standard deviation for Laplacian blur detector."""
+
+    MISC_BLUR_WINDOW_LENGTH = 20
+    """Window length for rolling blur filtering"""
+
     MAP_UPDATE_INITIAL_GUESS = None
     """Initial guess of vehicle's rough global position
     

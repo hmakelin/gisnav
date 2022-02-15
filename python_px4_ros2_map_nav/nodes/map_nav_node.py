@@ -130,6 +130,9 @@ class MapNavNode(Node, ABC):
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
 
+        # Stored blur values for blur detection
+        self._blurs = None
+
         # Must check for None when using these
         # self._image_frame = None  # Not currently used / needed
         self._map_frame = None
@@ -159,6 +162,16 @@ class MapNavNode(Node, ABC):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
+
+    @property
+    def _blurs(self) -> Optional[np.ndarray]:
+        """Array of image blur values for filtering images based on blur."""
+        return self.__blurs
+
+    @_blurs.setter
+    def _blurs(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__blurs = value
 
     @property
     def _r(self) -> Optional[np.ndarray]:
@@ -586,7 +599,9 @@ class MapNavNode(Node, ABC):
             ('export_projection', Defaults.MISC_EXPORT_PROJECTION),  # TODO: move to separate config file? mock_gps_node
             ('max_pitch', Defaults.MISC_MAX_PITCH),
             ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),  # TODO: move to separate config file? mock_gps_node
-            ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE)
+            ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
+            ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
+            ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH)
         ])
 
         namespace = 'map_update'
@@ -1010,7 +1025,7 @@ class MapNavNode(Node, ABC):
                                 position=None, attitude=None, c=None)
 
         # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
-        if self._should_match():
+        if self._should_match(image_frame.image):
             assert self._matching_results is None or self._matching_results.ready()
             inputs = self._match_inputs(image_frame)
             for k, v in inputs.items():
@@ -1387,12 +1402,13 @@ class MapNavNode(Node, ABC):
 
         return False
 
-    def _should_match(self) -> bool:
+    def _should_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
         Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.
-        facing horizon instead of nadir), and (3) drone is not flying too low.
+        facing horizon instead of nadir), (3) drone is not flying too low, and (4) image is not too blurry.
 
+        :param img: Image to match
         :return: True if matching should be attempted
         """
         # Check condition (1) - that a request is not already running
@@ -1413,7 +1429,42 @@ class MapNavNode(Node, ABC):
                                    f'could not be determined. Skipping matching.')
             return False
 
+        # Check condition (4) - is image too blurry?
+        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
+        blur = cv2.Laplacian(img, cv2.CV_64F).var()
+        self._push_blur(blur)
+        sd = np.std(self._blurs)
+        mn = np.mean(self._blurs)
+        threshold = mn - blur_threshold * sd
+        if blur < threshold:
+            # Expected to reject a fixed proportion of images so debug message more appropriate than warning
+            self.get_logger().debug(f'Image too blurry (blur: {blur}, mean: {mn}, sd: {sd}, threshold: {threshold}). '
+                                    f'Skipping matching.')
+            return False
+
         return True
+
+    def _push_blur(self, blur: float) -> None:
+        """Pushes blur value estimates to :py:attr:`~_blurs`
+
+        Pops the oldest estimate from the stack if needed.
+
+        :param blur: Blur value
+        :return:
+        """
+        if self._blurs is None:
+            self._blurs = np.array([blur])
+        else:
+            window_length = self.get_parameter('misc.blur_window_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for storing blur should be >0 ({window_length} provided).'
+            obs_count = len(self._blurs)
+            assert 0 <= obs_count <= window_length
+            if obs_count == window_length:
+                # Pop oldest values
+                self._blurs = np.delete(self._blurs, 0, 0)
+
+            # Add newest values
+            self._blurs = np.append(self._blurs, blur)
 
     def matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for matching worker.

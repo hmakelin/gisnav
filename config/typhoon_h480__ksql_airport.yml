@@ -13,8 +13,9 @@ map_nav_node:
       max_pitch: 30  # Used by _should_match
       variance_estimation_length: 20
       min_match_altitude: 80
-      blur_threshold: 2
-      blur_window_length: 20
+      blur_threshold: 1.5  # standard deviations
+      blur_window_length: 100
+      min_matches: 15
     map_update:
       initial_guess: # Values from ksql_airport.world file
         - 37.523640

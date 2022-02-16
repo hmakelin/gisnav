@@ -55,6 +55,9 @@ class Defaults:
     MISC_BLUR_WINDOW_LENGTH = 20
     """Window length for rolling blur filtering"""
 
+    MISC_MIN_MATCHES = 15
+    """Minimum number of keypoint matches required from matcher for continuing with match post-processing"""
+
     MAP_UPDATE_INITIAL_GUESS = None
     """Initial guess of vehicle's rough global position
     

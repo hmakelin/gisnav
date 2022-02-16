@@ -57,7 +57,7 @@ class MapNavNode(Node, ABC):
     PYPROJ_ELLIPSOID = 'WGS84'
 
     # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
-    EKF2_TIMESTAMP_PADDING = 500000  # microseconds
+    EKF2_TIMESTAMP_PADDING = 0  # 500000  # microseconds
 
 
     # Maps properties to microRTPS bridge topics and message definitions
@@ -601,7 +601,8 @@ class MapNavNode(Node, ABC):
             ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),  # TODO: move to separate config file? mock_gps_node
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
-            ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH)
+            ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
+            ('min_matches', Defaults.MISC_MIN_MATCHES)
         ])
 
         namespace = 'map_update'
@@ -1571,9 +1572,10 @@ class MapNavNode(Node, ABC):
         :param map_cropped: Optional map cropped image
         :return:
         """
-        if len(mkp_img) < self.HOMOGRAPHY_MINIMUM_MATCHES:
-            self.get_logger().warn(f'Found {len(mkp_img)} matches, {self.HOMOGRAPHY_MINIMUM_MATCHES} required. '
-                                   f'Skipping frame.')
+        min_matches = self.get_parameter('misc.min_matches').get_parameter_value().integer_value
+        min_matches = max(self.HOMOGRAPHY_MINIMUM_MATCHES, min_matches)
+        if len(mkp_img) < min_matches:  # TODO: should be part of _good_match check?
+            self.get_logger().warn(f'Found {len(mkp_img)} matches, {min_matches} required. Skipping frame.')
             return None
 
         assert_shape(k, (3, 3))

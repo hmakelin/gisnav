@@ -912,10 +912,7 @@ class MapNavNode(Node, ABC):
                 # Use projected field of view center instead of global position as map center
                 map_center_latlon = fov_center(gimbal_fov_wgs84)  # TODO: use cx, cy and not fov corners, polygon center != principal point
 
-                # Export to file in GIS readable format
-                export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
-                if export_projection is not None:
-                    self._export_position(map_center_latlon, gimbal_fov_wgs84, export_projection)
+                self.publish_projected_fov(gimbal_fov_wgs84, map_center_latlon)
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 return None
@@ -1696,6 +1693,14 @@ class MapNavNode(Node, ABC):
     @abstractmethod
     def publish(self, image_frame: ImageData) -> None:
         """Publishes or exports computed image data
+
+        This method should be implemented by an extending class to adapt for any given use case.
+        """
+        pass
+
+    @abstractmethod
+    def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
+        """Publishes projected field of view (FOV) and principal point
 
         This method should be implemented by an extending class to adapt for any given use case.
         """

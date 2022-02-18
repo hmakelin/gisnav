@@ -48,6 +48,13 @@ class MockGPSNode(MapNavNode):
         if export_geojson is not None:
             self._export_position(image_data.position, image_data.fov, export_geojson)
 
+    def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
+        """Writes field of view (FOV) and map center into GeoJSON file"""
+        # Export to file in GIS readable format
+        export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
+        if export_projection is not None:
+            self._export_position(c, fov, export_projection)
+
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher.
 

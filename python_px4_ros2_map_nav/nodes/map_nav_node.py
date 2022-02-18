@@ -910,9 +910,9 @@ class MapNavNode(Node, ABC):
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
                 # Use projected field of view center instead of global position as map center
-                map_center_latlon = fov_center(gimbal_fov_wgs84)  # TODO: use cx, cy and not fov corners, polygon center != principal point
+                map_center_latlon = fov_center(gimbal_fov_wgs84)
 
-                self.publish_projected_fov(gimbal_fov_wgs84, map_center_latlon)
+                self.publish_projected_fov(gimbal_fov_wgs84, map_center_latlon)  # Note: map center, not principal point
             else:
                 self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
                 return None

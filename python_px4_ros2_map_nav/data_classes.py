@@ -18,6 +18,7 @@ RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
 
 
+# noinspection PyClassHasNoInit
 @dataclass
 class ImageData:
     """Keeps image frame related data in one place and protects it from corruption."""
@@ -30,6 +31,7 @@ class ImageData:
     c: np.ndarray
 
 
+# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class MapData:
     """Keeps map frame related data in one place and protects it from corruption."""
@@ -39,6 +41,7 @@ class MapData:
     bbox: BBox
 
 
+# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class PackageData:
     """Stores data parsed from package.xml (not comprehensive)"""

@@ -2,8 +2,8 @@
 import cv2
 import numpy as np
 import os
-import xml.etree.ElementTree as ET
 
+from xml.etree import ElementTree
 from typing import Union, get_args
 from collections import namedtuple
 from dataclasses import dataclass
@@ -63,7 +63,7 @@ def parse_package_data(package_file: str) -> PackageData:
     :raise FileNotFoundError: If package.xml file is not found
     """
     if os.path.isfile(package_file):
-        tree = ET.parse(package_file)
+        tree = ElementTree.parse(package_file)
         root = tree.getroot()
         package_data = PackageData(
             package_name=root.find('name').text,

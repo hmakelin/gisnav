@@ -111,4 +111,3 @@ class SuperGlue(KeypointMatcher):
         mkp_map = kp_map[matches[valid]]
 
         return mkp_img, mkp_map
-

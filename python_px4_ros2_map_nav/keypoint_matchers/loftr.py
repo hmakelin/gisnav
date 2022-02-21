@@ -45,7 +45,6 @@ class LoFTRMatcher(KeypointMatcher):
         self._model.load_state_dict(torch.load(weights_path)['state_dict'])
         self._model = self._model.eval().cuda()
 
-
     @property
     def _device(self) -> str:
         """Device on which torch tensors are allocated."""
@@ -121,4 +120,3 @@ class LoFTRMatcher(KeypointMatcher):
         mkp_map = mkp_map[valid, :]
 
         return mkp_img, mkp_map
-

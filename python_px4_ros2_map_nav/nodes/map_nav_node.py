@@ -843,24 +843,6 @@ class MapNavNode(Node, ABC):
 
         return dst_corners
 
-    def _vehicle_local_position_ref_latlonalt(self) -> Optional[LatLonAlt]:
-        """Returns vehicle local frame reference origin
-
-        :return: Local reference frame origin in WGS84, or None if not available
-        """
-        if self._vehicle_local_position is None:
-            self.get_logger().warn('Could not get vehicle local position - returning None as local frame reference.')
-            return None
-
-        if self._vehicle_local_position.xy_global is True and self._vehicle_local_position.z_global is True:
-            assert_type(self._vehicle_local_position.timestamp, int)
-            return LatLonAlt(self._vehicle_local_position.ref_lat, self._vehicle_local_position.ref_lon,
-                             self._vehicle_local_position.ref_alt)
-        else:
-            # TODO: z may not be needed - make a separate _ref_latlon method!
-            self.get_logger().warn('No valid global reference for local frame origin - returning None.')
-            return None
-
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 

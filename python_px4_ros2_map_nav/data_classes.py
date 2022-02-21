@@ -109,7 +109,7 @@ def visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarra
     # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
     kp_count = len(kp_img)
     assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
-    matches = list(map(lambda i: cv2.DMatch(i, i, 0), range(0, kp_count)))
+    matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
 
     # Need cv2.KeyPoints for keypoints
     kp_img = np.apply_along_axis(_make_keypoint, 1, kp_img)

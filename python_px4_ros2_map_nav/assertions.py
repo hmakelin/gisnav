@@ -1,3 +1,4 @@
+"""Common assertions for convenience"""
 from typing import Any, Union, Sequence, Collection
 
 import numpy as np

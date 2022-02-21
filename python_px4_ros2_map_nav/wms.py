@@ -74,7 +74,7 @@ class WMSClient:
     @staticmethod
     def worker(center: Union[LatLon, LatLonAlt], radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
                layer_str: str, srs_str: str) -> MapData:
-        """Gets latest map from WMS server for given location, then creates a :class:`util.MapFrame` and returns it
+        """Gets latest map from WMS server for given location, then creates a :class:`~data_classes.MapData` and returns it
 
         :param center: Center of the map to be retrieved
         :param radius: Radius in meters of the circle to be enclosed by the map
@@ -82,7 +82,7 @@ class WMSClient:
         :param map_size: Map size tuple (height, width)
         :param layer_str: WMS server layer
         :param srs_str: WMS server SRS
-        :return: MapFrame containing the map raster and supporting metadata
+        :return: ~data_classes.MapData containing the map raster and supporting metadata
         """
         assert wms_client is not None
         assert_type(bbox, BBox)
@@ -94,8 +94,8 @@ class WMSClient:
         # TODO: handle exception from getmap request
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
-        map_frame = MapData(center=center, radius=radius, bbox=bbox, image=map_)
-        return map_frame
+        map_data = MapData(center=center, radius=radius, bbox=bbox, image=map_)
+        return map_data
 
     def _get_map(self, layer_str: str, srs_str: str, bbox_: BBox, size_: Tuple[int, int], format_: str,
                  transparent_: bool) -> np.ndarray:

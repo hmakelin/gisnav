@@ -131,10 +131,10 @@ class MapNavNode(Node, ABC):
         self._blurs = None
 
         # Must check for None when using these
-        # self._image_frame = None  # Not currently used / needed
-        self._map_frame = None
-        self._previous_map_frame = None
-        self._previous_image_frame = None
+        # self._image_data = None  # Not currently used / needed
+        self._map_data = None
+        self._previous_map_data = None
+        self._previous_image_data = None
 
         # Stored solution for the PnP problem
         self._r = None
@@ -299,14 +299,14 @@ class MapNavNode(Node, ABC):
         self.__geod = value
 
     @property
-    def _map_frame(self) -> Optional[MapData]:
+    def _map_data(self) -> Optional[MapData]:
         """The map raster from the WMS server response along with supporting metadata."""
-        return self.__map_frame
+        return self.__map_data
 
-    @_map_frame.setter
-    def _map_frame(self, value: Optional[MapData]) -> None:
+    @_map_data.setter
+    def _map_data(self, value: Optional[MapData]) -> None:
         assert_type(value, get_args(Optional[MapData]))
-        self.__map_frame = value
+        self.__map_data = value
 
     @property
     def _cv_bridge(self) -> CvBridge:
@@ -319,24 +319,24 @@ class MapNavNode(Node, ABC):
         self.__cv_bridge = value
 
     @property
-    def _previous_map_frame(self) -> Optional[MapData]:
-        """The previous map frame which is compared to current map frame to determine need for another update."""
-        return self.__previous_map_frame
+    def _previous_map_data(self) -> Optional[MapData]:
+        """The previous map data which is compared to current map data to determine need for another update."""
+        return self.__previous_map_data
 
-    @_previous_map_frame.setter
-    def _previous_map_frame(self, value: Optional[MapData]) -> None:
+    @_previous_map_data.setter
+    def _previous_map_data(self, value: Optional[MapData]) -> None:
         assert_type(value, get_args(Optional[MapData]))
-        self.__previous_map_frame = value
+        self.__previous_map_data = value
 
     @property
-    def _previous_image_frame(self) -> Optional[ImageData]:
-        """The previous image frame which is needed for computing the velocity estimate."""
-        return self.__previous_image_frame
+    def _previous_image_data(self) -> Optional[ImageData]:
+        """The previous image data which is needed for computing the velocity estimate."""
+        return self.__previous_image_data
 
-    @_previous_image_frame.setter
-    def _previous_image_frame(self, value: Optional[ImageData]) -> None:
+    @_previous_image_data.setter
+    def _previous_image_data(self, value: Optional[ImageData]) -> None:
         assert_type(value, get_args(Optional[ImageData]))
-        self.__previous_image_frame = value
+        self.__previous_image_data = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:
@@ -932,19 +932,19 @@ class MapNavNode(Node, ABC):
     def wms_pool_worker_callback(self, result: List[MapData]) -> None:
         """Handles result from WMS pool worker.
 
-        Saves received :class:`util.MapFrame` to :py:attr:`~_map_frame.
+        Saves received :class:`~data_classes.MapData` to :py:attr:`~_map_data.
 
-        :param result: Results from the asynchronous call (a collection containing a single :class:`util.MapFrame`)
+        :param result: Results from the asynchronous call (a collection containing a single :class:`~data_classes.MapData`)
         :return:
         """
         assert_len(result, 1)
         result = result[0]
         self.get_logger().info(f'WMS callback for bbox: {result.bbox}.')
         assert_type(result, MapData)
-        if self._map_frame is not None:
-            self._previous_map_frame = self._map_frame
-        self._map_frame = result
-        assert self._map_frame.image.shape[0:2] == self._map_size_with_padding(), \
+        if self._map_data is not None:
+            self._previous_map_data = self._map_data
+        self._map_data = result
+        assert self._map_data.image.shape[0:2] == self._map_size_with_padding(), \
             'Decoded map is not the specified size.'  # TODO: make map size with padding an argument?
 
     def wms_pool_worker_error_callback(self, e: BaseException) -> None:
@@ -988,29 +988,29 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        image_frame = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
+        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
                                 position=None, attitude=None, c=None)
 
-        # TODO: store image_frame as self._image_frame and move the stuff below into a dedicated self._matching_timer?
-        if self._should_match(image_frame.image):
+        # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
+        if self._should_match(image_data.image):
             assert self._matching_results is None or self._matching_results.ready()
-            inputs = self._match_inputs(image_frame)
+            inputs = self._match_inputs(image_data)
             for k, v in inputs.items():
                 if v is None:
                     self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
                     return
 
             camera_yaw = inputs.get('camera_yaw', None)
-            map_frame = inputs.get('map_frame', None)
+            map_data = inputs.get('map_data', None)
             img_dim = inputs.get('img_dim', None)
-            assert all((camera_yaw, map_frame, img_dim))  # Redundant (see above 'for k, v in inputs.items(): ...')
+            assert all((camera_yaw, map_data, img_dim))  # Redundant (see above 'for k, v in inputs.items(): ...')
 
             self._stored_inputs = inputs
             map_cropped = inputs.get('map_cropped')
             assert_type(map_cropped, np.ndarray)
 
-            self.get_logger().debug(f'Matching image with timestamp {image_frame.timestamp} to map.')
-            self._match(image_frame, map_cropped)
+            self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
+            self._match(image_data, map_cropped)
 
     def _camera_yaw(self) -> Optional[int]:  # TODO: int or float?
         """Returns camera yaw in degrees.
@@ -1160,8 +1160,8 @@ class MapNavNode(Node, ABC):
 
         return False
 
-    def _previous_map_frame_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
-        """Checks if previous map frame is too close to new requested one.
+    def _previous_map_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
+        """Checks if previous map is too close to new requested one.
 
         This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
         update interval should not improve accuracy of position estimation unless the map is so old that the field of
@@ -1170,14 +1170,14 @@ class MapNavNode(Node, ABC):
 
         :param center: WGS84 coordinates of new map candidate center
         :param radius: Radius in meters of new map candidate
-        :return: True if previous map frame is too close.
+        :return: True if previous map is too close.
         """
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
-        if self._previous_map_frame is not None:
-            if not (abs(self._distance(center, self._previous_map_frame.center)) >
+        if self._previous_map_data is not None:
+            if not (abs(self._distance(center, self._previous_map_data.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._previous_map_frame.radius) >
+                    abs(radius - self._previous_map_data.radius) >
                     self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return True
 
@@ -1186,7 +1186,7 @@ class MapNavNode(Node, ABC):
     def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Checks if a new WMS map request should be made to update old map.
 
-        Map is updated unless (1) there is a previous map frame that is close enough to provided center and has radius
+        Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
         that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
         large and gimbal projection is used so that map center would be too far or even beyond the horizon.
 
@@ -1198,7 +1198,7 @@ class MapNavNode(Node, ABC):
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
 
         # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
-        if self._wms_results_pending() or self._previous_map_frame_too_close(center, radius):
+        if self._wms_results_pending() or self._previous_map_too_close(center, radius):
             return False
 
         # Check condition (3) - whether camera pitch is too large if using gimbal projection
@@ -1270,30 +1270,30 @@ class MapNavNode(Node, ABC):
                 self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _match_inputs(self, image_frame: ImageData) -> dict:
+    def _match_inputs(self, image_data: ImageData) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
         to :meth:`_process_matches` from the time image used for the matching was taken.
 
         The dictionary has the following data:
-            map_frame - np.ndarray map_frame to match
+            map_data - np.ndarray map_data to match
             k - np.ndarray Camera intrinsics matrix of shape (3x3) from CameraInfo
             camera_yaw - float Camera yaw in radians
             vehicle_attitude - Rotation Vehicle attitude
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
-            map_cropped - np.ndarray Rotated and cropped map raster from map_frame.image
+            map_cropped - np.ndarray Rotated and cropped map raster from map_data.image
 
-        :param image_frame: The image frame from the drone video
+        :param image_data: The image data containing an image frame from the drone video
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
         data = {
-            'image_frame': image_frame,
-            'map_frame': self._map_frame,
+            'image_data': image_data,
+            'map_data': self._map_data,
             'k': self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
             'camera_yaw': camera_yaw,
             'vehicle_attitude': self._get_vehicle_attitude(),
@@ -1302,10 +1302,10 @@ class MapNavNode(Node, ABC):
         }
 
         # Get cropped and rotated map
-        if all((camera_yaw, self._map_frame, img_dim)):
-            assert hasattr(self._map_frame, 'image'), 'Map frame unexpectedly did not contain the image data.'
+        if all((camera_yaw, self._map_data, img_dim)):
+            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
-            data['map_cropped'] = rotate_and_crop_map(self._map_frame.image, camera_yaw, img_dim)
+            data['map_cropped'] = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim)
         else:
             data['map_cropped'] = None
 
@@ -1516,7 +1516,7 @@ class MapNavNode(Node, ABC):
         velocities = diff_position / time_diff_sec
         return velocities
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_frame: ImageData, map_frame: MapData,
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
                          img_dim: Dim, map_cropped: Optional[np.ndarray] = None)\
             -> None:
@@ -1528,8 +1528,8 @@ class MapNavNode(Node, ABC):
 
         :param mkp_img: Matching keypoints in drone image
         :param mkp_map: Matching keypoints in map raster
-        :param image_frame: The drone image
-        :param map_frame: The map raster
+        :param image_data: The drone image
+        :param map_data: The map raster
         :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
         :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # Maybe rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
         :param vehicle_attitude: Vehicle attitude
@@ -1548,7 +1548,7 @@ class MapNavNode(Node, ABC):
 
         # Transforms from rotated and cropped map pixel coordinates to WGS84
         pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-            map_dim_with_padding, map_frame.bbox, -camera_yaw, img_dim)
+            map_dim_with_padding, map_data.bbox, -camera_yaw, img_dim)
 
         # Estimate extrinsic and homography matrices
         padding = np.array([[0]]*len(mkp_img))
@@ -1571,8 +1571,8 @@ class MapNavNode(Node, ABC):
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(img_dim, h)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
-        image_frame.fov = fov_wgs84
-        image_frame.c = c_wgs84
+        image_data.fov = fov_wgs84
+        image_data.c = c_wgs84
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -1590,7 +1590,7 @@ class MapNavNode(Node, ABC):
 
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
-        image_frame.position = position
+        image_data.position = position
 
         # Check that we have everything we need to publish vehicle_gps_position
         if not all(position) or any(map(np.isnan, position)):
@@ -1605,7 +1605,7 @@ class MapNavNode(Node, ABC):
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
-        image_frame.attitude = gimbal_estimated_attitude
+        image_data.attitude = gimbal_estimated_attitude
 
         # TODO: figure out a way to get vehicle attitude from gimbal attitude
         vehicle_attitude_estimate = vehicle_attitude
@@ -1622,12 +1622,12 @@ class MapNavNode(Node, ABC):
                               f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                               f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
 
-            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_frame.image,
+            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
-        if self._good_match(image_frame):
-            self.publish(image_frame)
-            self._previous_image_frame = image_frame
+        if self._good_match(image_data):
+            self.publish(image_data)
+            self._previous_image_data = image_data
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
 
@@ -1644,23 +1644,23 @@ class MapNavNode(Node, ABC):
 
         return True
 
-    def _match(self, image_frame: ImageData, map_cropped: np.ndarray) -> None:
+    def _match(self, image_data: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.
 
-        :param image_frame: The image frame to match
+        :param image_data: The image to match
         :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
         """
         assert self._matching_results is None or self._matching_results.ready()
         self._matching_results = self._matching_pool.starmap_async(
             self._kp_matcher.worker,
-            [(image_frame.image, map_cropped)],
+            [(image_data.image, map_cropped)],
             callback=self.matching_worker_callback,
             error_callback=self.matching_worker_error_callback
         )
 
     @abstractmethod
-    def publish(self, image_frame: ImageData) -> None:
+    def publish(self, image_data: ImageData) -> None:
         """Publishes or exports computed image data
 
         This method should be implemented by an extending class to adapt for any given use case.

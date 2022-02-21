@@ -29,7 +29,6 @@ class MockGPSNode(MapNavNode):
         super().__init__(node_name)
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
-        self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
     # TODO: pass previous_image_data as argument? accessing a private attribute may not be that obvious for a method that's supposed to be extended
     # TODO: alternatively, give the errors/accuracy as arg, should not compute them here, this is meant for integrations!
@@ -40,7 +39,8 @@ class MockGPSNode(MapNavNode):
             self._push_estimates(np.array(image_data.position))
             if self._variance_window_full():
                 sd = np.std(self._estimation_history, axis=0)
-                self._publish_mock_gps_msg(image_data.position, sd, mock_gps_selection)
+                # TODO: check that position and sd are there and not None!
+                self._publish_mock_gps_msg(image_data.position, image_data.sd, mock_gps_selection)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
                                         'message yet...')
@@ -64,43 +64,6 @@ class MockGPSNode(MapNavNode):
         :return: The publisher instance
         """
         return self.create_publisher(class_, topic_name, self.PUBLISH_QOS_PROFILE)
-
-    def _variance_window_full(self) -> bool:
-        """Returns true if the variance estimation window is full.
-
-        :return: True if :py:attr:`~_estimation_history` is full
-        """
-        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-        obs_count = len(self._estimation_history)
-        if self._estimation_history is not None and obs_count == window_length:
-            return True
-        else:
-            assert 0 <= obs_count < window_length
-            return False
-
-    def _push_estimates(self, position: np.ndarray) -> None:
-        """Pushes position estimates to :py:attr:`~_estimation_history`
-
-        Pops the oldest estimate from the window if needed.
-
-        :param position: Pose translation (x, y, z) in WGS84
-        :return:
-        """
-        if self._estimation_history is None:
-            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            self._estimation_history = position.reshape(-1, 3)  # TODO Hard coded value?
-        else:
-            window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
-                                      f'provided).'
-            obs_count = len(self._estimation_history)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest values
-                self._estimation_history = np.delete(self._estimation_history, 0, 0)
-
-            # Add newest values
-            self._estimation_history = np.vstack((self._estimation_history, position))
 
     # TODO: get camera_yaw/course estimate?
     def _publish_mock_gps_msg(self, latlonalt: np.ndarray, sd: np.ndarray, selection: int) -> None:

@@ -29,6 +29,7 @@ class ImageData:
     position: LatLonAlt
     attitude: np.ndarray
     c: np.ndarray
+    sd: np.ndarray
 
 
 # noinspection PyClassHasNoInit

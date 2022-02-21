@@ -136,6 +136,8 @@ class MapNavNode(Node, ABC):
         self._previous_map_data = None
         self._previous_image_data = None
 
+        self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
+
         # Stored solution for the PnP problem
         self._r = None
         self._t = None
@@ -989,7 +991,7 @@ class MapNavNode(Node, ABC):
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-                                position=None, attitude=None, c=None)
+                                position=None, attitude=None, c=None, sd=None)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):
@@ -1626,7 +1628,14 @@ class MapNavNode(Node, ABC):
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 
         if self._good_match(image_data):
-            self.publish(image_data)
+            if self._previous_image_data is not None:
+                self._push_estimates(np.array(image_data.position))
+                if self._variance_window_full():
+                    sd = np.std(self._estimation_history, axis=0)
+                    image_data.sd = sd
+                    self.publish(image_data)
+                else:
+                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
             self._previous_image_data = image_data
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
@@ -1658,6 +1667,43 @@ class MapNavNode(Node, ABC):
             callback=self.matching_worker_callback,
             error_callback=self.matching_worker_error_callback
         )
+
+    def _variance_window_full(self) -> bool:
+        """Returns true if the variance estimation window is full.
+
+        :return: True if :py:attr:`~_estimation_history` is full
+        """
+        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+        obs_count = len(self._estimation_history)
+        if self._estimation_history is not None and obs_count == window_length:
+            return True
+        else:
+            assert 0 <= obs_count < window_length
+            return False
+
+    def _push_estimates(self, position: np.ndarray) -> None:
+        """Pushes position estimates to :py:attr:`~_estimation_history`
+
+        Pops the oldest estimate from the window if needed.
+
+        :param position: Pose translation (x, y, z) in WGS84
+        :return:
+        """
+        if self._estimation_history is None:
+            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
+            self._estimation_history = position.reshape(-1, 3)  # TODO Hard coded value?
+        else:
+            window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
+                                      f'provided).'
+            obs_count = len(self._estimation_history)
+            assert 0 <= obs_count <= window_length
+            if obs_count == window_length:
+                # Pop oldest values
+                self._estimation_history = np.delete(self._estimation_history, 0, 0)
+
+            # Add newest values
+            self._estimation_history = np.vstack((self._estimation_history, position))
 
     @abstractmethod
     def publish(self, image_data: ImageData) -> None:

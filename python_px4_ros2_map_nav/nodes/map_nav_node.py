@@ -102,9 +102,6 @@ class MapNavNode(Node, ABC):
         self._topics = {}  # TODO: combine with self.TOPICS
         self._setup_subscribers()
 
-        # Time of publication of mock GPS message  # TODO: currently not used
-        self._publish_timestamp = None
-
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
@@ -280,16 +277,6 @@ class MapNavNode(Node, ABC):
     def _matching_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(value, get_args(Optional[AsyncResult]))
         self.__matching_results = value
-
-    @property
-    def _publish_timestamp(self) -> Optional[int]:
-        """Timestamp in of when last :class:`px4_msgs.msg.VehicleGpsPosition` message was published."""
-        return self.__publish_timestamp
-
-    @_publish_timestamp.setter
-    def _publish_timestamp(self, value: Optional[int]) -> None:
-        assert_type(value, get_args(Optional[int]))
-        self.__publish_timestamp = value
 
     @property
     def _topics(self) -> dict:

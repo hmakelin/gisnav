@@ -458,6 +458,8 @@ class MapNavNode(Node, ABC):
         This method tries to return the 'z' value first, and 'dist_bottom' second from the VehicleLocalPosition
         message. If neither are valid, a None is returned.
 
+        # TODO: this assumes that local position z-coordinate is distance to ground (not to sea level) - need to check
+
         :return: Altitude in meters or None if information is not available"""
         if self._vehicle_local_position is not None:
             if self._vehicle_local_position.z_valid:
@@ -957,6 +959,22 @@ class MapNavNode(Node, ABC):
         """
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
 
+    def _local_position_ref_alt(self) -> Optional[float]:
+        """Returns local position reference altitude (AMSL)
+
+        :return: Assumed altitude of ground surface in meters above mean sea level
+        """
+        if self._vehicle_local_position is not None:
+            if hasattr(self._vehicle_local_position, 'ref_alt') and \
+                    isinstance(self._vehicle_local_position.ref_alt, float):
+                return self._vehicle_local_position.ref_alt
+            else:
+                self.get_logger().error('Vehicle local position did not contain a valid ref_alt value.')
+        else:
+            self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
+
+        return None
+
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
@@ -991,7 +1009,7 @@ class MapNavNode(Node, ABC):
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-                                position=None, attitude=None, c=None, sd=None)
+                               position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):
@@ -1592,11 +1610,19 @@ class MapNavNode(Node, ABC):
 
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+        image_data.terrain_altitude = position.alt
+        ground_elevation = self._local_position_ref_alt()
+        if ground_elevation is None:
+            self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
+            position = LatLonAlt(*position[0:2], None)
+        else:
+            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
         image_data.position = position
 
         # Check that we have everything we need to publish vehicle_gps_position
         if not all(position) or any(map(np.isnan, position)):
-            self.get_logger().debug('Could not determine global position. Cannot create mock GPS position message.')
+            # TODO: even if position.alt is None, could go ahead - it is up to publisher to decide whether it is needed?
+            self.get_logger().debug('Could not determine global position..')
             return None
 
         # Convert estimated rotation to attitude quaternion for publishing
@@ -1646,9 +1672,9 @@ class MapNavNode(Node, ABC):
         :param image_data: Image data containing the position estimate
         :return: True if match is good
         """
-        alt = image_data.position[2]
+        alt = image_data.terrain_altitude
         if alt < 0:
-            self.get_logger().warn(f'Match altitude {alt} was negative, bad match..')
+            self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match..')
             return False
 
         return True

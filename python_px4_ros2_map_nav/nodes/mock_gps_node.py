@@ -32,17 +32,14 @@ class MockGPSNode(MapNavNode):
 
     def publish(self, image_data: ImageData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-        if self._previous_image_data is not None:
-            self._push_estimates(np.array(image_data.position))
-            if self._variance_window_full():
-                sd = np.std(self._estimation_history, axis=0)
-                # TODO: check that position and sd are there and not None!
-                self._publish_mock_gps_msg(image_data.position, image_data.sd, mock_gps_selection)
-            else:
-                self.get_logger().debug('Waiting to get more data to estimate position error - not publishing mock GPS '
-                                        'message yet...')
+        if not all(image_data.position) or any(map(np.isnan, image_data.position)) or \
+                not all(image_data.sd) or any(map(np.isnan, image_data.sd)):
+            self.get_logger().debug('Some required fields required for publishing mock GPS message were None, '
+                                    'skipping publishing.')
+            return None
 
+        mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
+        self._publish_mock_gps_msg(image_data.position, image_data.sd, mock_gps_selection)
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
             self._export_position(image_data.position, image_data.fov, export_geojson)

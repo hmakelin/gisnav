@@ -63,6 +63,10 @@ class MapNavNode(Node, ABC):
     TOPICS_MSG_KEY = 'message'
     TOPICS_SUBSCRIBER_KEY = 'subscriber'
 
+    # Process counts for multiprocessing pools
+    WMS_PROCESS_COUNT = 1  # should be 1
+    MATCHER_PROCESS_COUNT = 1  # should be 1
+
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
 
@@ -84,7 +88,8 @@ class MapNavNode(Node, ABC):
         assert_type(url, str)
         assert_type(version, str)
         assert_type(timeout, int)
-        self._wms_pool = Pool(1, initializer=WMSClient.initializer, initargs=(url, version, timeout))  # Do not increase the process count, it should be 1
+        self._wms_pool = Pool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
+                              initargs=(url, version, timeout))
 
         # Setup map update timer
         self._map_update_timer = self._setup_map_update_timer()
@@ -121,7 +126,8 @@ class MapNavNode(Node, ABC):
 
         # Do not increase the process count, it should be 1
         # TODO: need to use torch pool? Torch not needed in general case?
-        self._matching_pool = torch.multiprocessing.Pool(1, initializer=self._kp_matcher.initializer, initargs=args)
+        self._matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
+                                                         initializer=self._kp_matcher.initializer, initargs=args)
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)

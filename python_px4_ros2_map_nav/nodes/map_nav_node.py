@@ -1269,12 +1269,13 @@ class MapNavNode(Node, ABC):
         """
         self._vehicle_attitude = msg
 
-    # TODO: need to return real! cmaera pitch, not set pitch
     def _camera_pitch(self) -> Optional[Union[int, float]]:
-        """Returns camera pitch in degrees relative to nadir.
+        """Returns camera pitch setting in degrees relative to nadir.
 
         Pitch of 0 degrees is a nadir facing camera, while a positive pitch of 90 degrees means the camera is facing
         the direction the vehicle is heading (facing horizon).
+
+        Note: this is the pitch setting, true pitch may be different if gimbal has not yet stabilized.
 
         :return: Camera pitch in degrees, or None if not available
         """

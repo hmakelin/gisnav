@@ -1729,7 +1729,8 @@ class MapNavNode(Node, ABC):
         """
         if self._estimation_history is None:
             # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            self._estimation_history = position.reshape(-1, 3)  # TODO Hard coded value?
+            assert_len(position, 3)
+            self._estimation_history = position.reshape(-1, len(position))
         else:
             window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
             assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \

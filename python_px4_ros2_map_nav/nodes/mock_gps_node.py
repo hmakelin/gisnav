@@ -20,7 +20,7 @@ class MockGPSNode(MapNavNode):
 
     # ROS 2 QoS profiles for topics
     # TODO: add duration to match publishing frequency, and publish every time (even if NaN)s.
-    # If publishign for some reason stops, it can be assumed that something has gone very wrong
+    # If publishing for some reason stops, it can be assumed that something has gone very wrong
     PUBLISH_QOS_PROFILE = rclpy.qos.QoSProfile(history=rclpy.qos.HistoryPolicy.KEEP_LAST,
                                                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
                                                depth=1)
@@ -30,8 +30,6 @@ class MockGPSNode(MapNavNode):
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
-    # TODO: pass previous_image_data as argument? accessing a private attribute may not be that obvious for a method that's supposed to be extended
-    # TODO: alternatively, give the errors/accuracy as arg, should not compute them here, this is meant for integrations!
     def publish(self, image_data: ImageData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value

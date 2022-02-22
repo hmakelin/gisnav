@@ -1038,7 +1038,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
             self._match(image_data, map_cropped)
 
-    def _camera_yaw(self) -> Optional[int]:  # TODO: int or float?
+    def _camera_yaw(self) -> Optional[Union[int, float]]:  # TODO: int or float?
         """Returns camera yaw in degrees.
 
         :return: Camera yaw in degrees, or None if not available

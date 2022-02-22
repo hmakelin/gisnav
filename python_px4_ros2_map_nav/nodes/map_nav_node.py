@@ -1376,11 +1376,10 @@ class MapNavNode(Node, ABC):
         camera_altitude = np.cos(np.radians(-camera_pitch)) * camera_distance  # Negate pitch to get positive altitude
         return camera_altitude
 
-    # TODO: this is "set" camera pitch, not real cmaera pitch so will not work in all cases
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
-        """Returns True if camera pitch exceeds given limit.
+        """Returns True if (set) camera pitch exceeds given limit.
 
-        Used to determine whether camera is looking too high up from the ground to make matching against a map
+        Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
         worthwhile.
 
         :param max_pitch: The limit for the pitch over which it will be considered too high
@@ -1389,12 +1388,9 @@ class MapNavNode(Node, ABC):
         assert_type(max_pitch, get_args(Union[int, float]))
         camera_pitch = self._camera_pitch()
         if camera_pitch is not None:
-            #if abs(camera_pitch) > max_pitch:
             if camera_pitch + 90 > max_pitch:
                 self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch}.')
                 return True
-            #if camera_pitch < 0:
-            #    self.get_logger().warn(f'Camera pitch {camera_pitch} is negative.')
         else:
             self.get_logger().warn(f'Could not determine camera pitch.')
             return True
@@ -1411,7 +1407,7 @@ class MapNavNode(Node, ABC):
         :return: True if matching should be attempted
         """
         # Check condition (1) - that a request is not already running
-        if not (self._matching_results is None or self._matching_results.ready()):  # TODO: handle timeouts, failures for matching results
+        if not (self._matching_results is None or self._matching_results.ready()):
             return False
 
         # Check condition (2) - whether camera pitch is too large

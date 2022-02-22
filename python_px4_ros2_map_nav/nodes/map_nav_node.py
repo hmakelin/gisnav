@@ -125,7 +125,6 @@ class MapNavNode(Node, ABC):
         args = self._load_config(matcher_params_file)['args']
 
         # Do not increase the process count, it should be 1
-        # TODO: need to use torch pool? Torch not needed in general case?
         self._matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
                                                          initializer=self._kp_matcher.initializer, initargs=args)
 

@@ -863,7 +863,7 @@ class MapNavNode(Node, ABC):
         :return: Center of the FOV or None if not available
         """
         if self._camera_info is not None:
-            pitch = self._camera_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls  # TODO: this logic uses old pitch origin (nadir=0)
+            pitch = self._camera_set_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls  # TODO: this logic uses old pitch origin (nadir=0)
             if pitch is None:
                 self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
                 return None
@@ -1269,7 +1269,7 @@ class MapNavNode(Node, ABC):
         """
         self._vehicle_attitude = msg
 
-    def _camera_pitch(self) -> Optional[Union[int, float]]:
+    def _camera_set_pitch(self) -> Optional[Union[int, float]]:
         """Returns camera pitch setting in degrees relative to nadir.
 
         Pitch of 0 degrees is a nadir facing camera, while a positive pitch of 90 degrees means the camera is facing
@@ -1387,7 +1387,7 @@ class MapNavNode(Node, ABC):
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        camera_pitch = self._camera_pitch()
+        camera_pitch = self._camera_set_pitch()
         if camera_pitch is not None:
             if camera_pitch + 90 > max_pitch:
                 self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch}.')

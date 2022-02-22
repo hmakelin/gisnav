@@ -1086,10 +1086,16 @@ class MapNavNode(Node, ABC):
         if self._vehicle_local_position is None:
             self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
             return None
-
-        heading = self._vehicle_local_position.heading
-        heading = math.degrees(heading)
-        assert -180 <= heading <= 180, f'Unexpected heading value: {heading} degrees ([-180, 180] expected).'
+        elif not hasattr(self._vehicle_local_position, 'heading'):
+            self.get_logger().error('VehicleLocalPosition unexpectedly did contain a heading field.')
+            return None
+        else:
+            heading = self._vehicle_local_position.heading
+            if abs(heading) > 180:
+                self.get_logger().error(f'VehicleLocalPosition did not have a valid heading value: {heading}, '
+                                        f'([-180, 180] expected).')
+                return None
+            heading = math.degrees(heading)
 
         self.get_logger().debug('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
         self.get_logger().debug('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption

@@ -59,18 +59,9 @@ class MapNavNode(Node, ABC):
     # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
     EKF2_TIMESTAMP_PADDING = 0  # 500000  # microseconds
 
-
-    # Maps properties to microRTPS bridge topics and message definitions
-    # TODO: get rid of static TOPICS and dynamic _topics dictionaries - just use one dictionary, initialize it in constructor?
-    TOPICS = {
-        'VehicleLocalPosition_PubSubTopic': VehicleLocalPosition,
-        'VehicleGlobalPosition_PubSubTopic': VehicleGlobalPosition,
-        'VehicleAttitude_PubSubTopic': VehicleAttitude,
-        'GimbalDeviceAttitudeStatus_PubSubTopic': GimbalDeviceAttitudeStatus,
-        'GimbalDeviceSetAttitude_PubSubTopic': GimbalDeviceSetAttitude,
-        'camera_info': CameraInfo,
-        'image_raw': Image,
-    }
+    # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
+    TOPICS_MSG_KEY = 'message'
+    TOPICS_SUBSCRIBER_KEY = 'subscriber'
 
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
@@ -99,7 +90,15 @@ class MapNavNode(Node, ABC):
         self._map_update_timer = self._setup_map_update_timer()
 
         # Dict for storing all microRTPS bridge subscribers
-        self._topics = {}  # TODO: combine with self.TOPICS
+        self._topics = {
+            'VehicleLocalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleLocalPosition},
+            'VehicleGlobalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleGlobalPosition},
+            'VehicleAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleAttitude},
+            'GimbalDeviceAttitudeStatus_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
+            'GimbalDeviceSetAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceSetAttitude},
+            'camera_info': {self.TOPICS_MSG_KEY: CameraInfo},
+            'image_raw': {self.TOPICS_MSG_KEY: Image},
+        }
         self._setup_subscribers()
 
         # Converts image_raw to cv2 compatible image
@@ -668,10 +667,12 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        for topic_name, class_ in self.TOPICS.items():
-            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {class_}.'
-            assert class_ is not None, f'Class not provided for topic: {topic_name}, {class_}.'
-            self._topics.update({topic_name: self._create_subscriber(topic_name, class_)})
+        for topic_name, d in self._topics.items():
+            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
+            assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
+            class_ = d.get(self.TOPICS_MSG_KEY, None)
+            assert class_ is not None, f'Message definition not provided for {topic_name}.'
+            self._topics.update({topic_name: {self.TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
 
         self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
@@ -1119,7 +1120,7 @@ class MapNavNode(Node, ABC):
         """
         self.get_logger().debug(f'Camera info received:\n{msg}.')
         self._camera_info = msg
-        camera_info_topic = self._topics.get('camera_info', None)
+        camera_info_topic = self._topics.get('camera_info', {}).get(self.TOPICS_SUBSCRIBER_KEY, None)
         if camera_info_topic is not None:
             self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
             camera_info_topic.destroy()

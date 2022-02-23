@@ -60,9 +60,9 @@ assertions module
    :undoc-members:
    :show-inheritance:
 
-data_classes module
+data module
 ---------------------------------------
-.. automodule:: python_px4_ros2_map_nav.data_classes
+.. automodule:: python_px4_ros2_map_nav.data
    :autosummary:
    :members:
    :private-members:

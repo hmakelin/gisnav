@@ -83,7 +83,7 @@ class WMSClient:
         :param map_size: Map size tuple (height, width)
         :param layer_str: WMS server layer
         :param srs_str: WMS server SRS
-        :return: ~data_classes.MapData containing the map raster and supporting metadata
+        :return: ~data.MapData containing the map raster and supporting metadata
         """
         assert wms_client is not None
         assert_type(bbox, BBox)

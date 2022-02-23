@@ -1642,10 +1642,11 @@ class MapNavNode(Node, ABC):
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
         image_data.attitude = gimbal_estimated_attitude
 
-        # TODO: figure out a way to get vehicle attitude from gimbal attitude
-        vehicle_attitude_estimate = vehicle_attitude
-        vehicle_attitude_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')
-        quaternion = vehicle_attitude_estimate.as_quat()
+        # TODO: Get vehicle attitude from camera attitude
+        #  Problem is gimbal relative attitude to vehicle body is unknown if gimbal has not stabilized to set attitude
+        #vehicle_attitude_estimate = vehicle_attitude
+        #vehicle_attitude_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')
+        #quaternion = vehicle_attitude_estimate.as_quat()
 
         # noinspection PyUnreachableCode
         if __debug__:

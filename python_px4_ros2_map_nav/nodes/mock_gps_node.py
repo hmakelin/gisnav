@@ -34,8 +34,8 @@ class MockGPSNode(MapNavNode):
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
         if not all(image_data.position) or any(map(np.isnan, image_data.position)) or \
                 not all(image_data.sd) or any(map(np.isnan, image_data.sd)):
-            self.get_logger().debug('Some required fields required for publishing mock GPS message were None, '
-                                    'skipping publishing.')
+            self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
+                                   'skipping publishing.')
             return None
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value

@@ -1617,6 +1617,13 @@ class MapNavNode(Node, ABC):
 
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
+
+        # Check that we have all the values needed for a global position
+        if not all(position) or any(map(np.isnan, position)):
+            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
+            return None
+
+        # Get altitude above mean sea level (AMSL)
         image_data.terrain_altitude = position.alt
         ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:
@@ -1625,12 +1632,6 @@ class MapNavNode(Node, ABC):
         else:
             position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
         image_data.position = position
-
-        # Check that we have everything we need to publish vehicle_gps_position
-        if not all(position) or any(map(np.isnan, position)):
-            # TODO: even if position.alt is None, could go ahead - it is up to publisher to decide whether it is needed?
-            self.get_logger().debug('Could not determine global position..')
-            return None
 
         # Convert estimated rotation to attitude quaternion for publishing
         gimbal_estimated_attitude = Rotation.from_matrix(r.T)  # in rotated map pixel frame

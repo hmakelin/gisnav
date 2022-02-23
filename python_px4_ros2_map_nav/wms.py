@@ -75,7 +75,7 @@ class WMSClient:
     @staticmethod
     def worker(center: Union[LatLon, LatLonAlt], radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
                layer_str: str, srs_str: str) -> MapData:
-        """Gets latest map from WMS server for given location, then creates a :class:`~data_classes.MapData` and returns it
+        """Gets latest map from WMS server for given location
 
         :param center: Center of the map to be retrieved
         :param radius: Radius in meters of the circle to be enclosed by the map

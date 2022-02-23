@@ -129,7 +129,6 @@ def rotate_and_crop_map(map_: np.ndarray, radians: float, dimensions: Dim, visua
     :param visualize: Flag to indicate whether intermediate rasters should be visualized
     :return: Rotated and cropped map raster
     """
-    # TODO: only tested on width>height images.
     cx, cy = tuple(np.array(map_.shape[0:2]) / 2)
     degrees = math.degrees(radians)
     r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)

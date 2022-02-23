@@ -39,7 +39,8 @@ class WMSClient:
         try:
             self._wms = WebMapService(url, version=version_, timeout=timeout_)
         except Exception as e:
-            raise e  # TODO: handle gracefully (e.g. ConnectionRefusedError)
+            # TODO: handle exception (e.g. ConnectionRefusedError)
+            raise e
 
     @property
     def _wms(self) -> WebMapService:

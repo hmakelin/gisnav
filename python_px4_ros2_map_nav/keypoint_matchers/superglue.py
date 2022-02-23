@@ -17,6 +17,7 @@ class SuperGlue(KeypointMatcher):
     """Adapter for Superglue, and Attentional Graph Neural Network based keypoint matcher"""
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.7
+    """Confidence threshold for filtering out bad matches"""
 
     class TorchDevice(Enum):
         """Possible devices on which torch tensors are allocated."""

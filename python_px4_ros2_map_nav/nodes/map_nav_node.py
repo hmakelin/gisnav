@@ -486,23 +486,15 @@ class MapNavNode(Node, ABC):
 
         return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
-    # TODO: update docstring - local position stuff was removed
     def _map_update_timer_callback(self) -> None:
         """Attempts to update the stored map at regular intervals.
 
         Calls :meth:`~_update_map` if the center and altitude coordinates for the new map raster are available and the
         :meth:`~_should_update_map` check passes.
 
-        Since knowledge of precise position (WGS84) nor altitude of the vehicle are not important for updating the map
-        center, this method tries several ways to get a reasonable estimate for the 'rough' positioning of the vehicle
-        in the following order:
-            1. Try to get a global position from latest VehicleGlobalPosition message (lat, lon, alt)
-            2. Try to get a global position from latest VehicleLocalPosition message (ref_lat, ref_lon, z/dist_bottom)
-            3. Try to get a global position from provided initial guess and default altitude
-
-        Finally, if gimbal projection is enabled, this method computes the center of the projected camera field of view
-        and retrieves the map for that location instead of the vehicle location to ensure the field of view is contained
-        in the map raster.
+        New map is retrieved based on rough guess of the vehicle's global position. If projection is enabled, the
+        center of the projected camera field of view is used instead of vehicle position to ensure the field of view is
+        best contained in the new map raster.
 
         :return:
         """

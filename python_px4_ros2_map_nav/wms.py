@@ -52,7 +52,7 @@ class WMSClient:
         self.__wms = value
 
     @staticmethod
-    def initializer(url: str, version_: str, timeout_: int = REQUEST_DEFAULT_TIMEOUT) -> WebMapService:
+    def initializer(url: str, version_: str, timeout_: int = REQUEST_DEFAULT_TIMEOUT) -> None:
         """Returns a cached WMS client.
 
         The WMS requests are intended to be handled in a dedicated process (to avoid blocking the main thread), so this

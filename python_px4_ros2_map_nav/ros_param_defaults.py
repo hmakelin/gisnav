@@ -128,10 +128,10 @@ class Defaults:
     and almost the same size. This parameter is used during :meth:`map_nav_node.MapNavNode._should_update_map` calls.
     """
 
-    MATCHER_CLASS = 'python_px4_ros2_map_nav.keypoint_matchers.superglue.SuperGlue'
+    MATCHER_CLASS = 'python_px4_ros2_map_nav.keypoint_matchers.loftr.LoFTRMatcher'
     """Default :class:`~keypoint_matchers.keypoint_matcher.KeyPointMatcher` to use for matching images to maps."""
 
-    MATCHER_PARAMS_FILE = 'superglue_params.yml'  # TODO: add config folder: config/superglue_params.yml
+    MATCHER_PARAMS_FILE = 'config/loftr_params.yml'
     """Default parameter file with args for the default :class:`~keypoint_matchers.keypoint_matcher.KeyPointMatcher`'s 
     :meth:keypoint_matchers.keypoint_matcher.KeyPointMatcher.initializer method."""
 

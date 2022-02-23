@@ -37,7 +37,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint
+    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -998,7 +998,7 @@ class MapNavNode(Node, ABC):
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-                               position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+                               fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):
@@ -1584,6 +1584,7 @@ class MapNavNode(Node, ABC):
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
         image_data.fov = fov_wgs84
         image_data.c = c_wgs84
+        image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -1630,19 +1631,19 @@ class MapNavNode(Node, ABC):
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
 
-        # noinspection PyUnreachableCode
-        if __debug__:
-            # Visualization of matched keypoints and field of view boundary
-            number_str_len = 7
-            accuracy = 2
-            gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
-            gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                              f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                              f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-            self._visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image, map_cropped,
-                                       mkp_img, mkp_map, fov_pix)
-
         if self._good_match(image_data):
+            # noinspection PyUnreachableCode
+            if __debug__:
+                # Visualization of matched keypoints and field of view boundary
+                number_str_len = 7
+                accuracy = 2
+                gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
+                gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
+                                  f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                                  f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+                self._visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image, map_cropped,
+                                           mkp_img, mkp_map, fov_pix)
+
             if self._previous_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
                 if self._variance_window_full():
@@ -1658,12 +1659,18 @@ class MapNavNode(Node, ABC):
     def _good_match(self, image_data: ImageData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
 
-        :param image_data: Image data containing the position estimate
+        :param image_data: The position estimate and supporting metadata
         :return: True if match is good
         """
         alt = image_data.terrain_altitude
         if alt < 0:
-            self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match..')
+            self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match.')
+            return False
+
+        fov_pix = image_data.fov_pix
+        if not is_convex_isosceles_trapezoid(fov_pix):
+            self.get_logger().warn(f'Match fov_pix {fov_pix.squeeze().tolist()} was not a convex isosceles trapezoid, '
+                                   f'assume bad match.')
             return False
 
         return True

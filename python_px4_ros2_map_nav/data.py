@@ -26,6 +26,7 @@ class ImageData:
     frame_id: str
     timestamp: int
     fov: np.ndarray
+    fov_pix: np.ndarray
     position: LatLonAlt
     terrain_altitude: float
     attitude: np.ndarray

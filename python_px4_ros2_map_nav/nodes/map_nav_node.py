@@ -1644,9 +1644,6 @@ class MapNavNode(Node, ABC):
 
         # TODO: Get vehicle attitude from camera attitude
         #  Problem is gimbal relative attitude to vehicle body is unknown if gimbal has not stabilized to set attitude
-        #vehicle_attitude_estimate = vehicle_attitude
-        #vehicle_attitude_estimate_rpy = vehicle_attitude_estimate.as_euler('XYZ')
-        #quaternion = vehicle_attitude_estimate.as_quat()
 
         # noinspection PyUnreachableCode
         if __debug__:
@@ -1657,7 +1654,6 @@ class MapNavNode(Node, ABC):
             gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
                               f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                               f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-
             visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image,
                                  map_cropped, mkp_img, mkp_map, fov_pix)
 

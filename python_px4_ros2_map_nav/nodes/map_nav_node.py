@@ -1439,7 +1439,7 @@ class MapNavNode(Node, ABC):
         return True
 
     def _push_blur(self, blur: float) -> None:
-        """Pushes blur value estimates to :py:attr:`~_blurs`
+        """Pushes blur estimates to :py:attr:`~_blurs`
 
         Pops the oldest estimate from the stack if needed.
 
@@ -1545,8 +1545,7 @@ class MapNavNode(Node, ABC):
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
-                         img_dim: Dim, map_cropped: Optional[np.ndarray] = None)\
-            -> None:
+                         img_dim: Dim, map_cropped: Optional[np.ndarray] = None) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 

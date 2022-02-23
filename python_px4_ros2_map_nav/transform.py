@@ -170,10 +170,9 @@ def crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
     :param dimensions: Dimensions of area to crop (not of image itself)
     :return: Cropped image
     """
-    # TODO: only tested on width>height images.
-    cx, cy = tuple(np.array(img.shape[0:2]) / 2)  # TODO: could be passed from rotate_and_crop_map instead of computing again
+    cx, cy = tuple(np.array(img.shape[0:2]) / 2)
     img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
-                      math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]   # TODO: use floor or smth else?
+                      math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]
     assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
                                                                             'map raster. '
     return img_cropped

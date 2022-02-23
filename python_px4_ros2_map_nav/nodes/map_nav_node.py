@@ -1611,10 +1611,9 @@ class MapNavNode(Node, ABC):
                                             LatLon(*fov_wgs84[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
-        # Translation in WGS84
+        # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
         t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
-        t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
-
+        t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
 

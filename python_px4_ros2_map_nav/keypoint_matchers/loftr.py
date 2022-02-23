@@ -93,7 +93,8 @@ class LoFTRMatcher(KeypointMatcher):
             assert_type(loftr, LoFTRMatcher)
             return loftr._match(img, map_)
         except Exception as e:
-            raise e  # TODO: need to do anything here or just pass it on?
+            # TODO: handle exception
+            raise e
 
     def _match(self, img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Uses LoFTR to find matching keypoints between provided image and map

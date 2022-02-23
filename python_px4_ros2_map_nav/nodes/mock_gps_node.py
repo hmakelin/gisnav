@@ -11,6 +11,7 @@ from px4_msgs.msg import VehicleGpsPosition
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
 from python_px4_ros2_map_nav.data import ImageData, LatLon, LatLonAlt
+from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 
 
 class MockGPSNode(MapNavNode):
@@ -54,6 +55,8 @@ class MockGPSNode(MapNavNode):
 
     def _declare_ros_params(self) -> None:
         """Declares any additional ROS parameters that are not declared by the base class
+
+        Note: does not override parent method which uses name mangling (double underscore).
 
         :return:
         """

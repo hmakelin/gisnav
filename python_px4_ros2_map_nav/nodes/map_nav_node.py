@@ -76,7 +76,7 @@ class MapNavNode(Node, ABC):
         self.name = node_name
 
         # Setup config and declare ROS parameters
-        self._declare_ros_params()
+        self.__declare_ros_params()
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -557,7 +557,7 @@ class MapNavNode(Node, ABC):
         assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
         return imported_class
 
-    def _declare_ros_params(self) -> None:
+    def __declare_ros_params(self) -> None:
         """Declares ROS parameters
 
         Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults`. Note that some parameters are declared
@@ -577,9 +577,6 @@ class MapNavNode(Node, ABC):
 
         namespace = 'misc'
         self.declare_parameters(namespace, [
-            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),  # TODO: move to separate config file? mock_gps_node
-            ('export_position', Defaults.MISC_EXPORT_POSITION),   # TODO: move to separate config file? mock_gps_node
-            ('export_projection', Defaults.MISC_EXPORT_PROJECTION),  # TODO: move to separate config file? mock_gps_node
             ('max_pitch', Defaults.MISC_MAX_PITCH),
             ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),

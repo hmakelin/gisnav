@@ -91,7 +91,6 @@ class WMSClient:
         assert_type(srs_str, str)
         assert_type(center, get_args(Union[LatLonAlt, LatLon]))
         assert_type(radius, get_args(Union[int, float]))
-        # TODO: handle exception from getmap request
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
         map_data = MapData(center=center, radius=radius, bbox=bbox, image=map_)
@@ -113,7 +112,8 @@ class WMSClient:
             map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_, size=size_, format=format_,
                                     transparent=transparent_)
         except Exception as e:
-            raise e  # TODO: need to do anything here or just pass it on?
+            # TODO: handle exception
+            raise e
 
         map_ = np.frombuffer(map_.read(), np.uint8)
         map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)

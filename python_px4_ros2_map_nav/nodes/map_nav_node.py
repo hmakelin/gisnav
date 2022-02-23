@@ -1651,7 +1651,7 @@ class MapNavNode(Node, ABC):
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
                     image_data.sd = sd
-                    self.publish(image_data)
+                    self.publish_position(image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
             self._previous_image_data = image_data
@@ -1762,7 +1762,7 @@ class MapNavNode(Node, ABC):
         return out
 
     @abstractmethod
-    def publish(self, image_data: ImageData) -> None:
+    def publish_position(self, image_data: ImageData) -> None:
         """Publishes or exports computed image data
 
         This method should be implemented by an extending class to adapt for any given use case.

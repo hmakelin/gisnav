@@ -7,9 +7,9 @@ map_nav_node:
       srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
       request_timeout: 5
     misc:
-      mock_gps_selection: 1
-      export_position: 'position.json'
-      export_projection: 'projection.json'
+      mock_gps_selection: 1 # declared by MockGPSNode, not by base class
+      export_position: 'position.json' # declared by MockGPSNode, not by base class
+      export_projection: 'projection.json' # declared by MockGPSNode, not by base class
       max_pitch: 30  # Used by _should_match
       variance_estimation_length: 20
       min_match_altitude: 80

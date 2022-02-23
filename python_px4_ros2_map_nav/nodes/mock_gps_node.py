@@ -27,10 +27,11 @@ class MockGPSNode(MapNavNode):
 
     def __init__(self, node_name: str):
         super().__init__(node_name)
+        self._declare_ros_params()
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
-    def publish(self, image_data: ImageData) -> None:
+    def publish_position(self, image_data: ImageData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
         if not all(image_data.position) or any(map(np.isnan, image_data.position)) or \
                 not all(image_data.sd) or any(map(np.isnan, image_data.sd)):
@@ -50,6 +51,18 @@ class MockGPSNode(MapNavNode):
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
         if export_projection is not None:
             self._export_position(c, fov, export_projection)
+
+    def _declare_ros_params(self) -> None:
+        """Declares any additional ROS parameters that are not declared by the base class
+
+        :return:
+        """
+        namespace = 'misc'
+        self.declare_parameters(namespace, [
+            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),
+            ('export_position', Defaults.MISC_EXPORT_POSITION),
+            ('export_projection', Defaults.MISC_EXPORT_PROJECTION)
+        ])
 
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher.

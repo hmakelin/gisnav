@@ -56,9 +56,6 @@ class MapNavNode(Node, ABC):
     # Ellipsoid model used by pyproj
     PYPROJ_ELLIPSOID = 'WGS84'
 
-    # Padding for EKF2 timestamp to optionally ensure published VVO message has a later timstamp than EKF2 system
-    EKF2_TIMESTAMP_PADDING = 0  # 500000  # microseconds
-
     # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
     TOPICS_MSG_KEY = 'message'
     TOPICS_SUBSCRIBER_KEY = 'subscriber'
@@ -663,7 +660,7 @@ class MapNavNode(Node, ABC):
                                                      f'timestamp stored earlier for synchronization ' \
                                                      f'{self._time_sync.local}.'
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
-            return ekf2_timestamp_usec + self.EKF2_TIMESTAMP_PADDING  # TODO: remove the padding or set it 0?
+            return ekf2_timestamp_usec
 
     def _setup_subscribers(self) -> None:
         """Creates and stores subscribers for microRTPS bridge topics.

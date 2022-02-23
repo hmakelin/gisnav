@@ -109,10 +109,10 @@ class MockGPSNode(MapNavNode):
         assert_type(position, get_args(Union[LatLon, LatLonAlt]))
         assert_type(fov, np.ndarray)
         assert_type(filename, str)
-        point = Feature(geometry=Point((position.lon, position.lat)))  # TODO: add name/description properties
+        point = Feature(geometry=Point((position.lon, position.lat)))
         corners = np.flip(fov.squeeze()).tolist()
         corners = [tuple(x) for x in corners]
-        corners = Feature(geometry=Polygon([corners]))  # TODO: add name/description properties
+        corners = Feature(geometry=Polygon([corners]))
         features = [point, corners]
         feature_collection = FeatureCollection(features)
         try:

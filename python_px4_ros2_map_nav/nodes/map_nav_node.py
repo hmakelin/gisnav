@@ -35,7 +35,7 @@ from functools import partial
 from python_px4_ros2_map_nav.data_classes import BBox, Dim, visualize_homography, LatLon, \
     TimePair, RPY, LatLonAlt, ImageData, MapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image
+    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -1641,8 +1641,8 @@ class MapNavNode(Node, ABC):
             gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
                               f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                               f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-            visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image,
-                                 map_cropped, mkp_img, mkp_map, fov_pix)
+            self._visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image, map_cropped,
+                                       mkp_img, mkp_map, fov_pix)
 
         if self._good_match(image_data):
             if self._previous_image_data is not None:
@@ -1722,6 +1722,43 @@ class MapNavNode(Node, ABC):
 
             # Add newest values
             self._estimation_history = np.vstack((self._estimation_history, position))
+
+    @staticmethod
+    def _visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
+                              kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> np.ndarray:
+        """Visualizes a homography including keypoint matches and field of view.
+
+        :param figure_name: Display name of visualization
+        :param display_text: Display text on top left of image
+        :param img_arr: Image array
+        :param map_arr: Map array
+        :param kp_img: Image keypoints
+        :param kp_map: Map keypoints
+        :param dst_corners: Field of view corner pixel coordinates on map
+        :return: Visualized image as numpy array
+        """
+        # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
+        kp_count = len(kp_img)
+        assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
+        matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
+
+        # Need cv2.KeyPoints for keypoints
+        kp_img = np.apply_along_axis(make_keypoint, 1, kp_img)
+        kp_map = np.apply_along_axis(make_keypoint, 1, kp_map)
+
+        map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
+        draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
+        out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
+
+        # Add text (need to manually handle newlines)
+        for i, text_line in enumerate(display_text.split('\n')):
+            y = (i + 1) * 30
+            cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
+
+        cv2.imshow(figure_name, out)
+        cv2.waitKey(1)
+
+        return out
 
     @abstractmethod
     def publish(self, image_data: ImageData) -> None:

@@ -208,3 +208,15 @@ def axes_ned_to_image(rpy: RPY, degrees: bool = True) -> RPY:
     yaw = rpy.yaw
     rpy = RPY(roll, pitch, yaw)
     return rpy
+
+
+def make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
+    """Converts input numpy array to a cv2.KeyPoint.
+
+    :param pt: Keypoint x and y coordinates
+    :param sz: Keypoint size
+    :return:
+    """
+    assert_type(pt, np.ndarray)
+    assert_shape(pt, (2,))
+    return cv2.KeyPoint(pt[0], pt[1], sz)

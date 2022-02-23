@@ -462,8 +462,6 @@ class MapNavNode(Node, ABC):
         This method tries to return the 'z' value first, and 'dist_bottom' second from the VehicleLocalPosition
         message. If neither are valid, a None is returned.
 
-        # TODO: this assumes that local position z-coordinate is distance to ground (not to sea level) - need to check
-
         :return: Altitude in meters or None if information is not available"""
         if self._vehicle_local_position is not None:
             if self._vehicle_local_position.z_valid:
@@ -1419,7 +1417,7 @@ class MapNavNode(Node, ABC):
 
         # Check condition (3) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        altitude = self._alt_from_vehicle_local_position()
+        altitude = self._alt_from_vehicle_local_position()  # assume this is distance to ground
         if not isinstance(min_alt, int) or altitude < min_alt:
             self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
                                    f'could not be determined. Skipping matching.')
@@ -1620,7 +1618,7 @@ class MapNavNode(Node, ABC):
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
         image_data.terrain_altitude = position.alt
-        ground_elevation = self._local_position_ref_alt()
+        ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:
             self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
             position = LatLonAlt(*position[0:2], None)

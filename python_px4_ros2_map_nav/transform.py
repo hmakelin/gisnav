@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_shape, assert_len, assert_ndim
-from python_px4_ros2_map_nav.data_classes import BBox, LatLon, Dim, RPY
+from python_px4_ros2_map_nav.data import BBox, LatLon, Dim, RPY
 
 
 def fov_center(fov_wgs84: np.ndarray) -> LatLon:

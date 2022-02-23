@@ -32,7 +32,7 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from python_px4_ros2_map_nav.data_classes import BBox, Dim, visualize_homography, LatLon, \
+from python_px4_ros2_map_nav.data import BBox, Dim, visualize_homography, LatLon, \
     TimePair, RPY, LatLonAlt, ImageData, MapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint
@@ -205,7 +205,7 @@ class MapNavNode(Node, ABC):
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
-        """A :class:`python_px4_ros2_map_nav.data_classes.TimePair` with local and foreign (EKF2) timestamps in microseconds
+        """A :class:`python_px4_ros2_map_nav.data.TimePair` with local and foreign (EKF2) timestamps in microseconds
 
         The pair will contain the local system time and the EKF2 time received via the PX4-ROS 2 bridge. The pair can
         then at any time be used to locally estimate the EKF2 system time.
@@ -928,7 +928,7 @@ class MapNavNode(Node, ABC):
         """Handles result from :meth:`python_px4_ros2_map_nav.wms.worker`.
 
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
-        :class:`~data_classes.MapData`.
+        :class:`~data.MapData`.
 
         :param result: Results from the asynchronous call
         :return:

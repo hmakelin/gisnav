@@ -6,7 +6,7 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.data_classes import BBox, LatLon, LatLonAlt, MapData, get_args
+from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, get_args
 
 
 class WMSClient:

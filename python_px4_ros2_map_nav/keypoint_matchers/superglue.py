@@ -84,7 +84,8 @@ class SuperGlue(KeypointMatcher):
             assert_type(superglue, SuperGlue)
             return superglue._match(img, map_)
         except Exception as e:
-            raise e  # TODO: need to do anything here or just pass it on?
+            # TODO: handle exception
+            raise e
 
     def _match(self, img: np.ndarray, map_: np.ndarray, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
             -> Tuple[np.ndarray, np.ndarray]:

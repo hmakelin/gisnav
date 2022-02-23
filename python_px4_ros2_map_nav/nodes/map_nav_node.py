@@ -633,10 +633,8 @@ class MapNavNode(Node, ABC):
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.
 
-        This synchronization is done in the :meth:`~vehicle_local_position_callback`. The sync is therefore expected
-        to be done at high frequency.
-
-        See :py:attr:`~_time_sync` for more information.
+        This synchronization is done in the :meth:`~vehicle_local_position_callback` and therefore expected to be done
+        at high frequency. See :py:attr:`~_time_sync` for more information.
 
         :param ekf2_timestamp_usec: The time since the EKF2 system start in microseconds
         :return:

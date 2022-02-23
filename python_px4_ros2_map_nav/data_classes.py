@@ -94,9 +94,8 @@ def _make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
     return cv2.KeyPoint(pt[0], pt[1], sz)
 
 
-def visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarray,
-                         map_arr: np.ndarray, kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) \
-        -> np.ndarray:
+def visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
+                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> np.ndarray:
     """Visualizes a homography including keypoint matches and field of view.
 
     :param figure_name: Display name of visualization

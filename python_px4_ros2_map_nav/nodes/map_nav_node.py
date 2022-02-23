@@ -579,7 +579,7 @@ class MapNavNode(Node, ABC):
             ('export_position', Defaults.MISC_EXPORT_POSITION),   # TODO: move to separate config file? mock_gps_node
             ('export_projection', Defaults.MISC_EXPORT_PROJECTION),  # TODO: move to separate config file? mock_gps_node
             ('max_pitch', Defaults.MISC_MAX_PITCH),
-            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),  # TODO: move to separate config file? mock_gps_node
+            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),

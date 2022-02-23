@@ -1616,7 +1616,7 @@ class MapNavNode(Node, ABC):
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground but make altitude positive
 
         position = t_wgs84.squeeze().tolist()
-        position = LatLonAlt(*position)  # TODO: shcleould just ditch LatLonAlt and keep numpy arrays?
+        position = LatLonAlt(*position)
         image_data.terrain_altitude = position.alt
         ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:

@@ -938,11 +938,12 @@ class MapNavNode(Node, ABC):
             return None
 
     def wms_pool_worker_callback(self, result: List[MapData]) -> None:
-        """Handles result from WMS pool worker.
+        """Handles result from :meth:`python_px4_ros2_map_nav.wms.worker`.
 
-        Saves received :class:`~data_classes.MapData` to :py:attr:`~_map_data.
+        Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
+        :class:`~data_classes.MapData`.
 
-        :param result: Results from the asynchronous call (a collection containing a single :class:`~data_classes.MapData`)
+        :param result: Results from the asynchronous call
         :return:
         """
         assert_len(result, 1)

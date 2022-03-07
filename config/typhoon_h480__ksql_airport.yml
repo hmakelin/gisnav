@@ -16,6 +16,7 @@ map_nav_node:
       blur_threshold: 1.5  # standard deviations
       blur_window_length: 100
       min_matches: 15
+      visual_odometry: True
     map_update:
       initial_guess: # Values from ksql_airport.world file
         - 37.523640

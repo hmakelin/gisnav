@@ -58,6 +58,9 @@ class Defaults:
     MISC_MIN_MATCHES = 15
     """Minimum number of keypoint matches required from matcher for continuing with match post-processing"""
 
+    MISC_VISUAL_ODOMETRY = True
+    """Flag that enables use of self referential visual odometry in addition to map matching."""
+
     MAP_UPDATE_INITIAL_GUESS = None
     """Initial guess of vehicle's rough global position
     

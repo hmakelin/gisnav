@@ -40,7 +40,7 @@ from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
-from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
+from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher, ORB
 from python_px4_ros2_map_nav.wms import WMSClient
 
 
@@ -125,6 +125,15 @@ class MapNavNode(Node, ABC):
         # Do not increase the process count, it should be 1
         self._matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
                                                          initializer=self._kp_matcher.initializer, initargs=args)
+
+        # Setup visual odometry
+        odom_enabled = self.get_parameter('matcher.class').get_parameter_value().bool_value
+        if odom_enabled:
+            odom_args = ()
+            self._odom_matching_pool = Pool(self.ODOM_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
+                                            initargs=odom_args)
+        else:
+            self._odom_matching_pool = None
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -258,6 +267,19 @@ class MapNavNode(Node, ABC):
         # TODO assert type
         #assert_type(torch.multiprocessing.Pool, value)
         self.__matching_pool = value
+
+    @property
+    def _odom_matching_pool(self) -> Optional[Pool]:
+        """Pool for running a :class:`~keypoint_matcher.ORB` in dedicated process
+
+        None if visual odometry is not enabled.
+        """
+        return self.__odom_matching_pool
+
+    @_odom_matching_pool.setter
+    def _odom_matching_pool(self, value: Pool) -> None:
+        assert_type(Pool, value)
+        self.__odom_matching_pool = value
 
     @property
     def _stored_inputs(self) -> dict:

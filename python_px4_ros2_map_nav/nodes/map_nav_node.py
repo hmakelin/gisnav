@@ -62,6 +62,7 @@ class MapNavNode(Node, ABC):
     # Process counts for multiprocessing pools
     WMS_PROCESS_COUNT = 1  # should be 1
     MATCHER_PROCESS_COUNT = 1  # should be 1
+    ODOM_MATCHER_PROCESS_COUNT = 1  # should be 1
 
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.

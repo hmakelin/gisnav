@@ -98,7 +98,7 @@ class ORB(KeypointMatcher):
 
         valid = []
         for m, n in matches:
-            if (m.distance < conf_threshold * n.distance):
+            if m.distance < conf_threshold * n.distance:
                 valid.append(m)
 
         mkp_img = np.float32([kp_img[m.queryIdx].pt for m in valid]).reshape(-1, 1, 2)

@@ -129,11 +129,14 @@ class MapNavNode(Node, ABC):
 
         # Setup visual odometry
         odom_enabled = self.get_parameter('matcher.class').get_parameter_value().bool_value
+        self._odom_matching_results = None
         if odom_enabled:
             odom_args = ()
+            self._odom_matcher = ORB  # TODO: this correct?
             self._odom_matching_pool = Pool(self.ODOM_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
                                             initargs=odom_args)
         else:
+            self._odom_matcher = None
             self._odom_matching_pool = None
 
         # Used for pyproj transformations
@@ -146,7 +149,7 @@ class MapNavNode(Node, ABC):
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
         self._previous_map_data = None
-        self._previous_image_data = None
+        self._previous_good_image_data = None
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
@@ -306,6 +309,16 @@ class MapNavNode(Node, ABC):
         self.__matching_results = value
 
     @property
+    def _odom_matching_results(self) -> Optional[AsyncResult]:
+        """Asynchronous results from a visual odometry matching process."""
+        return self.__odom_matching_results
+
+    @_odom_matching_results.setter
+    def _odom_matching_results(self, value: Optional[AsyncResult]) -> None:
+        assert_type(value, get_args(Optional[AsyncResult]))
+        self.__odom_matching_results = value
+
+    @property
     def _topics(self) -> dict:
         """Dictionary that stores all rclpy publishers and subscribers."""
         return self.__topics
@@ -356,8 +369,18 @@ class MapNavNode(Node, ABC):
         self.__previous_map_data = value
 
     @property
+    def _previous_good_image_data(self) -> Optional[ImageData]:
+        """The previous image data which had a good match (can be used for computing variance estimate)."""
+        return self.__previous_good_image_data
+
+    @_previous_good_image_data.setter
+    def _previous_good_image_data(self, value: Optional[ImageData]) -> None:
+        assert_type(value, get_args(Optional[ImageData]))
+        self.__previous_good_image_data = value
+
+    @property
     def _previous_image_data(self) -> Optional[ImageData]:
-        """The previous image data which is needed for computing the velocity estimate."""
+        """The previous image data used for visual odometry."""
         return self.__previous_image_data
 
     @_previous_image_data.setter
@@ -1024,6 +1047,13 @@ class MapNavNode(Node, ABC):
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
                                fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
+        # Do visual odometry if enabled
+        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        if visual_odometry:
+            # TODO: if visual odometry enabled, do it here (which should_match checks apply here?)
+            if self._previous_image_data is not None:
+                self._odom_match(image_data, self._previous_image_data)
+
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):
             assert self._matching_results is None or self._matching_results.ready()
@@ -1490,6 +1520,28 @@ class MapNavNode(Node, ABC):
         assert_len(mkp_img, len(mkp_map))
         self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
 
+    def odom_matching_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for visual odometry matching worker.
+
+        :return:
+        """
+        self.get_logger().error(f'Visual odometry matching process returned and error:\n{e}\n{traceback.print_exc()}')
+
+    def odom_matching_worker_callback(self, results) -> None:
+        """Callback for visual odometry matching worker.
+
+        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
+        are needed so that the post-processing is done using the same state information that was used for initiating
+        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
+        and current camera pitch should therefore not be used for processing the matches.
+
+        :return:
+        """
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
+        #self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
+        # TODO: process visual odometry results!
+
     def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
         """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
 
@@ -1668,7 +1720,7 @@ class MapNavNode(Node, ABC):
                 self._visualize_homography('Keypoint matches and FOV', gimbal_rpy_text, image_data.image, map_cropped,
                                            mkp_img, mkp_map, fov_pix)
 
-            if self._previous_image_data is not None:
+            if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
@@ -1676,9 +1728,11 @@ class MapNavNode(Node, ABC):
                     self.publish_position(image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-            self._previous_image_data = image_data
+            self._previous_good_image_data = image_data
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
+
+        self._previous_image_data = image_data
 
     def _good_match(self, image_data: ImageData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
@@ -1712,6 +1766,21 @@ class MapNavNode(Node, ABC):
             [(image_data.image, map_cropped)],
             callback=self.matching_worker_callback,
             error_callback=self.matching_worker_error_callback
+        )
+
+    def _odom_match(self, image_data: ImageData, previous_image_data: np.ndarray) -> None:
+        """Perform visual odometry matching.
+
+        :param image_data: The image to match
+        :param previous_image_data: Previous image to match
+        :return:
+        """
+        assert self._odom_matching_results is None or self._odom_matching_results.ready()
+        self._odom_matching_results = self._odom_matching_pool.starmap_async(
+            self._odom_matcher.worker,  # TODO: ORB?
+            [(image_data.image, previous_image_data.image)],
+            callback=self.odom_matching_worker_callback,
+            error_callback=self.odom_matching_worker_error_callback
         )
 
     def _variance_window_full(self) -> bool:

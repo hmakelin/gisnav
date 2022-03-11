@@ -159,9 +159,11 @@ class MapNavNode(Node, ABC):
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
-        # Stored solution for the PnP problem
+        # Stored solution for the PnP problem (map matching and visual odometry separately)
         self._r = None
         self._t = None
+        self._r_odom = None
+        self._t_odom = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
@@ -195,13 +197,23 @@ class MapNavNode(Node, ABC):
 
     @property
     def _r(self) -> Optional[np.ndarray]:
-        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches`."""
+        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches` for map matching."""
         return self.__r
 
     @_r.setter
     def _r(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__r = value
+
+    @property
+    def _r_odom(self) -> Optional[np.ndarray]:
+        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
+        return self.__r_odom
+
+    @_r_odom.setter
+    def _r_odom(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__r_odom = value
 
     @property
     def _r_acc(self) -> Optional[np.ndarray]:
@@ -215,13 +227,23 @@ class MapNavNode(Node, ABC):
 
     @property
     def _t(self) -> Optional[np.ndarray]:
-        """Translation vector, solution to the PnP problem in :meth:`~_process_matches`."""
+        """Translation vector, solution to the PnP problem in :meth:`~_process_matches` for map matching."""
         return self.__t
 
     @_t.setter
     def _t(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__t = value
+
+    @property
+    def _t_odom(self) -> Optional[np.ndarray]:
+        """Translation vector, solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
+        return self.__t_odom
+
+    @_t_odom.setter
+    def _t_odom(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__t_odom = value
 
     @property
     def _t_acc(self) -> Optional[np.ndarray]:
@@ -1680,7 +1702,7 @@ class MapNavNode(Node, ABC):
 
         return lat_diff, lon_diff, alt
 
-    def _store_extrinsic_guess(self, r: np.ndarray, t: np.ndarray) -> None:
+    def _store_extrinsic_guess(self, r: np.ndarray, t: np.ndarray, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
 
         Assumes previous solution to the PnP problem will be close to the new solution. See also
@@ -1688,12 +1710,17 @@ class MapNavNode(Node, ABC):
 
         :param r: Rotation vector
         :param t: Translation vector
+        :param odom: Set to True to store for visual odometry, otherwise map matching is assumed
         :return:
         """
-        self._r = r
-        self._t = t
+        if odom:
+            self._r_odom = r
+            self._t_odom = t
+        else:
+            self._r = r
+            self._t = t
 
-    def _retrieve_extrinsic_guess(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    def _retrieve_extrinsic_guess(self, odom: bool = False) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """Retrieves stored rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in
          :meth:`~_process_matches`.
 
@@ -1702,9 +1729,13 @@ class MapNavNode(Node, ABC):
 
         # TODO: require that timestamp of previous solution is not too old
 
+        :param odom: Set to true to retrieve extrinsic guess for visual odometry, otherwise map matching is assumed
         :return: Tuple with stored rotation and translation vectors, or tuple of Nones if not available
         """
-        return self._r, self._t
+        if odom:
+            return self._r_odom, self._t_odom
+        else:
+            return self._r, self._t
 
     def _estimate_velocities(self, current_position: ImageData, previous_position: ImageData) -> np.ndarray:
         """Estimates x, y and z velocities in m/s from current and previous position.

@@ -1874,6 +1874,8 @@ class MapNavNode(Node, ABC):
     def _match(self, image_data: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.
 
+        See also :meth:`~_odom_match` for the corresponding visual odometry method.
+
         :param image_data: The image to match
         :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
@@ -1888,6 +1890,8 @@ class MapNavNode(Node, ABC):
 
     def _odom_match(self, image_data: ImageData, previous_image_data: np.ndarray) -> None:
         """Perform visual odometry matching.
+
+        See also :meth:`~_match` for the corresponding map matching method.
 
         :param image_data: The image to match
         :param previous_image_data: Previous image to match

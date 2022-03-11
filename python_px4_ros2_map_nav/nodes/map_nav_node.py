@@ -1860,6 +1860,10 @@ class MapNavNode(Node, ABC):
                 self.get_logger().warn('Visual odometry has updated the accumulated position estimate but no absolute '
                                        'map match yet, skipping publishing.')
                 return None
+        else:
+            self._r_map = r
+            self._t_map = t
+            self._h_map = h
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h

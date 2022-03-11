@@ -1861,6 +1861,7 @@ class MapNavNode(Node, ABC):
                                        'map match yet, skipping publishing.')
                 return None
         else:
+            # Store latest map matches for later use (needed if visual odometry is enabled)
             self._r_map = r
             self._t_map = t
             self._h_map = h

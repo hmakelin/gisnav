@@ -1866,6 +1866,11 @@ class MapNavNode(Node, ABC):
             self._t_map = t
             self._h_map = h
 
+            # Reset accumulated r, t, and h
+            self._r_acc = None
+            self._t_acc = None
+            self._h_acc = None
+
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(img_dim, h)

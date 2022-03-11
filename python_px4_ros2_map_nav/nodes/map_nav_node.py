@@ -145,6 +145,11 @@ class MapNavNode(Node, ABC):
         self._t_acc = None
         self._h_acc = None
 
+        # Latest r, t, and h from map matching (need to remember for when visual odometry is enabled)
+        self._r_map = None
+        self._t_map = None
+        self._h_map = None
+
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
 
@@ -226,6 +231,16 @@ class MapNavNode(Node, ABC):
         self.__r_acc = value
 
     @property
+    def _r_map(self) -> Optional[np.ndarray]:
+        """Latest rotation matrix from map matching"""
+        return self.__r_map
+
+    @_r_map.setter
+    def _r_map(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__r_map = value
+
+    @property
     def _t(self) -> Optional[np.ndarray]:
         """Translation vector, solution to the PnP problem in :meth:`~_process_matches` for map matching."""
         return self.__t
@@ -256,6 +271,16 @@ class MapNavNode(Node, ABC):
         self.__t_acc = value
 
     @property
+    def _t_map(self) -> Optional[np.ndarray]:
+        """Latest t vector from map matching"""
+        return self.__t_map
+
+    @_t_map.setter
+    def _t_map(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__t_map = value
+
+    @property
     def _h_acc(self) -> Optional[np.ndarray]:
         """Accumulated homography transformation over multiple rounds of visual odometry"""
         return self.__h_acc
@@ -264,6 +289,16 @@ class MapNavNode(Node, ABC):
     def _h_acc(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__h_acc = value
+
+    @property
+    def _h_map(self) -> Optional[np.ndarray]:
+        """Latest h matrix from map matching"""
+        return self.__h_map
+
+    @_h_map.setter
+    def _h_map(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__h_map = value
 
     @property
     def _kp_matcher(self) -> KeypointMatcher:
@@ -1750,6 +1785,13 @@ class MapNavNode(Node, ABC):
         velocities = diff_position / time_diff_sec
         return velocities
 
+    def _have_map_match(self) -> None:
+        """Returns True if an existing map match is in store
+
+        :return: True if a map match has been made earlier
+        """
+        return all((self._r_map, self._t_map, self._h_map))
+
     # TODO: pass map + accumulated h, r and t as optional args
     #  if these are passed, ... ?
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
@@ -1790,11 +1832,11 @@ class MapNavNode(Node, ABC):
         padding = np.array([[0]]*len(mkp_img))
         mkp_map_3d = np.hstack((mkp_map, padding))  # Set all world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
-        r, t = self._retrieve_extrinsic_guess()
+        r, t = self._retrieve_extrinsic_guess(odom=visual_odometry)
         use_guess = True if r is not None and t is not None else False
         _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
                                          iterationsCount=10)
-        self._store_extrinsic_guess(r, t)
+        self._store_extrinsic_guess(r, t, odom=visual_odometry)
         r, _ = cv2.Rodrigues(r)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
@@ -1802,6 +1844,22 @@ class MapNavNode(Node, ABC):
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
+
+        if visual_odometry:
+            # Integrate with previous r, t and h
+            self._r_acc = r if self._r_acc is None else r @ self._r_acc
+            self._t_acc = t if self._t_acc is None else t + self._t_acc
+            self._h_acc = h if self._h_acc is None else h @ self._h_acc
+
+            if self._have_map_match():
+                # Combine with latest map match
+                r = r @ self._r_map
+                t = t + self._t_map
+                h = h @ self._h_map
+            else:
+                self.get_logger().warn('Visual odometry has updated the accumulated position estimate but no absolute '
+                                       'map match yet, skipping publishing.')
+                return None
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h

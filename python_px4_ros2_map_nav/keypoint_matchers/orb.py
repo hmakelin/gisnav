@@ -82,6 +82,8 @@ class ORB(KeypointMatcher):
             -> Tuple[np.ndarray, np.ndarray]:
         """Uses ORB to find matching keypoints between provided image and map
 
+        Note: map_ may be any image, not necessarily a map if this is used for visual odometry.
+
         :param img: The image captured from drone camera
         :param map_: The map raster of the same area (retrieved e.g. from a WMS endpoint)
         :param conf_threshold: Confidence threshold for filtering out bad matches

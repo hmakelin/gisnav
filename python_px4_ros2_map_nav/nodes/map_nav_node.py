@@ -130,6 +130,7 @@ class MapNavNode(Node, ABC):
         # Setup visual odometry
         odom_enabled = self.get_parameter('matcher.class').get_parameter_value().bool_value
         self._odom_matching_results = None
+        self._odom_stored_inputs = None
         if odom_enabled:
             odom_args = ()
             self._odom_matcher = ORB  # TODO: this correct?
@@ -138,6 +139,11 @@ class MapNavNode(Node, ABC):
         else:
             self._odom_matcher = None
             self._odom_matching_pool = None
+
+        # Accumulated r & t vectors and homography transformation from visual odometry
+        self._r_acc = None
+        self._t_acc = None
+        self._h_acc = None
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -198,6 +204,16 @@ class MapNavNode(Node, ABC):
         self.__r = value
 
     @property
+    def _r_acc(self) -> Optional[np.ndarray]:
+        """Accumulated rotation vector over multiple rounds of visual odometry"""
+        return self.__r_acc
+
+    @_r_acc.setter
+    def _r_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__r_acc = value
+
+    @property
     def _t(self) -> Optional[np.ndarray]:
         """Translation vector, solution to the PnP problem in :meth:`~_process_matches`."""
         return self.__t
@@ -206,6 +222,26 @@ class MapNavNode(Node, ABC):
     def _t(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__t = value
+
+    @property
+    def _t_acc(self) -> Optional[np.ndarray]:
+        """Accumulated translation vector over multiple rounds of visual odometry"""
+        return self.__t_acc
+
+    @_t_acc.setter
+    def _t_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__t_acc = value
+
+    @property
+    def _h_acc(self) -> Optional[np.ndarray]:
+        """Accumulated homography transformation over multiple rounds of visual odometry"""
+        return self.__h_acc
+
+    @_h_acc.setter
+    def _h_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__h_acc = value
 
     @property
     def _kp_matcher(self) -> KeypointMatcher:
@@ -297,6 +333,21 @@ class MapNavNode(Node, ABC):
     def _stored_inputs(self, value: Optional[dict]) -> None:
         assert_type(value, get_args(Optional[dict]))
         self.__stored_inputs = value
+
+    @property
+    def _odom_stored_inputs(self) -> dict:
+        """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
+
+        This is used for visual odometry matches as opposed to :py:attr:`~stored_inputs` which is used for map matches.
+
+        See :meth:`~_process_matches` for description of keys and values stored in the dictionary.
+        """
+        return self.__odom_stored_inputs
+
+    @_odom_stored_inputs.setter
+    def _odom_stored_inputs(self, value: Optional[dict]) -> None:
+        assert_type(value, get_args(Optional[dict]))
+        self.__odom_stored_inputs = value
 
     @property
     def _matching_results(self) -> Optional[AsyncResult]:
@@ -1011,6 +1062,24 @@ class MapNavNode(Node, ABC):
 
         return None
 
+    def _inputs_valid(self, inputs: dict) -> bool:
+        """Returns True if provided inputs are valid for matching
+
+        :param imputs: Dictionary of input arguments to provide for :meth:`~_process_matches`
+        :return: True if input arguments are all valid
+        """
+        for k, v in inputs.items():
+            if v is None:
+                self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
+                return False
+
+        camera_yaw = inputs.get('camera_yaw', None)
+        map_data = inputs.get('map_data', None)
+        img_dim = inputs.get('img_dim', None)
+        assert all((camera_yaw, map_data, img_dim))  # Redundant (see above 'for k, v in inputs.items(): ...')
+
+        return True
+
     def image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
@@ -1047,26 +1116,26 @@ class MapNavNode(Node, ABC):
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
                                fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
+        inputs = None
+
         # Do visual odometry if enabled
-        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        if visual_odometry:
-            # TODO: if visual odometry enabled, do it here (which should_match checks apply here?)
-            if self._previous_image_data is not None:
-                self._odom_match(image_data, self._previous_image_data)
+        if _odom_should_match(image_data.image):
+            assert self._odom_matching_results is None or self._odom_matching_results.ready()
+            assert self._previous_image_data is not None
+            inputs = self._match_inputs(image_data, True)
+            if not self._inputs_valid(inputs):
+                return
+
+            self._odom_stored_inputs = inputs
+            self._odom_match(image_data, self._previous_image_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_match(image_data.image):
+        if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
             assert self._matching_results is None or self._matching_results.ready()
-            inputs = self._match_inputs(image_data)
-            for k, v in inputs.items():
-                if v is None:
-                    self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
-                    return
-
-            camera_yaw = inputs.get('camera_yaw', None)
-            map_data = inputs.get('map_data', None)
-            img_dim = inputs.get('img_dim', None)
-            assert all((camera_yaw, map_data, img_dim))  # Redundant (see above 'for k, v in inputs.items(): ...')
+            if inputs is None:
+                inputs = self._match_inputs(image_data)  # Get inputs if did not yet get them earlier for viz odom
+            if not self._inputs_valid(inputs):  # TODO: possibly redundant check with viz odom check?
+                return
 
             self._stored_inputs = inputs
             map_cropped = inputs.get('map_cropped')
@@ -1340,7 +1409,7 @@ class MapNavNode(Node, ABC):
                 self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _match_inputs(self, image_data: ImageData) -> dict:
+    def _match_inputs(self, image_data: ImageData, visual_odometry: bool = False) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
@@ -1356,6 +1425,7 @@ class MapNavNode(Node, ABC):
             map_cropped - np.ndarray Rotated and cropped map raster from map_data.image
 
         :param image_data: The image data containing an image frame from the drone video
+        :param visual_odometry: True if the inputs are for a visual odometry match (as opposed to a map match)
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
         camera_yaw_deg = self._camera_yaw()
@@ -1378,6 +1448,9 @@ class MapNavNode(Node, ABC):
             data['map_cropped'] = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim)
         else:
             data['map_cropped'] = None
+
+        # Set visual odometry flag
+        data['visual_odometry'] = True if visual_odometry else False
 
         return data
 
@@ -1435,6 +1508,58 @@ class MapNavNode(Node, ABC):
 
         return False
 
+    def _image_too_blurry(self, img: np.ndarray) -> bool:
+        """Returns True if image is deemed too blurry for matching
+
+        Also pushes the blur value to a stack using :meth:`~_push_blur`.
+
+        :param img: Image to match
+        :return: True if image is too blurry
+        """
+        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
+        blur = cv2.Laplacian(img, cv2.CV_64F).var()
+        self._push_blur(blur)
+        sd = np.std(self._blurs)
+        mn = np.mean(self._blurs)
+        threshold = mn - blur_threshold * sd
+        if blur < threshold:
+            # Expected to reject a fixed proportion of images so debug message more appropriate than warning
+            self.get_logger().debug(f'Image too blurry (blur: {blur}, mean: {mn}, sd: {sd}, threshold: {threshold}). '
+                                    f'Skipping matching.')
+            return True
+        else:
+            return False
+
+    def _odom_should_match(self, img: np.ndarray) -> bool:
+        """Determines whether _odom_match should be called based on whether previous match is still being processed.
+
+        Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there
+        are no pending visual odometry match results and (4) image is not too blurry. Unlike :meth:`~should_match`, the
+        visual odometry ignores the drone altitude and camera pitch checks since they are not assumed to be relevant
+        for comparing successive frames against each other.
+
+        :param img: Image to match
+        :return: True if matching should be attempted
+        """
+        # Check whether visual odometry matching is enabled
+        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        if not visual_odometry:
+            return False
+
+        # Check whether previous image frame is available
+        if self._previous_image_data is None:
+            return False
+
+        # Check that a request is not already running
+        if not (self._odom_matching_results is None or self._odom_matching_results.ready()):
+            return False
+
+        # Check if is image too blurry
+        if self._image_too_blurry(img):
+            return False
+
+        return True
+
     def _should_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
@@ -1463,16 +1588,7 @@ class MapNavNode(Node, ABC):
             return False
 
         # Check condition (4) - is image too blurry?
-        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
-        blur = cv2.Laplacian(img, cv2.CV_64F).var()
-        self._push_blur(blur)
-        sd = np.std(self._blurs)
-        mn = np.mean(self._blurs)
-        threshold = mn - blur_threshold * sd
-        if blur < threshold:
-            # Expected to reject a fixed proportion of images so debug message more appropriate than warning
-            self.get_logger().debug(f'Image too blurry (blur: {blur}, mean: {mn}, sd: {sd}, threshold: {threshold}). '
-                                    f'Skipping matching.')
+        if self._image_too_blurry(img):
             return False
 
         return True
@@ -1530,17 +1646,16 @@ class MapNavNode(Node, ABC):
     def odom_matching_worker_callback(self, results) -> None:
         """Callback for visual odometry matching worker.
 
-        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
-        are needed so that the post-processing is done using the same state information that was used for initiating
-        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
-        and current camera pitch should therefore not be used for processing the matches.
+        Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored
+        inputs are needed so that the post-processing is done using the same state information that was used for
+        initiating the match. For example, camera pitch may have changed since then (e.g. if match takes 100ms) and
+        current camera pitch should therefore not be used for processing the matches.
 
         :return:
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        #self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
-        # TODO: process visual odometry results!
+        self._process_matches(mkp_img, mkp_map, **self._odom_stored_inputs)
 
     def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
         """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
@@ -1604,9 +1719,11 @@ class MapNavNode(Node, ABC):
         velocities = diff_position / time_diff_sec
         return velocities
 
+    # TODO: pass map + accumulated h, r and t as optional args
+    #  if these are passed, ... ?
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
-                         img_dim: Dim, map_cropped: Optional[np.ndarray] = None) -> None:
+                         img_dim: Dim, visual_odometry: bool, map_cropped: Optional[np.ndarray] = None) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 
@@ -1622,6 +1739,7 @@ class MapNavNode(Node, ABC):
         :param vehicle_attitude: Vehicle attitude
         :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
+        :param visual_odometry: True if this match is a visual odometry match and not a map match
         :param map_cropped: Optional map cropped image
         :return:
         """

@@ -8,7 +8,7 @@ from typing import Tuple
 from enum import Enum
 
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
-
+from python_px4_ros2_map_nav.assertions import assert_type
 
 class ORB(KeypointMatcher):
     """Adapter for ORB based keypoint matcher"""

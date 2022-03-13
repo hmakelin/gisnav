@@ -133,7 +133,7 @@ class MapNavNode(Node, ABC):
         self._odom_matching_results = None
         self._odom_stored_inputs = None
         if odom_enabled:
-            odom_args = ()
+            odom_args = ['dummy_argument']  # TODO: anything here?
             self._odom_matcher = ORB  # TODO: this correct?
             self._odom_matching_pool = Pool(self.ODOM_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
                                             initargs=odom_args)

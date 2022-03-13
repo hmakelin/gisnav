@@ -1793,7 +1793,7 @@ class MapNavNode(Node, ABC):
 
         :return: True if a map match has been made earlier
         """
-        return all((self._r_map, self._t_map, self._h_map))
+        return self._r_map is not None and self._t_map is not None and self._h_map is not None
 
     # TODO: pass map + accumulated h, r and t as optional args
     #  if these are passed, ... ?

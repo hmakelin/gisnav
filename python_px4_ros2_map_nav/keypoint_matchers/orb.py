@@ -10,6 +10,7 @@ from enum import Enum
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
 from python_px4_ros2_map_nav.assertions import assert_type
 
+
 class ORB(KeypointMatcher):
     """Adapter for ORB based keypoint matcher"""
 
@@ -71,7 +72,7 @@ class ORB(KeypointMatcher):
 
         :param img: The image captured from drone camera
         :param map_: The map raster of the same area (from e.g. WMS endpoint)
-        :return: Tuple of two lists containing matching keypoints in img and map respectively
+        :return: Tuple of two arrays containing matching keypoints in img and map respectively
         """
         try:
             assert_type(orb, ORB)
@@ -98,7 +99,7 @@ class ORB(KeypointMatcher):
         kp_map, desc_map = self._orb.detectAndCompute(map_grayscale, None)
 
         matches = self._bf.match(desc_img, desc_map)
-        matches = sorted(matches, key=lambda x: x.distance)
+        #matches = sorted(matches, key=lambda x: x.distance)
 
         valid = []
         for m, n in matches:

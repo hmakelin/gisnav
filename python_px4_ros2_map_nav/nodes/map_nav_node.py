@@ -375,8 +375,8 @@ class MapNavNode(Node, ABC):
         return self.__odom_matching_pool
 
     @_odom_matching_pool.setter
-    def _odom_matching_pool(self, value: Pool) -> None:
-        assert_type(Pool, value)
+    def _odom_matching_pool(self, value: Optional[Pool]) -> None:
+        assert_type(value, get_args(Optional[Pool]))
         self.__odom_matching_pool = value
 
     @property

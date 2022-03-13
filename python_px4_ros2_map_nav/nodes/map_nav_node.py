@@ -2004,7 +2004,7 @@ class MapNavNode(Node, ABC):
         """
         assert self._odom_matching_results is None or self._odom_matching_results.ready()
         self._odom_matching_results = self._odom_matching_pool.starmap_async(
-            self._odom_matcher.worker,  # TODO: ORB?
+            self._odom_matcher.worker,
             [(image_data.image, previous_image_data.image)],
             callback=self.odom_matching_worker_callback,
             error_callback=self.odom_matching_worker_error_callback

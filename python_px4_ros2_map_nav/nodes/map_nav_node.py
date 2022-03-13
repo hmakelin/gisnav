@@ -40,7 +40,8 @@ from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
-from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher, ORB
+from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
+from python_px4_ros2_map_nav.keypoint_matchers.orb import ORB
 from python_px4_ros2_map_nav.wms import WMSClient
 
 

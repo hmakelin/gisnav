@@ -1177,7 +1177,7 @@ class MapNavNode(Node, ABC):
         inputs = None
 
         # Do visual odometry if enabled
-        if _odom_should_match(image_data.image):
+        if self._odom_should_match(image_data.image):
             assert self._odom_matching_results is None or self._odom_matching_results.ready()
             assert self._previous_image_data is not None
             inputs = self._match_inputs(image_data, True)

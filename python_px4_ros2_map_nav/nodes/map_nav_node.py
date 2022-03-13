@@ -161,6 +161,7 @@ class MapNavNode(Node, ABC):
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
         self._previous_map_data = None
+        self._previous_image_data = None
         self._previous_good_image_data = None
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance

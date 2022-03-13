@@ -129,7 +129,7 @@ class MapNavNode(Node, ABC):
                                                          initializer=self._kp_matcher.initializer, initargs=args)
 
         # Setup visual odometry
-        odom_enabled = self.get_parameter('matcher.class').get_parameter_value().bool_value
+        odom_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
         self._odom_matching_results = None
         self._odom_stored_inputs = None
         if odom_enabled:
@@ -1180,6 +1180,7 @@ class MapNavNode(Node, ABC):
         # Do visual odometry if enabled
         if self._odom_should_match(image_data.image):
             assert self._odom_matching_results is None or self._odom_matching_results.ready()
+            assert self._odom_matching_pool is not None
             assert self._previous_image_data is not None
             inputs = self._match_inputs(image_data, True)
             if not self._inputs_valid(inputs):

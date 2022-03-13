@@ -1827,6 +1827,10 @@ class MapNavNode(Node, ABC):
 
         assert_shape(k, (3, 3))
 
+        # TODO: if visual_odometry = True.
+        #  replace map_data with self._previous_map_data or whatever was used for latest map match (store in stored inputs?)
+        #  replace use of map image in visualization with previous image frame (need to also store in stored inputs?)
+
         # Transforms from rotated and cropped map pixel coordinates to WGS84
         pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
             map_dim_with_padding, map_data.bbox, -camera_yaw, img_dim)
@@ -1842,7 +1846,6 @@ class MapNavNode(Node, ABC):
         self._store_extrinsic_guess(r, t, odom=visual_odometry)
         r, _ = cv2.Rodrigues(r)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
-        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
         h = inv_homography_from_k_and_e(k, e)
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
@@ -1873,6 +1876,8 @@ class MapNavNode(Node, ABC):
             self._r_acc = None
             self._t_acc = None
             self._h_acc = None
+
+        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h

@@ -97,7 +97,7 @@ class ORB(KeypointMatcher):
         kp_img, desc_img = self._orb.detectAndCompute(img_grayscale, None)
         kp_map, desc_map = self._orb.detectAndCompute(map_grayscale, None)
 
-        matches = bf.match(desc_img, desc_map)
+        matches = self._bf.match(desc_img, desc_map)
         matches = sorted(matches, key=lambda x: x.distance)
 
         valid = []

@@ -1701,7 +1701,7 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        self.get_logger().error(f'Visual odometry matching process returned and error:\n{e}\n{traceback.print_exc()}')
+        self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
 
     def odom_matching_worker_callback(self, results) -> None:
         """Callback for visual odometry matching worker.

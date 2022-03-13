@@ -1807,7 +1807,7 @@ class MapNavNode(Node, ABC):
         onto this method as keyword arguments (**kwargs).
 
         :param mkp_img: Matching keypoints in drone image
-        :param mkp_map: Matching keypoints in map raster
+        :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
         :param image_data: The drone image
         :param map_data: The map raster
         :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)

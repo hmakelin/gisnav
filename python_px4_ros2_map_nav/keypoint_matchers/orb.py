@@ -94,8 +94,8 @@ class ORB(KeypointMatcher):
         img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         map_grayscale = cv2.cvtColor(map_, cv2.COLOR_BGR2GRAY)
 
-        kp_img, desc_img = orb.detectAndCompute(img_grayscale, None)
-        kp_map, desc_map = orb.detectAndCompute(map_grayscale, None)
+        kp_img, desc_img = self._orb.detectAndCompute(img_grayscale, None)
+        kp_map, desc_map = self._orb.detectAndCompute(map_grayscale, None)
 
         matches = bf.match(desc_img, desc_map)
         matches = sorted(matches, key=lambda x: x.distance)

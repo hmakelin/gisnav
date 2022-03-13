@@ -100,11 +100,10 @@ class ORB(KeypointMatcher):
 
         matches = self._bf.match(desc_img, desc_map)
         #matches = sorted(matches, key=lambda x: x.distance)
-
-        valid = []
-        for m, n in matches:
-            if m.distance < conf_threshold * n.distance:
-                valid.append(m)
+        #valid = []
+        #for m, n in matches:
+        #    if m.distance < conf_threshold * n.distance:
+        #        valid.append(m)
 
         mkp_img = np.float32([kp_img[m.queryIdx].pt for m in valid]).reshape(-1, 1, 2)
         mkp_map = np.float32([kp_map[m.trainIdx].pt for m in valid]).reshape(-1, 1, 2)

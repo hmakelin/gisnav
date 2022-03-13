@@ -171,6 +171,7 @@ class MapNavNode(Node, ABC):
         self._t = None
         self._r_odom = None
         self._t_odom = None
+        self._pix_to_wgs84 = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
@@ -301,6 +302,16 @@ class MapNavNode(Node, ABC):
     def _h_map(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__h_map = value
+
+    @property
+    def _pix_to_wgs84(self) -> Optional[np.ndarray]:
+        """Transformation from image pixels to WGS84 coordinates for latest map match"""
+        return self.__pix_to_wgs84
+
+    @_pix_to_wgs84.setter
+    def _pix_to_wgs84(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__pix_to_wgs84 = value
 
     @property
     def _kp_matcher(self) -> KeypointMatcher:
@@ -1795,8 +1806,6 @@ class MapNavNode(Node, ABC):
         """
         return self._r_map is not None and self._t_map is not None and self._h_map is not None
 
-    # TODO: pass map + accumulated h, r and t as optional args
-    #  if these are passed, ... ?
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
                          img_dim: Dim, visual_odometry: bool, map_cropped: Optional[np.ndarray] = None) -> None:
@@ -1829,11 +1838,16 @@ class MapNavNode(Node, ABC):
 
         # TODO: if visual_odometry = True.
         #  replace map_data with self._previous_map_data or whatever was used for latest map match (store in stored inputs?)
+        #    NOTE: previous_map_data is not the map used for matching, it is just the previous fetched map!
         #  replace use of map image in visualization with previous image frame (need to also store in stored inputs?)
+        #  OR: need to store all of these intermediate inputs from previous map round and use them here when visual_odometry = True?
 
-        # Transforms from rotated and cropped map pixel coordinates to WGS84
-        pix_to_wgs84_, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-            map_dim_with_padding, map_data.bbox, -camera_yaw, img_dim)
+        if not visual_odometry:
+            # Transforms from rotated and cropped map pixel coordinates to WGS84
+            self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
+                map_dim_with_padding, map_data.bbox, -camera_yaw, img_dim)
+        assert self._pix_to_wgs84 is not None
+        pix_to_wgs84_ = self._pix_to_wgs84  # TODO: redundant assignment here? or provide as arugment from stored inputs?
 
         # Estimate extrinsic and homography matrices
         padding = np.array([[0]]*len(mkp_img))

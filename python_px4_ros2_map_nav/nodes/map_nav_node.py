@@ -1140,8 +1140,10 @@ class MapNavNode(Node, ABC):
         """
         for k, v in inputs.items():
             if v is None:
-                self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
-                return False
+                # Check validity of non-optional keys
+                if k not in ['map_cropped', 'previous_image']:  # TODO: ugly hard-coding, needs refactoring
+                    self.get_logger().warn(f'Key {k} value {v} in match input arguments, cannot process matches.')
+                    return False
 
         camera_yaw = inputs.get('camera_yaw', None)
         map_data = inputs.get('map_data', None)
@@ -1526,9 +1528,9 @@ class MapNavNode(Node, ABC):
         if visual_odometry:
             assert self._previous_image_data is not None
             assert hasattr(self._previous_image_data, 'image')
-            data['previous_image_data'] = self._previous_image_data.image
+            data['previous_image'] = self._previous_image_data.image
         else:
-            data['previous_image_data'] = None
+            data['previous_image'] = None
 
         return data
 

@@ -17,6 +17,9 @@ class ORB(KeypointMatcher):
     DEFAULT_CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad matches"""
 
+    MAX_KEYPOINTS = 40
+    """Maximum number of keypoints and descriptors to return for matching"""
+
     def __init__(self, params: dict) -> None:
         """Initializes instance attributes
 
@@ -99,11 +102,8 @@ class ORB(KeypointMatcher):
         kp_map, desc_map = self._orb.detectAndCompute(map_grayscale, None)
 
         matches = self._bf.match(desc_img, desc_map)
-        #matches = sorted(matches, key=lambda x: x.distance)
-        #valid = []
-        #for m, n in matches:
-        #    if m.distance < conf_threshold * n.distance:
-        #        valid.append(m)
+        matches = sorted(matches, key=lambda x: x.distance)
+        matches = matches[:min(len(matches), self.MAX_KEYPOINTS)]
 
         mkp_img = np.float32([kp_img[m.queryIdx].pt for m in matches]).reshape(-1, 2)
         mkp_map = np.float32([kp_map[m.trainIdx].pt for m in matches]).reshape(-1, 2)

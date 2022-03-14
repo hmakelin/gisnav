@@ -1848,8 +1848,6 @@ class MapNavNode(Node, ABC):
         # TODO: if visual_odometry = True.
         #  replace map_data with self._previous_map_data or whatever was used for latest map match (store in stored inputs?)
         #    NOTE: previous_map_data is not the map used for matching, it is just the previous fetched map!
-        #  replace use of map image in visualization with previous image frame (need to also store in stored inputs?)
-        #  OR: need to store all of these intermediate inputs from previous map round and use them here when visual_odometry = True?
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84

@@ -1886,8 +1886,8 @@ class MapNavNode(Node, ABC):
                 t = t + self._t_map
                 h = h @ self._h_map
             else:
-                self.get_logger().warn('Visual odometry has updated the accumulated position estimate but no absolute '
-                                       'map match yet, skipping publishing.')
+                self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
+                                        'map match yet, skipping publishing.')
                 return None
         else:
             # Store latest map matches for later use (needed if visual odometry is enabled)

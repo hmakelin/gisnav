@@ -105,7 +105,7 @@ class ORB(KeypointMatcher):
         #    if m.distance < conf_threshold * n.distance:
         #        valid.append(m)
 
-        mkp_img = np.float32([kp_img[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-        mkp_map = np.float32([kp_map[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        mkp_img = np.float32([kp_img[m.queryIdx].pt for m in matches]).reshape(-1, 2)
+        mkp_map = np.float32([kp_map[m.trainIdx].pt for m in matches]).reshape(-1, 2)
 
         return mkp_img, mkp_map

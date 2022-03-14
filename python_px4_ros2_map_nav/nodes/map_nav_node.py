@@ -1494,6 +1494,7 @@ class MapNavNode(Node, ABC):
             map_dim_with_padding - Dim map dimensions including padding for rotation
             img_dim - Dim image dimensions
             map_cropped - np.ndarray Rotated and cropped map raster from map_data.image
+            previous_image - np.ndarray Previous image in case needed for visual odometry visualization
 
         :param image_data: The image data containing an image frame from the drone video
         :param visual_odometry: True if the inputs are for a visual odometry match (as opposed to a map match)
@@ -1522,6 +1523,12 @@ class MapNavNode(Node, ABC):
 
         # Set visual odometry flag
         data['visual_odometry'] = True if visual_odometry else False
+        if visual_odometry:
+            assert self._previous_image_data is not None
+            assert hasattr(self._previous_image_data, 'image')
+            data['previous_image_data'] = self._previous_image_data.image
+        else:
+            data['previous_image_data'] = None
 
         return data
 
@@ -1808,7 +1815,8 @@ class MapNavNode(Node, ABC):
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
-                         img_dim: Dim, visual_odometry: bool, map_cropped: Optional[np.ndarray] = None) -> None:
+                         img_dim: Dim, visual_odometry: bool, map_cropped: Optional[np.ndarray] = None,
+                         previous_image: Optional[np.ndarray] = None) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 
@@ -1826,6 +1834,7 @@ class MapNavNode(Node, ABC):
         :param img_dim: Drone image dimensions from time of match (from _match_inputs)
         :param visual_odometry: True if this match is a visual odometry match and not a map match
         :param map_cropped: Optional map cropped image
+        :param previous_image: Optional previous image for visual odometry visualiaztion
         :return:
         """
         min_matches = self.get_parameter('misc.min_matches').get_parameter_value().integer_value
@@ -1959,7 +1968,11 @@ class MapNavNode(Node, ABC):
                 viz_text = 'Keypoint matches and FOV'
                 if visual_odometry:
                     viz_text = f'{viz_text} (visual odometry)'
-                self._visualize_homography(viz_text, gimbal_rpy_text, image_data.image, map_cropped,
+                    assert previous_image is not None
+                    reference_img = previous_image
+                else:
+                    reference_img = map_cropped
+                self._visualize_homography(viz_text, gimbal_rpy_text, image_data.image, reference_img,
                                            mkp_img, mkp_map, fov_pix)
 
             if self._previous_good_image_data is not None:

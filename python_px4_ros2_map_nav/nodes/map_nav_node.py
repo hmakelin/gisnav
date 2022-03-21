@@ -2021,7 +2021,6 @@ class MapNavNode(Node, ABC):
                                                                           fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
                     self._visualize_homography()  # TODO: move this call somewhere else?
 
-
             if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
                 if self._variance_window_full():
@@ -2034,7 +2033,6 @@ class MapNavNode(Node, ABC):
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
 
-        #self._visualize_homography()  # TODO: this the right place? Should be moved away from process_matches and make process_matches static method
         self._previous_image_data = image_data
 
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:

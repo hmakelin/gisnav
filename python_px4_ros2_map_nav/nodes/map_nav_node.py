@@ -158,6 +158,12 @@ class MapNavNode(Node, ABC):
         # Stored blur values for blur detection
         self._blurs = None
 
+        if __debug__:
+            # Stored visualizations (debug mode only)
+            # TODO: declare properties?
+            self._map_viz = None
+            self._odom_viz = None
+
         # Must check for None when using these
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
@@ -2000,26 +2006,27 @@ class MapNavNode(Node, ABC):
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
                 viz_text = 'Keypoint matches and FOV'
                 if visual_odometry:
-                    viz_text = f'{viz_text} (visual odometry)'
                     assert previous_image is not None
                     reference_img = previous_image
                     fov_pix_viz = fov_pix_odom
+                    self._odom_viz = self._create_homography_visualization(gimbal_rpy_text, image_data.image,
+                                                                           reference_img, mkp_img, mkp_map,
+                                                                           fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
+                    self._visualize_homography()  # TODO: move this call somewhere else?
                 else:
                     reference_img = map_cropped
                     fov_pix_viz = fov_pix
+                    self._map_viz = self._create_homography_visualization(gimbal_rpy_text, image_data.image,
+                                                                          reference_img, mkp_img, mkp_map,
+                                                                          fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
+                    self._visualize_homography()  # TODO: move this call somewhere else?
 
-                if visual_odometry:  # TODO: remove condition
-                    self.get_logger().info(f'Visualizing, viz odom: {visual_odometry}, {image_data.timestamp}')
-                    self._visualize_homography(viz_text, gimbal_rpy_text, image_data.image, reference_img,
-                                               mkp_img, mkp_map, fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
 
             if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
                     image_data.sd = sd
-                    if visual_odometry:
-                        self.get_logger().error(f'PUBLISH VIZ ODOM {position}')  # TODO: remove
                     self.publish_position(image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -2027,7 +2034,21 @@ class MapNavNode(Node, ABC):
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
 
+        #self._visualize_homography()  # TODO: this the right place? Should be moved away from process_matches and make process_matches static method
         self._previous_image_data = image_data
+
+    def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
+        """Visualizes stored homography"""
+        assert __debug__
+        # noinspection PyUnreachableCode
+        if self._map_viz is None:
+            self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
+        else:
+            img = self._map_viz
+            if self._odom_viz is not None:
+                img = np.vstack((img, self._odom_viz))
+            cv2.imshow(figure_name, img)
+            cv2.waitKey(1)
 
     def _good_match(self, image_data: ImageData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
@@ -2121,11 +2142,10 @@ class MapNavNode(Node, ABC):
             self._estimation_history = np.vstack((self._estimation_history, position))
 
     @staticmethod
-    def _visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
-                              kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> None:
+    def _create_homography_visualization(display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
+                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> None:
         """Visualizes a homography including keypoint matches and field of view.
 
-        :param figure_name: Display name of visualization
         :param display_text: Display text on top left of image
         :param img_arr: Image array
         :param map_arr: Map array
@@ -2152,10 +2172,7 @@ class MapNavNode(Node, ABC):
             y = (i + 1) * 30
             cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
 
-        cv2.imshow(figure_name, out)
-        cv2.waitKey(1)
-
-        return None
+        return out
 
     @abstractmethod
     def publish_position(self, image_data: ImageData) -> None:

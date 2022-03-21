@@ -141,15 +141,16 @@ class MapNavNode(Node, ABC):
             self._odom_matcher = None
             self._odom_matching_pool = None
 
-        # Accumulated r & t vectors and homography transformation from visual odometry
-        self._r_acc = None
-        self._t_acc = None
-        self._h_acc = None
-
-        # Latest r, t, and h from map matching (need to remember for when visual odometry is enabled)
+        # Latest r, t, h and position from map matching (need to remember for when visual odometry is enabled)
         self._r_map = None
         self._t_map = None
         self._h_map = None
+        self._pos_map = None
+
+        self._r_acc = None  # TODO: not needed? Only h and pos acc used?
+        self._t_acc = None  # TODO: not needed? Only h and pos acc used?
+        self._h_acc = None
+        self._pos_acc = None
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -224,16 +225,6 @@ class MapNavNode(Node, ABC):
         self.__r_odom = value
 
     @property
-    def _r_acc(self) -> Optional[np.ndarray]:
-        """Accumulated rotation vector over multiple rounds of visual odometry"""
-        return self.__r_acc
-
-    @_r_acc.setter
-    def _r_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__r_acc = value
-
-    @property
     def _r_map(self) -> Optional[np.ndarray]:
         """Latest rotation matrix from map matching"""
         return self.__r_map
@@ -242,6 +233,16 @@ class MapNavNode(Node, ABC):
     def _r_map(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__r_map = value
+
+    @property
+    def _r_acc(self) -> Optional[np.ndarray]:
+        """Accumulated r differential from visual odometry"""
+        return self.__r_acc
+
+    @_r_acc.setter
+    def _r_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__r_acc = value
 
     @property
     def _t(self) -> Optional[np.ndarray]:
@@ -264,16 +265,6 @@ class MapNavNode(Node, ABC):
         self.__t_odom = value
 
     @property
-    def _t_acc(self) -> Optional[np.ndarray]:
-        """Accumulated translation vector over multiple rounds of visual odometry"""
-        return self.__t_acc
-
-    @_t_acc.setter
-    def _t_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__t_acc = value
-
-    @property
     def _t_map(self) -> Optional[np.ndarray]:
         """Latest t vector from map matching"""
         return self.__t_map
@@ -284,14 +275,34 @@ class MapNavNode(Node, ABC):
         self.__t_map = value
 
     @property
-    def _h_acc(self) -> Optional[np.ndarray]:
-        """Accumulated homography transformation over multiple rounds of visual odometry"""
-        return self.__h_acc
+    def _t_acc(self) -> Optional[np.ndarray]:
+        """Accumulated t differential from visual odometry"""
+        return self.__t_acc
 
-    @_h_acc.setter
-    def _h_acc(self, value: Optional[np.ndarray]) -> None:
+    @_t_acc.setter
+    def _t_acc(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
-        self.__h_acc = value
+        self.__t_acc = value
+
+    @property
+    def _pos_map(self) -> Optional[np.ndarray]:
+        """Latest position from map match to be used with visual odometry"""
+        return self.__pos_map
+
+    @_pos_map.setter
+    def _pos_map(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__pos_map = value
+
+    @property
+    def _pos_acc(self) -> Optional[np.ndarray]:
+        """Accumulated differential position over multiple rounds of visual odometry"""
+        return self.__pos_acc
+
+    @_pos_acc.setter
+    def _pos_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__pos_acc = value
 
     @property
     def _h_map(self) -> Optional[np.ndarray]:
@@ -302,6 +313,16 @@ class MapNavNode(Node, ABC):
     def _h_map(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__h_map = value
+
+    @property
+    def _h_acc(self) -> Optional[np.ndarray]:
+        """Accumulated h transformation from visual odometry"""
+        return self.__h_acc
+
+    @_h_acc.setter
+    def _h_acc(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__h_acc = value
 
     @property
     def _pix_to_wgs84(self) -> Optional[np.ndarray]:
@@ -1185,20 +1206,21 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
+        # TODO: some of these fields do not make sense if visual odometry flag is on, need to refactor (e.g. fov_pix)
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
                                fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
-        inputs = None
+        inputs = None  # TODO: the odom flag should be disabled when called for map!
 
         # Do visual odometry if enabled
         if self._odom_should_match(image_data.image):
             assert self._odom_matching_results is None or self._odom_matching_results.ready()
             assert self._odom_matching_pool is not None
             assert self._previous_image_data is not None
-            inputs = self._match_inputs(image_data, True)
+            inputs = self._match_inputs(image_data)
             if not self._inputs_valid(inputs):
+                self.get_logger().warn(f'Inputs not valid for visual odometry matching, skipping.')
                 return
-
             self._odom_stored_inputs = inputs
             self._odom_match(image_data, self._previous_image_data)
 
@@ -1208,6 +1230,7 @@ class MapNavNode(Node, ABC):
             if inputs is None:
                 inputs = self._match_inputs(image_data)  # Get inputs if did not yet get them earlier for viz odom
             if not self._inputs_valid(inputs):  # TODO: possibly redundant check with viz odom check?
+                self.get_logger().warn(f'Inputs not valid for map odometry matching, skipping.')
                 return
 
             self._stored_inputs = inputs
@@ -1482,7 +1505,8 @@ class MapNavNode(Node, ABC):
                 self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
         return gimbal_attitude
 
-    def _match_inputs(self, image_data: ImageData, visual_odometry: bool = False) -> dict:
+    # TODO: refactor out visual_odometry flag from args and from return dict
+    def _match_inputs(self, image_data: ImageData) -> dict:
         """Returns a dictionary snapshot of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
@@ -1499,7 +1523,6 @@ class MapNavNode(Node, ABC):
             previous_image - np.ndarray Previous image in case needed for visual odometry visualization
 
         :param image_data: The image data containing an image frame from the drone video
-        :param visual_odometry: True if the inputs are for a visual odometry match (as opposed to a map match)
         :return: Dictionary with matching input data (give as **kwargs to _process_matches)
         """
         camera_yaw_deg = self._camera_yaw()
@@ -1523,14 +1546,9 @@ class MapNavNode(Node, ABC):
         else:
             data['map_cropped'] = None
 
-        # Set visual odometry flag
-        data['visual_odometry'] = True if visual_odometry else False
-        if visual_odometry:
-            assert self._previous_image_data is not None
+        if self._previous_image_data is not None:
             assert hasattr(self._previous_image_data, 'image')
-            data['previous_image'] = self._previous_image_data.image
-        else:
-            data['previous_image'] = None
+            data['previous_image'] = self._previous_image_data.image  # TODO: only for viz odom matches, not needed for map matches? put it here anyway?
 
         return data
 
@@ -1588,6 +1606,7 @@ class MapNavNode(Node, ABC):
 
         return False
 
+    # TODO: this is a check, should not push blur here? Easy to call this multiple times for the same frame
     def _image_too_blurry(self, img: np.ndarray) -> bool:
         """Returns True if image is deemed too blurry for matching
 
@@ -1635,8 +1654,9 @@ class MapNavNode(Node, ABC):
             return False
 
         # Check if is image too blurry
-        if self._image_too_blurry(img):
-            return False
+        #if self._image_too_blurry(img):
+        #    self.get_logger().warn('ODOM TOO BLURRY.')
+        #    return False
 
         return True
 
@@ -1714,7 +1734,7 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        self._process_matches(mkp_img, mkp_map, **self._stored_inputs)
+        self._process_matches(mkp_img, mkp_map, visual_odometry=False, **self._stored_inputs)
 
     def odom_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for visual odometry matching worker.
@@ -1735,7 +1755,7 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        self._process_matches(mkp_img, mkp_map, **self._odom_stored_inputs)
+        self._process_matches(mkp_img, mkp_map, visual_odometry=True, **self._odom_stored_inputs)
 
     def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
         """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
@@ -1847,10 +1867,6 @@ class MapNavNode(Node, ABC):
 
         assert_shape(k, (3, 3))
 
-        # TODO: if visual_odometry = True.
-        #  replace map_data with self._previous_map_data or whatever was used for latest map match (store in stored inputs?)
-        #    NOTE: previous_map_data is not the map used for matching, it is just the previous fetched map!
-
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -1874,37 +1890,53 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
+        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
+
         if visual_odometry:
+            f = k[0][0]
+            assert f == k[1][1]  # fx == fy
+            camera_center = np.array((img_dim.width / 2, img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
+            pos_diff = pos - camera_center
             # Integrate with previous r, t and h
             self._r_acc = r if self._r_acc is None else r @ self._r_acc
             self._t_acc = t if self._t_acc is None else t + self._t_acc
             self._h_acc = h if self._h_acc is None else h @ self._h_acc
+            self._pos_acc = pos_diff if self._pos_acc is None else self._pos_acc + pos_diff
 
             if self._have_map_match():
+                # Needed for visualize_homography below, store here already
+                fov_pix_odom, c_pix_odom = get_fov_and_c(img_dim, h)
                 # Combine with latest map match
-                r = r @ self._r_map
-                t = t + self._t_map
-                h = h @ self._h_map
+                r = self._r_map @ r  # self._r_acc
+                t = self._t_map + t  # self._t_acc
+                h = self._h_map @ h  # self._h_acc
+                pos = self._pos_map + self._pos_acc
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
                 return None
+
         else:
             # Store latest map matches for later use (needed if visual odometry is enabled)
             self._r_map = r
             self._t_map = t
             self._h_map = h
+            self._pos_map = pos
 
-            # Reset accumulated r, t, and h
+            # Reset accumulated position differential
             self._r_acc = None
             self._t_acc = None
             self._h_acc = None
+            self._pos_acc = None
 
-        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
+            # Not needed if visual odometry flag is not on
+            fov_pix_odom, c_pix_odom = None, None
+
+        #pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
-        h_wgs84 = pix_to_wgs84_ @ h
-        fov_pix, c_pix = get_fov_and_c(img_dim, h)
+        h_wgs84 = pix_to_wgs84_ @ h  # TODO: what about pix_to_wgs84_ assignment above? replace 'h' with 'h_viz_odom' or this thing is just the same as pix_to_wgs84_ now?
+        fov_pix, c_pix = get_fov_and_c(img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
         image_data.fov = fov_wgs84
         image_data.c = c_wgs84
@@ -1921,13 +1953,14 @@ class MapNavNode(Node, ABC):
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)
+        t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
         t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
 
         # Check that we have all the values needed for a global position
-        if not all(position) or any(map(np.isnan, position)):
+        #if not all(position) or any(map(np.isnan, position)):
+        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
             self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
             return None
 
@@ -1970,16 +2003,23 @@ class MapNavNode(Node, ABC):
                     viz_text = f'{viz_text} (visual odometry)'
                     assert previous_image is not None
                     reference_img = previous_image
+                    fov_pix_viz = fov_pix_odom
                 else:
                     reference_img = map_cropped
-                self._visualize_homography(viz_text, gimbal_rpy_text, image_data.image, reference_img,
-                                           mkp_img, mkp_map, fov_pix)
+                    fov_pix_viz = fov_pix
+
+                if visual_odometry:  # TODO: remove condition
+                    self.get_logger().info(f'Visualizing, viz odom: {visual_odometry}, {image_data.timestamp}')
+                    self._visualize_homography(viz_text, gimbal_rpy_text, image_data.image, reference_img,
+                                               mkp_img, mkp_map, fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
 
             if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
                     image_data.sd = sd
+                    if visual_odometry:
+                        self.get_logger().error(f'PUBLISH VIZ ODOM {position}')  # TODO: remove
                     self.publish_position(image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -2082,7 +2122,7 @@ class MapNavNode(Node, ABC):
 
     @staticmethod
     def _visualize_homography(figure_name: str, display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
-                              kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> np.ndarray:
+                              kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> None:
         """Visualizes a homography including keypoint matches and field of view.
 
         :param figure_name: Display name of visualization
@@ -2115,7 +2155,7 @@ class MapNavNode(Node, ABC):
         cv2.imshow(figure_name, out)
         cv2.waitKey(1)
 
-        return out
+        return None
 
     @abstractmethod
     def publish_position(self, image_data: ImageData) -> None:

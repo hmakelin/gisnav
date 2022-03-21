@@ -10,7 +10,7 @@ map_nav_node:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
       export_position: 'position.json' # declared by MockGPSNode, not by base class
       export_projection: 'projection.json' # declared by MockGPSNode, not by base class
-      max_pitch: 30  # Used by _should_match
+      max_pitch: 10  # 30  # Used by _should_match
       variance_estimation_length: 20
       min_match_altitude: 80
       blur_threshold: 1.5  # standard deviations

@@ -37,7 +37,7 @@ class Defaults:
     MISC_EXPORT_PROJECTION = 'projection.json'
     """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center"""
 
-    MISC_MAX_PITCH = 30
+    MISC_MAX_PITCH = 10  # 30
     """Maximum camera pitch in degrees from nadir for attempting a match against map
     
     See also :py:attr:`~MAP_UPDATE_MAP_PITCH`.

@@ -61,6 +61,11 @@ class Defaults:
     MISC_VISUAL_ODOMETRY = True
     """Flag that enables use of self referential visual odometry in addition to map matching."""
 
+    MISC_VISUAL_ODOMETRY_UPDATE_THRESHOLD = 0.5
+    """Ratio of estimated Field of View and reference image bounding box intersecting area under which a new visual 
+    odometry reference frame is retrieved
+    """
+
     MAP_UPDATE_INITIAL_GUESS = None
     """Initial guess of vehicle's rough global position
     

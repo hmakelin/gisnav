@@ -17,7 +17,7 @@ class ORB(KeypointMatcher):
     DEFAULT_CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad matches"""
 
-    MAX_KEYPOINTS = 80
+    MAX_KEYPOINTS = 40  # Should be 2x (?) larger than minimum required matches
     """Maximum number of keypoints and descriptors to return for matching"""
 
     def __init__(self, params: dict) -> None:

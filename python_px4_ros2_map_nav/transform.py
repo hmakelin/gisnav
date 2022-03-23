@@ -1,6 +1,7 @@
 """Helper functions for transforming between image pixel, WGS84 and other coordinates"""
 import math
 from typing import Tuple, Optional
+from shapely.geometry import box, Polygon
 
 import cv2
 import numpy as np
@@ -52,6 +53,18 @@ def get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np
     assert_shape(principal_point_dst, principal_point_src.shape)
 
     return dst_fov, principal_point_dst
+
+
+def relative_area_of_intersection(fov1: np.ndarray, fov2: np.ndarray) -> float:
+    """Returns relative area of intersection of two polygons (fields of view)"""
+    polygon_shape_1 = Polygon(fov1.squeeze())
+    polygon_shape_2 = Polygon(fov2.squeeze())
+    intersection_area_1 = polygon_shape_1.intersection(polygon_shape_2).area
+    intersection_area_2 = polygon_shape_2.intersection(polygon_shape_1).area
+    intersection_area = min(intersection_area_1, intersection_area_2)  # If other fov is fully contained by the other
+    ratio = intersection_area/polygon_shape_2.area
+    print(f'intersection area ratio {ratio} {polygon_shape_1} {polygon_shape_2}')
+    return ratio
 
 
 def create_src_corners(h: int, w: int) -> np.ndarray:

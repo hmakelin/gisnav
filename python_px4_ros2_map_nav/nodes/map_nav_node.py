@@ -35,9 +35,11 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
 
+
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid
+    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
+    relative_area_of_intersection
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
@@ -147,6 +149,7 @@ class MapNavNode(Node, ABC):
         self._h_map = None
         self._pos_map = None
 
+        # Accumulated rotation, translation, homography and position for visual odometry
         self._r_acc = None  # TODO: not needed? Only h and pos acc used?
         self._t_acc = None  # TODO: not needed? Only h and pos acc used?
         self._h_acc = None
@@ -158,6 +161,7 @@ class MapNavNode(Node, ABC):
         # Stored blur values for blur detection
         self._blurs = None
 
+        # noinspection PyUnreachableCode
         if __debug__:
             # Stored visualizations (debug mode only)
             # TODO: declare properties?
@@ -170,6 +174,7 @@ class MapNavNode(Node, ABC):
         self._previous_map_data = None
         self._previous_image_data = None
         self._previous_good_image_data = None
+        self._previous_odom_data = None
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
@@ -528,13 +533,23 @@ class MapNavNode(Node, ABC):
 
     @property
     def _previous_image_data(self) -> Optional[ImageData]:
-        """The previous image data used for visual odometry."""
+        """The previous image data (not currently used)"""
         return self.__previous_image_data
 
     @_previous_image_data.setter
     def _previous_image_data(self, value: Optional[ImageData]) -> None:
         assert_type(value, get_args(Optional[ImageData]))
         self.__previous_image_data = value
+
+    @property
+    def _previous_odom_data(self) -> Optional[ImageData]:
+        """The previous image data used for visual odometry"""
+        return self.__previous_odom_data
+
+    @_previous_odom_data.setter
+    def _previous_odom_data(self, value: Optional[ImageData]) -> None:
+        assert_type(value, get_args(Optional[ImageData]))
+        self.__previous_odom_data = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:
@@ -777,7 +792,8 @@ class MapNavNode(Node, ABC):
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
             ('min_matches', Defaults.MISC_MIN_MATCHES),
-            ('visual_odometry', Defaults.MISC_VISUAL_ODOMETRY)
+            ('visual_odometry', Defaults.MISC_VISUAL_ODOMETRY),
+            ('visual_odometry_update_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_THRESHOLD)
         ])
 
         namespace = 'map_update'
@@ -1228,7 +1244,12 @@ class MapNavNode(Node, ABC):
                 self.get_logger().warn(f'Inputs not valid for visual odometry matching, skipping.')
                 return
             self._odom_stored_inputs = inputs
-            self._odom_match(image_data, self._previous_image_data)
+
+            # TODO: refactor this section
+            if self._previous_odom_data is not None:
+                self._odom_match(image_data, self._previous_odom_data)  # self._previous_image_data
+            else:
+                self._odom_match(image_data, self._previous_image_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
@@ -1834,6 +1855,21 @@ class MapNavNode(Node, ABC):
         velocities = diff_position / time_diff_sec
         return velocities
 
+    def _should_accumulate_odom(self, fov1: np.ndarray, fov2: BBox) -> bool:
+        """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
+        (accumulated)."""
+        threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
+        assert 0 <= threshold <= 1
+        try:
+            if relative_area_of_intersection(fov1, fov2) < threshold:
+                return True
+            else:
+                return False
+        except Exception as e:
+            self.get_logger().error(f'Error occurred with computing FOV intersection area: '
+                                    f'\n{e}\n{traceback.print_exc()}')
+            return False
+
     def _have_map_match(self) -> None:
         """Returns True if an existing map match is in store
 
@@ -1904,19 +1940,30 @@ class MapNavNode(Node, ABC):
             camera_center = np.array((img_dim.width / 2, img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pos - camera_center
             # Integrate with previous r, t and h
-            self._r_acc = r if self._r_acc is None else r @ self._r_acc
-            self._t_acc = t if self._t_acc is None else t + self._t_acc
-            self._h_acc = h if self._h_acc is None else h @ self._h_acc
-            self._pos_acc = pos_diff if self._pos_acc is None else self._pos_acc + pos_diff
+            # TODO: accumulate only if fixed frame (previous_odom_data) has been updated (maybe use a flag?) - otherwise use r, t, h, pos directly!
+            assert self._previous_image_data is not None  # TODO: not a valid assumption? fix
+            if self._previous_odom_data is None or \
+                    self._should_accumulate_odom(self._previous_image_data.fov, self._previous_odom_data.fov):  # TODO: fov_wgs84 not yet known?  # TODO: use previous fov from map_data (previous odom frame?)
+                self._r_acc = r if self._r_acc is None else r @ self._r_acc
+                self._t_acc = t if self._t_acc is None else t + self._t_acc
+                self._h_acc = h if self._h_acc is None else h @ self._h_acc
+                self._pos_acc = pos_diff if self._pos_acc is None else self._pos_acc + pos_diff
+
+                self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
+            else:
+                self._r_acc = np.identity(3)
+                self._t_acc = 0 * t  # zero vector
+                self._h_acc = np.identity(3)
+                self._pos_acc = 0 * pos  # zero vector
 
             if self._have_map_match():
                 # Needed for visualize_homography below, store here already
                 fov_pix_odom, c_pix_odom = get_fov_and_c(img_dim, h)
                 # Combine with latest map match
-                r = self._r_map @ r  # self._r_acc
-                t = self._t_map + t  # self._t_acc
-                h = self._h_map @ h  # self._h_acc
-                pos = self._pos_map + self._pos_acc
+                r = self._r_map @ self._r_acc @ r  # @ r
+                t = self._t_map + self._t_acc + t  # + t
+                h = self._h_map @ self._h_acc @ h  # @ h
+                pos = self._pos_map + self._pos_acc + pos
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
@@ -1937,6 +1984,8 @@ class MapNavNode(Node, ABC):
 
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
+
+            # TODO: need to reset fov acc?
 
         #pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
 
@@ -2004,22 +2053,24 @@ class MapNavNode(Node, ABC):
                 gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
                                   f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-                viz_text = 'Keypoint matches and FOV'
                 if visual_odometry:
                     assert previous_image is not None
-                    reference_img = previous_image
+                    assert self._previous_odom_data is not None
+                    assert hasattr(self._previous_odom_data, 'image')
+                    reference_img = self._previous_odom_data.image
                     fov_pix_viz = fov_pix_odom
-                    self._odom_viz = self._create_homography_visualization(gimbal_rpy_text, image_data.image,
-                                                                           reference_img, mkp_img, mkp_map,
+                    self._odom_viz = self._create_homography_visualization(image_data.image,
+                                                                           reference_img.copy(), mkp_img, mkp_map,
                                                                            fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
                     self._visualize_homography()  # TODO: move this call somewhere else?
                 else:
                     reference_img = map_cropped
                     fov_pix_viz = fov_pix
-                    self._map_viz = self._create_homography_visualization(gimbal_rpy_text, image_data.image,
-                                                                          reference_img, mkp_img, mkp_map,
-                                                                          fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
-                    self._visualize_homography()  # TODO: move this call somewhere else?
+                    self._map_viz = self._create_homography_visualization(image_data.image,
+                                                                          reference_img.copy(), mkp_img, mkp_map,
+                                                                          fov_pix_viz, display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
+                    #self._visualize_homography()
+                    # TODO: if visual odometry is not enabled, visualize map here
 
             if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(image_data.position))
@@ -2039,14 +2090,23 @@ class MapNavNode(Node, ABC):
         """Visualizes stored homography"""
         assert __debug__
         # noinspection PyUnreachableCode
-        if self._map_viz is None:
-            self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
+        odom_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        if odom_enabled:
+            if self._map_viz is None or self._odom_viz is None:
+                self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
+                return None
         else:
-            img = self._map_viz
-            if self._odom_viz is not None:
-                img = np.vstack((img, self._odom_viz))
-            cv2.imshow(figure_name, img)
-            cv2.waitKey(1)
+            if self._map_viz is None:
+                self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
+                return None
+
+        img = self._map_viz
+        if self._odom_viz is not None:
+            img = np.vstack((img, self._odom_viz))
+        else:
+            img = np.vstack((img, np.zeros(self._map_viz.shape)))
+        cv2.imshow(figure_name, img)
+        cv2.waitKey(1)
 
     def _good_match(self, image_data: ImageData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
@@ -2140,16 +2200,17 @@ class MapNavNode(Node, ABC):
             self._estimation_history = np.vstack((self._estimation_history, position))
 
     @staticmethod
-    def _create_homography_visualization(display_text: str, img_arr: np.ndarray, map_arr: np.ndarray,
-                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray) -> None:
+    def _create_homography_visualization(img_arr: np.ndarray, map_arr: np.ndarray,
+                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray,
+                                         display_text: Optional[str] = None) -> None:
         """Visualizes a homography including keypoint matches and field of view.
 
-        :param display_text: Display text on top left of image
         :param img_arr: Image array
         :param map_arr: Map array
         :param kp_img: Image keypoints
         :param kp_map: Map keypoints
         :param dst_corners: Field of view corner pixel coordinates on map
+        :param display_text: Optional display text on top left of image
         :return: Visualized image as numpy array
         """
         # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
@@ -2166,9 +2227,10 @@ class MapNavNode(Node, ABC):
         out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
 
         # Add text (need to manually handle newlines)
-        for i, text_line in enumerate(display_text.split('\n')):
-            y = (i + 1) * 30
-            cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
+        if display_text is not None:
+            for i, text_line in enumerate(display_text.split('\n')):
+                y = (i + 1) * 30
+                cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
 
         return out
 

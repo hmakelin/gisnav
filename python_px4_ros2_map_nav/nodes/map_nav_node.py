@@ -1860,8 +1860,11 @@ class MapNavNode(Node, ABC):
         (accumulated)."""
         threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
         assert 0 <= threshold <= 1
+        assert fov1 is not None
+        assert fov2 is not None
         try:
             if relative_area_of_intersection(fov1, fov2) < threshold:
+                self.get_logger().info(f'ODOM UPDATE REFERENCE')
                 return True
             else:
                 return False
@@ -1942,14 +1945,19 @@ class MapNavNode(Node, ABC):
             # Integrate with previous r, t and h
             # TODO: accumulate only if fixed frame (previous_odom_data) has been updated (maybe use a flag?) - otherwise use r, t, h, pos directly!
             assert self._previous_image_data is not None  # TODO: not a valid assumption? fix
-            if self._previous_odom_data is None or \
-                    self._should_accumulate_odom(self._previous_image_data.fov, self._previous_odom_data.fov):  # TODO: fov_wgs84 not yet known?  # TODO: use previous fov from map_data (previous odom frame?)
+            # TODO: should accumulate condition should only use image data with good fov (good match) ? filter out bad image_datas with bad fovs?
+            if (self._previous_odom_data is None or (self._previous_odom_data is not None and self._should_accumulate_odom(self._previous_image_data.fov, self._previous_odom_data.fov))) and \
+                self._previous_good_image_data.timestamp == self._previous_image_data.timestamp:  # TODO: fov_wgs84 not yet known?  # TODO: use previous fov from map_data (previous odom frame?)
+                assert self._previous_image_data.fov is not None
+                #assert self._previous_odom_data.fov is not None
                 self._r_acc = r if self._r_acc is None else r @ self._r_acc
                 self._t_acc = t if self._t_acc is None else t + self._t_acc
                 self._h_acc = h if self._h_acc is None else h @ self._h_acc
                 self._pos_acc = pos_diff if self._pos_acc is None else self._pos_acc + pos_diff
 
-                self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
+                # TODO: only if previous image_data is a good match? because fov may not be a convex isosceles traezoid, can be eg. 0,0 0,0 0,0 etc.
+                #print(f'setting previous odom data, {image_data.fov}')
+                self._previous_odom_data = self._previous_image_data  # TODO: set this here now that the update/accumulation is done?
             else:
                 self._r_acc = np.identity(3)
                 self._t_acc = 0 * t  # zero vector

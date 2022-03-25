@@ -1943,11 +1943,9 @@ class MapNavNode(Node, ABC):
             camera_center = np.array((img_dim.width / 2, img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pos - camera_center
             # Integrate with previous r, t and h
-            # TODO: accumulate only if fixed frame (previous_odom_data) has been updated (maybe use a flag?) - otherwise use r, t, h, pos directly!
             assert self._previous_image_data is not None  # TODO: not a valid assumption? fix
-            # TODO: should accumulate condition should only use image data with good fov (good match) ? filter out bad image_datas with bad fovs?
             if (self._previous_odom_data is None or (self._previous_odom_data is not None and self._should_accumulate_odom(self._previous_image_data.fov, self._previous_odom_data.fov))) and \
-                self._previous_good_image_data.timestamp == self._previous_image_data.timestamp:  # TODO: fov_wgs84 not yet known?  # TODO: use previous fov from map_data (previous odom frame?)
+                self._previous_good_image_data.timestamp == self._previous_image_data.timestamp:  # TODO: previous_image_data also needs to be from a visual odometry match? or is that a redundant condition? odom FOV, not the map FOV?
                 assert self._previous_image_data.fov is not None
                 #assert self._previous_odom_data.fov is not None
                 self._r_acc = r if self._r_acc is None else r @ self._r_acc
@@ -1971,7 +1969,7 @@ class MapNavNode(Node, ABC):
                 r = self._r_map @ self._r_acc @ r  # @ r
                 t = self._t_map + self._t_acc + t  # + t
                 h = self._h_map @ self._h_acc @ h  # @ h
-                pos = self._pos_map + self._pos_acc + pos
+                pos = self._pos_map + self._pos_acc + pos_diff
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
@@ -2001,7 +1999,7 @@ class MapNavNode(Node, ABC):
         h_wgs84 = pix_to_wgs84_ @ h  # TODO: what about pix_to_wgs84_ assignment above? replace 'h' with 'h_viz_odom' or this thing is just the same as pix_to_wgs84_ now?
         fov_pix, c_pix = get_fov_and_c(img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
-        image_data.fov = fov_wgs84
+        image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
         image_data.c = c_wgs84
         image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
 

@@ -1944,9 +1944,13 @@ class MapNavNode(Node, ABC):
             pos_diff = pos - camera_center
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None  # TODO: not a valid assumption? fix
-            if (self._previous_odom_data is None or (self._previous_odom_data is not None and self._should_accumulate_odom(self._previous_image_data.fov, self._previous_odom_data.fov))) and \
-                self._previous_good_image_data.timestamp == self._previous_image_data.timestamp:  # TODO: previous_image_data also needs to be from a visual odometry match? or is that a redundant condition? odom FOV, not the map FOV?
+            assert self._previous_good_image_data is not None
+            if self._previous_odom_data is None or \
+                    (self._previous_odom_data is not None and self._should_accumulate_odom(self._previous_good_image_data.fov, self._previous_odom_data.fov)):  # TODO: previous_image_data also needs to be from a visual odometry match? or is that a redundant condition? odom FOV, not the map FOV?
                 assert self._previous_image_data.fov is not None
+                #assert self._good_match(self._previous_image_data)
+                if self._previous_odom_data is not None:
+                    assert self._good_match(self._previous_odom_data)
                 #assert self._previous_odom_data.fov is not None
                 self._r_acc = r if self._r_acc is None else r @ self._r_acc
                 self._t_acc = t if self._t_acc is None else t + self._t_acc
@@ -1955,7 +1959,8 @@ class MapNavNode(Node, ABC):
 
                 # TODO: only if previous image_data is a good match? because fov may not be a convex isosceles traezoid, can be eg. 0,0 0,0 0,0 etc.
                 #print(f'setting previous odom data, {image_data.fov}')
-                self._previous_odom_data = self._previous_image_data  # TODO: set this here now that the update/accumulation is done?
+                # TODO: only set if good match!
+                self._previous_odom_data = self._previous_good_image_data  # self._previous_image_data  # TODO: set this here now that the update/accumulation is done?
             else:
                 self._r_acc = np.identity(3)
                 self._t_acc = 0 * t  # zero vector

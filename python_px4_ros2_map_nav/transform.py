@@ -62,7 +62,10 @@ def relative_area_of_intersection(fov1: np.ndarray, fov2: np.ndarray) -> float:
     intersection_area_1 = polygon_shape_1.intersection(polygon_shape_2).area
     intersection_area_2 = polygon_shape_2.intersection(polygon_shape_1).area
     intersection_area = min(intersection_area_1, intersection_area_2)  # If other fov is fully contained by the other
-    ratio = intersection_area/polygon_shape_2.area
+    try:
+        ratio = intersection_area/polygon_shape_2.area
+    except Exception as e:
+        print(f'{e} {fov1} {fov2}')
     #print(f'intersection area ratio {ratio} {polygon_shape_1} {polygon_shape_2}')
     return ratio
 

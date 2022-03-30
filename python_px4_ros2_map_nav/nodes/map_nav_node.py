@@ -1855,7 +1855,7 @@ class MapNavNode(Node, ABC):
         velocities = diff_position / time_diff_sec
         return velocities
 
-    def _should_accumulate_odom(self, fov1: np.ndarray, fov2: BBox) -> bool:
+    def _should_accumulate_odom_old(self, fov1: np.ndarray, fov2: BBox) -> bool:
         """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
         (accumulated)."""
         threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
@@ -1873,12 +1873,37 @@ class MapNavNode(Node, ABC):
                                     f'\n{e}\n{traceback.print_exc()}')
             return False
 
+    def _should_accumulate_odom(self, pos_diff: float, f: float) -> bool:
+        """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
+        (accumulated)."""
+        threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
+        if np.linalg.norm(pos_diff.squeeze()) > threshold * f:
+            return True
+        else:
+            return False
+
     def _have_map_match(self) -> None:
         """Returns True if an existing map match is in store
 
         :return: True if a map match has been made earlier
         """
         return self._r_map is not None and self._t_map is not None and self._h_map is not None
+
+    # TODO: include self._previous_odom_data = image_data here?
+    def _odom_reset(self):
+        """Resets accumulated r, t, h and pos
+
+        Used when a new map match is found or visual odometry has lost track (bad match with visual odometry).
+        """
+        # Reset accumulated position differential
+        #self._r_acc = None
+        #self._t_acc = None
+        #self._h_acc = None
+        #self._pos_acc = None
+        self._r_acc = np.identity(3)
+        self._t_acc = np.zeros((3, 1))
+        self._h_acc = np.identity(3)
+        self._pos_acc = np.zeros((3, 1))
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
@@ -1917,6 +1942,8 @@ class MapNavNode(Node, ABC):
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
                 map_dim_with_padding, map_data.bbox, -camera_yaw, img_dim)
         assert self._pix_to_wgs84 is not None
+
+        # TODO: do not assign if previous round's self._pix_to_wgs84 was bad? only assign here if the map stuff gets assigned?
         pix_to_wgs84_ = self._pix_to_wgs84  # TODO: redundant assignment here? or provide as arugment from stored inputs?
 
         # Estimate extrinsic and homography matrices
@@ -1943,34 +1970,16 @@ class MapNavNode(Node, ABC):
             camera_center = np.array((img_dim.width / 2, img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pos - camera_center
             # Integrate with previous r, t and h
-            assert self._previous_image_data is not None  # TODO: not a valid assumption? fix
+            assert self._previous_image_data is not None
             assert self._previous_good_image_data is not None
-            if self._previous_odom_data is None or \
-                    (self._previous_odom_data is not None and self._should_accumulate_odom(self._previous_good_image_data.fov, self._previous_odom_data.fov)):  # TODO: previous_image_data also needs to be from a visual odometry match? or is that a redundant condition? odom FOV, not the map FOV?
-                assert self._previous_image_data.fov is not None
-                #assert self._good_match(self._previous_image_data)
-                if self._previous_odom_data is not None:
-                    assert self._good_match(self._previous_odom_data)
-                #assert self._previous_odom_data.fov is not None
-                self._r_acc = r if self._r_acc is None else r @ self._r_acc
-                self._t_acc = t if self._t_acc is None else t + self._t_acc
-                self._h_acc = h if self._h_acc is None else h @ self._h_acc
-                self._pos_acc = pos_diff if self._pos_acc is None else self._pos_acc + pos_diff
-
-                # TODO: only if previous image_data is a good match? because fov may not be a convex isosceles traezoid, can be eg. 0,0 0,0 0,0 etc.
-                #print(f'setting previous odom data, {image_data.fov}')
-                # TODO: only set if good match!
-                self._previous_odom_data = self._previous_good_image_data  # self._previous_image_data  # TODO: set this here now that the update/accumulation is done?
-            else:
-                self._r_acc = np.identity(3)
-                self._t_acc = 0 * t  # zero vector
-                self._h_acc = np.identity(3)
-                self._pos_acc = 0 * pos  # zero vector
-
             if self._have_map_match():
                 # Needed for visualize_homography below, store here already
                 fov_pix_odom, c_pix_odom = get_fov_and_c(img_dim, h)
+
                 # Combine with latest map match
+                r_orig = r  # TODO: refactor this stuff!
+                t_orig = t
+                h_orig = h
                 r = self._r_map @ self._r_acc @ r  # @ r
                 t = self._t_map + self._t_acc + t  # + t
                 h = self._h_map @ self._h_acc @ h  # @ h
@@ -1982,16 +1991,14 @@ class MapNavNode(Node, ABC):
 
         else:
             # Store latest map matches for later use (needed if visual odometry is enabled)
-            self._r_map = r
-            self._t_map = t
-            self._h_map = h
-            self._pos_map = pos
+            # TODO: do this only if good match - see below under _good_match
+            #self._r_map = r
+            #self._t_map = t
+            #self._h_map = h
+            #self._pos_map = pos
+            #self._odom_reset()
 
-            # Reset accumulated position differential
-            self._r_acc = None
-            self._t_acc = None
-            self._h_acc = None
-            self._pos_acc = None
+            # TODO: need to reste odom data (image)?
 
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
@@ -2055,6 +2062,33 @@ class MapNavNode(Node, ABC):
         #  at least when using GimbalDeviceSetAttitude provided quaternion
 
         if self._good_match(image_data):
+            if not visual_odometry:
+                self._r_map = r
+                self._t_map = t
+                self._h_map = h
+                self._pos_map = pos
+                self._odom_reset()
+
+            if visual_odometry:
+                if self._should_accumulate_odom(pos_diff, f):
+                #if False:  # TODO: debugging only, enable above line instead
+                    # self._r_acc = r if self._r_acc is None else r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                    # self._t_acc = t if self._t_acc is None else t + self._t_acc
+                    # self._h_acc = h if self._h_acc is None else h @ self._h_accself._r_acc = r if self._r_acc is None else r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                    # TODO: h_acc, h_map already included in h (and r and t and pos here already?) in above logic. Need to use the 'original' r,t, and h here!
+                    #self._r_acc = r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                    #self._t_acc = t + self._t_acc
+                    #self._h_acc = h @ self._h_acc
+                    #self._pos_acc = self._pos_acc + pos_diff
+                    self._r_acc = r_orig @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                    self._t_acc = t_orig + self._t_acc
+                    self._h_acc = h_orig @ self._h_acc
+                    self._pos_acc = self._pos_acc + pos_diff
+                    #r = np.identity(3)
+                    #t = np.zeros((3, 1))
+                    #h = np.identity(3)
+                    #pos_diff = np.zeros((3, 1))
+                    self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
             # noinspection PyUnreachableCode
             if __debug__:
                 # Visualization of matched keypoints and field of view boundary
@@ -2065,6 +2099,8 @@ class MapNavNode(Node, ABC):
                                   f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
                 if visual_odometry:
+                    if self._previous_odom_data is None:
+                        self._previous_odom_data = image_data  # Initialize, must be good match
                     assert previous_image is not None
                     assert self._previous_odom_data is not None
                     assert hasattr(self._previous_odom_data, 'image')
@@ -2094,6 +2130,10 @@ class MapNavNode(Node, ABC):
             self._previous_good_image_data = image_data
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
+            if visual_odometry:
+                # Visual odometry lost track - reset the accumulated
+                self._previous_odom_data = image_data
+                #self._reset_odom()  # TODO: include previous_odom_data reset in _reset_odom()?
 
         self._previous_image_data = image_data
 

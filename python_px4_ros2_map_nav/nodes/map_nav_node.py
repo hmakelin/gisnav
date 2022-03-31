@@ -185,6 +185,13 @@ class MapNavNode(Node, ABC):
         self._t_odom = None
         self._pix_to_wgs84 = None
 
+        # TODO: need to declare
+        # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
+        self._r_orig_prev = None
+        self._t_orig_prev = None
+        self._h_orig_prev = None
+        self._pos_diff_prev = None
+
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
@@ -2132,8 +2139,25 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Position estimate was not good, skipping this match.')
             if visual_odometry:
                 # Visual odometry lost track - reset the accumulated
-                self._previous_odom_data = image_data
+                # TODO: need to accumulate previous r, t, h orig here, also use previous image data as the new reference? (but not current since match is bad)?
+                # TODO: push accumulation logic into own method (same as reset_odom?)
+                self._r_acc = self._r_orig_prev @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                self._t_acc = self._t_orig_prev + self._t_acc
+                self._h_acc = self._h_orig_prev @ self._h_acc
+                self._pos_acc = self._pos_acc + self._pos_diff_prev
+                #self._r_acc = r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
+                #self._t_acc = t + self._t_acc
+                #self._h_acc = h @ self._h_acc
+                #self._pos_acc = self._pos_acc + pos_diff
+                self._previous_odom_data = self._previous_image_data  # image_data
                 #self._reset_odom()  # TODO: include previous_odom_data reset in _reset_odom()?
+
+        if visual_odometry:
+            # TODO: if multiple bad matches in a row, these are bad matches too! Need to store these for the previous good match?
+            self._r_orig_prev = r_orig  # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
+            self._t_orig_prev = t_orig
+            self._h_orig_prev = h_orig
+            self._pos_diff_prev = pos_diff
 
         self._previous_image_data = image_data
 

@@ -36,7 +36,7 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData
+from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -143,18 +143,6 @@ class MapNavNode(Node, ABC):
             self._odom_matcher = None
             self._odom_matching_pool = None
 
-        # Latest r, t, h and position from map matching (need to remember for when visual odometry is enabled)
-        self._r_map = None
-        self._t_map = None
-        self._h_map = None
-        self._pos_map = None
-
-        # Accumulated rotation, translation, homography and position for visual odometry
-        self._r_acc = None  # TODO: not needed? Only h and pos acc used?
-        self._t_acc = None  # TODO: not needed? Only h and pos acc used?
-        self._h_acc = None
-        self._pos_acc = None
-
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
 
@@ -178,19 +166,23 @@ class MapNavNode(Node, ABC):
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
-        # Stored solution for the PnP problem (map matching and visual odometry separately)
-        self._r = None
-        self._t = None
-        self._r_odom = None
-        self._t_odom = None
         self._pix_to_wgs84 = None
 
         # TODO: need to declare
         # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
-        self._r_orig_prev = None
-        self._t_orig_prev = None
-        self._h_orig_prev = None
+        # Latest pose from map matching (need to remember for when visual odometry is enabled)
+        self._pose_world = None
+        self._pose_vo_origin = Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
+        self._pose_orig_prev = None
         self._pos_diff_prev = None
+
+        self._h_map = None
+        self._h_acc = None
+        self._h_orig_prev = None
+
+        # Stored solution for the PnP problem (map matching and visual odometry separately)
+        self._pose_map_guess = None
+        self._pose_vo_guess = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
@@ -223,84 +215,34 @@ class MapNavNode(Node, ABC):
         self.__blurs = value
 
     @property
-    def _r(self) -> Optional[np.ndarray]:
-        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches` for map matching."""
-        return self.__r
+    def _pose_map_guess(self) -> Optional[Pose]:
+        """Solution to the PnP problem in :meth:`~_process_matches` for map matching."""
+        return self.__pose_map_guess
 
-    @_r.setter
-    def _r(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__r = value
-
-    @property
-    def _r_odom(self) -> Optional[np.ndarray]:
-        """Rotation vector, solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
-        return self.__r_odom
-
-    @_r_odom.setter
-    def _r_odom(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__r_odom = value
+    @_pose_map_guess.setter
+    def _pose_map_guess(self, value: Optional[Pose]) -> None:
+        assert_type(value, get_args(Optional[Pose]))
+        self.__pose_map_guess = value
 
     @property
-    def _r_map(self) -> Optional[np.ndarray]:
-        """Latest rotation matrix from map matching"""
-        return self.__r_map
+    def _pose_vo_guess(self) -> Optional[Pose]:
+        """Solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
+        return self.__pose_vo_guess
 
-    @_r_map.setter
-    def _r_map(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__r_map = value
-
-    @property
-    def _r_acc(self) -> Optional[np.ndarray]:
-        """Accumulated r differential from visual odometry"""
-        return self.__r_acc
-
-    @_r_acc.setter
-    def _r_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__r_acc = value
+    @_pose_vo_guess.setter
+    def _pose_vo_guess(self, value: Optional[Pose]) -> None:
+        assert_type(value, get_args(Optional[Pose]))
+        self.__pose_vo_guess = value
 
     @property
-    def _t(self) -> Optional[np.ndarray]:
-        """Translation vector, solution to the PnP problem in :meth:`~_process_matches` for map matching."""
-        return self.__t
+    def _pose_map(self) -> Optional[Pose]:
+        """Latest pose estimate obtained from map matching"""
+        return self.__pose_map
 
-    @_t.setter
-    def _t(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__t = value
-
-    @property
-    def _t_odom(self) -> Optional[np.ndarray]:
-        """Translation vector, solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
-        return self.__t_odom
-
-    @_t_odom.setter
-    def _t_odom(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__t_odom = value
-
-    @property
-    def _t_map(self) -> Optional[np.ndarray]:
-        """Latest t vector from map matching"""
-        return self.__t_map
-
-    @_t_map.setter
-    def _t_map(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__t_map = value
-
-    @property
-    def _t_acc(self) -> Optional[np.ndarray]:
-        """Accumulated t differential from visual odometry"""
-        return self.__t_acc
-
-    @_t_acc.setter
-    def _t_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__t_acc = value
+    @_pose_map.setter
+    def _pose_map(self, value: Optional[Pose]) -> None:
+        assert_type(value, get_args(Optional[Pose]))
+        self.__pose_map = value
 
     @property
     def _pos_map(self) -> Optional[np.ndarray]:
@@ -321,26 +263,6 @@ class MapNavNode(Node, ABC):
     def _pos_acc(self, value: Optional[np.ndarray]) -> None:
         assert_type(value, get_args(Optional[np.ndarray]))
         self.__pos_acc = value
-
-    @property
-    def _h_map(self) -> Optional[np.ndarray]:
-        """Latest h matrix from map matching"""
-        return self.__h_map
-
-    @_h_map.setter
-    def _h_map(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__h_map = value
-
-    @property
-    def _h_acc(self) -> Optional[np.ndarray]:
-        """Accumulated h transformation from visual odometry"""
-        return self.__h_acc
-
-    @_h_acc.setter
-    def _h_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__h_acc = value
 
     @property
     def _pix_to_wgs84(self) -> Optional[np.ndarray]:
@@ -1814,25 +1736,22 @@ class MapNavNode(Node, ABC):
 
         return lat_diff, lon_diff, alt
 
-    def _store_extrinsic_guess(self, r: np.ndarray, t: np.ndarray, odom: bool = False) -> None:
+    def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
 
         Assumes previous solution to the PnP problem will be close to the new solution. See also
         :meth:`~_retrieve_extrinsic_guess`.
 
-        :param r: Rotation vector
-        :param t: Translation vector
+        :param pose: Pose to store
         :param odom: Set to True to store for visual odometry, otherwise map matching is assumed
         :return:
         """
         if odom:
-            self._r_odom = r
-            self._t_odom = t
+            self._pose_vo_guess = pose
         else:
-            self._r = r
-            self._t = t
+            self._pose_map_guess = pose
 
-    def _retrieve_extrinsic_guess(self, odom: bool = False) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    def _retrieve_extrinsic_guess(self, odom: bool = False) -> Optional[Pose]:
         """Retrieves stored rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in
          :meth:`~_process_matches`.
 
@@ -1842,12 +1761,12 @@ class MapNavNode(Node, ABC):
         # TODO: require that timestamp of previous solution is not too old
 
         :param odom: Set to true to retrieve extrinsic guess for visual odometry, otherwise map matching is assumed
-        :return: Tuple with stored rotation and translation vectors, or tuple of Nones if not available
+        :return: Requested pose, or None if not available
         """
         if odom:
-            return self._r_odom, self._t_odom
+            return self._pose_vo_guess
         else:
-            return self._r, self._t
+            return self._pose_map_guess
 
     def _estimate_velocities(self, current_position: ImageData, previous_position: ImageData) -> np.ndarray:
         """Estimates x, y and z velocities in m/s from current and previous position.
@@ -1894,7 +1813,7 @@ class MapNavNode(Node, ABC):
 
         :return: True if a map match has been made earlier
         """
-        return self._r_map is not None and self._t_map is not None and self._h_map is not None
+        return self._pose_map is not None
 
     # TODO: include self._previous_odom_data = image_data here?
     def _odom_reset(self):
@@ -1903,14 +1822,9 @@ class MapNavNode(Node, ABC):
         Used when a new map match is found or visual odometry has lost track (bad match with visual odometry).
         """
         # Reset accumulated position differential
-        #self._r_acc = None
-        #self._t_acc = None
-        #self._h_acc = None
-        #self._pos_acc = None
-        self._r_acc = np.identity(3)
-        self._t_acc = np.zeros((3, 1))
-        self._h_acc = np.identity(3)
+        self._pose_vo_origin = Pose(np.identity(3), np.zeros((3, 1)))
         self._pos_acc = np.zeros((3, 1))
+        self._h_acc = np.identity(3)
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
@@ -1957,19 +1871,24 @@ class MapNavNode(Node, ABC):
         padding = np.array([[0]]*len(mkp_img))
         mkp_map_3d = np.hstack((mkp_map, padding))  # Set all world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
-        r, t = self._retrieve_extrinsic_guess(odom=visual_odometry)
-        use_guess = True if r is not None and t is not None else False
-        _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
-                                         iterationsCount=10)
-        self._store_extrinsic_guess(r, t, odom=visual_odometry)
+        pose = self._retrieve_extrinsic_guess(odom=visual_odometry)
+        use_guess = pose is not None
+        if use_guess:
+            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, pose.r, pose.t,
+                                             useExtrinsicGuess=use_guess, iterationsCount=10)
+        else:
+            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, k, dist_coeffs, iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
+        pose = Pose(r, t)
+        self._store_extrinsic_guess(pose, odom=visual_odometry)
         e = np.hstack((r, t))  # Extrinsic matrix (for homography estimation)
         h = inv_homography_from_k_and_e(k, e)
+        #h = np.linalg.inv(pose.h(k))  # TODO: invert already at extrinsic matrix, not at h?  # TODO: handle linalg error!
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
-        pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
+        pos = -pose.r.T @ pose.t  # Inverse extrinsic (for computing camera position in object coordinates)
 
         if visual_odometry:
             f = k[0][0]
@@ -1984,11 +1903,12 @@ class MapNavNode(Node, ABC):
                 fov_pix_odom, c_pix_odom = get_fov_and_c(img_dim, h)
 
                 # Combine with latest map match
-                r_orig = r  # TODO: refactor this stuff!
-                t_orig = t
                 h_orig = h
-                r = self._r_map @ self._r_acc @ r  # @ r
-                t = self._t_map + self._t_acc + t  # + t
+                pose_orig = Pose(pose.r, pose.t)
+                pose = self._pose_map @ self._pose_vo_origin @ pose
+                r = pose.r
+                t = pose.t
+                #h = np.linalg.inv(pose.h(k))  # TODO: refactor these r, t, and h out,  handle linalg error
                 h = self._h_map @ self._h_acc @ h  # @ h
                 pos = self._pos_map + self._pos_acc + pos_diff
             else:
@@ -1997,22 +1917,8 @@ class MapNavNode(Node, ABC):
                 return None
 
         else:
-            # Store latest map matches for later use (needed if visual odometry is enabled)
-            # TODO: do this only if good match - see below under _good_match
-            #self._r_map = r
-            #self._t_map = t
-            #self._h_map = h
-            #self._pos_map = pos
-            #self._odom_reset()
-
-            # TODO: need to reste odom data (image)?
-
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
-
-            # TODO: need to reset fov acc?
-
-        #pos = -r.T @ t  # Inverse extrinsic (for computing camera position in object coordinates)
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h  # TODO: what about pix_to_wgs84_ assignment above? replace 'h' with 'h_viz_odom' or this thing is just the same as pix_to_wgs84_ now?
@@ -2070,31 +1976,16 @@ class MapNavNode(Node, ABC):
 
         if self._good_match(image_data):
             if not visual_odometry:
-                self._r_map = r
-                self._t_map = t
+                self._pose_map = pose  # Pose(r, t)
                 self._h_map = h
                 self._pos_map = pos
                 self._odom_reset()
 
             if visual_odometry:
                 if self._should_accumulate_odom(pos_diff, f):
-                #if False:  # TODO: debugging only, enable above line instead
-                    # self._r_acc = r if self._r_acc is None else r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                    # self._t_acc = t if self._t_acc is None else t + self._t_acc
-                    # self._h_acc = h if self._h_acc is None else h @ self._h_accself._r_acc = r if self._r_acc is None else r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                    # TODO: h_acc, h_map already included in h (and r and t and pos here already?) in above logic. Need to use the 'original' r,t, and h here!
-                    #self._r_acc = r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                    #self._t_acc = t + self._t_acc
-                    #self._h_acc = h @ self._h_acc
-                    #self._pos_acc = self._pos_acc + pos_diff
-                    self._r_acc = r_orig @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                    self._t_acc = t_orig + self._t_acc
                     self._h_acc = h_orig @ self._h_acc
+                    self._pose_vo_origin = pose_orig @ self._pose_vo_origin
                     self._pos_acc = self._pos_acc + pos_diff
-                    #r = np.identity(3)
-                    #t = np.zeros((3, 1))
-                    #h = np.identity(3)
-                    #pos_diff = np.zeros((3, 1))
                     self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
             # noinspection PyUnreachableCode
             if __debug__:
@@ -2139,25 +2030,16 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Position estimate was not good, skipping this match.')
             if visual_odometry:
                 # Visual odometry lost track - reset the accumulated
-                # TODO: need to accumulate previous r, t, h orig here, also use previous image data as the new reference? (but not current since match is bad)?
                 # TODO: push accumulation logic into own method (same as reset_odom?)
-                self._r_acc = self._r_orig_prev @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                self._t_acc = self._t_orig_prev + self._t_acc
                 self._h_acc = self._h_orig_prev @ self._h_acc
+                self._pose_vo_origin = self._pose_orig_prev @ self._pose_vo_origin
                 self._pos_acc = self._pos_acc + self._pos_diff_prev
-                #self._r_acc = r @ self._r_acc  # TODO: None check not needed if initialized as identity matrix/zero vector?
-                #self._t_acc = t + self._t_acc
-                #self._h_acc = h @ self._h_acc
-                #self._pos_acc = self._pos_acc + pos_diff
                 self._previous_odom_data = self._previous_image_data  # image_data
-                #self._reset_odom()  # TODO: include previous_odom_data reset in _reset_odom()?
 
         if visual_odometry:
-            # TODO: if multiple bad matches in a row, these are bad matches too! Need to store these for the previous good match?
-            self._r_orig_prev = r_orig  # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
-            self._t_orig_prev = t_orig
-            self._h_orig_prev = h_orig
+            self._pose_orig_prev = pose_orig  # TODO: declare property _pose_orig_prev
             self._pos_diff_prev = pos_diff
+            self._h_orig_prev = h_orig
 
         self._previous_image_data = image_data
 

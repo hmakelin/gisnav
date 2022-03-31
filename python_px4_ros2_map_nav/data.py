@@ -1,4 +1,6 @@
 """Module containing utility functions for map_nav_node."""
+from __future__ import annotations  # Python version 3.7+
+
 import cv2
 import numpy as np
 import os
@@ -42,6 +44,37 @@ class MapData:
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
     bbox: BBox
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class Pose:
+    """Represents camera pose (rotation and translation)"""
+    r: np.ndarray
+    t: np.ndarray
+
+    @property
+    def e(self) -> np.ndarray:
+        """Extrinsic matrix"""
+        #return -self.r.T @ self.t
+        return np.hstack((self.r, self.t))
+
+    def h(self, k: np.ndarray) -> np.ndarray:
+        """Homography matrix for given intrinsics
+
+        :param k: Intrinsic matrix
+        """
+        return k @ np.delete(self.e, 2, 1)
+
+    def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
+        """Matrix multiplication operator for convenience
+
+        Returns a new pose by applying matrix multiplication to the rotation matrix, and addition to the translation
+        vector:
+
+        pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose2.t)
+        """
+        return Pose(self.r @ pose.r, self.t + pose.t)
 
 
 # noinspection PyClassHasNoInit

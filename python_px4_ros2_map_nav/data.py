@@ -8,7 +8,7 @@ import os
 from xml.etree import ElementTree
 from typing import Union, get_args
 from collections import namedtuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
 
@@ -49,32 +49,28 @@ class MapData:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Pose:
-    """Represents camera pose (rotation and translation)"""
+    """Represents camera pose (rotation and translation) along with camera intrinsics"""
+    k: np.ndarray
     r: np.ndarray
     t: np.ndarray
+    e: np.ndarray = field(init=False)
+    h: np.ndarray = field(init=False)
 
-    @property
-    def e(self) -> np.ndarray:
-        """Extrinsic matrix"""
-        #return -self.r.T @ self.t
-        return np.hstack((self.r, self.t))
-
-    def h(self, k: np.ndarray) -> np.ndarray:
-        """Homography matrix for given intrinsics
-
-        :param k: Intrinsic matrix
-        """
-        return k @ np.delete(self.e, 2, 1)
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
+        object.__setattr__(self, 'h', self.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
 
     def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
         """Matrix multiplication operator for convenience
 
-        Returns a new pose by applying matrix multiplication to the rotation matrix, and addition to the translation
-        vector:
+        Returns a new pose by combining two camera relative poses:
 
-        pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose2.t)
+        pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
         """
-        return Pose(self.r @ pose.r, self.t + pose.t)
+        assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
+        return Pose(self.k, self.r @ pose.r, self.t + self.r @ pose.t)
 
 
 # noinspection PyClassHasNoInit

@@ -55,12 +55,14 @@ class Pose:
     t: np.ndarray
     e: np.ndarray = field(init=False)
     h: np.ndarray = field(init=False)
+    camera_position: np.ndarray = field(init=False)
 
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
         object.__setattr__(self, 'h', self.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
+        object.__setattr__(self, 'camera_position', -self.r.T @ self.t)
 
     def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
         """Matrix multiplication operator for convenience

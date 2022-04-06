@@ -1885,13 +1885,13 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
-        pos = -pose.r.T @ pose.t  # Inverse extrinsic (for computing camera position in object coordinates)
+        pos = pose.camera_position
 
         if visual_odometry:
             f = k[0][0]
             assert f == k[1][1]  # fx == fy
             camera_center = np.array((img_dim.width / 2, img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
-            pos_diff = pos - camera_center
+            pos_diff = pose.camera_position - camera_center
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None
             #assert self._previous_good_image_data is not None
@@ -1911,7 +1911,7 @@ class MapNavNode(Node, ABC):
                     h = np.linalg.inv(self._pose_map.h @ pose_orig.h)  # TODO: handle linalg error!
                 else:
                     h = np.linalg.inv(self._pose_map.h @ self._pose_vo_origin.h @ pose_orig.h)  # TODO: handle linalg error!
-                pos = self._pos_map + self._pos_acc + pos_diff
+                pos = pose.camera_position - camera_center
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')

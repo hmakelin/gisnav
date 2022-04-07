@@ -171,8 +171,7 @@ class MapNavNode(Node, ABC):
         # TODO: need to declare
         # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
         # Latest pose from map matching (need to remember for when visual odometry is enabled)
-        self._pose_world = None
-        self._pose_vo_origin = None  # Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
+        self._pose_vo = None  # Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
         self._pose_orig_prev = None
 
         # Stored solution for the PnP problem (map matching and visual odometry separately)
@@ -1801,7 +1800,7 @@ class MapNavNode(Node, ABC):
         :param k: Camera intrinsics matrix
         """
         # Reset accumulated position differential
-        #self._pose_vo_origin = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
+        #self._pose_vo = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
         pass
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
@@ -1880,16 +1879,16 @@ class MapNavNode(Node, ABC):
 
                 # Combine with latest map match
                 pose_orig = Pose(pose.k, pose.r, pose.t)
-                if self._pose_vo_origin is None:
+                if self._pose_vo is None:
                     pose = self._pose_map @ pose
                 else:
-                    pose = self._pose_map @ self._pose_vo_origin @ pose
+                    pose = self._pose_map @ self._pose_vo @ pose
                 r = pose.r
                 t = pose.t
-                if self._pose_vo_origin is None:
+                if self._pose_vo is None:
                     h = np.linalg.inv(self._pose_map.h @ pose_orig.h)  # TODO: handle linalg error!
                 else:
-                    h = np.linalg.inv(self._pose_map.h @ self._pose_vo_origin.h @ pose_orig.h)  # TODO: handle linalg error!
+                    h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ pose_orig.h)  # TODO: handle linalg error!
                 pos = pose.camera_position - camera_center
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
@@ -1961,10 +1960,10 @@ class MapNavNode(Node, ABC):
 
             if visual_odometry:
                 if self._should_accumulate_odom(pos_diff, f):
-                    if self._pose_vo_origin is None:
-                        self._pose_vo_origin = pose_orig
+                    if self._pose_vo is None:
+                        self._pose_vo = pose_orig
                     else:
-                        self._pose_vo_origin = pose_orig @ self._pose_vo_origin
+                        self._pose_vo = pose_orig @ self._pose_vo
                     self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
             # noinspection PyUnreachableCode
             if __debug__:
@@ -2011,7 +2010,7 @@ class MapNavNode(Node, ABC):
             if visual_odometry and self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
                 # Visual odometry lost track - reset the accumulated
                 # TODO: push accumulation logic into own method (same as reset_odom?)
-                self._pose_vo_origin = self._pose_orig_prev @ self._pose_vo_origin
+                self._pose_vo = self._pose_orig_prev @ self._pose_vo
                 self._previous_odom_data = self._previous_image_data  # image_data
 
         if visual_odometry:

@@ -174,7 +174,6 @@ class MapNavNode(Node, ABC):
         self._pose_world = None
         self._pose_vo_origin = None  # Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
         self._pose_orig_prev = None
-        self._pos_diff_prev = None
 
         # Stored solution for the PnP problem (map matching and visual odometry separately)
         self._pose_map_guess = None
@@ -239,26 +238,6 @@ class MapNavNode(Node, ABC):
     def _pose_map(self, value: Optional[Pose]) -> None:
         assert_type(value, get_args(Optional[Pose]))
         self.__pose_map = value
-
-    @property
-    def _pos_map(self) -> Optional[np.ndarray]:
-        """Latest position from map match to be used with visual odometry"""
-        return self.__pos_map
-
-    @_pos_map.setter
-    def _pos_map(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__pos_map = value
-
-    @property
-    def _pos_acc(self) -> Optional[np.ndarray]:
-        """Accumulated differential position over multiple rounds of visual odometry"""
-        return self.__pos_acc
-
-    @_pos_acc.setter
-    def _pos_acc(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__pos_acc = value
 
     @property
     def _pix_to_wgs84(self) -> Optional[np.ndarray]:
@@ -1823,7 +1802,7 @@ class MapNavNode(Node, ABC):
         """
         # Reset accumulated position differential
         #self._pose_vo_origin = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
-        self._pos_acc = np.zeros((3, 1))
+        pass
 
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
@@ -1978,7 +1957,6 @@ class MapNavNode(Node, ABC):
         if self._good_match(image_data):
             if not visual_odometry:
                 self._pose_map = pose  # Pose(r, t)
-                self._pos_map = pos
                 self._odom_reset(k)
 
             if visual_odometry:
@@ -1987,7 +1965,6 @@ class MapNavNode(Node, ABC):
                         self._pose_vo_origin = pose_orig
                     else:
                         self._pose_vo_origin = pose_orig @ self._pose_vo_origin
-                    self._pos_acc = self._pos_acc + pos_diff
                     self._previous_odom_data = image_data  # TODO: set this here now that the update/accumulation is done?
             # noinspection PyUnreachableCode
             if __debug__:
@@ -2035,12 +2012,10 @@ class MapNavNode(Node, ABC):
                 # Visual odometry lost track - reset the accumulated
                 # TODO: push accumulation logic into own method (same as reset_odom?)
                 self._pose_vo_origin = self._pose_orig_prev @ self._pose_vo_origin
-                self._pos_acc = self._pos_acc + self._pos_diff_prev
                 self._previous_odom_data = self._previous_image_data  # image_data
 
         if visual_odometry:
             self._pose_orig_prev = pose_orig  # TODO: declare property _pose_orig_prev
-            self._pos_diff_prev = pos_diff
 
         self._previous_image_data = image_data
 

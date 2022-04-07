@@ -6,7 +6,7 @@ import numpy as np
 import os
 
 from xml.etree import ElementTree
-from typing import Union, get_args
+from typing import Optional, Union, get_args
 from collections import namedtuple
 from dataclasses import dataclass, field
 
@@ -73,6 +73,38 @@ class Pose:
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         return Pose(self.k, self.r @ pose.r, self.t + self.r @ pose.t)
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class Snapshot:
+    """Snapshot of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
+
+    :param image_data: The drone image
+    :param map_data: The map raster
+    :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
+    :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # TODO: Rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
+    :param vehicle_attitude: Vehicle attitude
+    :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
+    :param img_dim: Drone image dimensions from time of match (from _match_inputs)
+    :param map_cropped: - np.ndarray Rotated and cropped map raster from map_data.image
+    :param previous_image: - np.ndarray Previous image in case needed for visual odometry visualization
+    :return:
+    """
+    image_data: ImageData
+    map_data: Union[ImageData, MapData]  # TODO: if vo, this should just be a another ImageData instead of MapData?
+    k: np.ndarray
+    camera_yaw: np.ndarray
+    vehicle_attitude: np.ndarray
+    map_dim_with_padding: Dim
+    img_dim: Dim
+    map_cropped: np.ndarray
+    previous_image: Optional[np.ndarray]
+
+    def __post_init__(self):
+        """Validate the data structure"""
+        # TODO: Enforce types
+        pass
 
 
 # noinspection PyClassHasNoInit

@@ -1803,6 +1803,17 @@ class MapNavNode(Node, ABC):
         #self._pose_vo = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
         pass
 
+    def _not_enough_matches(self, count: int) -> bool:
+        """Returns True if match count is too small for processing"""
+        # TODO: should be part of _good_match check?
+        min_matches = self.get_parameter('misc.min_matches').get_parameter_value().integer_value
+        min_matches = max(self.HOMOGRAPHY_MINIMUM_MATCHES, min_matches)
+        if count < min_matches:
+            self.get_logger().warn(f'Found {count} matches, {min_matches} required.')
+            return True
+        else:
+            return False
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, image_data: ImageData, map_data: MapData,
                          k: np.ndarray, camera_yaw: float, vehicle_attitude: Rotation, map_dim_with_padding: Dim,
                          img_dim: Dim, visual_odometry: bool, map_cropped: Optional[np.ndarray] = None,
@@ -1827,10 +1838,8 @@ class MapNavNode(Node, ABC):
         :param previous_image: Optional previous image for visual odometry visualiaztion
         :return:
         """
-        min_matches = self.get_parameter('misc.min_matches').get_parameter_value().integer_value
-        min_matches = max(self.HOMOGRAPHY_MINIMUM_MATCHES, min_matches)
-        if len(mkp_img) < min_matches:  # TODO: should be part of _good_match check?
-            self.get_logger().warn(f'Found {len(mkp_img)} matches, {min_matches} required. Skipping frame.')
+        if self._not_enough_matches(len(mkp_img)):
+            self.get_logger().warn(f'Not enought matches ({len(mkp_img)}), skipping frame.')
             return None
 
         assert_shape(k, (3, 3))

@@ -77,8 +77,8 @@ class Pose:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class Snapshot:
-    """Snapshot of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
+class InputData:
+    """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
     :param image_data: The drone image
     :param map_data: The map raster

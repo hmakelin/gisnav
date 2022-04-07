@@ -36,7 +36,7 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose, Snapshot
+from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose, InputData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -327,17 +327,17 @@ class MapNavNode(Node, ABC):
         self.__odom_matching_pool = value
 
     @property
-    def _stored_inputs(self) -> Snapshot:
+    def _stored_inputs(self) -> InputData:
         """Inputs stored at time of launching a new asynchronous match that are needed for processing its results."""
         return self.__stored_inputs
 
     @_stored_inputs.setter
-    def _stored_inputs(self, value: Optional[Snapshot]) -> None:
-        assert_type(value, get_args(Optional[Snapshot]))
+    def _stored_inputs(self, value: Optional[InputData]) -> None:
+        assert_type(value, get_args(Optional[InputData]))
         self.__stored_inputs = value
 
     @property
-    def _odom_stored_inputs(self) -> Snapshot:
+    def _odom_stored_inputs(self) -> InputData:
         """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
 
         This is used for visual odometry matches as opposed to :py:attr:`~stored_inputs` which is used for map matches.
@@ -345,8 +345,8 @@ class MapNavNode(Node, ABC):
         return self.__odom_stored_inputs
 
     @_odom_stored_inputs.setter
-    def _odom_stored_inputs(self, value: Optional[Snapshot]) -> None:
-        assert_type(value, get_args(Optional[Snapshot]))
+    def _odom_stored_inputs(self, value: Optional[InputData]) -> None:
+        assert_type(value, get_args(Optional[InputData]))
         self.__odom_stored_inputs = value
 
     @property
@@ -1080,7 +1080,7 @@ class MapNavNode(Node, ABC):
         made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
         saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
         the :meth:`~_matching_worker_callback` will use the stored inputs for post-processing the matches based on
-        the same snapshot of data that was used to make the call. It is assumed that the latest stored inputs are the
+        the same input_data of data that was used to make the call. It is assumed that the latest stored inputs are the
         same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
 
         :param msg: The Image message from the PX4-ROS 2 bridge to decode
@@ -1418,25 +1418,25 @@ class MapNavNode(Node, ABC):
         return gimbal_attitude
 
     # TODO: refactor out visual_odometry flag from args and from return dict
-    def _match_inputs(self, image_data: ImageData) -> Snapshot:
-        """Returns a dictionary snapshot of the input data required to perform and process a match.
+    def _match_inputs(self, image_data: ImageData) -> InputData:
+        """Returns a dictionary input_data of the input data required to perform and process a match.
 
-        Processing of matches is asynchronous, so this method provides a way of taking a snapshot of the input arguments
+        Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
         to :meth:`_process_matches` from the time image used for the matching was taken.
 
         :param image_data: The image data containing an image frame from the drone video
-        :return: :class:`~Snapshot` with matching input data (input to _process_matches)
+        :return: :class:`python_px4_ros2_map_nav.data.InputData` with matching input data
         """
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
-        snapshot = Snapshot(image_data=image_data, map_data=self._map_data,
-                            k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                            camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
-                            map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
-                            map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
+        snapshot = InputData(image_data=image_data, map_data=self._map_data,
+                             k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
+                             camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
+                             map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
+                             map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
                                 all((camera_yaw, self._map_data, img_dim)) else None,
-                            previous_image=self._previous_image_data)
+                             previous_image=self._previous_image_data)
 
         # Get cropped and rotated map
         if all((camera_yaw, self._map_data, img_dim)):
@@ -1785,14 +1785,14 @@ class MapNavNode(Node, ABC):
         else:
             return False
 
-    # TODO: put outputs into a new data class and not into snapshot.image_data (e.g. OutputData, and make Snapshot 'InputData')
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, snapshot: Snapshot, visual_odometry: bool) -> None:
+    # TODO: put outputs into a new data class and not into input_data.image_data (e.g. OutputData, and make InputData 'InputData')
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 
         :param mkp_img: Matching keypoints in drone image
         :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
-        :param snapshot: Snapshot of vehicle state variables from the time the image was taken
+        :param input_data: InputData of vehicle state variables from the time the image was taken
         :param visual_odometry: True if this match is a visual odometry match and not a map match
         :return:
         """
@@ -1800,12 +1800,12 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
             return None
 
-        assert_shape(snapshot.k, (3, 3))
+        assert_shape(input_data.k, (3, 3))
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-                snapshot.map_dim_with_padding, snapshot.map_data.bbox, -snapshot.camera_yaw, snapshot.img_dim)
+                input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
         assert self._pix_to_wgs84 is not None
 
         # TODO: do not assign if previous round's self._pix_to_wgs84 was bad? only assign here if the map stuff gets assigned?
@@ -1818,12 +1818,12 @@ class MapNavNode(Node, ABC):
         pose = self._retrieve_extrinsic_guess(odom=visual_odometry)
         use_guess = pose is not None
         if use_guess:
-            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, snapshot.k, dist_coeffs, pose.r, pose.t,
+            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, input_data.k, dist_coeffs, pose.r, pose.t,
                                              useExtrinsicGuess=use_guess, iterationsCount=10)
         else:
-            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, snapshot.k, dist_coeffs, iterationsCount=10)
+            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, input_data.k, dist_coeffs, iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
-        pose = Pose(snapshot.k, r, t)
+        pose = Pose(input_data.k, r, t)
         self._store_extrinsic_guess(pose, odom=visual_odometry)
         h = np.linalg.inv(pose.h)  # TODO: handle linalg error!
         if h is None:
@@ -1833,16 +1833,16 @@ class MapNavNode(Node, ABC):
         pos = pose.camera_position
 
         if visual_odometry:
-            f = snapshot.k[0][0]
-            assert f == snapshot.k[1][1]  # fx == fy
-            camera_center = np.array((snapshot.img_dim.width / 2, snapshot.img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
+            f = input_data.k[0][0]
+            assert f == input_data.k[1][1]  # fx == fy
+            camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pose.camera_position - camera_center
             # Integrate with previous r, t and h
-            assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the snapshot version
+            assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
             #assert self._previous_good_image_data is not None
             if self._have_map_match():
                 # Needed for visualize_homography below, store here already
-                fov_pix_odom, c_pix_odom = get_fov_and_c(snapshot.img_dim, h)
+                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, h)
 
                 # Combine with latest map match
                 pose_orig = Pose(pose.k, pose.r, pose.t)
@@ -1868,11 +1868,11 @@ class MapNavNode(Node, ABC):
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         h_wgs84 = pix_to_wgs84_ @ h  # TODO: what about pix_to_wgs84_ assignment above? replace 'h' with 'h_viz_odom' or this thing is just the same as pix_to_wgs84_ now?
-        fov_pix, c_pix = get_fov_and_c(snapshot.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
-        fov_wgs84, c_wgs84 = get_fov_and_c(snapshot.img_dim, h_wgs84)
-        snapshot.image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
-        snapshot.image_data.c = c_wgs84
-        snapshot.image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
+        fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
+        fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
+        input_data.image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
+        input_data.image_data.c = c_wgs84
+        input_data.image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -1897,33 +1897,33 @@ class MapNavNode(Node, ABC):
             return None
 
         # Get altitude above mean sea level (AMSL)
-        snapshot.image_data.terrain_altitude = position.alt
+        input_data.image_data.terrain_altitude = position.alt
         ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:
             self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
             position = LatLonAlt(*position[0:2], None)
         else:
             position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
-        snapshot.image_data.position = position
+        input_data.image_data.position = position
 
         # Convert estimated rotation to attitude quaternion for publishing
         gimbal_estimated_attitude = Rotation.from_matrix(r.T)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
-        gimbal_estimated_attitude *= Rotation.from_rotvec(snapshot.camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(input_data.camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
 
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
-        snapshot.image_data.attitude = gimbal_estimated_attitude
+        input_data.image_data.attitude = gimbal_estimated_attitude
 
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
 
-        if self._good_match(snapshot.image_data):
+        if self._good_match(input_data.image_data):
             if not visual_odometry:
                 self._pose_map = pose  # Pose(r, t)
-                self._odom_reset(snapshot.k)
+                self._odom_reset(input_data.k)
 
             if visual_odometry:
                 if self._should_accumulate_odom(pos_diff, f):
@@ -1931,7 +1931,7 @@ class MapNavNode(Node, ABC):
                         self._pose_vo = pose_orig
                     else:
                         self._pose_vo = pose_orig @ self._pose_vo
-                    self._previous_odom_data = snapshot.image_data  # TODO: set this here now that the update/accumulation is done?
+                    self._previous_odom_data = input_data.image_data  # TODO: set this here now that the update/accumulation is done?
             # noinspection PyUnreachableCode
             if __debug__:
                 # Visualization of matched keypoints and field of view boundary
@@ -1943,35 +1943,35 @@ class MapNavNode(Node, ABC):
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
                 if visual_odometry:
                     if self._previous_odom_data is None:
-                        self._previous_odom_data = snapshot.image_data  # Initialize, must be good match
-                    assert snapshot.previous_image is not None
+                        self._previous_odom_data = input_data.image_data  # Initialize, must be good match
+                    assert input_data.previous_image is not None
                     assert self._previous_odom_data is not None
                     assert hasattr(self._previous_odom_data, 'image')
                     reference_img = self._previous_odom_data.image
                     fov_pix_viz = fov_pix_odom
-                    self._odom_viz = self._create_homography_visualization(snapshot.image_data.image,
+                    self._odom_viz = self._create_homography_visualization(input_data.image_data.image,
                                                                            reference_img.copy(), mkp_img, mkp_map,
                                                                            fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
                     self._visualize_homography()  # TODO: move this call somewhere else?
                 else:
-                    reference_img = snapshot.map_cropped
+                    reference_img = input_data.map_cropped
                     fov_pix_viz = fov_pix
-                    self._map_viz = self._create_homography_visualization(snapshot.image_data.image,
+                    self._map_viz = self._create_homography_visualization(input_data.image_data.image,
                                                                           reference_img.copy(), mkp_img, mkp_map,
                                                                           fov_pix_viz, display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
                     #self._visualize_homography()
                     # TODO: if visual odometry is not enabled, visualize map here
 
             if self._previous_good_image_data is not None:
-                self._push_estimates(np.array(snapshot.image_data.position))
+                self._push_estimates(np.array(input_data.image_data.position))
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
-                    snapshot.image_data.sd = sd
+                    input_data.image_data.sd = sd
                     #if visual_odometry:  # TODO: remove this condition
-                    self.publish_position(snapshot.image_data)
+                    self.publish_position(input_data.image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-            self._previous_good_image_data = snapshot.image_data
+            self._previous_good_image_data = input_data.image_data
         else:
             self.get_logger().warn('Position estimate was not good, skipping this match.')
             if visual_odometry and self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
@@ -1983,7 +1983,7 @@ class MapNavNode(Node, ABC):
         if visual_odometry:
             self._pose_orig_prev = pose_orig  # TODO: declare property _pose_orig_prev
 
-        self._previous_image_data = snapshot.image_data
+        self._previous_image_data = input_data.image_data
 
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
         """Visualizes stored homography"""

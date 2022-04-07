@@ -1839,7 +1839,7 @@ class MapNavNode(Node, ABC):
         :return:
         """
         if self._not_enough_matches(len(mkp_img)):
-            self.get_logger().warn(f'Not enought matches ({len(mkp_img)}), skipping frame.')
+            self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
             return None
 
         assert_shape(k, (3, 3))

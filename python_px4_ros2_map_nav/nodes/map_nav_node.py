@@ -1977,7 +1977,10 @@ class MapNavNode(Node, ABC):
             if visual_odometry and self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
                 # Visual odometry lost track - reset the accumulated
                 # TODO: push accumulation logic into own method (same as reset_odom?)
-                self._pose_vo = self._pose_orig_prev @ self._pose_vo
+                if self._pose_vo is not None:
+                    self._pose_vo = self._pose_orig_prev @ self._pose_vo
+                else:
+                    self._pose_vo = self._pose_orig_prev
                 self._previous_odom_data = self._previous_image_data  # image_data
 
         if visual_odometry:

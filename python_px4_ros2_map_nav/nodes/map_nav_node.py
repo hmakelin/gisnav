@@ -1430,7 +1430,7 @@ class MapNavNode(Node, ABC):
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
-        snapshot = InputData(image_data=image_data, map_data=self._map_data,
+        input_data = InputData(image_data=image_data, map_data=self._map_data,
                              k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
                              camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
                              map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
@@ -1451,7 +1451,7 @@ class MapNavNode(Node, ABC):
             assert hasattr(self._previous_image_data, 'image')
             #data['previous_image'] = self._previous_image_data.image  # TODO: only for viz odom matches, not needed for map matches? put it here anyway?
 
-        return snapshot
+        return input_data
 
     def _compute_camera_altitude(self, camera_distance: float, camera_pitch: Union[int, float]) -> Optional[float]:
         """Computes camera altitude in meters (positive) based on distance to principal point and pitch in degrees.

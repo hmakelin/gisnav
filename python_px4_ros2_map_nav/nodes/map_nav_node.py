@@ -1867,7 +1867,8 @@ class MapNavNode(Node, ABC):
             fov_pix_odom, c_pix_odom = None, None
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
-        h_wgs84 = pix_to_wgs84_ @ h  # TODO: what about pix_to_wgs84_ assignment above? replace 'h' with 'h_viz_odom' or this thing is just the same as pix_to_wgs84_ now?
+        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
+        h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
         input_data.image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?

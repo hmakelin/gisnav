@@ -1804,6 +1804,7 @@ class MapNavNode(Node, ABC):
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
+            self.get_logger().debug('Computing pix_to_wgs84 transformation.')
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
         assert self._pix_to_wgs84 is not None
@@ -1868,12 +1869,14 @@ class MapNavNode(Node, ABC):
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
+        self.get_logger().debug('Computing field of view in WGS84...')
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
         input_data.image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
         input_data.image_data.c = c_wgs84
         input_data.image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
+        self.get_logger().debug('Field of view in WGS84 computed.')
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
@@ -1969,12 +1972,14 @@ class MapNavNode(Node, ABC):
                     sd = np.std(self._estimation_history, axis=0)
                     input_data.image_data.sd = sd
                     #if visual_odometry:  # TODO: remove this condition
+                    self.get_logger().debug(f'Publising image data, fov: {input_data.image_data.fov}.')
                     self.publish_position(input_data.image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
             self._previous_good_image_data = input_data.image_data
         else:
-            self.get_logger().warn('Position estimate was not good, skipping this match.')
+            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
+            self.get_logger().warn(f'Position estimate was not good, skipping this match.')
             if visual_odometry and self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
                 # Visual odometry lost track - reset the accumulated
                 # TODO: push accumulation logic into own method (same as reset_odom?)
@@ -2018,7 +2023,7 @@ class MapNavNode(Node, ABC):
         :return: True if match is good
         """
         alt = image_data.terrain_altitude
-        if alt < 0:
+        if alt < 0:  # TODO: or is nan
             self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match.')
             return False
 

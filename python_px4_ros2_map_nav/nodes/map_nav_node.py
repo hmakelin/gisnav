@@ -1972,7 +1972,7 @@ class MapNavNode(Node, ABC):
                     sd = np.std(self._estimation_history, axis=0)
                     input_data.image_data.sd = sd
                     #if visual_odometry:  # TODO: remove this condition
-                    self.get_logger().debug(f'Publising image data, fov: {input_data.image_data.fov}.')
+                    self.get_logger().info(f'Publishing image data, viz odom: {visual_odometry}')
                     self.publish_position(input_data.image_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')

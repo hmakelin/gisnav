@@ -1829,7 +1829,6 @@ class MapNavNode(Node, ABC):
 
         return pose
 
-    # TODO: put outputs into a new data class and not into input_data.image_data (e.g. OutputData, and make InputData 'InputData')
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.

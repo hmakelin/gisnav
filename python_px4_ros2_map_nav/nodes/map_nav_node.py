@@ -1915,6 +1915,39 @@ class MapNavNode(Node, ABC):
 
         return pose
 
+    def _build_visualization(self, attitude: np.ndarray, image_data: ImageData, map_cropped: np.ndarray, previous_image,
+                             fov_pix: np.ndarray, visual_odometry: bool, mkp_img: np.ndarray, mkp_map: np.ndarray,
+                             fov_pix_odom) -> None:
+        """Builds visualization of matched keypoints and field of view boundary."""
+        # TODO: params in docstring, refactor together with _create_homography_visualization
+        number_str_len = 7
+        accuracy = 2
+        gimbal_rpy_deg = RPY(*attitude.as_euler('XYZ', degrees=True))
+        gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
+                          f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
+                          f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
+        if visual_odometry:
+            if self._previous_odom_data is None:  # TODO: this should not be here!
+                self._previous_odom_data = image_data  # Initialize, must be good match
+            assert previous_image is not None
+            assert self._previous_odom_data is not None
+            assert hasattr(self._previous_odom_data, 'image')
+            reference_img = self._previous_odom_data.image
+            fov_pix_viz = fov_pix_odom
+            self._odom_viz = self._create_homography_visualization(image_data.image,
+                                                                   reference_img.copy(), mkp_img, mkp_map,
+                                                                   fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
+            self._visualize_homography()  # TODO: move this call somewhere else?
+        else:
+            reference_img = map_cropped
+            fov_pix_viz = fov_pix
+            self._map_viz = self._create_homography_visualization(image_data.image,
+                                                                  reference_img.copy(), mkp_img, mkp_map,
+                                                                  fov_pix_viz,
+                                                                  display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
+            # self._visualize_homography()
+            # TODO: if visual odometry is not enabled, visualize map here
+
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
@@ -2008,35 +2041,12 @@ class MapNavNode(Node, ABC):
                     else:
                         self._pose_vo = pose_orig @ self._pose_vo
                     self._previous_odom_data = input_data.image_data  # TODO: set this here now that the update/accumulation is done?
+
             # noinspection PyUnreachableCode
             if __debug__:
-                # Visualization of matched keypoints and field of view boundary
-                number_str_len = 7
-                accuracy = 2
-                gimbal_rpy_deg = RPY(*output_data.attitude.as_euler('XYZ', degrees=True))
-                gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                                  f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                                  f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-                if visual_odometry:
-                    if self._previous_odom_data is None:
-                        self._previous_odom_data = input_data.image_data  # Initialize, must be good match
-                    assert input_data.previous_image is not None
-                    assert self._previous_odom_data is not None
-                    assert hasattr(self._previous_odom_data, 'image')
-                    reference_img = self._previous_odom_data.image
-                    fov_pix_viz = fov_pix_odom
-                    self._odom_viz = self._create_homography_visualization(input_data.image_data.image,
-                                                                           reference_img.copy(), mkp_img, mkp_map,
-                                                                           fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
-                    self._visualize_homography()  # TODO: move this call somewhere else?
-                else:
-                    reference_img = input_data.map_cropped
-                    fov_pix_viz = output_data.fov_pix
-                    self._map_viz = self._create_homography_visualization(input_data.image_data.image,
-                                                                          reference_img.copy(), mkp_img, mkp_map,
-                                                                          fov_pix_viz, display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
-                    #self._visualize_homography()
-                    # TODO: if visual odometry is not enabled, visualize map here
+                self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
+                                          input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
+                                          mkp_map, fov_pix_odom)
 
             if self._previous_good_image_data is not None:
                 self._push_estimates(np.array(output_data.position))
@@ -2181,7 +2191,7 @@ class MapNavNode(Node, ABC):
     @staticmethod
     def _create_homography_visualization(img_arr: np.ndarray, map_arr: np.ndarray,
                                          kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray,
-                                         display_text: Optional[str] = None) -> None:
+                                         display_text: Optional[str] = None) -> np.ndarray:
         """Visualizes a homography including keypoint matches and field of view.
 
         :param img_arr: Image array

@@ -1785,6 +1785,23 @@ class MapNavNode(Node, ABC):
         else:
             return False
 
+    def _estimate_attitude(self, pose: Pose, camera_yaw: float) -> np.ndarray:
+        """Estimates gimbal attitude from pose and camera yaw in global NED frame
+
+        :param pose: Camera pose in rotated frame
+        :param camera_yaw: Rotation (yaw) of the frame
+        """
+        # Convert estimated rotation to attitude quaternion for publishing
+        gimbal_estimated_attitude = Rotation.from_matrix(pose.r.T)  # in rotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
+        gimbal_estimated_attitude *= Rotation.from_rotvec(camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
+
+        # Re-arrange axes from unrotated (original) map pixel frame to NED frame
+        rotvec = gimbal_estimated_attitude.as_rotvec()
+        gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
+
+        return gimbal_estimated_attitude
+
     def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> Pose:
         # TODO: make static function, move store and retrieve extrinsic guess out of this function?
         """Estimates pose (rotation and translation) based on found keypoint matches.
@@ -1928,15 +1945,7 @@ class MapNavNode(Node, ABC):
             position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
         input_data.image_data.position = position
 
-        # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(pose.r.T)  # in rotated map pixel frame
-        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
-        gimbal_estimated_attitude *= Rotation.from_rotvec(input_data.camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
-
-        # Re-arrange axes from unrotated (original) map pixel frame to NED frame
-        rotvec = gimbal_estimated_attitude.as_rotvec()
-        gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
-        input_data.image_data.attitude = gimbal_estimated_attitude
+        input_data.image_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
 
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
@@ -1959,7 +1968,7 @@ class MapNavNode(Node, ABC):
                 # Visualization of matched keypoints and field of view boundary
                 number_str_len = 7
                 accuracy = 2
-                gimbal_rpy_deg = RPY(*gimbal_estimated_attitude.as_euler('XYZ', degrees=True))
+                gimbal_rpy_deg = RPY(*input_data.image_data.attitude.as_euler('XYZ', degrees=True))
                 gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
                                   f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'

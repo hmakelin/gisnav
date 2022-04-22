@@ -10,7 +10,7 @@ from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
-from python_px4_ros2_map_nav.data import ImageData, LatLon, LatLonAlt
+from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 
 
@@ -32,19 +32,19 @@ class MockGPSNode(MapNavNode):
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
-    def publish_position(self, image_data: ImageData) -> None:
+    def publish_position(self, output_data: OutputData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        if not all(image_data.position) or any(map(np.isnan, image_data.position)) or \
-                not all(image_data.sd) or any(map(np.isnan, image_data.sd)):
+        if not all(output_data.position) or any(map(np.isnan, output_data.position)) or \
+                not all(output_data.sd) or any(map(np.isnan, output_data.sd)):
             self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
                                    'skipping publishing.')
             return None
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-        self._publish_mock_gps_msg(image_data.position, image_data.sd, mock_gps_selection)
+        self._publish_mock_gps_msg(output_data.position, output_data.sd, mock_gps_selection)
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
-            self._export_position(image_data.position, image_data.fov, export_geojson)
+            self._export_position(output_data.position, output_data.fov, export_geojson)
 
     def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
         """Writes field of view (FOV) and map center into GeoJSON file"""

@@ -21,19 +21,12 @@ TimePair = namedtuple('TimePair', 'local foreign')
 
 
 # noinspection PyClassHasNoInit
-@dataclass
+@dataclass(frozen=True)
 class ImageData:
     """Keeps image frame related data in one place and protects it from corruption."""
     image: np.ndarray
     frame_id: str
     timestamp: int
-    fov: np.ndarray
-    fov_pix: np.ndarray
-    position: LatLonAlt
-    terrain_altitude: float
-    attitude: np.ndarray
-    c: np.ndarray
-    sd: np.ndarray
 
 
 # noinspection PyClassHasNoInit
@@ -100,6 +93,40 @@ class InputData:
     img_dim: Dim
     map_cropped: np.ndarray
     previous_image: Optional[np.ndarray]
+
+    def __post_init__(self):
+        """Validate the data structure"""
+        # TODO: Enforce types
+        pass
+
+
+# noinspection PyClassHasNoInit
+@dataclass
+class OutputData:
+    # TODO: add extrinsic matrix / pose, pix_to_wgs84 transformation?
+    # TODO: freeze this data structure to reduce unintentional re-assignment?
+    """Algorithm output passed onto publish method.
+
+    :param image_data: The drone image
+    :param map_data: The map raster
+    :param fov: Camera field of view projected to WGS84 coordinates
+    :param fov_pix: Camera field of view in pixels in reference frame (map or previous frame)
+    :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
+    :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
+    :param attitude: Camera attitude quaternion
+    :param c: Principal point projected to ground in WGS84 coordinates
+    :param sd: Standard deviation of position estimate
+    :return:
+    """
+    image_data: ImageData
+    map_data: Union[ImageData, MapData]  # TODO: if vo, this should just be a another ImageData instead of MapData?
+    fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
+    fov_pix: np.ndarray
+    position: LatLonAlt
+    terrain_altitude: float
+    attitude: np.ndarray
+    c: np.ndarray
+    sd: np.ndarray
 
     def __post_init__(self):
         """Validate the data structure"""

@@ -36,7 +36,8 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose, InputData
+from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose,\
+    InputData, OutputData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -1107,8 +1108,9 @@ class MapNavNode(Node, ABC):
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         # TODO: some of these fields do not make sense if visual odometry flag is on, need to refactor (e.g. fov_pix)
-        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-                               fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+        #image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
+        #                       fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp)
 
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
@@ -1844,6 +1846,10 @@ class MapNavNode(Node, ABC):
 
         assert_shape(input_data.k, (3, 3))
 
+        # Init output
+        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, fov=None,
+                                 fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self.get_logger().debug('Computing pix_to_wgs84 transformation.')
@@ -1900,9 +1906,9 @@ class MapNavNode(Node, ABC):
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
-        input_data.image_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
-        input_data.image_data.c = c_wgs84
-        input_data.image_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
+        output_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
+        output_data.c = c_wgs84
+        output_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
         self.get_logger().debug('Field of view in WGS84 computed.')
 
         # Compute altitude scaling:
@@ -1936,22 +1942,22 @@ class MapNavNode(Node, ABC):
             return None
 
         # Get altitude above mean sea level (AMSL)
-        input_data.image_data.terrain_altitude = position.alt
+        output_data.terrain_altitude = position.alt
         ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:
             self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
             position = LatLonAlt(*position[0:2], None)
         else:
             position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
-        input_data.image_data.position = position
+        output_data.position = position
 
-        input_data.image_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
+        output_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
 
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
 
-        if self._good_match(input_data.image_data):
+        if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
             if not visual_odometry:
                 self._pose_map = pose  # Pose(r, t)
                 self._odom_reset(input_data.k)
@@ -1968,7 +1974,7 @@ class MapNavNode(Node, ABC):
                 # Visualization of matched keypoints and field of view boundary
                 number_str_len = 7
                 accuracy = 2
-                gimbal_rpy_deg = RPY(*input_data.image_data.attitude.as_euler('XYZ', degrees=True))
+                gimbal_rpy_deg = RPY(*output_data.attitude.as_euler('XYZ', degrees=True))
                 gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
                                   f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                                   f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
@@ -1994,13 +2000,13 @@ class MapNavNode(Node, ABC):
                     # TODO: if visual odometry is not enabled, visualize map here
 
             if self._previous_good_image_data is not None:
-                self._push_estimates(np.array(input_data.image_data.position))
+                self._push_estimates(np.array(output_data.position))
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
-                    input_data.image_data.sd = sd
+                    output_data.sd = sd
                     #if visual_odometry:  # TODO: remove this condition
                     self.get_logger().info(f'Publishing image data, viz odom: {visual_odometry}')
-                    self.publish_position(input_data.image_data)
+                    self.publish_position(output_data)
                 else:
                     self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
             self._previous_good_image_data = input_data.image_data
@@ -2043,18 +2049,17 @@ class MapNavNode(Node, ABC):
         cv2.imshow(figure_name, img)
         cv2.waitKey(1)
 
-    def _good_match(self, image_data: ImageData) -> bool:
+    def _good_match(self, alt: float, fov_pix: np.ndarray) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
 
-        :param image_data: The position estimate and supporting metadata
+        :param alt: Terrain altitude of match
+        :param fov_pix: Field of view in pixels of match
         :return: True if match is good
         """
-        alt = image_data.terrain_altitude
         if alt < 0:  # TODO: or is nan
             self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match.')
             return False
 
-        fov_pix = image_data.fov_pix
         if not is_convex_isosceles_trapezoid(fov_pix):
             self.get_logger().warn(f'Match fov_pix {fov_pix.squeeze().tolist()} was not a convex isosceles trapezoid, '
                                    f'assume bad match.')
@@ -2170,8 +2175,8 @@ class MapNavNode(Node, ABC):
         return out
 
     @abstractmethod
-    def publish_position(self, image_data: ImageData) -> None:
-        """Publishes or exports computed image data
+    def publish_position(self, output_data: OutputData) -> None:
+        """Publishes or exports computed output
 
         This method should be implemented by an extending class to adapt for any given use case.
         """

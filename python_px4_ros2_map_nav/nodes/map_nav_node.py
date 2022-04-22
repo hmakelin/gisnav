@@ -1787,6 +1787,25 @@ class MapNavNode(Node, ABC):
         else:
             return False
 
+    def _estimate_altitude_scaling(self, fov_pix: np.ndarray, fov_wgs84: np.ndarray) -> float:
+        """Estimates altitude scaling factor
+
+        Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
+        find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
+        of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
+        the corresponding WGS84 latitude and latitude coordinates.
+
+        :param fov_pix: Field of view in pixel coordinates
+        :param fov_wgs84: Field of view in WGS84 coordinates
+        :return: Altitude scaling factor
+        """
+        distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
+        distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
+                                            LatLon(*fov_wgs84[2].squeeze().tolist()))
+        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
+
+        return altitude_scaling
+
     def _estimate_attitude(self, pose: Pose, camera_yaw: float) -> np.ndarray:
         """Estimates gimbal attitude from pose and camera yaw in global NED frame
 
@@ -1910,15 +1929,7 @@ class MapNavNode(Node, ABC):
         output_data.c = c_wgs84
         output_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
 
-        # Compute altitude scaling:
-        # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
-        # find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
-        # of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
-        # the corresponding WGS84 latitude and latitude coordinates.
-        distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
-                                            LatLon(*fov_wgs84[2].squeeze().tolist()))
-        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
+        altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov_wgs84)
 
         # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
         if not visual_odometry:

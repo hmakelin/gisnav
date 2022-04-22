@@ -1793,6 +1793,9 @@ class MapNavNode(Node, ABC):
         :param pose: Camera pose in rotated frame
         :param camera_yaw: Rotation (yaw) of the frame
         """
+        # TODO: Estimate vehicle attitude from estimated camera attitude
+        #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
+        #  at least when using GimbalDeviceSetAttitude provided quaternion
         # Convert estimated rotation to attitude quaternion for publishing
         gimbal_estimated_attitude = Rotation.from_matrix(pose.r.T)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
@@ -1949,10 +1952,6 @@ class MapNavNode(Node, ABC):
         output_data.position = position
 
         output_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
-
-        # TODO: Estimate vehicle attitude from estimated camera attitude
-        #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
-        #  at least when using GimbalDeviceSetAttitude provided quaternion
 
         if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
             if not visual_odometry:

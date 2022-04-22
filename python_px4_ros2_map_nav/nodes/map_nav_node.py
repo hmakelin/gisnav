@@ -1844,12 +1844,10 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
-        pos = pose.camera_position
-
         if visual_odometry:
             f = input_data.k[0][0]
             assert f == input_data.k[1][1]  # fx == fy
-            camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(pos.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
+            camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pose.camera_position - camera_center
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
@@ -1870,7 +1868,6 @@ class MapNavNode(Node, ABC):
                     h = np.linalg.inv(self._pose_map.h @ pose_orig.h)  # TODO: handle linalg error!
                 else:
                     h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ pose_orig.h)  # TODO: handle linalg error!
-                pos = pose.camera_position - camera_center
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
@@ -1901,11 +1898,19 @@ class MapNavNode(Node, ABC):
                                             LatLon(*fov_wgs84[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
-        # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        t_wgs84 = pix_to_wgs84_ @ np.append(pos[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-        t_wgs84[2] = -altitude_scaling * pos[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-        position = t_wgs84.squeeze().tolist()
-        position = LatLonAlt(*position)
+        # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
+        if not visual_odometry:
+            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+            t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
+            t_wgs84[2] = -altitude_scaling * pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+            position = t_wgs84.squeeze().tolist()
+            position = LatLonAlt(*position)
+        else:
+            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+            t_wgs84 = pix_to_wgs84_ @ np.append((pose.camera_position - camera_center)[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
+            t_wgs84[2] = -altitude_scaling * (pose.camera_position - camera_center)[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+            position = t_wgs84.squeeze().tolist()
+            position = LatLonAlt(*position)
 
         # Check that we have all the values needed for a global position
         #if not all(position) or any(map(np.isnan, position)):

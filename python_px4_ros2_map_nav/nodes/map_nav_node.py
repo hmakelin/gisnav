@@ -1854,7 +1854,6 @@ class MapNavNode(Node, ABC):
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
-            self.get_logger().debug('Computing pix_to_wgs84 transformation.')
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
         assert self._pix_to_wgs84 is not None

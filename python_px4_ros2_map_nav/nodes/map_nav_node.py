@@ -1901,14 +1901,12 @@ class MapNavNode(Node, ABC):
 
         # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        self.get_logger().debug('Computing field of view in WGS84...')
         h_wgs84 = pix_to_wgs84_ @ h
         fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
         fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
         output_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
         output_data.c = c_wgs84
         output_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
-        self.get_logger().debug('Field of view in WGS84 computed.')
 
         # Compute altitude scaling:
         # Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to

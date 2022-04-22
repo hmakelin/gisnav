@@ -1785,6 +1785,31 @@ class MapNavNode(Node, ABC):
         else:
             return False
 
+    def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> Pose:
+        # TODO: make static function, move store and retrieve extrinsic guess out of this function?
+        """Estimates pose (rotation and translation) based on found keypoint matches.
+
+        :param mkp1: Matching keypoints for image #1 (current frame)
+        :param mkp2: Matching keypoints for image #2 (map or previous frame)
+        :param k: Camera intrinsics matrix
+        :param visual_odometry: True if this pose is estimated for visual odometry
+        """
+        padding = np.array([[0]]*len(mkp1))
+        mkp2_3d = np.hstack((mkp2, padding))  # Set all world z-coordinates to zero
+        dist_coeffs = np.zeros((4, 1))
+        pose = self._retrieve_extrinsic_guess(odom=visual_odometry)
+        use_guess = pose is not None
+        if use_guess:
+            _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, pose.r, pose.t,
+                                             useExtrinsicGuess=use_guess, iterationsCount=10)
+        else:
+            _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, iterationsCount=10)
+        r, _ = cv2.Rodrigues(r)
+        pose = Pose(k, r, t)
+        self._store_extrinsic_guess(pose, odom=visual_odometry)
+
+        return pose
+
     # TODO: put outputs into a new data class and not into input_data.image_data (e.g. OutputData, and make InputData 'InputData')
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> None:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
@@ -1813,19 +1838,7 @@ class MapNavNode(Node, ABC):
         pix_to_wgs84_ = self._pix_to_wgs84  # TODO: redundant assignment here? or provide as arugment from stored inputs?
 
         # Estimate extrinsic and homography matrices
-        padding = np.array([[0]]*len(mkp_img))
-        mkp_map_3d = np.hstack((mkp_map, padding))  # Set all world z-coordinates to zero
-        dist_coeffs = np.zeros((4, 1))
-        pose = self._retrieve_extrinsic_guess(odom=visual_odometry)
-        use_guess = pose is not None
-        if use_guess:
-            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, input_data.k, dist_coeffs, pose.r, pose.t,
-                                             useExtrinsicGuess=use_guess, iterationsCount=10)
-        else:
-            _, r, t, __ = cv2.solvePnPRansac(mkp_map_3d, mkp_img, input_data.k, dist_coeffs, iterationsCount=10)
-        r, _ = cv2.Rodrigues(r)
-        pose = Pose(input_data.k, r, t)
-        self._store_extrinsic_guess(pose, odom=visual_odometry)
+        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
         h = np.linalg.inv(pose.h)  # TODO: handle linalg error!
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
@@ -1911,7 +1924,7 @@ class MapNavNode(Node, ABC):
         input_data.image_data.position = position
 
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(r.T)  # in rotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(pose.r.T)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body pose
         gimbal_estimated_attitude *= Rotation.from_rotvec(input_data.camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
 

@@ -1806,7 +1806,8 @@ class MapNavNode(Node, ABC):
 
         return altitude_scaling
 
-    def _estimate_attitude(self, pose: Pose, camera_yaw: float) -> np.ndarray:
+    @staticmethod
+    def _estimate_attitude(pose: Pose, camera_yaw: float) -> np.ndarray:
         """Estimates gimbal attitude from pose and camera yaw in global NED frame
 
         :param pose: Camera pose in rotated frame
@@ -1825,6 +1826,22 @@ class MapNavNode(Node, ABC):
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
         return gimbal_estimated_attitude
+
+    @staticmethod
+    def _estimate_fov(img_dim: Dim, h: np.ndarray, pix_to_wgs84_: np.ndarray) -> Tuple[3*(np.ndarray,)]:
+        """Estimates field of view in pixel and WGS84 coordinates, and principal point projection in WGS84 coordinates.
+
+        :param img_dim: Image dimensions
+        :param h: Homography matrix
+        :param pix_to_wgs84_: Transformation from 2D pixel space to WGS84 coordinates
+        :return: Field of view in pixel and WGS84 coordinates, and principal point in WGS84
+        """
+        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
+        h_wgs84 = pix_to_wgs84_ @ h
+        fov_pix, c_pix = get_fov_and_c(img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
+        fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
+
+        return fov_pix, fov_wgs84, c_wgs84
 
     def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> Pose:
         # TODO: make static function, move store and retrieve extrinsic guess out of this function?
@@ -1920,16 +1937,9 @@ class MapNavNode(Node, ABC):
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
 
-        # Field of view in both pixel (rotated and cropped map raster) and WGS84 coordinates
-        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        h_wgs84 = pix_to_wgs84_ @ h
-        fov_pix, c_pix = get_fov_and_c(input_data.img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
-        fov_wgs84, c_wgs84 = get_fov_and_c(input_data.img_dim, h_wgs84)
-        output_data.fov = fov_wgs84  # TODO: this stuff gets triggered twice for the same image data (stored in previous_image_data) with different FOV?
-        output_data.c = c_wgs84
-        output_data.fov_pix = fov_pix  # used by is_convex_isosceles_trapezoid
+        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
 
-        altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov_wgs84)
+        altitude_scaling = self._estimate_altitude_scaling(output_data.fov_pix, output_data.fov)
 
         # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
         if not visual_odometry:
@@ -1998,7 +2008,7 @@ class MapNavNode(Node, ABC):
                     self._visualize_homography()  # TODO: move this call somewhere else?
                 else:
                     reference_img = input_data.map_cropped
-                    fov_pix_viz = fov_pix
+                    fov_pix_viz = output_data.fov_pix
                     self._map_viz = self._create_homography_visualization(input_data.image_data.image,
                                                                           reference_img.copy(), mkp_img, mkp_map,
                                                                           fov_pix_viz, display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?

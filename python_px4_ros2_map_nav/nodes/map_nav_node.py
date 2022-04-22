@@ -1989,7 +1989,7 @@ class MapNavNode(Node, ABC):
 
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
 
-        altitude_scaling = self._estimate_altitude_scaling(output_data.fov_pix, output_data.fov)
+        altitude_scaling = self._estimate_altitude_scaling(output_data.fov_pix, output_data.fov)  # TODO: move inside _estimate_position?
 
         output_data.position, output_data.terrain_altitude = self._estimate_position(pose, pix_to_wgs84_,
                                                                                      altitude_scaling, visual_odometry, camera_center)

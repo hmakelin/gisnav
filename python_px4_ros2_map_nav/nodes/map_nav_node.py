@@ -1843,6 +1843,53 @@ class MapNavNode(Node, ABC):
 
         return fov_pix, fov_wgs84, c_wgs84
 
+    def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, altitude_scaling: float, visual_odometry: bool,
+                           camera_center: np.ndarray) -> Tuple[LatLonAlt, float]:
+        """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
+        terrain altitude in meters.
+
+        :param pose: Camera relative pose in pixel (world) space
+        :param pix_to_wgs84_: Transformation from 2D pixel space to WGS84
+        :param altitude_scaling: Altitude scaling factor (from world space to meters)
+        :param visual_odometry: True if this estimation is for a visual odometry match
+        :param camera_center: Camera center coordinates (visual odometry only)
+        :return: Camera position LatLonAlt, and altitude from ground in meters
+        """
+        # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
+        if not visual_odometry:
+            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+            t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2],
+                                                1)  # TODO: the t_map is already included in t when visual odometry = TRue?
+            t_wgs84[2] = -altitude_scaling * pose.camera_position[
+                2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+            position = t_wgs84.squeeze().tolist()
+            position = LatLonAlt(*position)
+        else:
+            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+            t_wgs84 = pix_to_wgs84_ @ np.append((pose.camera_position - camera_center)[0:2],
+                                                1)  # TODO: the t_map is already included in t when visual odometry = TRue?
+            t_wgs84[2] = -altitude_scaling * (pose.camera_position - camera_center)[
+                2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+            position = t_wgs84.squeeze().tolist()
+            position = LatLonAlt(*position)
+
+        # Check that we have all the values needed for a global position
+        # if not all(position) or any(map(np.isnan, position)):
+        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
+            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
+            return None
+
+        # Get altitude above mean sea level (AMSL)
+        terrain_altitude = position.alt
+        ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
+        if ground_elevation is None:
+            self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
+            position = LatLonAlt(*position[0:2], None)
+        else:
+            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
+
+        return position, terrain_altitude
+
     def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> Pose:
         # TODO: make static function, move store and retrieve extrinsic guess out of this function?
         """Estimates pose (rotation and translation) based on found keypoint matches.
@@ -1904,10 +1951,13 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
+        # TODO: needed only for vo? Need to refactor _estimate_position
+        f = input_data.k[0][0]
+        assert f == input_data.k[1][1]  # fx == fy
+        camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(
+            pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
+
         if visual_odometry:
-            f = input_data.k[0][0]
-            assert f == input_data.k[1][1]  # fx == fy
-            camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
             pos_diff = pose.camera_position - camera_center
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
@@ -1941,35 +1991,8 @@ class MapNavNode(Node, ABC):
 
         altitude_scaling = self._estimate_altitude_scaling(output_data.fov_pix, output_data.fov)
 
-        # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
-        if not visual_odometry:
-            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-            t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-            t_wgs84[2] = -altitude_scaling * pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-            position = t_wgs84.squeeze().tolist()
-            position = LatLonAlt(*position)
-        else:
-            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-            t_wgs84 = pix_to_wgs84_ @ np.append((pose.camera_position - camera_center)[0:2], 1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-            t_wgs84[2] = -altitude_scaling * (pose.camera_position - camera_center)[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-            position = t_wgs84.squeeze().tolist()
-            position = LatLonAlt(*position)
-
-        # Check that we have all the values needed for a global position
-        #if not all(position) or any(map(np.isnan, position)):
-        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
-            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
-            return None
-
-        # Get altitude above mean sea level (AMSL)
-        output_data.terrain_altitude = position.alt
-        ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
-        if ground_elevation is None:
-            self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
-            position = LatLonAlt(*position[0:2], None)
-        else:
-            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
-        output_data.position = position
+        output_data.position, output_data.terrain_altitude = self._estimate_position(pose, pix_to_wgs84_,
+                                                                                     altitude_scaling, visual_odometry, camera_center)
 
         output_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
 

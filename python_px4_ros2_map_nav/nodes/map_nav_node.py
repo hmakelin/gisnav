@@ -1843,19 +1843,21 @@ class MapNavNode(Node, ABC):
 
         return fov_pix, fov_wgs84, c_wgs84
 
-    def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, altitude_scaling: float, visual_odometry: bool,
-                           camera_center: np.ndarray) -> Tuple[LatLonAlt, float]:
+    def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, visual_odometry: bool,
+                           camera_center: np.ndarray, fov_pix: np.ndarray, fov: np.ndarray) -> Tuple[LatLonAlt, float]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
         :param pose: Camera relative pose in pixel (world) space
         :param pix_to_wgs84_: Transformation from 2D pixel space to WGS84
-        :param altitude_scaling: Altitude scaling factor (from world space to meters)
         :param visual_odometry: True if this estimation is for a visual odometry match
         :param camera_center: Camera center coordinates (visual odometry only)
+        :param fov_pix: Field of view in pixel coordinates
+        :param fov: Field of view in WGS84
         :return: Camera position LatLonAlt, and altitude from ground in meters
         """
         # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
+        altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov)
         if not visual_odometry:
             # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
             t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2],
@@ -2021,12 +2023,10 @@ class MapNavNode(Node, ABC):
             fov_pix_odom, c_pix_odom = None, None
 
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
-
-        altitude_scaling = self._estimate_altitude_scaling(output_data.fov_pix, output_data.fov)  # TODO: move inside _estimate_position?
-
         output_data.position, output_data.terrain_altitude = self._estimate_position(pose, pix_to_wgs84_,
-                                                                                     altitude_scaling, visual_odometry, camera_center)
-
+                                                                                     visual_odometry, camera_center,
+                                                                                     output_data.fov_pix,
+                                                                                     output_data.fov)
         output_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
 
         if self._good_match(output_data.terrain_altitude, output_data.fov_pix):

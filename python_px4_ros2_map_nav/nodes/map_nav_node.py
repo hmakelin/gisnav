@@ -1967,8 +1967,9 @@ class MapNavNode(Node, ABC):
         assert_shape(input_data.k, (3, 3))
 
         # Init output
-        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, fov=None,
-                                 fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, pose=None,
+                                 pose_wgs84=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
+                                 attitude=None, c=None, sd=None)
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
@@ -1981,7 +1982,10 @@ class MapNavNode(Node, ABC):
 
         # Estimate extrinsic and homography matrices
         pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-        h = np.linalg.inv(pose.h)  # TODO: handle linalg error!
+
+        output_data.pose = pose
+
+        h = np.linalg.inv(pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
@@ -2007,6 +2011,7 @@ class MapNavNode(Node, ABC):
                     pose = self._pose_map @ pose
                 else:
                     pose = self._pose_map @ self._pose_vo @ pose
+
                 r = pose.r
                 t = pose.t
                 if self._pose_vo is None:
@@ -2022,6 +2027,7 @@ class MapNavNode(Node, ABC):
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
 
+        output_data.pose_wgs84 = pose
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
         output_data.position, output_data.terrain_altitude = self._estimate_position(pose, pix_to_wgs84_,
                                                                                      visual_odometry, camera_center,

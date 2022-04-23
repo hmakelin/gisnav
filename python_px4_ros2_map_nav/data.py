@@ -109,6 +109,8 @@ class OutputData:
 
     :param image_data: The drone image
     :param map_data: The map raster
+    :param pose: Estimated pose for the image frame vs. the map frame
+    :param pose_wgs84: Estimated pose for the image frame vs. the map frame (in WGS84)
     :param fov: Camera field of view projected to WGS84 coordinates
     :param fov_pix: Camera field of view in pixels in reference frame (map or previous frame)
     :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
@@ -120,6 +122,8 @@ class OutputData:
     """
     image_data: ImageData
     map_data: Union[ImageData, MapData]  # TODO: if vo, this should just be a another ImageData instead of MapData?
+    pose: Pose
+    pose_wgs84: Pose
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     fov_pix: np.ndarray
     position: LatLonAlt

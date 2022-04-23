@@ -1982,7 +1982,6 @@ class MapNavNode(Node, ABC):
 
         # Estimate extrinsic and homography matrices
         pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-
         output_data.pose = pose
 
         h = np.linalg.inv(pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose

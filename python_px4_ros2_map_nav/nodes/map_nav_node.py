@@ -1968,7 +1968,7 @@ class MapNavNode(Node, ABC):
 
         # Init output
         output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, pose=None,
-                                 pose_wgs84=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
+                                 pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
                                  attitude=None, c=None, sd=None)
 
         if not visual_odometry:
@@ -1994,7 +1994,7 @@ class MapNavNode(Node, ABC):
         camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(
             output_data.pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
 
-        pose_wgs84 = output_data.pose  # If not visual odometry, this is same as output_data.pose? Or should not be since _wgs84 has also pix_to_wgs84 included?
+        pose_map = output_data.pose  # If not visual odometry, this is same as output_data.pose? Or should not be since _wgs84 has also pix_to_wgs84 included?
         if visual_odometry:
             pos_diff = output_data.pose.camera_position - camera_center
             # Integrate with previous r, t and h
@@ -2006,12 +2006,12 @@ class MapNavNode(Node, ABC):
 
                 # Combine with latest map match
                 if self._pose_vo is None:
-                    pose_wgs84 = self._pose_map @ output_data.pose
+                    pose_map = self._pose_map @ output_data.pose
                 else:
-                    pose_wgs84 = self._pose_map @ self._pose_vo @ output_data.pose
+                    pose_map = self._pose_map @ self._pose_vo @ output_data.pose
 
-                r = pose_wgs84.r
-                t = pose_wgs84.t
+                r = pose_map.r
+                t = pose_map.t
                 if self._pose_vo is None:
                     h = np.linalg.inv(self._pose_map.h @ output_data.pose.h)  # TODO: handle linalg error!
                 else:
@@ -2025,17 +2025,17 @@ class MapNavNode(Node, ABC):
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
 
-        output_data.pose_wgs84 = pose_wgs84
+        output_data.pose_map = pose_map
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
-        output_data.position, output_data.terrain_altitude = self._estimate_position(pose_wgs84, pix_to_wgs84_,
+        output_data.position, output_data.terrain_altitude = self._estimate_position(pose_map, pix_to_wgs84_,
                                                                                      visual_odometry, camera_center,
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)
-        output_data.attitude = self._estimate_attitude(output_data.pose_wgs84, input_data.camera_yaw)
+        output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
 
         if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
             if not visual_odometry:
-                self._pose_map = pose_wgs84  # Pose(r, t)
+                self._pose_map = pose_map  # Pose(r, t)
                 self._odom_reset(input_data.k)
 
             if visual_odometry:

@@ -1981,10 +1981,9 @@ class MapNavNode(Node, ABC):
         pix_to_wgs84_ = self._pix_to_wgs84  # TODO: redundant assignment here? or provide as arugment from stored inputs?
 
         # Estimate extrinsic and homography matrices
-        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-        output_data.pose = pose
+        output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
-        h = np.linalg.inv(pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose
+        h = np.linalg.inv(output_data.pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
@@ -1993,10 +1992,11 @@ class MapNavNode(Node, ABC):
         f = input_data.k[0][0]
         assert f == input_data.k[1][1]  # fx == fy
         camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(
-            pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
+            output_data.pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
 
+        pose_wgs84 = output_data.pose  # If not visual odometry, this is same as output_data.pose? Or should not be since _wgs84 has also pix_to_wgs84 included?
         if visual_odometry:
-            pos_diff = pose.camera_position - camera_center
+            pos_diff = output_data.pose.camera_position - camera_center
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
             #assert self._previous_good_image_data is not None
@@ -2005,18 +2005,17 @@ class MapNavNode(Node, ABC):
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, h)
 
                 # Combine with latest map match
-                pose_orig = Pose(pose.k, pose.r, pose.t)
                 if self._pose_vo is None:
-                    pose = self._pose_map @ pose
+                    pose_wgs84 = self._pose_map @ output_data.pose
                 else:
-                    pose = self._pose_map @ self._pose_vo @ pose
+                    pose_wgs84 = self._pose_map @ self._pose_vo @ output_data.pose
 
-                r = pose.r
-                t = pose.t
+                r = pose_wgs84.r
+                t = pose_wgs84.t
                 if self._pose_vo is None:
-                    h = np.linalg.inv(self._pose_map.h @ pose_orig.h)  # TODO: handle linalg error!
+                    h = np.linalg.inv(self._pose_map.h @ output_data.pose.h)  # TODO: handle linalg error!
                 else:
-                    h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ pose_orig.h)  # TODO: handle linalg error!
+                    h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ output_data.pose.h)  # TODO: handle linalg error!
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
@@ -2026,25 +2025,25 @@ class MapNavNode(Node, ABC):
             # Not needed if visual odometry flag is not on
             fov_pix_odom, c_pix_odom = None, None
 
-        output_data.pose_wgs84 = pose
+        output_data.pose_wgs84 = pose_wgs84
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
-        output_data.position, output_data.terrain_altitude = self._estimate_position(pose, pix_to_wgs84_,
+        output_data.position, output_data.terrain_altitude = self._estimate_position(pose_wgs84, pix_to_wgs84_,
                                                                                      visual_odometry, camera_center,
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)
-        output_data.attitude = self._estimate_attitude(pose, input_data.camera_yaw)
+        output_data.attitude = self._estimate_attitude(output_data.pose_wgs84, input_data.camera_yaw)
 
         if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
             if not visual_odometry:
-                self._pose_map = pose  # Pose(r, t)
+                self._pose_map = pose_wgs84  # Pose(r, t)
                 self._odom_reset(input_data.k)
 
             if visual_odometry:
                 if self._should_accumulate_odom(pos_diff, f):
                     if self._pose_vo is None:
-                        self._pose_vo = pose_orig
+                        self._pose_vo = output_data.pose
                     else:
-                        self._pose_vo = pose_orig @ self._pose_vo
+                        self._pose_vo = output_data.pose @ self._pose_vo
                     self._previous_odom_data = input_data.image_data  # TODO: set this here now that the update/accumulation is done?
 
             # noinspection PyUnreachableCode
@@ -2077,7 +2076,7 @@ class MapNavNode(Node, ABC):
                 self._previous_odom_data = self._previous_image_data  # image_data
 
         if visual_odometry:
-            self._pose_orig_prev = pose_orig  # TODO: declare property _pose_orig_prev
+            self._pose_orig_prev = output_data.pose  # TODO: declare property _pose_orig_prev
 
         self._previous_image_data = input_data.image_data
 

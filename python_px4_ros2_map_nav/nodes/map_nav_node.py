@@ -2028,6 +2028,7 @@ class MapNavNode(Node, ABC):
 
         output_data.pose_map = self._estimate_map_pose(output_data.pose, h, input_data.img_dim, visual_odometry, camera_center)
         if output_data.pose_map is None:
+            # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
             self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                     'map match yet, skipping publishing.')
             return None

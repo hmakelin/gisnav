@@ -2012,9 +2012,6 @@ class MapNavNode(Node, ABC):
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
         assert self._pix_to_wgs84 is not None
 
-        # TODO: do not assign if previous round's self._pix_to_wgs84 was bad? only assign here if the map stuff gets assigned?
-        pix_to_wgs84_ = self._pix_to_wgs84  # TODO: redundant assignment here? or provide as arugment from stored inputs?
-
         # Estimate extrinsic and homography matrices
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
@@ -2048,8 +2045,8 @@ class MapNavNode(Node, ABC):
 
         pos_diff = output_data.pose.camera_position - camera_center
 
-        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, pix_to_wgs84_)
-        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, pix_to_wgs84_,
+        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, self._pix_to_wgs84)
+        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
                                                                                      visual_odometry, camera_center,
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)

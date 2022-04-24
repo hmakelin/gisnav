@@ -2031,6 +2031,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                     'map match yet, skipping publishing.')
             return None
+
         if visual_odometry:
             if output_data.pose_map is not None:
                 # Have map match
@@ -2076,7 +2077,6 @@ class MapNavNode(Node, ABC):
                 if self._variance_window_full():
                     sd = np.std(self._estimation_history, axis=0)
                     output_data.sd = sd
-                    #if visual_odometry:  # TODO: remove this condition
                     self.get_logger().info(f'Publishing image data, viz odom: {visual_odometry}')
                     self.publish_position(output_data)
                 else:

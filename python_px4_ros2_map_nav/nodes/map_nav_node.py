@@ -2098,7 +2098,7 @@ class MapNavNode(Node, ABC):
                                                                                      output_data.fov)
         output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
 
-        if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
+        if self._good_match(output_data):
             # noinspection PyUnreachableCode
             if __debug__:
                 self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
@@ -2132,20 +2132,20 @@ class MapNavNode(Node, ABC):
         cv2.imshow(figure_name, img)
         cv2.waitKey(1)
 
-    def _good_match(self, alt: float, fov_pix: np.ndarray) -> bool:
+    def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
 
-        :param alt: Terrain altitude of match
-        :param fov_pix: Field of view in pixels of match
+        :param output_data: Computed output
         :return: True if match is good
         """
-        if alt < 0:  # TODO: or is nan
-            self.get_logger().warn(f'Match terrain altitude {alt} was negative, assume bad match.')
+        if output_data.terrain_altitude < 0:  # TODO: or is nan
+            self.get_logger().warn(f'Match terrain altitude {output_data.terrain_altitude} was negative, assume bad '
+                                   f'match.')
             return False
 
-        if not is_convex_isosceles_trapezoid(fov_pix):
-            self.get_logger().warn(f'Match fov_pix {fov_pix.squeeze().tolist()} was not a convex isosceles trapezoid, '
-                                   f'assume bad match.')
+        if not is_convex_isosceles_trapezoid(output_data.fov_pix):
+            self.get_logger().warn(f'Match fov_pix {output_data.fov_pix.squeeze().tolist()} was not a convex isosceles '
+                                   f'trapezoid, assume bad match.')
             return False
 
         return True

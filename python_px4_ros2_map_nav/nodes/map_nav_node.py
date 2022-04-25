@@ -2109,6 +2109,7 @@ class MapNavNode(Node, ABC):
 
             return output_data
         else:
+            self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
             return None
 
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:

@@ -1637,7 +1637,26 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        self._process_matches(mkp_img, mkp_map, self._stored_inputs, visual_odometry=False)
+        output_data = self._process_matches(mkp_img, mkp_map, self._stored_inputs, visual_odometry=False)
+
+        if output_data is None:
+            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
+            self.get_logger().warn(f'Position estimate was not good or could not be obtained, skipping this match.')
+        else:
+            self._pose_map = output_data.pose_map  # Pose(r, t)
+            self._odom_reset(self._stored_inputs.k)
+            if self._previous_good_image_data is not None:
+                self._push_estimates(np.array(output_data.position))
+                if self._variance_window_full():
+                    sd = np.std(self._estimation_history, axis=0)
+                    output_data.sd = sd
+                    self.get_logger().info(f'Publishing map image data')
+                    self.publish_position(output_data)
+                else:
+                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
+            self._previous_good_image_data = self._stored_inputs.image_data
+
+        self._previous_image_data = self._stored_inputs.image_data
 
     def odom_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for visual odometry matching worker.
@@ -1658,7 +1677,43 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        self._process_matches(mkp_img, mkp_map, self._odom_stored_inputs, visual_odometry=True)
+        output_data = self._process_matches(mkp_img, mkp_map, self._odom_stored_inputs, visual_odometry=True)
+
+        if output_data is None:
+            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
+            self.get_logger().warn(f'Position estimate was not good or could not be obtained, skipping this match.')
+            if self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
+                # Visual odometry lost track - reset the accumulated
+                # TODO: push accumulation logic into own method (same as reset_odom?)
+                if self._pose_vo is not None:
+                    self._pose_vo = self._pose_orig_prev @ self._pose_vo
+                else:
+                    self._pose_vo = self._pose_orig_prev
+                self._previous_odom_data = self._previous_image_data  # image_data
+        else:
+            #if self._should_accumulate_odom(pos_diff, f):  # TODO: make pos_diff available via output_data?
+            # TODO: assumes fx == fy
+            if self._should_accumulate_odom(output_data.pose.camera_position_difference, output_data.pose.fx):  # TODO: make pos_diff available via output_data?
+                if self._pose_vo is None:
+                    self._pose_vo = output_data.pose
+                else:
+                    self._pose_vo = output_data.pose @ self._pose_vo
+                self._previous_odom_data = self._stored_inputs.image_data  # TODO: set this here now that the update/accumulation is done?
+
+            if self._previous_good_image_data is not None:
+                self._push_estimates(np.array(output_data.position))
+                if self._variance_window_full():
+                    sd = np.std(self._estimation_history, axis=0)
+                    output_data.sd = sd
+                    self.get_logger().info(f'Publishing vo image data.')
+                    self.publish_position(output_data)
+                else:
+                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
+            self._previous_good_image_data = self._stored_inputs.image_data
+
+        self._pose_orig_prev = output_data.pose  # TODO: declare property _pose_orig_prev
+
+        self._previous_image_data = self._stored_inputs.image_data
 
     def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
         """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
@@ -1950,21 +2005,18 @@ class MapNavNode(Node, ABC):
             # self._visualize_homography()
             # TODO: if visual odometry is not enabled, visualize map here
 
-    def _estimate_map_pose(self, pose: Pose, h: np.ndarray, img_dim: Dim, visual_odometry: bool,
-                           camera_center: np.ndarray) -> Optional[Pose]:
+    def _estimate_map_pose(self, pose: Pose, visual_odometry: bool) -> Optional[Pose]:
         """Estimates pose against the latest map frame
 
         :param pose: Pose for the match
-        :param h: Homography for latest match  # TODO: refactor out - use output_data or pose directly?
-        :param img_dim: Image dimensions
         :param visual_odometry: True if this is a visual odometry match
-        :param camera_center: Camera center coordinates
+        :return: Estimated pose if possible
         """
         if visual_odometry:
             # Integrate with previous r, t and h
             assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
             #assert self._previous_good_image_data is not None
-            if self._have_map_match():
+            if self._have_map_match():  # TODO: should not be in estimate poes method - should be checked outside of the method (encapsulation)
                 # Needed for visualize_homography below, store here already
 
                 # Combine with latest map match
@@ -1985,7 +2037,7 @@ class MapNavNode(Node, ABC):
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> None:
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> Optional[OutputData]:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 
@@ -1993,7 +2045,7 @@ class MapNavNode(Node, ABC):
         :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :param visual_odometry: True if this match is a visual odometry match and not a map match
-        :return:
+        :return: Computed output_data is a valid estimate was obtained
         """
         if self._not_enough_matches(len(mkp_img)):
             self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
@@ -2015,18 +2067,12 @@ class MapNavNode(Node, ABC):
         # Estimate extrinsic and homography matrices
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
-        # TODO: needed only for vo? Need to refactor _estimate_position
-        f = input_data.k[0][0]
-        assert f == input_data.k[1][1]  # fx == fy
-        camera_center = np.array((input_data.img_dim.width / 2, input_data.img_dim.height / 2, -f)).reshape(
-            output_data.pose.camera_position.shape)  # Negative z coordinate intended  # TODO need np.float32 array type?
-
         h = np.linalg.inv(output_data.pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose
         if h is None:
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
-        output_data.pose_map = self._estimate_map_pose(output_data.pose, h, input_data.img_dim, visual_odometry, camera_center)
+        output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
         if output_data.pose_map is None:
             # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
             self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
@@ -2045,60 +2091,25 @@ class MapNavNode(Node, ABC):
         else:
             fov_pix_odom, c_pix_odom = None, None
 
-        pos_diff = output_data.pose.camera_position - camera_center
+        #pos_diff = output_data.pose.camera_position - camera_center
 
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
-                                                                                     visual_odometry, camera_center,
+                                                                                     visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)
         output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
 
         if self._good_match(output_data.terrain_altitude, output_data.fov_pix):
-            if not visual_odometry:
-                self._pose_map = output_data.pose_map  # Pose(r, t)
-                self._odom_reset(input_data.k)
-
-            if visual_odometry:
-                if self._should_accumulate_odom(pos_diff, f):
-                    if self._pose_vo is None:
-                        self._pose_vo = output_data.pose
-                    else:
-                        self._pose_vo = output_data.pose @ self._pose_vo
-                    self._previous_odom_data = input_data.image_data  # TODO: set this here now that the update/accumulation is done?
-
             # noinspection PyUnreachableCode
             if __debug__:
                 self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
                                           input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
                                           mkp_map, fov_pix_odom)
 
-            if self._previous_good_image_data is not None:
-                self._push_estimates(np.array(output_data.position))
-                if self._variance_window_full():
-                    sd = np.std(self._estimation_history, axis=0)
-                    output_data.sd = sd
-                    self.get_logger().info(f'Publishing image data, viz odom: {visual_odometry}')
-                    self.publish_position(output_data)
-                else:
-                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-            self._previous_good_image_data = input_data.image_data
+            return output_data
         else:
-            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
-            self.get_logger().warn(f'Position estimate was not good, skipping this match.')
-            if visual_odometry and self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
-                # Visual odometry lost track - reset the accumulated
-                # TODO: push accumulation logic into own method (same as reset_odom?)
-                if self._pose_vo is not None:
-                    self._pose_vo = self._pose_orig_prev @ self._pose_vo
-                else:
-                    self._pose_vo = self._pose_orig_prev
-                self._previous_odom_data = self._previous_image_data  # image_data
-
-        if visual_odometry:
-            self._pose_orig_prev = output_data.pose  # TODO: declare property _pose_orig_prev
-
-        self._previous_image_data = input_data.image_data
+            return None
 
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
         """Visualizes stored homography"""

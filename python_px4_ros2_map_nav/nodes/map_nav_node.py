@@ -2091,8 +2091,6 @@ class MapNavNode(Node, ABC):
         else:
             fov_pix_odom, c_pix_odom = None, None
 
-        #pos_diff = output_data.pose.camera_position - camera_center
-
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
                                                                                      visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature

@@ -2012,6 +2012,41 @@ class MapNavNode(Node, ABC):
         cv2.imshow(figure_name, img)
         cv2.waitKey(1)
 
+    @staticmethod
+    def _create_homography_visualization(img_arr: np.ndarray, map_arr: np.ndarray,
+                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray,
+                                         display_text: Optional[str] = None) -> np.ndarray:
+        """Visualizes a homography including keypoint matches and field of view.
+
+        :param img_arr: Image array
+        :param map_arr: Map array
+        :param kp_img: Image keypoints
+        :param kp_map: Map keypoints
+        :param dst_corners: Field of view corner pixel coordinates on map
+        :param display_text: Optional display text on top left of image
+        :return: Visualized image as numpy array
+        """
+        # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
+        kp_count = len(kp_img)
+        assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
+        matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
+
+        # Need cv2.KeyPoints for keypoints
+        kp_img = np.apply_along_axis(make_keypoint, 1, kp_img)
+        kp_map = np.apply_along_axis(make_keypoint, 1, kp_map)
+
+        map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
+        draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
+        out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
+
+        # Add text (need to manually handle newlines)
+        if display_text is not None:
+            for i, text_line in enumerate(display_text.split('\n')):
+                y = (i + 1) * 30
+                cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
+
+        return out
+
     def _build_visualization(self, attitude: np.ndarray, image_data: ImageData, map_cropped: np.ndarray, previous_image,
                              fov_pix: np.ndarray, visual_odometry: bool, mkp_img: np.ndarray, mkp_map: np.ndarray,
                              fov_pix_odom) -> None:
@@ -2134,41 +2169,6 @@ class MapNavNode(Node, ABC):
 
             # Add newest values
             self._estimation_history = np.vstack((self._estimation_history, position))
-
-    @staticmethod
-    def _create_homography_visualization(img_arr: np.ndarray, map_arr: np.ndarray,
-                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray,
-                                         display_text: Optional[str] = None) -> np.ndarray:
-        """Visualizes a homography including keypoint matches and field of view.
-
-        :param img_arr: Image array
-        :param map_arr: Map array
-        :param kp_img: Image keypoints
-        :param kp_map: Map keypoints
-        :param dst_corners: Field of view corner pixel coordinates on map
-        :param display_text: Optional display text on top left of image
-        :return: Visualized image as numpy array
-        """
-        # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
-        kp_count = len(kp_img)
-        assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
-        matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
-
-        # Need cv2.KeyPoints for keypoints
-        kp_img = np.apply_along_axis(make_keypoint, 1, kp_img)
-        kp_map = np.apply_along_axis(make_keypoint, 1, kp_map)
-
-        map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
-        draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
-        out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
-
-        # Add text (need to manually handle newlines)
-        if display_text is not None:
-            for i, text_line in enumerate(display_text.split('\n')):
-                y = (i + 1) * 30
-                cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
-
-        return out
 
     @abstractmethod
     def publish_position(self, output_data: OutputData) -> None:

@@ -1455,39 +1455,6 @@ class MapNavNode(Node, ABC):
 
         return input_data
 
-    def _compute_camera_altitude(self, camera_distance: float, camera_pitch: Union[int, float]) -> Optional[float]:
-        """Computes camera altitude in meters (positive) based on distance to principal point and pitch in degrees.
-
-        :param camera_distance: Camera distance to projected principal point
-        :param camera_pitch: Camera pitch in degrees
-        :return:
-        """
-        if camera_pitch >= 0:
-            self.get_logger().warn(f'Camera pitch {camera_pitch} is positive (not facing ground). Cannot compute '
-                                   f'camera altitude from distance.')
-            return None
-
-        if abs(camera_pitch) > 90:
-            self.get_logger().error(f'Absolute camera pitch {camera_pitch} is unexpectedly higher than 90 degrees. '
-                                    f'Cannot compute camera altitude from distance.')
-            return None
-
-        if camera_distance < 0:
-            self.get_logger().error(f'Camera distance {camera_distance} is unexpectedly negative. '
-                                    f'Cannot compute camera altitude from distance.')
-            return None
-
-        map_update_max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-        match_max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
-        camera_pitch_from_nadir = 90 + camera_pitch
-        if camera_pitch_from_nadir > map_update_max_pitch or camera_pitch_from_nadir > match_max_pitch:
-            self.get_logger().warn(f'Camera pitch from nadir {camera_pitch_from_nadir} is higher than one of max pitch '
-                                   f'limits (map_update.max_pitch: {map_update_max_pitch}, misc.max_pitch). Are you '
-                                   f'sure you want to compute camera distance to principal point projected to ground?.')
-
-        camera_altitude = np.cos(np.radians(-camera_pitch)) * camera_distance  # Negate pitch to get positive altitude
-        return camera_altitude
-
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera pitch exceeds given limit.
 

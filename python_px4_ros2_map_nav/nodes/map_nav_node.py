@@ -1971,12 +1971,6 @@ class MapNavNode(Node, ABC):
                                  pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
                                  attitude=None, c=None, sd=None)
 
-        if not visual_odometry:
-            # Transforms from rotated and cropped map pixel coordinates to WGS84
-            self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
-        assert self._pix_to_wgs84 is not None
-
         # Estimate extrinsic and homography matrices
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
@@ -1985,6 +1979,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
             return None
 
+        # TODO: refactor OutputData.pose_map property - easy to confuse with self._map_pose
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
         if output_data.pose_map is None:
             # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
@@ -2002,8 +1997,13 @@ class MapNavNode(Node, ABC):
             else:
                 h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @  output_data.pose.h)  # TODO: handle linalg error!
         else:
+            # Transforms from rotated and cropped map pixel coordinates to WGS84
+            self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
+                input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
+
             fov_pix_odom, c_pix_odom = None, None
 
+        assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
                                                                                      visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature

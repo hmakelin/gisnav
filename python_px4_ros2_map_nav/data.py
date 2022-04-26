@@ -63,7 +63,6 @@ class Pose:
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
-
     def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
         """Matrix multiplication operator for convenience
 

@@ -48,13 +48,25 @@ class Pose:
     t: np.ndarray
     e: np.ndarray = field(init=False)
     h: np.ndarray = field(init=False)
+    inv_h: np.ndarray = field(init=False)
+    fx: float = field(init=False)
+    fy: float = field(init=False)
+    cx: float = field(init=False)  # TODO: int?
+    cy: float = field(init=False)  # TODO: int?
     camera_position: np.ndarray = field(init=False)
+    camera_center: np.ndarray = field(init=False)
+    camera_position_difference: np.ndarray = field(init=False)
 
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
         object.__setattr__(self, 'h', self.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
+        try:
+            object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
+        except np.linalg.LinAlgError as _:
+            #object.__setattr__(self, 'inv_h', None)  # TODO: pass error on?
+            object.__setattr__(self, 'inv_h', np.identity(3))  # TODO: pass error on? using identity here is not transparent/intuitive, need to refactor later
         object.__setattr__(self, 'fx', self.k[0][0])
         object.__setattr__(self, 'fy', self.k[1][1])
         object.__setattr__(self, 'cx', self.k[0][2])

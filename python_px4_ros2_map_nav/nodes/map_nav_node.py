@@ -175,6 +175,7 @@ class MapNavNode(Node, ABC):
         # Latest pose from map matching (need to remember for when visual odometry is enabled)
         self._pose_vo = None  # Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
         self._pose_orig_prev = None
+        self._pose_map = None
 
         # Stored solution for the PnP problem (map matching and visual odometry separately)
         self._pose_map_guess = None
@@ -1972,12 +1973,8 @@ class MapNavNode(Node, ABC):
                                  attitude=None, c=None, sd=None)
 
         # Estimate extrinsic and homography matrices
+        # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-
-        h = np.linalg.inv(output_data.pose.h)  # TODO: handle linalg error!  # TODO: get rid of this section? Use where needed via pose
-        if h is None:
-            self.get_logger().warn('Could not invert homography matrix, cannot estimate position.')
-            return None
 
         # TODO: refactor OutputData.pose_map property - easy to confuse with self._map_pose
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
@@ -1990,12 +1987,13 @@ class MapNavNode(Node, ABC):
         if visual_odometry:
             if output_data.pose_map is not None:
                 # Have map match
-                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, h)
+                assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
+                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
 
-            if self._pose_vo is None:
-                h = np.linalg.inv(self._pose_map.h @ output_data.pose.h)  # TODO: handle linalg error!
-            else:
-                h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @  output_data.pose.h)  # TODO: handle linalg error!
+            #if self._pose_vo is None:
+                #h = np.linalg.inv(self._pose_map.h @ output_data.pose.h)  # TODO: handle linalg error!
+            #else:
+            #    h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ output_data.pose.h)  # TODO: handle linalg error!
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -2004,7 +2002,13 @@ class MapNavNode(Node, ABC):
             fov_pix_odom, c_pix_odom = None, None
 
         assert self._pix_to_wgs84 is not None
-        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim, h, self._pix_to_wgs84)
+        if self._pose_vo is None:
+            self._pose_vo = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
+        if self._pose_map is None:
+            self._pose_map = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
+        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
+                                                                                 self._pose_map.inv_h @ self._pose_vo.inv_h @ output_data.pose.inv_h,
+                                                                                 self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
                                                                                      visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature
                                                                                      output_data.fov_pix,

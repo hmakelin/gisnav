@@ -1770,24 +1770,6 @@ class MapNavNode(Node, ABC):
         else:
             return self._pose_map_guess
 
-    def _should_accumulate_odom_old(self, fov1: np.ndarray, fov2: BBox) -> bool:
-        """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
-        (accumulated)."""
-        threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
-        assert 0 <= threshold <= 1
-        assert fov1 is not None
-        assert fov2 is not None
-        try:
-            if relative_area_of_intersection(fov1, fov2) < threshold:
-                self.get_logger().info(f'ODOM UPDATE REFERENCE')
-                return True
-            else:
-                return False
-        except Exception as e:
-            self.get_logger().error(f'Error occurred with computing FOV intersection area: '
-                                    f'\n{e}\n{traceback.print_exc()}')
-            return False
-
     def _should_accumulate_odom(self, pos_diff: float, f: float) -> bool:
         """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
         (accumulated)."""

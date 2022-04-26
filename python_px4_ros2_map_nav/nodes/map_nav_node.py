@@ -1992,9 +1992,8 @@ class MapNavNode(Node, ABC):
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
 
             if self._pose_vo is None:
-                h = np.linalg.inv(self._pose_map.h @ output_data.pose.h)  # TODO: handle linalg error!
-            else:
-                h = np.linalg.inv(self._pose_map.h @ self._pose_vo.h @ output_data.pose.h)  # TODO: handle linalg error!
+                self._pose_vo = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))
+            h = output_data.pose.inv_h @ self._pose_vo.inv_h @ self._pose_map.inv_h
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -2003,17 +2002,6 @@ class MapNavNode(Node, ABC):
             fov_pix_odom, c_pix_odom = None, None
 
         assert self._pix_to_wgs84 is not None
-        #if self._pose_vo is None:
-            # TODO: translation should be 0 0 1 and not 0 0 0?
-            #self._pose_vo = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))  # TODO: move to reset odom or similar?
-        #    self._pose_vo = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
-        #if self._pose_map is None:
-            # TODO: translation should be 0 0 1 and not 0 0 0?
-        #    self._pose_map = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
-            #self._pose_map = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))  # TODO: move to reset odom or similar?
-        #output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
-        #                                                                         self._pose_map.inv_h @ self._pose_vo.inv_h @ output_data.pose.inv_h,  # TODO: need to flip the order when using inverted values? pose @ pose_vo @ pose_map
-        #                                                                         self._pix_to_wgs84)
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
                                                                                  h,
                                                                                  self._pix_to_wgs84)

@@ -1770,19 +1770,6 @@ class MapNavNode(Node, ABC):
         else:
             return self._pose_map_guess
 
-    def _estimate_velocities(self, current_position: ImageData, previous_position: ImageData) -> np.ndarray:
-        """Estimates x, y and z velocities in m/s from current and previous position.
-
-        :param current_position: Current estimated position
-        :param previous_position: Previous estimated position
-        :return: Tuple of x, y and z velocity in m/s
-        """
-        time_diff_sec = (current_position.timestamp - previous_position.timestamp) / 1e6
-        diff_position = np.array(self._compute_xyz_distances(current_position.position,
-                                                             previous_position.position))
-        velocities = diff_position / time_diff_sec
-        return velocities
-
     def _should_accumulate_odom_old(self, fov1: np.ndarray, fov2: BBox) -> bool:
         """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
         (accumulated)."""
@@ -2037,7 +2024,8 @@ class MapNavNode(Node, ABC):
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) -> Optional[OutputData]:
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) \
+            -> Optional[OutputData]:
         """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
         message.
 

@@ -1715,29 +1715,6 @@ class MapNavNode(Node, ABC):
 
         self._previous_image_data = self._stored_inputs.image_data
 
-    def _compute_xyz_distances(self, position: LatLonAlt, origin: LatLonAlt) -> Optional[Tuple[float, float, float]]:
-        """Computes distance in meters in x, y and z (NED frame) dimensions from origin to position
-
-        :param origin: WGS84 coordinates of origin
-        :param position: WGS84 coordinates of position
-        :return: Tuple containing x, y and z coordinates (meters)
-        """
-        assert_type(position, LatLonAlt)
-        assert_type(origin, LatLonAlt)
-
-        lats_orig = (origin.lat, origin.lat)
-        lons_orig = (origin.lon, origin.lon)
-        lats_term = (origin.lat, position.lat)
-        lons_term = (position.lon, origin.lon)
-        _, __, dist = self._geod.inv(lons_orig, lats_orig, lons_term, lats_term)
-
-        lat_diff = math.copysign(dist[1], position.lat - origin.lat)
-        lon_diff = math.copysign(dist[0], position.lon - origin.lon)
-
-        alt = position.alt - origin.alt
-
-        return lat_diff, lon_diff, alt
-
     def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
 

@@ -1107,9 +1107,6 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        # TODO: some of these fields do not make sense if visual odometry flag is on, need to refactor (e.g. fov_pix)
-        #image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, fov=None,
-        #                       fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
         image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp)
 
         inputs = None  # TODO: the odom flag should be disabled when called for map!
@@ -1402,6 +1399,7 @@ class MapNavNode(Node, ABC):
         assert_type(rpy, RPY)
         return rpy.pitch
 
+    # TODO: remove this method? dead code from before
     def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
         """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available.
 

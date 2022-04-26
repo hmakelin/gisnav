@@ -2003,9 +2003,13 @@ class MapNavNode(Node, ABC):
 
         assert self._pix_to_wgs84 is not None
         if self._pose_vo is None:
+            # TODO: translation should be 0 0 1 and not 0 0 0?
+            #self._pose_vo = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))  # TODO: move to reset odom or similar?
             self._pose_vo = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
         if self._pose_map is None:
+            # TODO: translation should be 0 0 1 and not 0 0 0?
             self._pose_map = Pose(input_data.k, np.identity(3), np.zeros((3, 1)))  # TODO: move to reset odom or similar?
+            #self._pose_map = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))  # TODO: move to reset odom or similar?
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
                                                                                  self._pose_map.inv_h @ self._pose_vo.inv_h @ output_data.pose.inv_h,
                                                                                  self._pix_to_wgs84)

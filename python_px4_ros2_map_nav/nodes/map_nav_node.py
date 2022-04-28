@@ -1593,6 +1593,7 @@ class MapNavNode(Node, ABC):
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
+            self._vo_reset()
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
 
@@ -1844,18 +1845,17 @@ class MapNavNode(Node, ABC):
         if visual_odometry:
             if self._have_map_match():  # TODO: should not be in estimate pose method - should be checked outside of the method (encapsulation)
                 # Combine with latest map match
-                assert self._vo_output_data_fix is not None  # TODO: This might fail? Need to assume identity if None? Or should be initialized somewhere?
                 assert self._map_output_data_prev is not None
-                map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
-                r = map_pose.r
-                t = map_pose.t
+                if self._vo_output_data_fix is None:
+                    map_pose = self._map_output_data_prev.pose @ pose
+                else:
+                    map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
+
+                return map_pose
             else:
                 self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
                                         'map match yet, skipping publishing.')
                 return None
-
-            return map_pose
-
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
@@ -1893,12 +1893,16 @@ class MapNavNode(Node, ABC):
             return None
 
         h = output_data.pose.inv_h
-        if visual_odometry:
+        if visual_odometry:  # TODO: similar condition in _estimate_map_pose! maybe estimate this there too?
             if self._have_map_match():
                 assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
 
-            h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_input_data.pose.inv_h
+            assert self._map_output_data_prev is not None
+            if self._vo_output_data_fix is None:
+                h = output_data.pose.inv_h @ self._map_output_data_prev.pose.inv_h
+            else:
+                h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_output_data_prev.pose.inv_h
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -1997,12 +2001,9 @@ class MapNavNode(Node, ABC):
                           f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
                           f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
         if visual_odometry:
-            if self._previous_odom_data is None:  # TODO: this should not be here!
-                self._vo_input_data_prev = image_data  # Initialize, must be good match
             assert previous_image is not None
-            assert self._vo_input_data_prev is not None
-            assert hasattr(self._vo_input_data_prev, 'image')
-            reference_img = self._vo_input_data_prev.image
+            reference_img = self._previous_image()
+            assert reference_img is not None
             fov_pix_viz = fov_pix_odom
             self._vo_viz = self._create_homography_visualization(image_data.image,
                                                                  reference_img.copy(), mkp_img, mkp_map,

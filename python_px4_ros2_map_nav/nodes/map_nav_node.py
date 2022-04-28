@@ -65,8 +65,8 @@ class MapNavNode(Node, ABC):
 
     # Process counts for multiprocessing pools
     WMS_PROCESS_COUNT = 1  # should be 1
-    MATCHER_PROCESS_COUNT = 1  # should be 1
-    ODOM_MATCHER_PROCESS_COUNT = 1  # should be 1
+    MAP_MATCHER_PROCESS_COUNT = 1  # should be 1
+    VO_MATCHER_PROCESS_COUNT = 1  # should be 1
 
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
@@ -114,8 +114,7 @@ class MapNavNode(Node, ABC):
 
         # Setup matching
         # TODO: refactor this section, messy
-        self._stored_inputs = None  # Must check for None when using this
-        self._matching_results = None  # Must check for None when using this
+        self._map_matching_results = None  # Must check for None when using this
         class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
         matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
         if class_path is None or matcher_params_file is None:
@@ -129,21 +128,20 @@ class MapNavNode(Node, ABC):
         args = self._load_config(matcher_params_file)['args']
 
         # Do not increase the process count, it should be 1
-        self._matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
-                                                         initializer=self._kp_matcher.initializer, initargs=args)
+        self._map_matching_pool = torch.multiprocessing.Pool(self.MAP_MATCHER_PROCESS_COUNT,
+                                                             initializer=self._kp_matcher.initializer, initargs=args)
 
         # Setup visual odometry
-        odom_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        self._odom_matching_results = None
-        self._odom_stored_inputs = None
-        if odom_enabled:
-            odom_args = ['dummy_argument']  # TODO: anything here?
-            self._odom_matcher = ORB  # TODO: this correct?
-            self._odom_matching_pool = Pool(self.ODOM_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
-                                            initargs=odom_args)
+        vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        self._vo_matching_results = None
+        if vo_enabled:
+            vo_args = ['dummy_argument']  # TODO: anything here?
+            self._vo_matcher = ORB  # TODO: this correct?
+            self._vo_matching_pool = Pool(self.VO_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
+                                          initargs=vo_args)
         else:
-            self._odom_matcher = None
-            self._odom_matching_pool = None
+            self._vo_matcher = None
+            self._vo_matching_pool = None
 
         # Used for pyproj transformations
         self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
@@ -156,26 +154,23 @@ class MapNavNode(Node, ABC):
             # Stored visualizations (debug mode only)
             # TODO: declare properties?
             self._map_viz = None
-            self._odom_viz = None
+            self._vo_viz = None
 
         # Must check for None when using these
         # self._image_data = None  # Not currently used / needed
+        self._vo_input_data = None
+        self._vo_input_data_prev = None
+        self._vo_output_data_prev = None
+        self._vo_output_data_fix = None
+        self._map_input_data = None
+        self._map_input_data_prev = None
+        self._map_output_data_prev = None
+
         self._map_data = None
-        self._previous_map_data = None
-        self._previous_image_data = None
-        self._previous_good_image_data = None
-        self._previous_odom_data = None
 
         self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
 
         self._pix_to_wgs84 = None
-
-        # TODO: need to declare
-        # These are needed if bad match reset is done (accumulate and set previous_odom_data above)
-        # Latest pose from map matching (need to remember for when visual odometry is enabled)
-        self._pose_vo = None  # Pose(np.identity(3), np.zeros((3, 1)))# None  # TODO: only initialize if VO is enabled?
-        self._pose_orig_prev = None
-        self._pose_map = None
 
         # Stored solution for the PnP problem (map matching and visual odometry separately)
         self._pose_map_guess = None
@@ -230,16 +225,6 @@ class MapNavNode(Node, ABC):
     def _pose_vo_guess(self, value: Optional[Pose]) -> None:
         assert_type(value, get_args(Optional[Pose]))
         self.__pose_vo_guess = value
-
-    @property
-    def _pose_map(self) -> Optional[Pose]:
-        """Latest pose estimate obtained from map matching"""
-        return self.__pose_map
-
-    @_pose_map.setter
-    def _pose_map(self, value: Optional[Pose]) -> None:
-        assert_type(value, get_args(Optional[Pose]))
-        self.__pose_map = value
 
     @property
     def _pix_to_wgs84(self) -> Optional[np.ndarray]:
@@ -306,71 +291,81 @@ class MapNavNode(Node, ABC):
         self.__map_update_timer = value
 
     @property
-    def _matching_pool(self) -> torch.multiprocessing.Pool:
+    def _map_matching_pool(self) -> torch.multiprocessing.Pool:
         """Pool for running a :class:`~keypoint_matcher.KeypointMatcher` in dedicated process"""
-        return self.__matching_pool
+        return self.__map_matching_pool
 
-    @_matching_pool.setter
-    def _matching_pool(self, value: torch.multiprocessing.Pool) -> None:
+    @_map_matching_pool.setter
+    def _map_matching_pool(self, value: torch.multiprocessing.Pool) -> None:
         # TODO assert type
         #assert_type(torch.multiprocessing.Pool, value)
-        self.__matching_pool = value
+        self.__map_matching_pool = value
 
     @property
-    def _odom_matching_pool(self) -> Optional[Pool]:
+    def _vo_matching_pool(self) -> Optional[Pool]:
         """Pool for running a :class:`~keypoint_matcher.ORB` in dedicated process
 
         None if visual odometry is not enabled.
         """
-        return self.__odom_matching_pool
+        return self.__vo_matching_pool
 
-    @_odom_matching_pool.setter
-    def _odom_matching_pool(self, value: Optional[Pool]) -> None:
+    @_vo_matching_pool.setter
+    def _vo_matching_pool(self, value: Optional[Pool]) -> None:
         assert_type(value, get_args(Optional[Pool]))
-        self.__odom_matching_pool = value
+        self.__vo_matching_pool = value
+
+    @ property
+    def _map_data(self) -> Optional[MapData]:
+        """The map raster from the WMS server response along with supporting metadata."""
+        return self.__map_data
+
+    @_map_data.setter
+    def _map_data(self, value: Optional[MapData]) -> None:
+        assert_type(value, get_args(Optional[MapData]))
+        self.__map_data = value
 
     @property
-    def _stored_inputs(self) -> InputData:
+    def _map_input_data(self) -> InputData:
         """Inputs stored at time of launching a new asynchronous match that are needed for processing its results."""
-        return self.__stored_inputs
+        return self.__map_input_data
 
-    @_stored_inputs.setter
-    def _stored_inputs(self, value: Optional[InputData]) -> None:
+    @_map_input_data.setter
+    def _map_input_data(self, value: Optional[InputData]) -> None:
         assert_type(value, get_args(Optional[InputData]))
-        self.__stored_inputs = value
+        self.__map_input_data = value
 
     @property
-    def _odom_stored_inputs(self) -> InputData:
+    def _vo_input_data(self) -> InputData:
         """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
 
         This is used for visual odometry matches as opposed to :py:attr:`~stored_inputs` which is used for map matches.
         """
-        return self.__odom_stored_inputs
+        return self.__vo_input_data
 
-    @_odom_stored_inputs.setter
-    def _odom_stored_inputs(self, value: Optional[InputData]) -> None:
+    @_vo_input_data.setter
+    def _vo_input_data(self, value: Optional[InputData]) -> None:
         assert_type(value, get_args(Optional[InputData]))
-        self.__odom_stored_inputs = value
+        self.__vo_input_data = value
 
     @property
-    def _matching_results(self) -> Optional[AsyncResult]:
+    def _map_matching_results(self) -> Optional[AsyncResult]:
         """Asynchronous results from a matching process."""
-        return self.__matching_results
+        return self.__map_matching_results
 
-    @_matching_results.setter
-    def _matching_results(self, value: Optional[AsyncResult]) -> None:
+    @_map_matching_results.setter
+    def _map_matching_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(value, get_args(Optional[AsyncResult]))
-        self.__matching_results = value
+        self.__map_matching_results = value
 
     @property
-    def _odom_matching_results(self) -> Optional[AsyncResult]:
+    def _vo_matching_results(self) -> Optional[AsyncResult]:
         """Asynchronous results from a visual odometry matching process."""
-        return self.__odom_matching_results
+        return self.__vo_matching_results
 
-    @_odom_matching_results.setter
-    def _odom_matching_results(self, value: Optional[AsyncResult]) -> None:
+    @_vo_matching_results.setter
+    def _vo_matching_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(value, get_args(Optional[AsyncResult]))
-        self.__odom_matching_results = value
+        self.__vo_matching_results = value
 
     @property
     def _topics(self) -> dict:
@@ -393,16 +388,6 @@ class MapNavNode(Node, ABC):
         self.__geod = value
 
     @property
-    def _map_data(self) -> Optional[MapData]:
-        """The map raster from the WMS server response along with supporting metadata."""
-        return self.__map_data
-
-    @_map_data.setter
-    def _map_data(self, value: Optional[MapData]) -> None:
-        assert_type(value, get_args(Optional[MapData]))
-        self.__map_data = value
-
-    @property
     def _cv_bridge(self) -> CvBridge:
         """CvBridge that decodes incoming PX4-ROS 2 bridge images to cv2 images."""
         return self.__cv_bridge
@@ -413,44 +398,24 @@ class MapNavNode(Node, ABC):
         self.__cv_bridge = value
 
     @property
-    def _previous_map_data(self) -> Optional[MapData]:
-        """The previous map data which is compared to current map data to determine need for another update."""
-        return self.__previous_map_data
+    def _map_input_data_prev(self) -> Optional[InputData]:
+        """Previous map input data"""
+        return self.__map_input_data_prev
 
-    @_previous_map_data.setter
-    def _previous_map_data(self, value: Optional[MapData]) -> None:
-        assert_type(value, get_args(Optional[MapData]))
-        self.__previous_map_data = value
-
-    @property
-    def _previous_good_image_data(self) -> Optional[ImageData]:
-        """The previous image data which had a good match (can be used for computing variance estimate)."""
-        return self.__previous_good_image_data
-
-    @_previous_good_image_data.setter
-    def _previous_good_image_data(self, value: Optional[ImageData]) -> None:
-        assert_type(value, get_args(Optional[ImageData]))
-        self.__previous_good_image_data = value
+    @_map_input_data_prev.setter
+    def _map_input_data_prev(self, value: Optional[InputData]) -> None:
+        assert_type(value, get_args(Optional[InputData]))
+        self.__map_input_data_prev = value
 
     @property
-    def _previous_image_data(self) -> Optional[ImageData]:
-        """The previous image data (not currently used)"""
-        return self.__previous_image_data
+    def _vo_input_data_prev(self) -> Optional[InputData]:
+        """Previous visual odometry input data"""
+        return self.__vo_input_data_prev
 
-    @_previous_image_data.setter
-    def _previous_image_data(self, value: Optional[ImageData]) -> None:
-        assert_type(value, get_args(Optional[ImageData]))
-        self.__previous_image_data = value
-
-    @property
-    def _previous_odom_data(self) -> Optional[ImageData]:
-        """The previous image data used for visual odometry"""
-        return self.__previous_odom_data
-
-    @_previous_odom_data.setter
-    def _previous_odom_data(self, value: Optional[ImageData]) -> None:
-        assert_type(value, get_args(Optional[ImageData]))
-        self.__previous_odom_data = value
+    @_vo_input_data_prev.setter
+    def _vo_input_data_prev(self, value: Optional[InputData]) -> None:
+        assert_type(value, get_args(Optional[InputData]))
+        self.__vo_input_data_prev = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:
@@ -1114,10 +1079,10 @@ class MapNavNode(Node, ABC):
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
         # Do visual odometry if enabled
-        if self._odom_should_match(image_data.image):
-            assert self._odom_matching_results is None or self._odom_matching_results.ready()
-            assert self._odom_matching_pool is not None
-            assert self._previous_image_data is not None
+        if self._should_vo_match(image_data.image):
+            assert self._vo_matching_results is None or self._vo_matching_results.ready()
+            assert self._vo_matching_pool is not None
+            assert self._map_input_data_prev is not None
             try:
                 inputs = self._match_inputs(image_data)
             except TypeError as e:
@@ -1125,17 +1090,16 @@ class MapNavNode(Node, ABC):
                 self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
                                         f'Skipping visual odometry matching.')
                 return
-            self._odom_stored_inputs = inputs
+            self._vo_input_data = inputs
 
-            # TODO: refactor this section
-            if self._previous_odom_data is not None:
-                self._odom_match(image_data, self._previous_odom_data)  # self._previous_image_data
+            if self._vo_input_data_prev is not None:
+                self._vo_match(image_data, self._vo_input_data_prev.image_data)
             else:
-                self._odom_match(image_data, self._previous_image_data)
+                self._vo_match(image_data, self._map_input_data_prev.image_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
-            assert self._matching_results is None or self._matching_results.ready()
+            assert self._map_matching_results is None or self._map_matching_results.ready()
             if inputs is None:
                 # Get inputs if did not yet get them earlier for viz odom
                 try:
@@ -1146,12 +1110,11 @@ class MapNavNode(Node, ABC):
                                             f'Skipping map matching.')
                     return
 
-            self._stored_inputs = inputs
+            self._map_input_data = inputs
             map_cropped = inputs.map_cropped
-            #assert_type(map_cropped, np.ndarray)
 
             self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
-            self._match(image_data, map_cropped)
+            self._map_match(image_data, map_cropped)
 
     def _camera_yaw(self) -> Optional[Union[int, float]]:
         """Returns camera yaw in degrees.
@@ -1321,10 +1284,10 @@ class MapNavNode(Node, ABC):
         """
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
-        if self._previous_map_data is not None:
-            if not (abs(self._distance(center, self._previous_map_data.center)) >
+        if self._map_input_data_prev is not None:
+            if not (abs(self._distance(center, self._map_input_data_prev.map_data.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._previous_map_data.radius) >
+                    abs(radius - self._map_input_data_prev.map_data.radius) >
                     self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return True
 
@@ -1433,12 +1396,12 @@ class MapNavNode(Node, ABC):
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
         input_data = InputData(image_data=image_data, map_data=self._map_data,
-                             k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                             camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
-                             map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
-                             map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
+                               k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
+                               camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
+                               map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
+                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
                                 all((camera_yaw, self._map_data, img_dim)) else None,
-                             previous_image=self._previous_image_data)
+                               previous_image=self._previous_image())
 
         # Get cropped and rotated map
         if all((camera_yaw, self._map_data, img_dim)):
@@ -1449,11 +1412,22 @@ class MapNavNode(Node, ABC):
             #data['map_cropped'] = None
             pass
 
-        if self._previous_image_data is not None:
-            assert hasattr(self._previous_image_data, 'image')
-            #data['previous_image'] = self._previous_image_data.image  # TODO: only for viz odom matches, not needed for map matches? put it here anyway?
-
         return input_data
+
+    def _previous_image(self) -> Optional[np.ndarray]:
+        """Returns previous image frame that was used for matching
+        
+        :return: Previous frame from either map or vo matching, or None if not available
+        """
+        if self._vo_input_data_prev is not None:
+            assert self._map_input_data_prev is not None
+            assert self._vo_input_data_prev.image_data.timestamp >= self._map_input_data_prev.image_data.timestamp
+            return self._vo_input_data_prev.image_data.image
+        elif self._map_input_data_prev is not None:
+            return self._map_input_data_prev.image_data.image
+        else:
+            self.get_logger().debug('No previous frame available, returning None.')
+            return None
 
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera pitch exceeds given limit.
@@ -1499,7 +1473,7 @@ class MapNavNode(Node, ABC):
         else:
             return False
 
-    def _odom_should_match(self, img: np.ndarray) -> bool:
+    def _should_vo_match(self, img: np.ndarray) -> bool:
         """Determines whether _odom_match should be called based on whether previous match is still being processed.
 
         Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there
@@ -1515,12 +1489,13 @@ class MapNavNode(Node, ABC):
         if not visual_odometry:
             return False
 
-        # Check whether previous image frame is available
-        if self._previous_image_data is None:
+        # Check whether previous image frame data is available
+        if self._map_input_data_prev is None:  # or self._vo_input_data_prev is None:
+            assert self._vo_input_data_prev is None  # If no map match, reset odom should have been called
             return False
 
         # Check that a request is not already running
-        if not (self._odom_matching_results is None or self._odom_matching_results.ready()):
+        if not (self._vo_matching_results is None or self._vo_matching_results.ready()):
             return False
 
         # Check if is image too blurry
@@ -1540,7 +1515,7 @@ class MapNavNode(Node, ABC):
         :return: True if matching should be attempted
         """
         # Check condition (1) - that a request is not already running
-        if not (self._matching_results is None or self._matching_results.ready()):
+        if not (self._map_matching_results is None or self._map_matching_results.ready()):
             return False
 
         # Check condition (2) - whether camera pitch is too large
@@ -1585,14 +1560,14 @@ class MapNavNode(Node, ABC):
             # Add newest values
             self._blurs = np.append(self._blurs, blur)
 
-    def matching_worker_error_callback(self, e: BaseException) -> None:
+    def map_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for matching worker.
 
         :return:
         """
         self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
 
-    def matching_worker_callback(self, results) -> None:
+    def map_matching_worker_callback(self, results) -> None:
         """Callback for matching worker.
 
         Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
@@ -1604,35 +1579,31 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._stored_inputs, visual_odometry=False)
+        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=False)
 
         if output_data is None:
-            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
-            self.get_logger().warn(f'Position estimate was not good or could not be obtained, skipping this match.')
+            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
-            self._pose_map = output_data.pose_map  # Pose(r, t)
-            self._odom_reset(self._stored_inputs.k)
-            if self._previous_good_image_data is not None:
-                self._push_estimates(np.array(output_data.position))
-                if self._variance_window_full():
-                    sd = np.std(self._estimation_history, axis=0)
-                    output_data.sd = sd
-                    self.get_logger().info(f'Publishing map image data')
-                    self.publish_position(output_data)
-                else:
-                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-            self._previous_good_image_data = self._stored_inputs.image_data
+            self._push_estimates(np.array(output_data.position))
+            if self._variance_window_full():
+                sd = np.std(self._estimation_history, axis=0)
+                output_data.sd = sd
+                self.get_logger().info(f'Publishing map image data')
+                self.publish_position(output_data)
+            else:
+                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
-        self._previous_image_data = self._stored_inputs.image_data
+            self._map_input_data_prev = self._map_input_data
+            self._map_output_data_prev = output_data
 
-    def odom_matching_worker_error_callback(self, e: BaseException) -> None:
+    def vo_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for visual odometry matching worker.
 
         :return:
         """
         self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
 
-    def odom_matching_worker_callback(self, results) -> None:
+    def vo_matching_worker_callback(self, results) -> None:
         """Callback for visual odometry matching worker.
 
         Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored
@@ -1644,43 +1615,19 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._odom_stored_inputs, visual_odometry=True)
+        output_data = self._process_matches(mkp_img, mkp_map, self._vo_input_data, visual_odometry=True)
 
         if output_data is None:
-            #self.get_logger().warn(f'Position estimate was not good, skipping this match:\n{input_data.image_data}.')
-            self.get_logger().warn(f'Position estimate was not good or could not be obtained, skipping this match.')
-            if self._pose_orig_prev is not None:  # TODO: refactor the condition - should have previous frame
-                # Visual odometry lost track - reset the accumulated
-                # TODO: push accumulation logic into own method (same as reset_odom?)
-                if self._pose_vo is not None:
-                    self._pose_vo = self._pose_orig_prev @ self._pose_vo
-                else:
-                    self._pose_vo = self._pose_orig_prev
-                self._previous_odom_data = self._previous_image_data  # image_data
+            self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
+            self._vo_reset()
         else:
-            #if self._should_accumulate_odom(pos_diff, f):  # TODO: make pos_diff available via output_data?
-            # TODO: assumes fx == fy
-            if self._should_accumulate_odom(output_data.pose.camera_position_difference, output_data.pose.fx):  # TODO: make pos_diff available via output_data?
-                if self._pose_vo is None:
-                    self._pose_vo = output_data.pose
-                else:
-                    self._pose_vo = output_data.pose @ self._pose_vo
-                self._previous_odom_data = self._stored_inputs.image_data  # TODO: set this here now that the update/accumulation is done?
+            if self._should_fix_vo(output_data):
+                self._vo_output_data_fix = output_data
 
-            if self._previous_good_image_data is not None:
-                self._push_estimates(np.array(output_data.position))
-                if self._variance_window_full():
-                    sd = np.std(self._estimation_history, axis=0)
-                    output_data.sd = sd
-                    self.get_logger().info(f'Publishing vo image data.')
-                    self.publish_position(output_data)
-                else:
-                    self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-            self._previous_good_image_data = self._stored_inputs.image_data
+            # TODO: update dedicated variance estimates for visual odometry (like is done with map data)
 
-        self._pose_orig_prev = output_data.pose  # TODO: declare property _pose_orig_prev
-
-        self._previous_image_data = self._stored_inputs.image_data
+            self._vo_input_data_prev = self._vo_input_data
+            self._vo_output_data_prev = output_data
 
     def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
@@ -1714,27 +1661,26 @@ class MapNavNode(Node, ABC):
         else:
             return self._pose_map_guess
 
-    def _should_accumulate_odom(self, pos_diff: float, f: float) -> bool:
-        """Returns True if previous visual odometry fixed frame has been updated and current progress should be saved
-        (accumulated)."""
+    def _should_fix_vo(self, output_data: OutputData) -> bool:
+        """Returns True if previous visual odometry fixed reference frame should be updated
+
+        Assumes fx == fy (focal lengths in x and y dimensions are the approximately same).
+
+        :param output_data: Output data from the visual odometry matching
+        """
         threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
-        if np.linalg.norm(pos_diff.squeeze()) > threshold * f:
-            return True
-        else:
-            return False
+        return np.linalg.norm(output_data.pose.camera_position_difference.squeeze()) > threshold * output_data.pose.fx
 
     def _have_map_match(self) -> None:
         """Returns True if an existing map match is in store
 
         :return: True if a map match has been made earlier
         """
-        if not hasattr(self, '_pose_map'):  # TODO: initialize this somewhere
-            return False
-        return self._pose_map is not None
+        assert self._map_input_data_prev is not None
+        return self._map_output_data_prev is not None
 
-    # TODO: include self._previous_odom_data = image_data here?
-    def _odom_reset(self, k: np.ndarray) -> None:
-        """Resets accumulated r, t, h and pos
+    def _vo_reset(self) -> None:
+        """Resets accumulated pose
 
         Used when a new map match is found or visual odometry has lost track (bad match with visual odometry).
 
@@ -1742,7 +1688,10 @@ class MapNavNode(Node, ABC):
         """
         # Reset accumulated position differential
         #self._pose_vo = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
-        pass
+        self._vo_input_data = None
+        self._vo_input_data_prev = None
+        self._vo_output_data_prev = None
+        self._vo_output_data_fix = None
 
     def _not_enough_matches(self, count: int) -> bool:
         """Returns True if match count is too small for processing"""
@@ -1893,18 +1842,11 @@ class MapNavNode(Node, ABC):
         :return: Estimated pose if possible
         """
         if visual_odometry:
-            # Integrate with previous r, t and h
-            assert self._previous_image_data is not None  # TODO: should use previous_image data from arg and not this one! Use the input_data version
-            #assert self._previous_good_image_data is not None
-            if self._have_map_match():  # TODO: should not be in estimate poes method - should be checked outside of the method (encapsulation)
-                # Needed for visualize_homography below, store here already
-
+            if self._have_map_match():  # TODO: should not be in estimate pose method - should be checked outside of the method (encapsulation)
                 # Combine with latest map match
-                if self._pose_vo is None:
-                    map_pose = self._pose_map @ pose
-                else:
-                    map_pose = self._pose_map @ self._pose_vo @ pose
-
+                assert self._vo_output_data_fix is not None  # TODO: This might fail? Need to assume identity if None? Or should be initialized somewhere?
+                assert self._map_output_data_prev is not None
+                map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
                 r = map_pose.r
                 t = map_pose.t
             else:
@@ -1939,7 +1881,6 @@ class MapNavNode(Node, ABC):
                                  pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
                                  attitude=None, c=None, sd=None)
 
-        # Estimate extrinsic and homography matrices
         # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
@@ -1953,14 +1894,11 @@ class MapNavNode(Node, ABC):
 
         h = output_data.pose.inv_h
         if visual_odometry:
-            if output_data.pose_map is not None:
-                # Have map match
+            if self._have_map_match():
                 assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
 
-            if self._pose_vo is None:
-                self._pose_vo = Pose(input_data.k, np.identity(3), np.array([0, 0, 1]).reshape(3, 1))
-            h = output_data.pose.inv_h @ self._pose_vo.inv_h @ self._pose_map.inv_h
+            h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_input_data.pose.inv_h
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -1994,9 +1932,9 @@ class MapNavNode(Node, ABC):
         """Visualizes stored homography"""
         assert __debug__
         # noinspection PyUnreachableCode
-        odom_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        if odom_enabled:
-            if self._map_viz is None or self._odom_viz is None:
+        vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        if vo_enabled:
+            if self._map_viz is None or self._vo_viz is None:
                 self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
                 return None
         else:
@@ -2005,8 +1943,8 @@ class MapNavNode(Node, ABC):
                 return None
 
         img = self._map_viz
-        if self._odom_viz is not None:
-            img = np.vstack((img, self._odom_viz))
+        if self._vo_viz is not None:
+            img = np.vstack((img, self._vo_viz))
         else:
             img = np.vstack((img, np.zeros(self._map_viz.shape)))
         cv2.imshow(figure_name, img)
@@ -2060,15 +1998,15 @@ class MapNavNode(Node, ABC):
                           f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
         if visual_odometry:
             if self._previous_odom_data is None:  # TODO: this should not be here!
-                self._previous_odom_data = image_data  # Initialize, must be good match
+                self._vo_input_data_prev = image_data  # Initialize, must be good match
             assert previous_image is not None
-            assert self._previous_odom_data is not None
-            assert hasattr(self._previous_odom_data, 'image')
-            reference_img = self._previous_odom_data.image
+            assert self._vo_input_data_prev is not None
+            assert hasattr(self._vo_input_data_prev, 'image')
+            reference_img = self._vo_input_data_prev.image
             fov_pix_viz = fov_pix_odom
-            self._odom_viz = self._create_homography_visualization(image_data.image,
-                                                                   reference_img.copy(), mkp_img, mkp_map,
-                                                                   fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
+            self._vo_viz = self._create_homography_visualization(image_data.image,
+                                                                 reference_img.copy(), mkp_img, mkp_map,
+                                                                 fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
             self._visualize_homography()  # TODO: move this call somewhere else?
         else:
             reference_img = map_cropped
@@ -2098,7 +2036,7 @@ class MapNavNode(Node, ABC):
 
         return True
 
-    def _match(self, image_data: ImageData, map_cropped: np.ndarray) -> None:
+    def _map_match(self, image_data: ImageData, map_cropped: np.ndarray) -> None:
         """Instructs the neural network to match camera image to map image.
 
         See also :meth:`~_odom_match` for the corresponding visual odometry method.
@@ -2107,15 +2045,15 @@ class MapNavNode(Node, ABC):
         :param map_cropped: Cropped and rotated map raster (aligned with image)
         :return:
         """
-        assert self._matching_results is None or self._matching_results.ready()
-        self._matching_results = self._matching_pool.starmap_async(
+        assert self._map_matching_results is None or self._map_matching_results.ready()
+        self._map_matching_results = self._map_matching_pool.starmap_async(
             self._kp_matcher.worker,
             [(image_data.image, map_cropped)],
-            callback=self.matching_worker_callback,
-            error_callback=self.matching_worker_error_callback
+            callback=self.map_matching_worker_callback,
+            error_callback=self.map_matching_worker_error_callback
         )
 
-    def _odom_match(self, image_data: ImageData, previous_image_data: np.ndarray) -> None:
+    def _vo_match(self, image_data: ImageData, previous_image_data: np.ndarray) -> None:
         """Perform visual odometry matching.
 
         See also :meth:`~_match` for the corresponding map matching method.
@@ -2124,12 +2062,12 @@ class MapNavNode(Node, ABC):
         :param previous_image_data: Previous image to match
         :return:
         """
-        assert self._odom_matching_results is None or self._odom_matching_results.ready()
-        self._odom_matching_results = self._odom_matching_pool.starmap_async(
-            self._odom_matcher.worker,
+        assert self._vo_matching_results is None or self._vo_matching_results.ready()
+        self._vo_matching_results = self._vo_matching_pool.starmap_async(
+            self._vo_matcher.worker,
             [(image_data.image, previous_image_data.image)],
-            callback=self.odom_matching_worker_callback,
-            error_callback=self.odom_matching_worker_error_callback
+            callback=self.vo_matching_worker_callback,
+            error_callback=self.vo_matching_worker_error_callback
         )
 
     def _variance_window_full(self) -> bool:

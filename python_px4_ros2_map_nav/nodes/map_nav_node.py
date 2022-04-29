@@ -1176,7 +1176,7 @@ class MapNavNode(Node, ABC):
                 self._vo_match(image_data, self._map_input_data_prev.image_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
+        if self._should_map_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
             assert self._map_matching_results is None or self._map_matching_results.ready()
             if inputs is None:
                 # Get inputs if did not yet get them earlier for viz odom
@@ -1624,7 +1624,7 @@ class MapNavNode(Node, ABC):
 
         return True
 
-    def _should_match(self, img: np.ndarray) -> bool:
+    def _should_map_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
         Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.

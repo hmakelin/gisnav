@@ -186,6 +186,7 @@ class MapNavNode(Node, ABC):
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 
+    #region Properties
     @property
     def name(self) -> str:
         """Node name."""
@@ -476,6 +477,7 @@ class MapNavNode(Node, ABC):
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
+    #endregion
 
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.
@@ -1195,6 +1197,7 @@ class MapNavNode(Node, ABC):
 
         return rpy
 
+    #region microRTPSBridgeCallbacks
     def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
 
@@ -1346,6 +1349,7 @@ class MapNavNode(Node, ABC):
         :return:
         """
         self._vehicle_attitude = msg
+    #endregion
 
     def _camera_set_pitch(self) -> Optional[Union[int, float]]:
         """Returns camera pitch setting in degrees relative to nadir.
@@ -1560,6 +1564,7 @@ class MapNavNode(Node, ABC):
             # Add newest values
             self._blurs = np.append(self._blurs, blur)
 
+    #region MatchingWorkerCallbacks
     def map_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for matching worker.
 
@@ -1634,6 +1639,7 @@ class MapNavNode(Node, ABC):
 
             self._vo_input_data_prev = self._vo_input_data
             self._vo_output_data_prev = output_data
+    #endregion
 
     def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
@@ -1937,6 +1943,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
             return None
 
+    #region Visualization
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
         """Visualizes stored homography"""
         assert __debug__
@@ -2023,6 +2030,7 @@ class MapNavNode(Node, ABC):
                                                                   display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
             # self._visualize_homography()
             # TODO: if visual odometry is not enabled, visualize map here
+    #endregion
 
     def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
@@ -2114,6 +2122,7 @@ class MapNavNode(Node, ABC):
             # Add newest values
             self._estimation_history = np.vstack((self._estimation_history, position))
 
+    #region PublicAPI
     @abstractmethod
     def publish_position(self, output_data: OutputData) -> None:
         """Publishes or exports computed output
@@ -2129,6 +2138,7 @@ class MapNavNode(Node, ABC):
         This method should be implemented by an extending class to adapt for any given use case.
         """
         pass
+    #endregion
 
     def terminate_wms_pool(self):
         """Terminates the WMS Pool.

@@ -1354,6 +1354,18 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region MatchingWorkerCallbacks
+    def _matching_worker_callback_common(self, results: AsyncResult, visual_odometry: bool) -> Optional[OutputData]:
+        """Common logic for both vo and map matching worker callbacks
+
+        :param results: Results from the matching worker
+        :param visual_odometry: True if results are from visual odometry worker
+        :return: Parsed output data
+        """
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
+        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=visual_odometry)
+        return output_data
+
     def map_matching_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for matching worker.
 
@@ -1371,10 +1383,7 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=False)
-
+        output_data = self._matching_worker_callback_common(results, False)
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
@@ -1413,10 +1422,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('VO match received but VO reset happend in the meantime.')
             return
 
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._vo_input_data, visual_odometry=True)
-
+        output_data = self._matching_worker_callback_common(results, True)
         if output_data is None:
             self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
             self._vo_reset()

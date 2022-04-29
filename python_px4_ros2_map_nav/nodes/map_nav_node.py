@@ -168,7 +168,9 @@ class MapNavNode(Node, ABC):
 
         self._map_data = None
 
-        self._estimation_history = None  # Windowed estimates for computing estimate SD and variance
+        # Windowed estimates for computing estimate SD and variance
+        self._map_estimation_history = None
+        self._vo_estimation_history = None
 
         self._pix_to_wgs84 = None
 
@@ -367,6 +369,26 @@ class MapNavNode(Node, ABC):
     def _vo_matching_results(self, value: Optional[AsyncResult]) -> None:
         assert_type(value, get_args(Optional[AsyncResult]))
         self.__vo_matching_results = value
+
+    @property
+    def _map_estimation_history(self) -> Optional[np.ndarray]:
+        """Rolling window of past map position estimates for computing estimate variance"""
+        return self.__map_estimation_history
+
+    @_map_estimation_history.setter
+    def _map_estimation_history(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__map_estimation_history = value
+
+    @property
+    def _vo_estimation_history(self) -> Optional[np.ndarray]:
+        """Rolling window of past vo position estimates for computing estimate variance"""
+        return self.__vo_estimation_history
+
+    @_vo_estimation_history.setter
+    def _vo_estimation_history(self, value: Optional[np.ndarray]) -> None:
+        assert_type(value, get_args(Optional[np.ndarray]))
+        self.__vo_estimation_history = value
 
     @property
     def _topics(self) -> dict:
@@ -1387,9 +1409,9 @@ class MapNavNode(Node, ABC):
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
-            self._push_estimates(np.array(output_data.position))
-            if self._variance_window_full():
-                sd = np.std(self._estimation_history, axis=0)
+            self._push_estimates(np.array(output_data.position), False)
+            if self._variance_window_full(False):
+                sd = np.std(self._map_estimation_history, axis=0)
                 output_data.sd = sd
                 self.get_logger().info(f'Publishing map image data')
                 self.publish_position(output_data)
@@ -1430,7 +1452,14 @@ class MapNavNode(Node, ABC):
             if self._should_fix_vo(output_data):
                 self._vo_output_data_fix = output_data
 
-            # TODO: update dedicated variance estimates for visual odometry (like is done with map data)
+            self._push_estimates(np.array(output_data.position), True)
+            if self._variance_window_full(True):
+                sd = np.std(self._vo_estimation_history, axis=0)
+                output_data.sd = sd
+                self.get_logger().info(f'Publishing vo image data')
+                self.publish_position(output_data)
+            else:
+                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
             self._vo_input_data_prev = self._vo_input_data
             self._vo_output_data_prev = output_data
@@ -2093,43 +2122,77 @@ class MapNavNode(Node, ABC):
             error_callback=self.vo_matching_worker_error_callback
         )
 
-    def _variance_window_full(self) -> bool:
-        """Returns true if the variance estimation window is full.
+    #region Variance
+    @staticmethod
+    def _window_full(stack: np.ndarray, stack_height: int) -> bool:
+        """Return True if stack is full
 
-        :return: True if :py:attr:`~_estimation_history` is full
+        :param stack: Map or vo estimation history stack
+        :param stack_height: Configured max length for the estimation history (stack max height)
+        :return: True if stack is full
         """
-        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-        obs_count = len(self._estimation_history)
-        if self._estimation_history is not None and obs_count == window_length:
+        obs_count = len(stack)
+        if stack is not None and obs_count == window_length:
             return True
         else:
             assert 0 <= obs_count < window_length
             return False
 
-    def _push_estimates(self, position: np.ndarray) -> None:
-        """Pushes position estimates to :py:attr:`~_estimation_history`
+    def _variance_window_full(self, visual_odometry: bool) -> bool:
+        """Returns true if the variance estimation window is full.
+
+        :param visual_odometry: True if need to check vo variance windo
+        :return: True if :py:attr:`~_map_estimation_history` or :py:attr:`~_vo_estimation_history` is full
+        """
+        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+        if visual_odometry:
+            return self._window_full(self._vo_estimation_history, window_length)
+        else:
+            return self._window_full(self._map_estimation_history, window_length)
+
+    @staticmethod
+    def _push_and_pop_stack(stack: np.ndarray, position: np.ndarray) -> np.ndarray:
+        """Pushes a position estimate to the stack and pops an older one if needed
+
+        :param stack: Map or visual odometry estimation history stack
+        :param: position: Position estimate
+        :return: Returns the new stack
+        """
+        if stack is None:
+            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
+            assert_len(position, 3)
+            stack = position.reshape(-1, len(position))
+        else:
+            window_length = self.get_parameter(
+                'misc.variance_estimation_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
+                                      f'provided).'
+            obs_count = len(stack)
+            assert 0 <= obs_count <= window_length
+            if obs_count == window_length:
+                # Pop oldest values
+                stack = np.delete(stack, 0, 0)
+
+            # Add newest values
+            stack = np.vstack((stack, position))
+
+        return stack
+
+    # Refactor redundant logic!
+    def _push_estimates(self, position: np.ndarray, visual_odometry: bool) -> None:
+        """Pushes position estimates to :py:attr:`~_map_estimation_history`
 
         Pops the oldest estimate from the window if needed.
 
         :param position: Pose translation (x, y, z) in WGS84
+        :param visual_odometry: True input is from visual odometry, map is assumed otherwise
         :return:
         """
-        if self._estimation_history is None:
-            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            assert_len(position, 3)
-            self._estimation_history = position.reshape(-1, len(position))
+        if not visual_odometry:
+            self._vo_estimation_history = self._push_and_pop_stack(self._vo_estimation_history, position)
         else:
-            window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
-                                      f'provided).'
-            obs_count = len(self._estimation_history)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest values
-                self._estimation_history = np.delete(self._estimation_history, 0, 0)
-
-            # Add newest values
-            self._estimation_history = np.vstack((self._estimation_history, position))
+            self._map_estimation_history = self._push_and_pop_stack(self._map_estimation_history, position)
+    #endregion
 
     #region PublicAPI
     @abstractmethod

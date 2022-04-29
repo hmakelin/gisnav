@@ -1385,7 +1385,8 @@ class MapNavNode(Node, ABC):
         """
         mkp_img, mkp_map = results[0]
         assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=visual_odometry)
+        input_data = self._vo_input_data if visual_odometry else self._map_input_data
+        output_data = self._process_matches(mkp_img, mkp_map, input_data, visual_odometry=visual_odometry)
         return output_data
 
     def map_matching_worker_error_callback(self, e: BaseException) -> None:
@@ -2124,18 +2125,22 @@ class MapNavNode(Node, ABC):
 
     #region Variance
     @staticmethod
-    def _window_full(stack: np.ndarray, stack_height: int) -> bool:
+    def _window_full(stack: np.ndarray, window_length: int) -> bool:
         """Return True if stack is full
 
         :param stack: Map or vo estimation history stack
-        :param stack_height: Configured max length for the estimation history (stack max height)
+        :param window_length: Configured max length for the estimation history (stack max height)
         :return: True if stack is full
         """
-        obs_count = len(stack)
-        if stack is not None and obs_count == window_length:
-            return True
+        if stack is not None:
+            obs_count = len(stack)
+            if obs_count >= window_length:
+                assert obs_count == window_length
+                return True
+            else:
+                assert 0 <= obs_count < window_length
+                return False
         else:
-            assert 0 <= obs_count < window_length
             return False
 
     def _variance_window_full(self, visual_odometry: bool) -> bool:
@@ -2150,8 +2155,7 @@ class MapNavNode(Node, ABC):
         else:
             return self._window_full(self._map_estimation_history, window_length)
 
-    @staticmethod
-    def _push_and_pop_stack(stack: np.ndarray, position: np.ndarray) -> np.ndarray:
+    def _push_and_pop_stack(self, stack: np.ndarray, position: np.ndarray) -> np.ndarray:
         """Pushes a position estimate to the stack and pops an older one if needed
 
         :param stack: Map or visual odometry estimation history stack

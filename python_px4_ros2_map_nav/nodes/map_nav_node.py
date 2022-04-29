@@ -1354,7 +1354,7 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region MatchingWorkerCallbacks
-    def _matching_worker_callback_common(self, results: AsyncResult, visual_odometry: bool) -> Optional[OutputData]:
+    def _matching_worker_callback_common(self, results: list, visual_odometry: bool) -> Optional[OutputData]:
         """Common logic for both vo and map matching worker callbacks
 
         :param results: Results from the matching worker
@@ -1373,7 +1373,7 @@ class MapNavNode(Node, ABC):
         """
         self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
 
-    def map_matching_worker_callback(self, results) -> None:
+    def map_matching_worker_callback(self, results: list) -> None:
         """Callback for matching worker.
 
         Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
@@ -1407,7 +1407,7 @@ class MapNavNode(Node, ABC):
         """
         self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
 
-    def vo_matching_worker_callback(self, results) -> None:
+    def vo_matching_worker_callback(self, results: list) -> None:
         """Callback for visual odometry matching worker.
 
         Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored

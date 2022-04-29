@@ -2155,7 +2155,7 @@ class MapNavNode(Node, ABC):
         else:
             return self._window_full(self._map_estimation_history, window_length)
 
-    def _push_and_pop_stack(self, stack: np.ndarray, position: np.ndarray) -> np.ndarray:
+    def _update_estimation_history(self, stack: np.ndarray, position: np.ndarray) -> np.ndarray:
         """Pushes a position estimate to the stack and pops an older one if needed
 
         :param stack: Map or visual odometry estimation history stack
@@ -2193,9 +2193,9 @@ class MapNavNode(Node, ABC):
         :return:
         """
         if not visual_odometry:
-            self._vo_estimation_history = self._push_and_pop_stack(self._vo_estimation_history, position)
+            self._vo_estimation_history = self._update_estimation_history(self._vo_estimation_history, position)
         else:
-            self._map_estimation_history = self._push_and_pop_stack(self._map_estimation_history, position)
+            self._map_estimation_history = self._update_estimation_history(self._map_estimation_history, position)
     #endregion
 
     #region PublicAPI

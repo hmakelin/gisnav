@@ -1903,7 +1903,6 @@ class MapNavNode(Node, ABC):
         # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
-        # TODO: refactor OutputData.pose_map property - easy to confuse with self._map_pose
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
         if output_data.pose_map is None:
             # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message

@@ -1408,13 +1408,13 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
         if self._vo_input_data is None:
             # VO reset happened while matching
             self.get_logger().warn('VO match received but VO reset happend in the meantime.')
             return
 
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
         output_data = self._process_matches(mkp_img, mkp_map, self._vo_input_data, visual_odometry=True)
 
         if output_data is None:

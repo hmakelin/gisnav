@@ -1001,32 +1001,6 @@ class MapNavNode(Node, ABC):
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
 
-    def wms_pool_worker_callback(self, result: List[MapData]) -> None:
-        """Handles result from :meth:`python_px4_ros2_map_nav.wms.worker`.
-
-        Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
-        :class:`~data.MapData`.
-
-        :param result: Results from the asynchronous call
-        :return:
-        """
-        assert_len(result, 1)
-        result = result[0]
-        assert_type(result, MapData)
-        assert result.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
-        self.get_logger().info(f'Map received for bbox: {result.bbox}.')
-        if self._map_data is not None:
-            self._previous_map_data = self._map_data
-        self._map_data = result
-
-    def wms_pool_worker_error_callback(self, e: BaseException) -> None:
-        """Handles errors from WMS pool worker.
-
-        :param e: Exception returned by the worker
-        :return:
-        """
-        self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
-
     def _local_position_ref_alt(self) -> Optional[float]:
         """Returns local position reference altitude (AMSL)
 
@@ -1042,81 +1016,6 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
 
         return None
-
-    def image_raw_callback(self, msg: Image) -> None:
-        """Handles latest image frame from camera.
-
-        For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
-        made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
-        saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
-        the :meth:`~_matching_worker_callback` will use the stored inputs for post-processing the matches based on
-        the same input_data of data that was used to make the call. It is assumed that the latest stored inputs are the
-        same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
-
-        :param msg: The Image message from the PX4-ROS 2 bridge to decode
-        :return:
-        """
-        # Estimate EKF2 timestamp first to get best estimate
-        timestamp = self._get_ekf2_time()
-        if timestamp is None:
-            self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
-            return None
-
-        self.get_logger().debug('Camera image callback triggered.')
-        assert_type(msg, Image)
-
-        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
-
-        # Check that image dimensions match declared dimensions
-        img_size = self._declared_img_size()
-        if img_size is not None:
-            cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == img_size, f'Converted cv_image shape {cv_img_shape} did not match declared image ' \
-                                             f'shape {img_size}.'
-
-        # Process image frame
-        # TODO: save previous image frame and check that new timestamp is greater
-        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp)
-
-        inputs = None  # TODO: the odom flag should be disabled when called for map!
-
-        # Do visual odometry if enabled
-        if self._should_vo_match(image_data.image):
-            assert self._vo_matching_results is None or self._vo_matching_results.ready()
-            assert self._vo_matching_pool is not None
-            assert self._map_input_data_prev is not None
-            try:
-                inputs = self._match_inputs(image_data)
-            except TypeError as e:
-                # TODO: handle invalid/unavailable inputs with a warning, not error
-                self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
-                                        f'Skipping visual odometry matching.')
-                return
-            self._vo_input_data = inputs
-
-            if self._vo_input_data_prev is not None:
-                self._vo_match(image_data, self._vo_input_data_prev.image_data)
-            else:
-                self._vo_match(image_data, self._map_input_data_prev.image_data)
-
-        # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
-            assert self._map_matching_results is None or self._map_matching_results.ready()
-            if inputs is None:
-                # Get inputs if did not yet get them earlier for viz odom
-                try:
-                    inputs = self._match_inputs(image_data)
-                except TypeError as e:
-                    # TODO: handle invalid/unavailable inputs with a warning, not error
-                    self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
-                                            f'Skipping map matching.')
-                    return
-
-            self._map_input_data = inputs
-            map_cropped = inputs.map_cropped
-
-            self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
-            self._map_match(image_data, map_cropped)
 
     def _camera_yaw(self) -> Optional[Union[int, float]]:
         """Returns camera yaw in degrees.
@@ -1198,6 +1097,81 @@ class MapNavNode(Node, ABC):
         return rpy
 
     #region microRTPSBridgeCallbacks
+    def image_raw_callback(self, msg: Image) -> None:
+        """Handles latest image frame from camera.
+
+        For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
+        made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
+        saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
+        the :meth:`~_matching_worker_callback` will use the stored inputs for post-processing the matches based on
+        the same input_data of data that was used to make the call. It is assumed that the latest stored inputs are the
+        same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
+
+        :param msg: The Image message from the PX4-ROS 2 bridge to decode
+        :return:
+        """
+        # Estimate EKF2 timestamp first to get best estimate
+        timestamp = self._get_ekf2_time()
+        if timestamp is None:
+            self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
+            return None
+
+        self.get_logger().debug('Camera image callback triggered.')
+        assert_type(msg, Image)
+
+        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
+
+        # Check that image dimensions match declared dimensions
+        img_size = self._declared_img_size()
+        if img_size is not None:
+            cv_img_shape = cv_image.shape[0:2]
+            assert cv_img_shape == img_size, f'Converted cv_image shape {cv_img_shape} did not match declared image ' \
+                                             f'shape {img_size}.'
+
+        # Process image frame
+        # TODO: save previous image frame and check that new timestamp is greater
+        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp)
+
+        inputs = None  # TODO: the odom flag should be disabled when called for map!
+
+        # Do visual odometry if enabled
+        if self._should_vo_match(image_data.image):
+            assert self._vo_matching_results is None or self._vo_matching_results.ready()
+            assert self._vo_matching_pool is not None
+            assert self._map_input_data_prev is not None
+            try:
+                inputs = self._match_inputs(image_data)
+            except TypeError as e:
+                # TODO: handle invalid/unavailable inputs with a warning, not error
+                self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
+                                        f'Skipping visual odometry matching.')
+                return
+            self._vo_input_data = inputs
+
+            if self._vo_input_data_prev is not None:
+                self._vo_match(image_data, self._vo_input_data_prev.image_data)
+            else:
+                self._vo_match(image_data, self._map_input_data_prev.image_data)
+
+        # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
+        if self._should_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
+            assert self._map_matching_results is None or self._map_matching_results.ready()
+            if inputs is None:
+                # Get inputs if did not yet get them earlier for viz odom
+                try:
+                    inputs = self._match_inputs(image_data)
+                except TypeError as e:
+                    # TODO: handle invalid/unavailable inputs with a warning, not error
+                    self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
+                                            f'Skipping map matching.')
+                    return
+
+            self._map_input_data = inputs
+            map_cropped = inputs.map_cropped
+
+            self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
+            self._map_match(image_data, map_cropped)
+
     def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
 
@@ -1349,6 +1323,111 @@ class MapNavNode(Node, ABC):
         :return:
         """
         self._vehicle_attitude = msg
+    #endregion
+
+    #region WMSWorkerCallbacks
+    def wms_pool_worker_callback(self, result: List[MapData]) -> None:
+        """Handles result from :meth:`python_px4_ros2_map_nav.wms.worker`.
+
+        Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
+        :class:`~data.MapData`.
+
+        :param result: Results from the asynchronous call
+        :return:
+        """
+        assert_len(result, 1)
+        result = result[0]
+        assert_type(result, MapData)
+        assert result.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
+        self.get_logger().info(f'Map received for bbox: {result.bbox}.')
+        if self._map_data is not None:
+            self._previous_map_data = self._map_data
+        self._map_data = result
+
+    def wms_pool_worker_error_callback(self, e: BaseException) -> None:
+        """Handles errors from WMS pool worker.
+
+        :param e: Exception returned by the worker
+        :return:
+        """
+        self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
+    #endregion
+
+    #region MatchingWorkerCallbacks
+    def map_matching_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for matching worker.
+
+        :return:
+        """
+        self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
+
+    def map_matching_worker_callback(self, results) -> None:
+        """Callback for matching worker.
+
+        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
+        are needed so that the post-processing is done using the same state information that was used for initiating
+        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
+        and current camera pitch should therefore not be used for processing the matches.
+
+        :return:
+        """
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
+        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=False)
+
+        if output_data is None:
+            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
+        else:
+            self._push_estimates(np.array(output_data.position))
+            if self._variance_window_full():
+                sd = np.std(self._estimation_history, axis=0)
+                output_data.sd = sd
+                self.get_logger().info(f'Publishing map image data')
+                self.publish_position(output_data)
+            else:
+                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
+
+            self._vo_reset()
+            self._map_input_data_prev = self._map_input_data
+            self._map_output_data_prev = output_data
+
+    def vo_matching_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for visual odometry matching worker.
+
+        :return:
+        """
+        self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
+
+    def vo_matching_worker_callback(self, results) -> None:
+        """Callback for visual odometry matching worker.
+
+        Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored
+        inputs are needed so that the post-processing is done using the same state information that was used for
+        initiating the match. For example, camera pitch may have changed since then (e.g. if match takes 100ms) and
+        current camera pitch should therefore not be used for processing the matches.
+
+        :return:
+        """
+        mkp_img, mkp_map = results[0]
+        assert_len(mkp_img, len(mkp_map))
+        if self._vo_input_data is None:
+            # VO reset happened while matching
+            self.get_logger().warn('VO match received but VO reset happend in the meantime.')
+            return
+
+        output_data = self._process_matches(mkp_img, mkp_map, self._vo_input_data, visual_odometry=True)
+
+        if output_data is None:
+            self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
+            self._vo_reset()
+        else:
+            if self._should_fix_vo(output_data):
+                self._vo_output_data_fix = output_data
+
+            # TODO: update dedicated variance estimates for visual odometry (like is done with map data)
+
+            self._vo_input_data_prev = self._vo_input_data
+            self._vo_output_data_prev = output_data
     #endregion
 
     def _camera_set_pitch(self) -> Optional[Union[int, float]]:
@@ -1563,83 +1642,6 @@ class MapNavNode(Node, ABC):
 
             # Add newest values
             self._blurs = np.append(self._blurs, blur)
-
-    #region MatchingWorkerCallbacks
-    def map_matching_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for matching worker.
-
-        :return:
-        """
-        self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
-
-    def map_matching_worker_callback(self, results) -> None:
-        """Callback for matching worker.
-
-        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
-        are needed so that the post-processing is done using the same state information that was used for initiating
-        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
-        and current camera pitch should therefore not be used for processing the matches.
-
-        :return:
-        """
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
-        output_data = self._process_matches(mkp_img, mkp_map, self._map_input_data, visual_odometry=False)
-
-        if output_data is None:
-            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
-        else:
-            self._push_estimates(np.array(output_data.position))
-            if self._variance_window_full():
-                sd = np.std(self._estimation_history, axis=0)
-                output_data.sd = sd
-                self.get_logger().info(f'Publishing map image data')
-                self.publish_position(output_data)
-            else:
-                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-
-            self._vo_reset()
-            self._map_input_data_prev = self._map_input_data
-            self._map_output_data_prev = output_data
-
-    def vo_matching_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for visual odometry matching worker.
-
-        :return:
-        """
-        self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
-
-    def vo_matching_worker_callback(self, results) -> None:
-        """Callback for visual odometry matching worker.
-
-        Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored
-        inputs are needed so that the post-processing is done using the same state information that was used for
-        initiating the match. For example, camera pitch may have changed since then (e.g. if match takes 100ms) and
-        current camera pitch should therefore not be used for processing the matches.
-
-        :return:
-        """
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
-        if self._vo_input_data is None:
-            # VO reset happened while matching
-            self.get_logger().warn('VO match received but VO reset happend in the meantime.')
-            return
-
-        output_data = self._process_matches(mkp_img, mkp_map, self._vo_input_data, visual_odometry=True)
-
-        if output_data is None:
-            self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
-            self._vo_reset()
-        else:
-            if self._should_fix_vo(output_data):
-                self._vo_output_data_fix = output_data
-
-            # TODO: update dedicated variance estimates for visual odometry (like is done with map data)
-
-            self._vo_input_data_prev = self._vo_input_data
-            self._vo_output_data_prev = output_data
-    #endregion
 
     def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.

@@ -1483,24 +1483,6 @@ class MapNavNode(Node, ABC):
         assert_type(rpy, RPY)
         return rpy.pitch
 
-    # TODO: remove this method? dead code from before
-    def _gimbal_attitude(self) -> Optional[Union[GimbalDeviceAttitudeStatus, GimbalDeviceSetAttitude]]:
-        """Returns 1. GimbalDeviceAttitudeStatus, or 2. GimbalDeviceSetAttitude if 1. is not available.
-
-        NOTE: Gimbal is assumed stabilized but in some instances GimbalDeviceSetAttitude does not reflect what real
-        attitude. This may happen for example when vehicle is hovering still and suddenly takes off in some direction,
-        there's a sudden yank on the gimbal.
-
-        :return: GimbalDeviceAttitudeStatus or GimbalDeviceSetAttitude message
-        """
-        gimbal_attitude = self._gimbal_device_attitude_status
-        if gimbal_attitude is None:
-            self.get_logger().debug('GimbalDeviceAttitudeStatus not available. Trying GimbalDeviceSetAttitude instead.')
-            gimbal_attitude = self._gimbal_device_set_attitude
-            if gimbal_attitude is None:
-                self.get_logger().debug('GimbalDeviceSetAttitude not available. Gimbal attitude status not available.')
-        return gimbal_attitude
-
     # TODO: refactor out visual_odometry flag from args and from return dict
     def _match_inputs(self, image_data: ImageData) -> InputData:
         """Returns a dictionary input_data of the input data required to perform and process a match.

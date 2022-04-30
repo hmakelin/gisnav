@@ -501,6 +501,7 @@ class MapNavNode(Node, ABC):
         self.__gimbal_device_set_attitude = value
     #endregion
 
+    #region Setup
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.
 
@@ -534,57 +535,6 @@ class MapNavNode(Node, ABC):
             raise ValueError(error_msg)
         timer = self.create_timer(timer_period, self._map_update_timer_callback)
         return timer
-
-    def _latlonalt_from_vehicle_global_position(self) -> LatLonAlt:
-        """Returns lat, lon in WGS84 coordinates and alt in meters from VehicleGlobalPosition.
-
-        The individual values of the LatLonAlt tuple may be None if vehicle global position is not available but a
-        LatLonAlt tuple is returned nevertheless.
-
-        :return: LatLonAlt tuple"""
-        lat, lon, alt = None, None, None
-        if self._vehicle_global_position is not None:
-            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
-                   hasattr(self._vehicle_global_position, 'alt')
-            lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
-                            self._vehicle_global_position.alt
-            assert_type(lat, get_args(Union[int, float]))
-            assert_type(lon, get_args(Union[int, float]))
-            assert_type(alt, get_args(Union[int, float]))
-        return LatLonAlt(lat, lon, alt)
-
-    def _alt_from_vehicle_local_position(self) -> Optional[float]:
-        """Returns altitude from vehicle local position or None if not available.
-
-        This method tries to return the 'z' value first, and 'dist_bottom' second from the VehicleLocalPosition
-        message. If neither are valid, a None is returned.
-
-        :return: Altitude in meters or None if information is not available"""
-        if self._vehicle_local_position is not None:
-            if self._vehicle_local_position.z_valid:
-                self.get_logger().debug('Using VehicleLocalPosition.z for altitude.')
-                return abs(self._vehicle_local_position.z)
-            elif self._vehicle_local_position.dist_bottom_valid:
-                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude.')
-                return abs(self._vehicle_local_position.dist_bottom)
-            else:
-                return None
-        else:
-            return None
-
-    def _latlonalt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
-        """Returns lat, lon (WGS84) and altitude (meters) from provided values, or None if not available.
-
-        If some of the initial guess values are not provided, a None is returned in their place within the tuple.
-
-        :return: A lat, lon, alt tuple"""
-        initial_guess = self.get_parameter('map_update.initial_guess').get_parameter_value().double_array_value
-        if not (len(initial_guess) == 2 and all(isinstance(x, float) for x in initial_guess)):
-            lat, lon = None, None
-        else:
-            lat, lon = initial_guess[0], initial_guess[1]
-
-        return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
 
     def _map_update_timer_callback(self) -> None:
         """Attempts to update the stored map at regular intervals.
@@ -642,19 +592,31 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')
 
-    def _import_class(self, class_name: str, module_name: str) -> object:
-        """Dynamically imports class from given module if not yet imported
+    def _setup_subscribers(self) -> None:
+        """Creates and stores subscribers for microRTPS bridge topics.
 
-        :param class_name: Name of the class to import
-        :param module_name: Name of module that contains the class
-        :return: Imported class
+        :return:
         """
-        if module_name not in sys.modules:
-            self.get_logger().info(f'Importing module {module_name}.')
-            importlib.import_module(module_name)
-        imported_class = getattr(sys.modules[module_name], class_name, None)
-        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
-        return imported_class
+        for topic_name, d in self._topics.items():
+            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
+            assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
+            class_ = d.get(self.TOPICS_MSG_KEY, None)
+            assert class_ is not None, f'Message definition not provided for {topic_name}.'
+            self._topics.update({topic_name: {self.TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
+
+        self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
+
+    def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
+        """Sets up an rclpy subscriber.
+
+        :param topic_name: Name of the microRTPS topic
+        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleLocalPosition)
+        :return: The subscriber instance
+        """
+        callback_name = topic_name.lower() + '_callback'
+        callback = getattr(self, callback_name, None)
+        assert callback is not None, f'Missing callback implementation for {callback_name}.'
+        return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
 
     def __declare_ros_params(self) -> None:
         """Declares ROS parameters
@@ -703,6 +665,72 @@ class MapNavNode(Node, ABC):
             ('class', Defaults.MATCHER_CLASS, read_only),
             ('params_file', Defaults.MATCHER_PARAMS_FILE, read_only)
         ])
+    #endregion
+
+    def _latlonalt_from_vehicle_global_position(self) -> LatLonAlt:
+        """Returns lat, lon in WGS84 coordinates and alt in meters from VehicleGlobalPosition.
+
+        The individual values of the LatLonAlt tuple may be None if vehicle global position is not available but a
+        LatLonAlt tuple is returned nevertheless.
+
+        :return: LatLonAlt tuple"""
+        lat, lon, alt = None, None, None
+        if self._vehicle_global_position is not None:
+            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
+                   hasattr(self._vehicle_global_position, 'alt')
+            lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
+                            self._vehicle_global_position.alt
+            assert_type(lat, get_args(Union[int, float]))
+            assert_type(lon, get_args(Union[int, float]))
+            assert_type(alt, get_args(Union[int, float]))
+        return LatLonAlt(lat, lon, alt)
+
+    def _alt_from_vehicle_local_position(self) -> Optional[float]:
+        """Returns altitude from vehicle local position or None if not available.
+
+        This method tries to return the 'z' value first, and 'dist_bottom' second from the VehicleLocalPosition
+        message. If neither are valid, a None is returned.
+
+        :return: Altitude in meters or None if information is not available"""
+        if self._vehicle_local_position is not None:
+            if self._vehicle_local_position.z_valid:
+                self.get_logger().debug('Using VehicleLocalPosition.z for altitude.')
+                return abs(self._vehicle_local_position.z)
+            elif self._vehicle_local_position.dist_bottom_valid:
+                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude.')
+                return abs(self._vehicle_local_position.dist_bottom)
+            else:
+                return None
+        else:
+            return None
+
+    def _latlonalt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
+        """Returns lat, lon (WGS84) and altitude (meters) from provided values, or None if not available.
+
+        If some of the initial guess values are not provided, a None is returned in their place within the tuple.
+
+        :return: A lat, lon, alt tuple"""
+        initial_guess = self.get_parameter('map_update.initial_guess').get_parameter_value().double_array_value
+        if not (len(initial_guess) == 2 and all(isinstance(x, float) for x in initial_guess)):
+            lat, lon = None, None
+        else:
+            lat, lon = initial_guess[0], initial_guess[1]
+
+        return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
+
+    def _import_class(self, class_name: str, module_name: str) -> object:
+        """Dynamically imports class from given module if not yet imported
+
+        :param class_name: Name of the class to import
+        :param module_name: Name of module that contains the class
+        :return: Imported class
+        """
+        if module_name not in sys.modules:
+            self.get_logger().info(f'Importing module {module_name}.')
+            importlib.import_module(module_name)
+        imported_class = getattr(sys.modules[module_name], class_name, None)
+        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
+        return imported_class
 
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
@@ -750,32 +778,6 @@ class MapNavNode(Node, ABC):
                                                      f'{self._time_sync.local}.'
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec
-
-    def _setup_subscribers(self) -> None:
-        """Creates and stores subscribers for microRTPS bridge topics.
-
-        :return:
-        """
-        for topic_name, d in self._topics.items():
-            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
-            assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
-            class_ = d.get(self.TOPICS_MSG_KEY, None)
-            assert class_ is not None, f'Message definition not provided for {topic_name}.'
-            self._topics.update({topic_name: {self.TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
-
-        self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
-
-    def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
-        """Sets up an rclpy subscriber.
-
-        :param topic_name: Name of the microRTPS topic
-        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleLocalPosition)
-        :return: The subscriber instance
-        """
-        callback_name = topic_name.lower() + '_callback'
-        callback = getattr(self, callback_name, None)
-        assert callback is not None, f'Missing callback implementation for {callback_name}.'
-        return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
 
     def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
         """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
@@ -1483,38 +1485,6 @@ class MapNavNode(Node, ABC):
         assert_type(rpy, RPY)
         return rpy.pitch
 
-    # TODO: refactor out visual_odometry flag from args and from return dict
-    def _match_inputs(self, image_data: ImageData) -> InputData:
-        """Returns a dictionary input_data of the input data required to perform and process a match.
-
-        Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
-        to :meth:`_process_matches` from the time image used for the matching was taken.
-
-        :param image_data: The image data containing an image frame from the drone video
-        :return: :class:`python_px4_ros2_map_nav.data.InputData` with matching input data
-        """
-        camera_yaw_deg = self._camera_yaw()
-        camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
-        img_dim = self._img_dim()
-        input_data = InputData(image_data=image_data, map_data=self._map_data,
-                               k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                               camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
-                               map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
-                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
-                                all((camera_yaw, self._map_data, img_dim)) else None,
-                               previous_image=self._previous_image())
-
-        # Get cropped and rotated map
-        if all((camera_yaw, self._map_data, img_dim)):
-            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
-            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
-            #data['map_cropped'] = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim)
-        else:
-            #data['map_cropped'] = None
-            pass
-
-        return input_data
-
     def _previous_image(self) -> Optional[np.ndarray]:
         """Returns previous image frame that was used for matching
         
@@ -1573,71 +1543,6 @@ class MapNavNode(Node, ABC):
             return True
         else:
             return False
-
-    def _should_vo_match(self, img: np.ndarray) -> bool:
-        """Determines whether _odom_match should be called based on whether previous match is still being processed.
-
-        Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there
-        are no pending visual odometry match results and (4) image is not too blurry. Unlike :meth:`~should_match`, the
-        visual odometry ignores the drone altitude and camera pitch checks since they are not assumed to be relevant
-        for comparing successive frames against each other.
-
-        :param img: Image to match
-        :return: True if matching should be attempted
-        """
-        # Check whether visual odometry matching is enabled
-        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        if not visual_odometry:
-            return False
-
-        # Check whether previous image frame data is available
-        if self._map_input_data_prev is None:  # or self._vo_input_data_prev is None:
-            assert self._vo_input_data_prev is None  # If no map match, reset odom should have been called
-            return False
-
-        # Check that a request is not already running
-        if not (self._vo_matching_results is None or self._vo_matching_results.ready()):
-            return False
-
-        # Check if is image too blurry
-        #if self._image_too_blurry(img):
-        #    self.get_logger().warn('ODOM TOO BLURRY.')
-        #    return False
-
-        return True
-
-    def _should_map_match(self, img: np.ndarray) -> bool:
-        """Determines whether _match should be called based on whether previous match is still being processed.
-
-        Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.
-        facing horizon instead of nadir), (3) drone is not flying too low, and (4) image is not too blurry.
-
-        :param img: Image to match
-        :return: True if matching should be attempted
-        """
-        # Check condition (1) - that a request is not already running
-        if not (self._map_matching_results is None or self._map_matching_results.ready()):
-            return False
-
-        # Check condition (2) - whether camera pitch is too large
-        max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
-        if self._camera_pitch_too_high(max_pitch):
-            self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')
-            return False
-
-        # Check condition (3) - whether vehicle altitude is too low
-        min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        altitude = self._alt_from_vehicle_local_position()  # assume this is distance to ground
-        if not isinstance(min_alt, int) or altitude < min_alt:
-            self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
-                                   f'could not be determined. Skipping matching.')
-            return False
-
-        # Check condition (4) - is image too blurry?
-        if self._image_too_blurry(img):
-            return False
-
-        return True
 
     def _push_blur(self, blur: float) -> None:
         """Pushes blur estimates to :py:attr:`~_blurs`
@@ -1702,14 +1607,6 @@ class MapNavNode(Node, ABC):
         """
         threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
         return np.linalg.norm(output_data.pose.camera_position_difference.squeeze()) > threshold * output_data.pose.fx
-
-    def _have_map_match(self) -> None:
-        """Returns True if an existing map match is in store
-
-        :return: True if a map match has been made earlier
-        """
-        assert self._map_input_data_prev is not None
-        return self._map_output_data_prev is not None
 
     def _vo_reset(self) -> None:
         """Resets accumulated pose
@@ -2053,6 +1950,39 @@ class MapNavNode(Node, ABC):
             # TODO: if visual odometry is not enabled, visualize map here
     #endregion
 
+    #region Match
+    # TODO: refactor out visual_odometry flag from args and from return dict
+    def _match_inputs(self, image_data: ImageData) -> InputData:
+        """Returns a dictionary input_data of the input data required to perform and process a match.
+
+        Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
+        to :meth:`_process_matches` from the time image used for the matching was taken.
+
+        :param image_data: The image data containing an image frame from the drone video
+        :return: :class:`python_px4_ros2_map_nav.data.InputData` with matching input data
+        """
+        camera_yaw_deg = self._camera_yaw()
+        camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
+        img_dim = self._img_dim()
+        input_data = InputData(image_data=image_data, map_data=self._map_data,
+                               k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
+                               camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
+                               map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
+                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
+                                all((camera_yaw, self._map_data, img_dim)) else None,
+                               previous_image=self._previous_image())
+
+        # Get cropped and rotated map
+        if all((camera_yaw, self._map_data, img_dim)):
+            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
+            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+            #data['map_cropped'] = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim)
+        else:
+            #data['map_cropped'] = None
+            pass
+
+        return input_data
+
     def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
 
@@ -2067,6 +1997,79 @@ class MapNavNode(Node, ABC):
         if not is_convex_isosceles_trapezoid(output_data.fov_pix):
             self.get_logger().warn(f'Match fov_pix {output_data.fov_pix.squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
+            return False
+
+        return True
+
+    def _have_map_match(self) -> None:
+        """Returns True if an existing map match is in store
+
+        :return: True if a map match has been made earlier
+        """
+        assert self._map_input_data_prev is not None
+        return self._map_output_data_prev is not None
+
+    def _should_vo_match(self, img: np.ndarray) -> bool:
+        """Determines whether _odom_match should be called based on whether previous match is still being processed.
+
+        Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there
+        are no pending visual odometry match results and (4) image is not too blurry. Unlike :meth:`~should_match`, the
+        visual odometry ignores the drone altitude and camera pitch checks since they are not assumed to be relevant
+        for comparing successive frames against each other.
+
+        :param img: Image to match
+        :return: True if matching should be attempted
+        """
+        # Check whether visual odometry matching is enabled
+        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+        if not visual_odometry:
+            return False
+
+        # Check whether previous image frame data is available
+        if self._map_input_data_prev is None:  # or self._vo_input_data_prev is None:
+            assert self._vo_input_data_prev is None  # If no map match, reset odom should have been called
+            return False
+
+        # Check that a request is not already running
+        if not (self._vo_matching_results is None or self._vo_matching_results.ready()):
+            return False
+
+        # Check if is image too blurry
+        # if self._image_too_blurry(img):
+        #    self.get_logger().warn('ODOM TOO BLURRY.')
+        #    return False
+
+        return True
+
+    def _should_map_match(self, img: np.ndarray) -> bool:
+        """Determines whether _match should be called based on whether previous match is still being processed.
+
+        Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.
+        facing horizon instead of nadir), (3) drone is not flying too low, and (4) image is not too blurry.
+
+        :param img: Image to match
+        :return: True if matching should be attempted
+        """
+        # Check condition (1) - that a request is not already running
+        if not (self._map_matching_results is None or self._map_matching_results.ready()):
+            return False
+
+        # Check condition (2) - whether camera pitch is too large
+        max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
+        if self._camera_pitch_too_high(max_pitch):
+            self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')
+            return False
+
+        # Check condition (3) - whether vehicle altitude is too low
+        min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
+        altitude = self._alt_from_vehicle_local_position()  # assume this is distance to ground
+        if not isinstance(min_alt, int) or altitude < min_alt:
+            self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
+                                   f'could not be determined. Skipping matching.')
+            return False
+
+        # Check condition (4) - is image too blurry?
+        if self._image_too_blurry(img):
             return False
 
         return True
@@ -2104,6 +2107,7 @@ class MapNavNode(Node, ABC):
             callback=self.vo_matching_worker_callback,
             error_callback=self.vo_matching_worker_error_callback
         )
+    #endregion
 
     #region Variance
     @staticmethod

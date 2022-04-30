@@ -1787,79 +1787,6 @@ class MapNavNode(Node, ABC):
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) \
-            -> Optional[OutputData]:
-        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
-        message.
-
-        :param mkp_img: Matching keypoints in drone image
-        :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
-        :param input_data: InputData of vehicle state variables from the time the image was taken
-        :param visual_odometry: True if this match is a visual odometry match and not a map match
-        :return: Computed output_data is a valid estimate was obtained
-        """
-        if self._not_enough_matches(len(mkp_img)):
-            self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
-            return None
-
-        assert_shape(input_data.k, (3, 3))
-
-        # Init output
-        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, pose=None,
-                                 pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
-                                 attitude=None, c=None, sd=None)
-
-        # TODO: this can also return as None? E.g. if h does not invert?
-        output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-
-        output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
-        if output_data.pose_map is None:
-            # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
-            self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
-                                    'map match yet, skipping publishing.')
-            return None
-
-        h = output_data.pose.inv_h
-        if visual_odometry:  # TODO: similar condition in _estimate_map_pose! maybe estimate this there too?
-            if self._have_map_match():
-                assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
-                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
-
-            assert self._map_output_data_prev is not None
-            if self._vo_output_data_fix is None:
-                h = output_data.pose.inv_h @ self._map_output_data_prev.pose.inv_h
-            else:
-                h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_output_data_prev.pose.inv_h
-        else:
-            # Transforms from rotated and cropped map pixel coordinates to WGS84
-            self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
-
-            fov_pix_odom, c_pix_odom = None, None
-
-        #h = output_data.pose_map.inv_h
-
-        assert self._pix_to_wgs84 is not None
-        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
-                                                                                 h,
-                                                                                 self._pix_to_wgs84)
-        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
-                                                                                     visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature
-                                                                                     output_data.fov_pix,
-                                                                                     output_data.fov)
-        output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
-
-        if self._good_match(output_data):
-            # noinspection PyUnreachableCode
-            if __debug__:
-                self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
-                                          input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
-                                          mkp_map, fov_pix_odom)
-
-            return output_data
-        else:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
-            return None
 
     #region Visualization
     def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
@@ -1951,6 +1878,80 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Match
+    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) \
+            -> Optional[OutputData]:
+        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
+        message.
+
+        :param mkp_img: Matching keypoints in drone image
+        :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
+        :param input_data: InputData of vehicle state variables from the time the image was taken
+        :param visual_odometry: True if this match is a visual odometry match and not a map match
+        :return: Computed output_data is a valid estimate was obtained
+        """
+        if self._not_enough_matches(len(mkp_img)):
+            self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
+            return None
+
+        assert_shape(input_data.k, (3, 3))
+
+        # Init output
+        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, pose=None,
+                                 pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
+                                 attitude=None, c=None, sd=None)
+
+        # TODO: this can also return as None? E.g. if h does not invert?
+        output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
+
+        output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
+        if output_data.pose_map is None:
+            # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
+            self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
+                                    'map match yet, skipping publishing.')
+            return None
+
+        h = output_data.pose.inv_h
+        if visual_odometry:  # TODO: similar condition in _estimate_map_pose! maybe estimate this there too?
+            if self._have_map_match():
+                assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
+                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
+
+            assert self._map_output_data_prev is not None
+            if self._vo_output_data_fix is None:
+                h = output_data.pose.inv_h @ self._map_output_data_prev.pose.inv_h
+            else:
+                h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_output_data_prev.pose.inv_h
+        else:
+            # Transforms from rotated and cropped map pixel coordinates to WGS84
+            self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
+                input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
+
+            fov_pix_odom, c_pix_odom = None, None
+
+        #h = output_data.pose_map.inv_h
+
+        assert self._pix_to_wgs84 is not None
+        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
+                                                                                 h,
+                                                                                 self._pix_to_wgs84)
+        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
+                                                                                     visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature
+                                                                                     output_data.fov_pix,
+                                                                                     output_data.fov)
+        output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
+
+        if self._good_match(output_data):
+            # noinspection PyUnreachableCode
+            if __debug__:
+                self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
+                                          input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
+                                          mkp_map, fov_pix_odom)
+
+            return output_data
+        else:
+            self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
+            return None
+
     # TODO: refactor out visual_odometry flag from args and from return dict
     def _match_inputs(self, image_data: ImageData) -> InputData:
         """Returns a dictionary input_data of the input data required to perform and process a match.

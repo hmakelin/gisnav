@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>python_px4_ros2_map_nav</name>
-  <version>0.26.1</version>
+  <version>0.26.2</version>
   <description>Estimates airborne drone position by matching video to map retrieved from OGC WMS endpoint.</description>
   <author email="hmakelin@protonmail.com">Harri Mäkelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Mäkelin</maintainer>

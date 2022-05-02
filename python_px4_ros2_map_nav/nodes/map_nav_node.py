@@ -1704,22 +1704,13 @@ class MapNavNode(Node, ABC):
         """
         # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
         altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov)
-        if not visual_odometry:
-            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-            t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2],
-                                                1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-            t_wgs84[2] = -altitude_scaling * pose.camera_position[
-                2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-            position = t_wgs84.squeeze().tolist()
-            position = LatLonAlt(*position)
-        else:
-            # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-            t_wgs84 = pix_to_wgs84_ @ np.append((pose.camera_position - camera_center)[0:2],
-                                                1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-            t_wgs84[2] = -altitude_scaling * (pose.camera_position - camera_center)[
-                2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-            position = t_wgs84.squeeze().tolist()
-            position = LatLonAlt(*position)
+        # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+        t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2],
+                                            1)  # TODO: the t_map is already included in t when visual odometry = TRue?
+        t_wgs84[2] = -altitude_scaling * pose.camera_position[
+            2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        position = t_wgs84.squeeze().tolist()
+        position = LatLonAlt(*position)
 
         # Check that we have all the values needed for a global position
         # if not all(position) or any(map(np.isnan, position)):

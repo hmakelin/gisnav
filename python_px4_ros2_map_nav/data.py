@@ -83,7 +83,7 @@ class Pose:
         pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        return Pose(self.k, self.r @ pose.r, self.t + self.r @ pose.t)
+        return Pose(self.k, self.r @ pose.r, self.t + self.r @ (pose.t + pose.camera_center))  # TODO: need to fix sign somehow? Would think minus sign is needed here?
 
 
 # noinspection PyClassHasNoInit

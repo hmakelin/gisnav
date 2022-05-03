@@ -1689,15 +1689,13 @@ class MapNavNode(Node, ABC):
 
         return fov_pix, fov_wgs84, c_wgs84
 
-    def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, visual_odometry: bool,
-                           camera_center: np.ndarray, fov_pix: np.ndarray, fov: np.ndarray) -> Tuple[LatLonAlt, float]:
+    def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, fov_pix: np.ndarray, fov: np.ndarray) -> \
+            Tuple[LatLonAlt, float]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
         :param pose: Camera relative pose in pixel (world) space
         :param pix_to_wgs84_: Transformation from 2D pixel space to WGS84
-        :param visual_odometry: True if this estimation is for a visual odometry match
-        :param camera_center: Camera center coordinates (visual odometry only)
         :param fov_pix: Field of view in pixel coordinates
         :param fov: Field of view in WGS84
         :return: Camera position LatLonAlt, and altitude from ground in meters

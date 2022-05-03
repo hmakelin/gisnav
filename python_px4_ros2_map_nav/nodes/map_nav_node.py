@@ -1901,17 +1901,11 @@ class MapNavNode(Node, ABC):
                                     'map match yet, skipping publishing.')
             return None
 
-        h = output_data.pose.inv_h
         if visual_odometry:  # TODO: similar condition in _estimate_map_pose! maybe estimate this there too?
             if self._have_map_match():
                 assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
-
             assert self._map_output_data_prev is not None
-            if self._vo_output_data_fix is None:
-                h = output_data.pose.inv_h @ self._map_output_data_prev.pose.inv_h
-            else:
-                h = output_data.pose.inv_h @ self._vo_output_data_fix.pose.inv_h @ self._map_output_data_prev.pose.inv_h
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
@@ -1919,11 +1913,9 @@ class MapNavNode(Node, ABC):
 
             fov_pix_odom, c_pix_odom = None, None
 
-        #h = output_data.pose_map.inv_h
-
         assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
-                                                                                 h,
+                                                                                 output_data.pose_map.inv_h,
                                                                                  self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
                                                                                      visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature

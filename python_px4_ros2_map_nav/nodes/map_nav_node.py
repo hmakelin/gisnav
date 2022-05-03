@@ -1889,10 +1889,10 @@ class MapNavNode(Node, ABC):
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
 
         if visual_odometry:
-            if self._have_map_match():
-                assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
-                fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
+            assert self._have_map_match()  # Should be checkd in :meth:`~_should_vo_match`
             assert self._map_output_data_prev is not None
+            assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
+            fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(

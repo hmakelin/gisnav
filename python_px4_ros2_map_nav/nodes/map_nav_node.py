@@ -1752,27 +1752,22 @@ class MapNavNode(Node, ABC):
 
         return pose
 
-    def _estimate_map_pose(self, pose: Pose, visual_odometry: bool) -> Optional[Pose]:
+    def _estimate_map_pose(self, pose: Pose, visual_odometry: bool) -> Pose:
         """Estimates pose against the latest map frame
 
         :param pose: Pose for the match
         :param visual_odometry: True if this is a visual odometry match
-        :return: Estimated pose if possible
+        :return: Estimated pose against map
         """
         if visual_odometry:
-            if self._have_map_match():  # TODO: should not be in estimate pose method - should be checked outside of the method (encapsulation)
-                # Combine with latest map match
-                assert self._map_output_data_prev is not None
-                if self._vo_output_data_fix is None:
-                    map_pose = self._map_output_data_prev.pose @ pose
-                else:
-                    map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
-
-                return map_pose
+            assert self._have_map_match()  # Should already be checked in :meth:`_should_vo_match`
+            assert self._map_output_data_prev is not None
+            # Combine with latest map match
+            if self._vo_output_data_fix is None:
+                map_pose = self._map_output_data_prev.pose @ pose
             else:
-                self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
-                                        'map match yet, skipping publishing.')
-                return None
+                map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
+            return map_pose
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
@@ -1891,13 +1886,7 @@ class MapNavNode(Node, ABC):
 
         # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
-        if output_data.pose_map is None:
-            # TODO: this only happens if _estimate_map_pose does not have map match? Need to update this message
-            self.get_logger().debug('Visual odometry has updated the accumulated position estimate but no absolute '
-                                    'map match yet, skipping publishing.')
-            return None
 
         if visual_odometry:
             if self._have_map_match():
@@ -1915,8 +1904,8 @@ class MapNavNode(Node, ABC):
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
                                                                                  output_data.pose_map.inv_h,
                                                                                  self._pix_to_wgs84)
-        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map, self._pix_to_wgs84,
-                                                                                     visual_odometry, output_data.pose.camera_center,  # TODO: refactor camera_center out of method signature
+        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map,
+                                                                                     self._pix_to_wgs84,
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)
         output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
@@ -1988,7 +1977,7 @@ class MapNavNode(Node, ABC):
 
         :return: True if a map match has been made earlier
         """
-        assert self._map_input_data_prev is not None
+        #assert self._map_input_data_prev is not None  # TODO: why was this here?
         return self._map_output_data_prev is not None
 
     def _should_vo_match(self, img: np.ndarray) -> bool:
@@ -2008,7 +1997,9 @@ class MapNavNode(Node, ABC):
             return False
 
         # Check whether previous image frame data is available
-        if self._map_input_data_prev is None:  # or self._vo_input_data_prev is None:
+        if not self._have_map_match():  # or self._vo_input_data_prev is None:
+            #assert self._map_input_data_prev is None  # TODO: why was this originally here? Need to check for output, not input
+            assert self._map_output_data_prev is None
             assert self._vo_input_data_prev is None  # If no map match, reset odom should have been called
             return False
 

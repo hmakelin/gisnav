@@ -1901,7 +1901,7 @@ class MapNavNode(Node, ABC):
                                     'map match yet, skipping publishing.')
             return None
 
-        if visual_odometry:  # TODO: similar condition in _estimate_map_pose! maybe estimate this there too?
+        if visual_odometry:
             if self._have_map_match():
                 assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
                 fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)

@@ -1700,13 +1700,10 @@ class MapNavNode(Node, ABC):
         :param fov: Field of view in WGS84
         :return: Camera position LatLonAlt, and altitude from ground in meters
         """
-        # TODO: refactor redudnancy out of this section! problem is -camera_center that is only done if vo=True
         altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov)
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2],
-                                            1)  # TODO: the t_map is already included in t when visual odometry = TRue?
-        t_wgs84[2] = -altitude_scaling * pose.camera_position[
-            2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        t_wgs84 = pix_to_wgs84_ @ np.append(pose.camera_position[0:2], 1)
+        t_wgs84[2] = -altitude_scaling * pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
 

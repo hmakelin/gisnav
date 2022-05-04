@@ -135,10 +135,9 @@ class MapNavNode(Node, ABC):
         vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
         self._vo_matching_results = None
         if vo_enabled:
-            vo_args = ['dummy_argument']  # TODO: anything here?
             self._vo_matcher = ORB  # TODO: this correct?
             self._vo_matching_pool = Pool(self.VO_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
-                                          initargs=vo_args)
+                                          initargs=['dummy_argument'])
         else:
             self._vo_matcher = None
             self._vo_matching_pool = None

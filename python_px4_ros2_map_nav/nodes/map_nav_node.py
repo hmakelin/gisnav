@@ -1933,12 +1933,15 @@ class MapNavNode(Node, ABC):
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
-        input_data = InputData(image_data=image_data, map_data=self._map_data,
+        input_data = InputData(image_data=image_data,
+                               map_data=self._map_data,
                                k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                               camera_yaw=camera_yaw, vehicle_attitude=self._get_vehicle_attitude(),
-                               map_dim_with_padding=self._map_dim_with_padding(), img_dim=img_dim,
-                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if \
-                                all((camera_yaw, self._map_data, img_dim)) else None,
+                               camera_yaw=camera_yaw,
+                               vehicle_attitude=self._get_vehicle_attitude(),
+                               map_dim_with_padding=self._map_dim_with_padding(),
+                               img_dim=img_dim,
+                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if all((
+                                   camera_yaw, self._map_data, img_dim)) else None,
                                previous_image=self._previous_image())
 
         # Get cropped and rotated map

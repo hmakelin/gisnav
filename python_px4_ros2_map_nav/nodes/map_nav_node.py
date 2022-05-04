@@ -1872,7 +1872,7 @@ class MapNavNode(Node, ABC):
         :param visual_odometry: True if this match is a visual odometry match and not a map match
         :return: Computed output_data is a valid estimate was obtained
         """
-        if self._not_enough_matches(len(mkp_img)):
+        if self._not_enough_matches(len(mkp_img)):  # TODO: move check to _should_match and only assert here?
             self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
             return None
 

@@ -113,7 +113,6 @@ class MapNavNode(Node, ABC):
         self._cv_bridge = CvBridge()
 
         # Setup matching
-        # TODO: refactor this section, messy
         self._map_matching_results = None  # Must check for None when using this
         class_name, module_name = self._import_matcher()
         # noinspection PyTypeChecker

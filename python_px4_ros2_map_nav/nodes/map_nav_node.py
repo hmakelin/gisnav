@@ -149,7 +149,6 @@ class MapNavNode(Node, ABC):
             self._vo_viz = None
 
         # Must check for None when using these
-        # self._image_data = None  # Not currently used / needed
         self._vo_input_data = None
         self._vo_input_data_prev = None
         self._vo_output_data_prev = None
@@ -158,6 +157,7 @@ class MapNavNode(Node, ABC):
         self._map_input_data_prev = None
         self._map_output_data_prev = None
 
+        # self._image_data = None  # Not currently used / needed
         self._map_data = None
 
         # Windowed estimates for computing estimate SD and variance

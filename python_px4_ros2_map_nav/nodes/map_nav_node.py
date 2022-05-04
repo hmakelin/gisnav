@@ -114,7 +114,8 @@ class MapNavNode(Node, ABC):
 
         # Setup matching
         self._map_matching_results = None  # Must check for None when using this
-        class_name, module_name = self._import_matcher()
+        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
+        module_name, class_name = self._import_matcher(matcher_params_file)
         # noinspection PyTypeChecker
         self._kp_matcher = self._import_class(class_name, module_name)
         #assert_type(kp_matcher, KeypointMatcher)  # TODO: seems like it recognizes it as an ABCMeta class
@@ -672,10 +673,12 @@ class MapNavNode(Node, ABC):
         assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
         return imported_class
 
-    def _import_matcher(self) -> Tuple[str, str]:
-        """Imports the matcher class based on configuration"""
+    def _import_matcher(self, matcher_params_file: str) -> Tuple[str, str]:
+        """Imports the matcher class based on configuration
+
+        :param matcher_params_file: Matcher parameter file name
+        """
         class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
-        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
         if class_path is None or matcher_params_file is None:
             msg = f'Class path {class_path} or init args {matcher_params_file} for matcher was None.'
             self.get_logger.error(msg)
@@ -1915,7 +1918,6 @@ class MapNavNode(Node, ABC):
                 self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
                                           input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
                                           mkp_map, fov_pix_odom)
-
             return output_data
         else:
             self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')

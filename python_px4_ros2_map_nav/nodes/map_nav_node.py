@@ -1414,8 +1414,7 @@ class MapNavNode(Node, ABC):
         else:
             self._push_estimates(np.array(output_data.position), False)
             if self._variance_window_full(False):
-                sd = np.std(self._map_estimation_history, axis=0)
-                output_data.sd = sd
+                output_data.sd = np.std(self._map_estimation_history, axis=0)
                 self.get_logger().info(f'Publishing map image data')
                 self.publish_position(output_data)
             else:
@@ -1457,8 +1456,7 @@ class MapNavNode(Node, ABC):
 
             self._push_estimates(np.array(output_data.position), True)
             if self._variance_window_full(True):
-                sd = np.std(self._vo_estimation_history, axis=0)
-                output_data.sd = sd
+                output_data.sd = np.std(self._vo_estimation_history, axis=0)
                 self.get_logger().info(f'Publishing vo image data')
                 self.publish_position(output_data)
             else:

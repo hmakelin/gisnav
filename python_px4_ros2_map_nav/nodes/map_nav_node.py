@@ -1921,7 +1921,6 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
             return None
 
-    # TODO: refactor out visual_odometry flag from args and from return dict
     def _match_inputs(self, image_data: ImageData) -> InputData:
         """Returns a dictionary input_data of the input data required to perform and process a match.
 

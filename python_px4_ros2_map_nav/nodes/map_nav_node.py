@@ -115,13 +115,7 @@ class MapNavNode(Node, ABC):
         # Setup matching
         # TODO: refactor this section, messy
         self._map_matching_results = None  # Must check for None when using this
-        class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
-        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
-        if class_path is None or matcher_params_file is None:
-            msg = f'Class path {class_path} or init args {matcher_params_file} for matcher was None.'
-            self.get_logger.error(msg)
-            raise ValueError(msg)
-        module_name, class_name = class_path.rsplit('.', 1)
+        class_name, module_name = self._import_matcher()
         # noinspection PyTypeChecker
         self._kp_matcher = self._import_class(class_name, module_name)
         #assert_type(kp_matcher, KeypointMatcher)  # TODO: seems like it recognizes it as an ABCMeta class
@@ -664,6 +658,32 @@ class MapNavNode(Node, ABC):
             ('class', Defaults.MATCHER_CLASS, read_only),
             ('params_file', Defaults.MATCHER_PARAMS_FILE, read_only)
         ])
+
+    def _import_class(self, class_name: str, module_name: str) -> object:
+        """Dynamically imports class from given module if not yet imported
+
+        :param class_name: Name of the class to import
+        :param module_name: Name of module that contains the class
+        :return: Imported class
+        """
+        if module_name not in sys.modules:
+            self.get_logger().info(f'Importing module {module_name}.')
+            importlib.import_module(module_name)
+        imported_class = getattr(sys.modules[module_name], class_name, None)
+        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
+        return imported_class
+
+    def _import_matcher(self) -> Tuple[str, str]:
+        """Imports the matcher class based on configuration"""
+        class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
+        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
+        if class_path is None or matcher_params_file is None:
+            msg = f'Class path {class_path} or init args {matcher_params_file} for matcher was None.'
+            self.get_logger.error(msg)
+            raise ValueError(msg)
+        module_name, class_name = class_path.rsplit('.', 1)
+
+        return module_name, class_name
     #endregion
 
     def _latlonalt_from_vehicle_global_position(self) -> LatLonAlt:
@@ -716,20 +736,6 @@ class MapNavNode(Node, ABC):
             lat, lon = initial_guess[0], initial_guess[1]
 
         return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
-
-    def _import_class(self, class_name: str, module_name: str) -> object:
-        """Dynamically imports class from given module if not yet imported
-
-        :param class_name: Name of the class to import
-        :param module_name: Name of module that contains the class
-        :return: Imported class
-        """
-        if module_name not in sys.modules:
-            self.get_logger().info(f'Importing module {module_name}.')
-            importlib.import_module(module_name)
-        imported_class = getattr(sys.modules[module_name], class_name, None)
-        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
-        return imported_class
 
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.

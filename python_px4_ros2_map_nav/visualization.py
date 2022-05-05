@@ -37,6 +37,7 @@ class Visualization:
         img = self._create_visualization(output_data, self._attitude_text(output_data.attitude), visual_odometry)
         img = img.astype(np.uint8)
 
+        # TODO: check that image shapes do not change?
         if visual_odometry:
             self._vo_visualization = img
             if self._map_visualization is None:

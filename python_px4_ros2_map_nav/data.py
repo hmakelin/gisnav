@@ -125,8 +125,9 @@ class OutputData:
     # TODO: freeze this data structure to reduce unintentional re-assignment?
     """Algorithm output passed onto publish method.
 
-    :param image_data: The drone image
-    :param map_data: The map raster
+    :param input: The input data used for the match
+    :param mkp_img: Matching keypoints in the image
+    :param mkp_map: Matching keypoints in the map
     :param pose: Estimated pose for the image frame vs. the map frame
     :param pose_map: Estimated pose for the image frame vs. the map frame (in WGS84)
     :param fov: Camera field of view projected to WGS84 coordinates
@@ -138,8 +139,9 @@ class OutputData:
     :param sd: Standard deviation of position estimate
     :return:
     """
-    image_data: ImageData
-    map_data: Union[ImageData, MapData]  # TODO: if vo, this should just be a another ImageData instead of MapData?
+    input: InputData
+    mkp_img: np.ndarray
+    mkp_map: np.ndarray
     pose: Pose
     pose_map: Pose
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?

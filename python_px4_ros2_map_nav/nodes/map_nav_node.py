@@ -46,6 +46,7 @@ from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
 from python_px4_ros2_map_nav.keypoint_matchers.orb import ORB
 from python_px4_ros2_map_nav.wms import WMSClient
+from python_px4_ros2_map_nav.visualization import Visualization
 
 
 class MapNavNode(Node, ABC):
@@ -142,12 +143,7 @@ class MapNavNode(Node, ABC):
         # Stored blur values for blur detection
         self._blurs = None
 
-        # noinspection PyUnreachableCode
-        if __debug__:
-            # Stored visualizations (debug mode only)
-            # TODO: declare properties?
-            self._map_viz = None
-            self._vo_viz = None
+        self._visualization = Visualization('Keypoint matches and homography') if __debug__ else None
 
         # Must check for None when using these
         self._vo_input_data = None
@@ -191,6 +187,16 @@ class MapNavNode(Node, ABC):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
+
+    @property
+    def _visualization(self) -> str:
+        """Visualization of keypoint matches for debugging"""
+        return self.__visualization
+
+    @_visualization.setter
+    def _visualization(self, value: Visualization) -> None:
+        assert_type(value, Visualization)
+        self.__visualization = value
 
     @property
     def _blurs(self) -> Optional[np.ndarray]:
@@ -1396,6 +1402,12 @@ class MapNavNode(Node, ABC):
         assert_len(mkp_img, len(mkp_map))
         input_data = self._vo_input_data if visual_odometry else self._map_input_data
         output_data = self._process_matches(mkp_img, mkp_map, input_data, visual_odometry=visual_odometry)
+
+        # noinspection PyUnreachableCode
+        if __debug__ and output_data is not None:
+            if visual_odometry:
+                self._visualization.update(output_data, visual_odometry)
+
         return output_data
 
     def map_matching_worker_error_callback(self, e: BaseException) -> None:
@@ -1773,96 +1785,6 @@ class MapNavNode(Node, ABC):
         else:
             return pose  # This is a map match so the map pose is just the pose itself
 
-
-    #region Visualization
-    def _visualize_homography(self, figure_name: str = 'Keypoint matches and homography') -> None:
-        """Visualizes stored homography"""
-        assert __debug__
-        # noinspection PyUnreachableCode
-        vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        if vo_enabled:
-            if self._map_viz is None or self._vo_viz is None:
-                self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
-                return None
-        else:
-            if self._map_viz is None:
-                self.get_logger().debug('Nothing to visualize yet, skipping cv2.imshow().')
-                return None
-
-        img = self._map_viz
-        if self._vo_viz is not None:
-            img = np.vstack((img, self._vo_viz))
-        else:
-            img = np.vstack((img, np.zeros(self._map_viz.shape)))
-        cv2.imshow(figure_name, img)
-        cv2.waitKey(1)
-
-    @staticmethod
-    def _create_homography_visualization(img_arr: np.ndarray, map_arr: np.ndarray,
-                                         kp_img: np.ndarray, kp_map: np.ndarray, dst_corners: np.ndarray,
-                                         display_text: Optional[str] = None) -> np.ndarray:
-        """Visualizes a homography including keypoint matches and field of view.
-
-        :param img_arr: Image array
-        :param map_arr: Map array
-        :param kp_img: Image keypoints
-        :param kp_map: Map keypoints
-        :param dst_corners: Field of view corner pixel coordinates on map
-        :param display_text: Optional display text on top left of image
-        :return: Visualized image as numpy array
-        """
-        # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
-        kp_count = len(kp_img)
-        assert kp_count == len(kp_map), 'Keypoint counts for img and map did not match.'
-        matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
-
-        # Need cv2.KeyPoints for keypoints
-        kp_img = np.apply_along_axis(make_keypoint, 1, kp_img)
-        kp_map = np.apply_along_axis(make_keypoint, 1, kp_map)
-
-        map_with_fov = cv2.polylines(map_arr, [np.int32(dst_corners)], True, 255, 3, cv2.LINE_AA)
-        draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
-        out = cv2.drawMatches(img_arr, kp_img, map_with_fov, kp_map, matches, None, **draw_params)
-
-        # Add text (need to manually handle newlines)
-        if display_text is not None:
-            for i, text_line in enumerate(display_text.split('\n')):
-                y = (i + 1) * 30
-                cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
-
-        return out
-
-    def _build_visualization(self, attitude: np.ndarray, image_data: ImageData, map_cropped: np.ndarray, previous_image,
-                             fov_pix: np.ndarray, visual_odometry: bool, mkp_img: np.ndarray, mkp_map: np.ndarray,
-                             fov_pix_odom) -> None:
-        """Builds visualization of matched keypoints and field of view boundary."""
-        # TODO: params in docstring, refactor together with _create_homography_visualization
-        number_str_len = 7
-        accuracy = 2
-        gimbal_rpy_deg = RPY(*attitude.as_euler('XYZ', degrees=True))
-        gimbal_rpy_text = f'Gimbal roll: {str(round(gimbal_rpy_deg.roll, accuracy)).rjust(number_str_len)}, ' \
-                          f'pitch: {str(round(gimbal_rpy_deg.pitch, accuracy)).rjust(number_str_len)}, ' \
-                          f'yaw: {str(round(gimbal_rpy_deg.yaw, accuracy)).rjust(number_str_len)}.'
-        if visual_odometry:
-            assert previous_image is not None
-            reference_img = self._previous_image()
-            assert reference_img is not None
-            fov_pix_viz = fov_pix_odom
-            self._vo_viz = self._create_homography_visualization(image_data.image,
-                                                                 reference_img.copy(), mkp_img, mkp_map,
-                                                                 fov_pix_viz)  # TODO: just pass image_data which should include fov_pix already?
-            self._visualize_homography()  # TODO: move this call somewhere else?
-        else:
-            reference_img = map_cropped
-            fov_pix_viz = fov_pix
-            self._map_viz = self._create_homography_visualization(image_data.image,
-                                                                  reference_img.copy(), mkp_img, mkp_map,
-                                                                  fov_pix_viz,
-                                                                  display_text=gimbal_rpy_text)  # TODO: just pass image_data which should include fov_pix already?
-            # self._visualize_homography()
-            # TODO: if visual odometry is not enabled, visualize map here
-    #endregion
-
     #region Match
     def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) \
             -> Optional[OutputData]:
@@ -1882,25 +1804,20 @@ class MapNavNode(Node, ABC):
         assert_shape(input_data.k, (3, 3))
 
         # Init output
-        output_data = OutputData(image_data=input_data.image_data, map_data=input_data.map_data, pose=None,
-                                 pose_map=None, fov=None, fov_pix=None, position=None, terrain_altitude=None,
-                                 attitude=None, c=None, sd=None)
+        output_data = OutputData(mkp_img=mkp_img, mkp_map=mkp_map, input=input_data,
+                                 #image_data=input_data.image_data,
+                                 #map_data=input_data.map_data,
+                                 pose=None, pose_map=None, fov=None, fov_pix=None,
+                                 position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
 
         # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
 
-        if visual_odometry:
-            assert self._have_map_match()  # Should be checkd in :meth:`~_should_vo_match`
-            assert self._map_output_data_prev is not None
-            assert output_data.pose.inv_h is not None  # TODO: need to handle this when initializing the pose? if h is not invertible? See Pose dataclass
-            fov_pix_odom, c_pix_odom = get_fov_and_c(input_data.img_dim, output_data.pose.inv_h)
-        else:
+        if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
-
-            fov_pix_odom, c_pix_odom = None, None
 
         assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
@@ -1913,11 +1830,6 @@ class MapNavNode(Node, ABC):
         output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
 
         if self._good_match(output_data):
-            # noinspection PyUnreachableCode
-            if __debug__:
-                self._build_visualization(output_data.attitude, input_data.image_data, input_data.map_cropped,
-                                          input_data.previous_image, output_data.fov_pix, visual_odometry, mkp_img,
-                                          mkp_map, fov_pix_odom)
             return output_data
         else:
             self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')

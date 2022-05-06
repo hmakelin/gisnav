@@ -1510,7 +1510,9 @@ class MapNavNode(Node, ABC):
         return rpy.pitch
 
     def _vo_reference(self) -> Optional[np.ndarray]:
-        """Returns previous image frame that should be used for visual odometry matching
+        """Returns previous image frame that should be used for visual odometry matching.
+
+        First priority is the vo fixed frame reference. If no fixed frame exists, try latest map frame.
         
         :return: Previous frame from either map or vo matching, or None if not available
         """
@@ -1526,7 +1528,7 @@ class MapNavNode(Node, ABC):
         if self._vo_output_data_fix is not None:
             return self._vo_output_data_fix.input.image_data.image
         elif self._vo_input_data_prev is not None:
-            return self._vo_input_data_prev.image_data.image
+            return self._vo_input_data_prev.image_data.image  # TODO: is this needed? In this case there should always be a vo fixed frame. Assert it here?
         elif self._map_input_data_prev is not None:
             return self._map_input_data_prev.image_data.image
         else:

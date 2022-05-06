@@ -1692,6 +1692,7 @@ g
         else:
             return False
 
+    # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
     def _estimate_altitude_scaling(self, fov_pix: np.ndarray, fov_wgs84: np.ndarray) -> float:
         """Estimates altitude scaling factor
 

@@ -136,6 +136,7 @@ class OutputData:
     :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
     :param attitude: Camera attitude quaternion
     :param c: Principal point projected to ground in WGS84 coordinates
+    :param c_pix: Principal point projected in pixel coordinates
     :param sd: Standard deviation of position estimate
     :return:
     """
@@ -150,6 +151,7 @@ class OutputData:
     terrain_altitude: float
     attitude: np.ndarray
     c: np.ndarray
+    c_pix: np.ndarray
     sd: np.ndarray
 
     def __post_init__(self):

@@ -1690,20 +1690,22 @@ class MapNavNode(Node, ABC):
         return gimbal_estimated_attitude
 
     @staticmethod
-    def _estimate_fov(img_dim: Dim, h: np.ndarray, pix_to_wgs84_: np.ndarray) -> Tuple[3*(np.ndarray,)]:
-        """Estimates field of view in pixel and WGS84 coordinates, and principal point projection in WGS84 coordinates.
+    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, h_map_pose: np.ndarray, pix_to_wgs84_: np.ndarray) -> \
+            Tuple[4*(np.ndarray,)]:
+        """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
         :param img_dim: Image dimensions
-        :param h: Homography matrix
+        :param h_pose: Homography matrix against reference image (map or previous frame)
+        :param h_map_pose: Homography matrix against map
         :param pix_to_wgs84_: Transformation from 2D pixel space to WGS84 coordinates
-        :return: Field of view in pixel and WGS84 coordinates, and principal point in WGS84
+        :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
         """
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        h_wgs84 = pix_to_wgs84_ @ h
-        fov_pix, c_pix = get_fov_and_c(img_dim, h)  # TODO: this cannot be used for visualizing viz_odom homography!
+        h_wgs84 = pix_to_wgs84_ @ h_map_pose
+        fov_pix, c_pix = get_fov_and_c(img_dim, h_pose)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
 
-        return fov_pix, fov_wgs84, c_wgs84
+        return fov_pix, c_pix, fov_wgs84, c_wgs84
 
     def _estimate_position(self, pose: Pose, pix_to_wgs84_: np.ndarray, fov_pix: np.ndarray, fov: np.ndarray) -> \
             Tuple[LatLonAlt, float]:
@@ -1803,11 +1805,9 @@ class MapNavNode(Node, ABC):
         assert_shape(input_data.k, (3, 3))
 
         # Init output
-        output_data = OutputData(mkp_img=mkp_img, mkp_map=mkp_map, input=input_data,
-                                 #image_data=input_data.image_data,
-                                 #map_data=input_data.map_data,
-                                 pose=None, pose_map=None, fov=None, fov_pix=None,
-                                 position=None, terrain_altitude=None, attitude=None, c=None, sd=None)
+        output_data = OutputData(mkp_img=mkp_img, mkp_map=mkp_map, input=input_data, pose=None, pose_map=None, fov=None,
+                                 fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
+                                 sd=None)
 
         # TODO: this can also return as None? E.g. if h does not invert?
         output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
@@ -1819,10 +1819,8 @@ class MapNavNode(Node, ABC):
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
 
         assert self._pix_to_wgs84 is not None
-        # TODO: if visual_odometry, need to use output_data.pose.h for fov_pix, not output_data.pose_map
-        output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
-                                                                                 output_data.pose_map.inv_h,
-                                                                                 self._pix_to_wgs84)
+        output_data.fov_pix, output_data.c_pix, output_data.fov, output_data.c = self._estimate_fov(
+            input_data.img_dim, output_data.pose.inv_h, output_data.pose_map.inv_h, self._pix_to_wgs84)
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map,
                                                                                      self._pix_to_wgs84,
                                                                                      output_data.fov_pix,

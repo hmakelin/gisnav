@@ -41,7 +41,10 @@ class MockGPSNode(MapNavNode):
             return None
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
-        self._publish_mock_gps_msg(output_data.position, output_data.sd, mock_gps_selection)
+        try:
+            self._publish_mock_gps_msg(output_data.position, output_data.sd, mock_gps_selection)
+        except AssertionError as ae:
+            self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
             self._export_position(output_data.position, output_data.fov, export_geojson)

@@ -27,11 +27,16 @@ class Visualization:
         self._map_visualization = None
         self._vo_visualization = None
 
-    def update(self, output_data: OutputData, visual_odometry: bool) -> None:
+    def update(self, output_data: OutputData, visual_odometry: bool, vo_enabled: bool) -> None:
         """Updates the visualization
+
+        TODO: Remove vo_enabled parameter. This parameter is used to get around problem of cv2.imshow hanging when
+        trying to update both map and visual odometry visualizations. In this case visualization is only updated
+        when visual_odometry==True
 
         :param output_data: Data to update the visualization with
         :param visual_odometry: True to update visual odometry visualization, False for map visualization
+        :param vo_enabled: Flag indicating whether visual odometry is enabled
         :return:
         """
         img = self._create_visualization(output_data, self._attitude_text(output_data.attitude), visual_odometry)
@@ -48,7 +53,11 @@ class Visualization:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
         out = np.vstack((self._map_visualization, self._vo_visualization))
-        if visual_odometry:
+        if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
+            if visual_odometry:
+                cv2.imshow(self.name, out)
+                cv2.waitKey(1)
+        else:
             cv2.imshow(self.name, out)
             cv2.waitKey(1)
 

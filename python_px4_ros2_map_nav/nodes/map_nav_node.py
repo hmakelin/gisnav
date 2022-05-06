@@ -1405,7 +1405,9 @@ class MapNavNode(Node, ABC):
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
-            self._visualization.update(output_data, visual_odometry)
+            # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
+            vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+            self._visualization.update(output_data, visual_odometry, vo_enabled)
 
         return output_data
 

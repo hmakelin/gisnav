@@ -644,7 +644,8 @@ class MapNavNode(Node, ABC):
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
             ('min_matches', Defaults.MISC_MIN_MATCHES),
             ('visual_odometry', Defaults.MISC_VISUAL_ODOMETRY),
-            ('visual_odometry_update_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_THRESHOLD)
+            ('visual_odometry_update_t_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_T_THRESHOLD),
+            ('visual_odometry_update_r_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_R_THRESHOLD)
         ])
 
         namespace = 'map_update'
@@ -1185,10 +1186,15 @@ class MapNavNode(Node, ABC):
                 return
             self._vo_input_data = inputs
 
-            if self._vo_input_data_prev is not None:
-                self._vo_match(image_data, self._vo_input_data_prev.image_data)
-            else:
-                self._vo_match(image_data, self._map_input_data_prev.image_data)
+            # TODO: just use inputs.previous_image here! Use this logic to set previous_image in _match_inputs!
+            #if self._vo_output_data_fix is not None:
+            #    self._vo_match(image_data, self._vo_output_data_fix.input.image_data)
+            #elif self._vo_input_data_prev is not None:
+            #    self._vo_match(image_data, self._vo_input_data_prev.image_data)
+            #else:
+            #    assert self._map_input_data_prev is not None  # Should have this if passed self._should_vo_match
+            #    self._vo_match(image_data, self._map_input_data_prev.image_data)
+            self._vo_match(image_data, inputs.previous_image)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
@@ -1503,14 +1509,23 @@ class MapNavNode(Node, ABC):
         assert_type(rpy, RPY)
         return rpy.pitch
 
-    def _previous_image(self) -> Optional[np.ndarray]:
-        """Returns previous image frame that was used for matching
+    def _vo_reference(self) -> Optional[np.ndarray]:
+        """Returns previous image frame that should be used for visual odometry matching
         
         :return: Previous frame from either map or vo matching, or None if not available
         """
-        if self._vo_input_data_prev is not None:
-            assert self._map_input_data_prev is not None
-            assert self._vo_input_data_prev.image_data.timestamp >= self._map_input_data_prev.image_data.timestamp
+        #if self._vo_input_data_prev is not None:
+        #    assert self._map_input_data_prev is not None
+        #    assert self._vo_input_data_prev.image_data.timestamp >= self._map_input_data_prev.image_data.timestamp
+        #    return self._vo_input_data_prev.image_data.image
+        #elif self._map_input_data_prev is not None:
+        #    return self._map_input_data_prev.image_data.image
+        #else:
+        #    self.get_logger().debug('No previous frame available, returning None.')
+        #    return None
+        if self._vo_output_data_fix is not None:
+            return self._vo_output_data_fix.input.image_data.image
+        elif self._vo_input_data_prev is not None:
             return self._vo_input_data_prev.image_data.image
         elif self._map_input_data_prev is not None:
             return self._map_input_data_prev.image_data.image
@@ -1620,11 +1635,35 @@ class MapNavNode(Node, ABC):
         """Returns True if previous visual odometry fixed reference frame should be updated
 
         Assumes fx == fy (focal lengths in x and y dimensions are the approximately same).
-
+g
         :param output_data: Output data from the visual odometry matching
         """
-        threshold = self.get_parameter('misc.visual_odometry_update_threshold').get_parameter_value().double_value
-        return np.linalg.norm(output_data.pose.camera_position_difference.squeeze()) > threshold * output_data.pose.fx
+        # TODO: turn the info messages to debugging messages
+        # If has not been fixed yet
+        if self._vo_output_data_fix is None:
+            self.get_logger().info(f'Visual odometry fixed frame missing. Fixing it now.')
+            return True
+
+        # Check whether camera translation is over threshold
+        t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
+        camera_translation = np.linalg.norm(output_data.pose.camera_position_difference.squeeze())
+        threshold = t_threshold * output_data.pose.fx
+        if camera_translation > threshold:
+            self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
+                                   f'frame.')
+            return True
+
+        # Check whether camera rotation is over threshold
+        r_threshold = self.get_parameter('misc.visual_odometry_update_r_threshold').get_parameter_value().double_value
+        rotvec = Rotation.from_matrix(output_data.pose.r).as_rotvec()
+        camera_rotation = np.linalg.norm(rotvec)
+        threshold = r_threshold
+        if camera_rotation > threshold:
+            self.get_logger().info(f'Camera rotation {camera_rotation} over threshold {threshold}, fixing vo '
+                                   f'frame.')
+            return True
+
+        return False
 
     def _vo_reset(self) -> None:
         """Resets accumulated pose
@@ -1856,7 +1895,7 @@ class MapNavNode(Node, ABC):
                                img_dim=img_dim,
                                map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if all((
                                    camera_yaw, self._map_data, img_dim)) else None,
-                               previous_image=self._previous_image())
+                               previous_image=self._vo_reference())  # TODO: rename vo_reference? not previous_image
 
         # Get cropped and rotated map
         if all((camera_yaw, self._map_data, img_dim)):
@@ -1976,19 +2015,20 @@ class MapNavNode(Node, ABC):
             error_callback=self.map_matching_worker_error_callback
         )
 
-    def _vo_match(self, image_data: ImageData, previous_image_data: np.ndarray) -> None:
+    # TODO: harmonize args - other is ImageData, other is np.ndarray?
+    def _vo_match(self, image_data: ImageData, previous_image: np.ndarray) -> None:
         """Perform visual odometry matching.
 
         See also :meth:`~_match` for the corresponding map matching method.
 
         :param image_data: The image to match
-        :param previous_image_data: Previous image to match
+        :param previous_image: Previous image to match
         :return:
         """
         assert self._vo_matching_results is None or self._vo_matching_results.ready()
         self._vo_matching_results = self._vo_matching_pool.starmap_async(
             self._vo_matcher.worker,
-            [(image_data.image, previous_image_data.image)],
+            [(image_data.image, previous_image)],
             callback=self.vo_matching_worker_callback,
             error_callback=self.vo_matching_worker_error_callback
         )

@@ -1405,8 +1405,7 @@ class MapNavNode(Node, ABC):
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
-            if visual_odometry:
-                self._visualization.update(output_data, visual_odometry)
+            self._visualization.update(output_data, visual_odometry)
 
         return output_data
 
@@ -1820,6 +1819,7 @@ class MapNavNode(Node, ABC):
                 input_data.map_dim_with_padding, input_data.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)
 
         assert self._pix_to_wgs84 is not None
+        # TODO: if visual_odometry, need to use output_data.pose.h for fov_pix, not output_data.pose_map
         output_data.fov_pix, output_data.fov, output_data.c = self._estimate_fov(input_data.img_dim,
                                                                                  output_data.pose_map.inv_h,
                                                                                  self._pix_to_wgs84)

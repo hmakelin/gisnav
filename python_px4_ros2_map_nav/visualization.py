@@ -48,8 +48,9 @@ class Visualization:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
         out = np.vstack((self._map_visualization, self._vo_visualization))
-        cv2.imshow(self.name, out)
-        cv2.waitKey(1)
+        if visual_odometry:
+            cv2.imshow(self.name, out)
+            cv2.waitKey(1)
 
     @staticmethod
     def _create_visualization(output_data: OutputData, display_text: str, visual_odometry: bool) -> np.ndarray:

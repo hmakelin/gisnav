@@ -1786,7 +1786,8 @@ g
 
         return position, terrain_altitude
 
-    def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> Pose:
+    def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> \
+            Optional[Pose]:
         # TODO: make static function, move store and retrieve extrinsic guess out of this function?
         """Estimates pose (rotation and translation) based on found keypoint matches.
 
@@ -1806,7 +1807,12 @@ g
         else:
             _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
-        pose = Pose(k, r, t)
+        try:
+            pose = Pose(k, r, t)
+        except np.linalg.LinAlgError as e:
+            self.get_logger().warn(f'Could not invert homography matrix:\n{e}\n{traceback.print_exc()}')
+            return None
+
         self._store_extrinsic_guess(pose, odom=visual_odometry)
 
         return pose
@@ -1853,8 +1859,14 @@ g
                                  fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
                                  sd=None)
 
-        # TODO: this can also return as None? E.g. if h does not invert?
-        output_data.pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
+        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
+        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
+        if pose is None:
+            self.get_logger().warn(f'Could not compute pose, returning None.')
+            return None
+        else:
+            output_data.pose = pose
+
         output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
 
         if not visual_odometry:

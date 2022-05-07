@@ -1860,7 +1860,6 @@ g
                                  sd=None)
 
         pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
         if pose is None:
             self.get_logger().warn(f'Could not compute pose, returning None.')
             return None

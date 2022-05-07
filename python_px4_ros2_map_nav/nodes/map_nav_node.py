@@ -1913,14 +1913,24 @@ g
         :param output_data: Computed output
         :return: True if match is good
         """
+        # Altitude below startin altitude?
         if output_data.terrain_altitude < 0:  # TODO: or is nan
             self.get_logger().warn(f'Match terrain altitude {output_data.terrain_altitude} was negative, assume bad '
                                    f'match.')
             return False
 
+        # Estimated field of view has unexpected shape?
         if not is_convex_isosceles_trapezoid(output_data.fov_pix):
             self.get_logger().warn(f'Match fov_pix {output_data.fov_pix.squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
+            return False
+
+        # Estimated translation vector blows up?
+        reference = np.array([output_data.input.k[0][2], output_data.input.k[1][2], output_data.input.k[0][0]])  # TODO: refactor using Pose inside InputData, can access these values directly
+        if (np.abs(output_data.pose.t).squeeze() >= 3*reference).any() or \
+                (np.abs(output_data.pose_map.t).squeeze() >= 6*reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
+            self.get_logger().error(f'Pose.t {output_data.pose.t} & pose_map.t {output_data.pose_map.t} have values '
+                                    f'too large compared to (cx, cy, fx): {reference}.')
             return False
 
         return True

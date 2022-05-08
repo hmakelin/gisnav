@@ -1824,6 +1824,7 @@ g
         :param visual_odometry: True if this is a visual odometry match
         :return: Estimated pose against map
         """
+        # TODO: should use frozen poses from input_data, not self._X poses!
         if visual_odometry:
             assert self._have_map_match()  # Should already be checked in :meth:`_should_vo_match`
             assert self._map_output_data_prev is not None
@@ -1831,7 +1832,8 @@ g
             if self._vo_output_data_fix is None:
                 map_pose = self._map_output_data_prev.pose @ pose
             else:
-                map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
+                #map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
+                map_pose = self._vo_output_data_fix.pose_map @ pose
             return map_pose
         else:
             return pose  # This is a map match so the map pose is just the pose itself

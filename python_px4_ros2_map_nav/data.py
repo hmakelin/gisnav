@@ -68,6 +68,7 @@ class Pose:
         object.__setattr__(self, 'cx', self.k[0][2])
         object.__setattr__(self, 'cy', self.k[1][2])
         object.__setattr__(self, 'camera_position', -self.r.T @ self.t)
+        #object.__setattr__(self, 'camera_position', -self.r.T @  np.array((-self.cx, -self.cy, self.t.squeeze()[2])).reshape((3, 1)))
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 

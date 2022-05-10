@@ -9,6 +9,7 @@ import time
 import importlib
 import os
 import yaml
+import copy
 
 from ament_index_python.packages import get_package_share_directory
 PACKAGE_NAME = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
@@ -1817,23 +1818,31 @@ g
 
         return pose
 
-    def _estimate_map_pose(self, pose: Pose, visual_odometry: bool) -> Pose:
+    @staticmethod
+    # TODO: just pass input data (not the two poses?) - how to ensure that at least one pose is not None?
+    def _estimate_map_pose(pose: Pose, map_output_data_prev_pose: Optional[Pose],
+                           vo_output_data_fix_map_pose: Optional[Pose], visual_odometry: bool) -> Pose:
         """Estimates pose against the latest map frame
 
         :param pose: Pose for the match
+        :param map_output_data_prev_pose: Pose against map
+        :param vo_output_data_fix_map_pose: Pose against map (via vo reference)
         :param visual_odometry: True if this is a visual odometry match
         :return: Estimated pose against map
         """
-        # TODO: should use frozen poses from input_data, not self._X poses!
         if visual_odometry:
-            assert self._have_map_match()  # Should already be checked in :meth:`_should_vo_match`
-            assert self._map_output_data_prev is not None
+            #assert self._have_map_match()  # Should already be checked in :meth:`_should_vo_match`
+            #assert self._map_output_data_prev is not None
             # Combine with latest map match
-            if self._vo_output_data_fix is None:
-                map_pose = self._map_output_data_prev.pose @ pose
+            #if self._vo_output_data_fix is None:
+            if vo_output_data_fix_map_pose is None:
+                assert map_output_data_prev_pose is not None  # TODO: remove double args from signature - just give one arg if going with this kind of implementation!
+                #map_pose = self._map_output_data_prev.pose @ pose
+                map_pose = map_output_data_prev_pose @ pose
             else:
                 #map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
-                map_pose = self._vo_output_data_fix.pose_map @ pose
+                #map_pose = self._vo_output_data_fix.pose_map @ pose
+                map_pose = vo_output_data_fix_map_pose @ pose
             return map_pose
         else:
             return pose  # This is a map match so the map pose is just the pose itself
@@ -1868,7 +1877,9 @@ g
         else:
             output_data.pose = pose
 
-        output_data.pose_map = self._estimate_map_pose(output_data.pose, visual_odometry)
+        # TODO: fix estimate_map_pose method signature (two redudnant args?)
+        output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.map_output_data_prev_pose,
+                                                       input_data.vo_output_data_fix_map_pose, visual_odometry)
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
@@ -1911,14 +1922,16 @@ g
                                img_dim=img_dim,
                                map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if all((
                                    camera_yaw, self._map_data, img_dim)) else None,
-                               previous_image=self._vo_reference())  # TODO: rename vo_reference? not previous_image
+                               previous_image=self._vo_reference(),
+                               vo_output_data_fix_map_pose=None if self._vo_output_data_fix is None else self._vo_output_data_fix.pose_map,  # TODO: this is ugly!
+                               map_output_data_prev_pose=None if self._map_output_data_prev is None else self._map_output_data_prev.pose)  # TODO: this is ugly!
 
         # Get cropped and rotated map
         if all((camera_yaw, self._map_data, img_dim)):
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
 
-        return input_data
+        return copy.deepcopy(input_data)
 
     def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.

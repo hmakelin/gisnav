@@ -96,6 +96,8 @@ class InputData:
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
     :param map_cropped: - np.ndarray Rotated and cropped map raster from map_data.image
     :param previous_image: - np.ndarray Previous image in case needed for visual odometry visualization
+    :param vo_output_data_fix_map_pose: - Pose (chained) map pose from previous vo output data fix
+    :param map_output_data_prev_pose: - Pose (unchained) (map) pose from previous map output data
     :return:
     """
     image_data: ImageData
@@ -107,6 +109,8 @@ class InputData:
     img_dim: Dim
     map_cropped: np.ndarray
     previous_image: Optional[np.ndarray]
+    vo_output_data_fix_map_pose: Optional[Pose]
+    map_output_data_prev_pose: Optional[Pose]
 
     def __post_init__(self):
         """Validate the data structure"""

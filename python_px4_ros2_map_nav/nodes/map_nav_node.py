@@ -2129,7 +2129,7 @@ g
         :param visual_odometry: True input is from visual odometry, map is assumed otherwise
         :return:
         """
-        if not visual_odometry:
+        if visual_odometry:
             self._vo_estimation_history = self._update_estimation_history(self._vo_estimation_history, position)
         else:
             self._map_estimation_history = self._update_estimation_history(self._map_estimation_history, position)

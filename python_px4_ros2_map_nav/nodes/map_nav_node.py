@@ -1838,11 +1838,10 @@ g
             if vo_output_data_fix_map_pose is None:
                 assert map_output_data_prev_pose is not None  # TODO: remove double args from signature - just give one arg if going with this kind of implementation!
                 #map_pose = self._map_output_data_prev.pose @ pose
-                map_pose = map_output_data_prev_pose @ pose
+                map_pose = pose @ map_output_data_prev_pose
             else:
                 #map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
-                #map_pose = self._vo_output_data_fix.pose_map @ pose
-                map_pose = vo_output_data_fix_map_pose @ pose
+                map_pose = pose @ vo_output_data_fix_map_pose
             return map_pose
         else:
             return pose  # This is a map match so the map pose is just the pose itself

@@ -44,17 +44,14 @@ from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_
     relative_area_of_intersection
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
-from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
-from python_px4_ros2_map_nav.keypoint_matchers.orb import ORB
+from python_px4_ros2_map_nav.matchers.matcher import Matcher
+from python_px4_ros2_map_nav.matchers.orb import ORBMatcher
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.visualization import Visualization
 
 
 class MapNavNode(Node, ABC):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
-    # Minimum matches for homography estimation, should be at least 4
-    HOMOGRAPHY_MINIMUM_MATCHES = 4
-
     # Encoding of input video (input to CvBridge)
     IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
 
@@ -67,8 +64,7 @@ class MapNavNode(Node, ABC):
 
     # Process counts for multiprocessing pools
     WMS_PROCESS_COUNT = 1  # should be 1
-    MAP_MATCHER_PROCESS_COUNT = 1  # should be 1
-    VO_MATCHER_PROCESS_COUNT = 1  # should be 1
+    MATCHER_PROCESS_COUNT = 1  # should be 1, same for both map and vo matching pools
 
     def __init__(self, node_name: str) -> None:
         """Initializes the ROS 2 node.
@@ -114,26 +110,17 @@ class MapNavNode(Node, ABC):
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # Setup matching
+        # Setup map matching pool
+        map_matcher_params_file = self.get_parameter('map_matcher.params_file').get_parameter_value().string_value
+        self._map_matcher, self._map_matching_pool = self._setup_matching_pool(map_matcher_params_file)
         self._map_matching_results = None  # Must check for None when using this
-        matcher_params_file = self.get_parameter('matcher.params_file').get_parameter_value().string_value
-        module_name, class_name = self._import_matcher(matcher_params_file)
-        # noinspection PyTypeChecker
-        self._kp_matcher = self._import_class(class_name, module_name)
-        #assert_type(kp_matcher, KeypointMatcher)  # TODO: seems like it recognizes it as an ABCMeta class
-        args = self._load_config(matcher_params_file)['args']
 
-        # Do not increase the process count, it should be 1
-        self._map_matching_pool = torch.multiprocessing.Pool(self.MAP_MATCHER_PROCESS_COUNT,
-                                                             initializer=self._kp_matcher.initializer, initargs=args)
-
-        # Setup visual odometry
+        # Setup visual odometry matching pool
         vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
         self._vo_matching_results = None
         if vo_enabled:
-            self._vo_matcher = ORB  # TODO: this correct?
-            self._vo_matching_pool = Pool(self.VO_MATCHER_PROCESS_COUNT, initializer=ORB.initializer,
-                                          initargs=['dummy_argument'])
+            vo_matcher_params_file = self.get_parameter('vo_matcher.params_file').get_parameter_value().string_value
+            self._vo_matcher, self._vo_matching_pool = self._setup_matching_pool(vo_matcher_params_file)
         else:
             self._vo_matcher = None
             self._vo_matching_pool = None
@@ -240,14 +227,24 @@ class MapNavNode(Node, ABC):
         self.__pix_to_wgs84 = value
 
     @property
-    def _kp_matcher(self) -> KeypointMatcher:
-        """Dynamically loaded keypoint matcher"""
-        return self.__kp_matcher
+    def _map_matcher(self) -> Matcher:
+        """Dynamically loaded map matcher"""
+        return self.__map_matcher
 
-    @_kp_matcher.setter
-    def _kp_matcher(self, value: KeypointMatcher) -> None:
-        #assert_type(value, KeypointMatcher)  # TODO: fix this
-        self.__kp_matcher = value
+    @_map_matcher.setter
+    def _map_matcher(self, value: Matcher) -> None:
+        #assert_type(value, Matcher)  # TODO: fix this
+        self.__map_matcher = value
+
+    @property
+    def _vo_matcher(self) -> Matcher:
+        """Dynamically loaded visual odometry matcher"""
+        return self.__vo_matcher
+
+    @_vo_matcher.setter
+    def _vo_matcher(self, value: Matcher) -> None:
+        #assert_type(value, Matcher)  # TODO: fix this
+        self.__vo_matcher = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -306,7 +303,7 @@ class MapNavNode(Node, ABC):
 
     @property
     def _vo_matching_pool(self) -> Optional[Pool]:
-        """Pool for running a :class:`~keypoint_matcher.ORB` in dedicated process
+        """Pool for running a :class:`~keypoint_matcher.ORBMatcher` in dedicated process
 
         None if visual odometry is not enabled.
         """
@@ -502,6 +499,21 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Setup
+    def _setup_matching_pool(self, params_file: str) -> Tuple[str, torch.multiprocessing.Pool]:
+        """Imports a matcher from given params file and returns a matching pool
+
+        :param params_file: Parameter file with matcher class name and initializer arguments
+        :return: Tuple containing the class_name and matching pool
+        """
+        matcher_params = self._load_config(params_file)
+        module_name, class_name = matcher_params.get('class_name', '').rsplit('.', 1)
+        matcher = self._import_class(class_name, module_name)
+        matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
+                                                   initializer=matcher.initializer,
+                                                   initargs=(matcher, *matcher_params.get('args', []),))  # TODO: handle missing args, do not use default value
+
+        return matcher, matching_pool
+
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.
 
@@ -643,7 +655,6 @@ class MapNavNode(Node, ABC):
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
-            ('min_matches', Defaults.MISC_MIN_MATCHES),
             ('visual_odometry', Defaults.MISC_VISUAL_ODOMETRY),
             ('visual_odometry_update_t_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_T_THRESHOLD),
             ('visual_odometry_update_r_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_R_THRESHOLD)
@@ -661,10 +672,16 @@ class MapNavNode(Node, ABC):
             ('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH)
         ])
 
-        namespace = 'matcher'
+        namespace = 'map_matcher'
         self.declare_parameters(namespace, [
-            ('class', Defaults.MATCHER_CLASS, read_only),
-            ('params_file', Defaults.MATCHER_PARAMS_FILE, read_only)
+            ('class', Defaults.MAP_MATCHER_CLASS, read_only),
+            ('params_file', Defaults.MAP_MATCHER_PARAMS_FILE, read_only)
+        ])
+
+        namespace = 'vo_matcher'
+        self.declare_parameters(namespace, [
+            ('class', Defaults.VO_MATCHER_CLASS, read_only),
+            ('params_file', Defaults.VO_MATCHER_PARAMS_FILE, read_only)
         ])
 
     def _import_class(self, class_name: str, module_name: str) -> object:
@@ -1195,7 +1212,7 @@ class MapNavNode(Node, ABC):
             #else:
             #    assert self._map_input_data_prev is not None  # Should have this if passed self._should_vo_match
             #    self._vo_match(image_data, self._map_input_data_prev.image_data)
-            self._vo_match(image_data, inputs.previous_image)
+            self._vo_match(image_data, inputs.previous_image, inputs, self._retrieve_extrinsic_guess(True))
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
@@ -1214,7 +1231,7 @@ class MapNavNode(Node, ABC):
             map_cropped = inputs.map_cropped
 
             self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
-            self._map_match(image_data, map_cropped)
+            self._map_match(image_data, map_cropped, inputs, self._retrieve_extrinsic_guess(False))
 
     def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
@@ -1405,10 +1422,17 @@ class MapNavNode(Node, ABC):
         :param visual_odometry: True if results are from visual odometry worker
         :return: Parsed output data
         """
-        mkp_img, mkp_map = results[0]
-        assert_len(mkp_img, len(mkp_map))
+        #mkp_img, mkp_map = results[0]
+        pose = results[0]
+        if pose is not None:
+            self._store_extrinsic_guess(pose, odom=visual_odometry)
+        else:
+            self.get_logger().warn(f'Could not compute pose, returning None.')
+            return None
+        #assert_len(mkp_img, len(mkp_map))
         input_data = self._vo_input_data if visual_odometry else self._map_input_data
-        output_data = self._process_matches(mkp_img, mkp_map, input_data, visual_odometry=visual_odometry)
+        #output_data = self._process_matches(mkp_img, mkp_map, input_data, visual_odometry=visual_odometry)
+        output_data = self._process_matches(pose, input_data, visual_odometry=visual_odometry)
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
@@ -1442,7 +1466,7 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), False)
             if self._variance_window_full(False):
                 output_data.sd = np.std(self._map_estimation_history, axis=0)
-                self.get_logger().info(f'Publishing map image data')
+                #self.get_logger().info(f'Publishing map image data')
                 self.publish_position(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -1484,7 +1508,7 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), True)
             if self._variance_window_full(True):
                 output_data.sd = np.std(self._vo_estimation_history, axis=0)
-                self.get_logger().info(f'Publishing vo image data')
+                #self.get_logger().info(f'Publishing vo image data')
                 self.publish_position(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -1682,17 +1706,6 @@ g
         self._vo_output_data_prev = None
         self._vo_output_data_fix = None
 
-    def _not_enough_matches(self, count: int) -> bool:
-        """Returns True if match count is too small for processing"""
-        # TODO: should be part of _good_match check?
-        min_matches = self.get_parameter('misc.min_matches').get_parameter_value().integer_value
-        min_matches = max(self.HOMOGRAPHY_MINIMUM_MATCHES, min_matches)
-        if count < min_matches:
-            self.get_logger().warn(f'Found {count} matches, {min_matches} required.')
-            return True
-        else:
-            return False
-
     # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
     def _estimate_altitude_scaling(self, fov_pix: np.ndarray, fov_wgs84: np.ndarray) -> float:
         """Estimates altitude scaling factor
@@ -1787,37 +1800,6 @@ g
 
         return position, terrain_altitude
 
-    def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, visual_odometry: bool) -> \
-            Optional[Pose]:
-        # TODO: make static function, move store and retrieve extrinsic guess out of this function?
-        """Estimates pose (rotation and translation) based on found keypoint matches.
-
-        :param mkp1: Matching keypoints for image #1 (current frame)
-        :param mkp2: Matching keypoints for image #2 (map or previous frame)
-        :param k: Camera intrinsics matrix
-        :param visual_odometry: True if this pose is estimated for visual odometry
-        """
-        padding = np.array([[0]]*len(mkp1))
-        mkp2_3d = np.hstack((mkp2, padding))  # Set all world z-coordinates to zero
-        dist_coeffs = np.zeros((4, 1))
-        pose = self._retrieve_extrinsic_guess(odom=visual_odometry)
-        use_guess = pose is not None
-        if use_guess:
-            _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, pose.r, pose.t,
-                                             useExtrinsicGuess=use_guess, iterationsCount=10)
-        else:
-            _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, iterationsCount=10)
-        r, _ = cv2.Rodrigues(r)
-        try:
-            pose = Pose(k, r, t)
-        except np.linalg.LinAlgError as e:
-            self.get_logger().warn(f'Could not invert homography matrix:\n{e}\n{traceback.print_exc()}')
-            return None
-
-        self._store_extrinsic_guess(pose, odom=visual_odometry)
-
-        return pose
-
     @staticmethod
     # TODO: just pass input data (not the two poses?) - how to ensure that at least one pose is not None?
     def _estimate_map_pose(pose: Pose, map_output_data_prev_pose: Optional[Pose],
@@ -1847,34 +1829,22 @@ g
             return pose  # This is a map match so the map pose is just the pose itself
 
     #region Match
-    def _process_matches(self, mkp_img: np.ndarray, mkp_map: np.ndarray, input_data: InputData, visual_odometry: bool) \
-            -> Optional[OutputData]:
-        """Process the matching image and map keypoints into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition`
-        message.
+    def _process_matches(self, pose: Pose, input_data: InputData, visual_odometry: bool) -> Optional[OutputData]:
+        """Process the estimated camera pose into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition` message
 
-        :param mkp_img: Matching keypoints in drone image
-        :param mkp_map: Matching keypoints in map raster (or in previous frame if visual_odometry = True)
+        :param pose: Estimated pose between images
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :param visual_odometry: True if this match is a visual odometry match and not a map match
         :return: Computed output_data is a valid estimate was obtained
         """
-        if self._not_enough_matches(len(mkp_img)):  # TODO: move check to _should_match and only assert here?
-            self.get_logger().warn(f'Not enough matches ({len(mkp_img)}), skipping frame.')
-            return None
-
         assert_shape(input_data.k, (3, 3))
 
         # Init output
-        output_data = OutputData(mkp_img=mkp_img, mkp_map=mkp_map, input=input_data, pose=None, pose_map=None, fov=None,
+        output_data = OutputData(input=input_data, pose=pose, pose_map=None, fov=None,
                                  fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
                                  sd=None)
 
-        pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-        if pose is None:
-            self.get_logger().warn(f'Could not compute pose, returning None.')
-            return None
-        else:
-            output_data.pose = pose
+        #pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
 
         # TODO: fix estimate_map_pose method signature (two redudnant args?)
         output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.map_output_data_prev_pose,
@@ -2036,37 +2006,43 @@ g
 
         return True
 
-    def _map_match(self, image_data: ImageData, map_cropped: np.ndarray) -> None:
+    def _map_match(self, image_data: ImageData, map_cropped: np.ndarray, input_data: InputData,
+                   guess: Optional[Pose]) -> None:
         """Instructs the neural network to match camera image to map image.
 
         See also :meth:`~_odom_match` for the corresponding visual odometry method.
 
         :param image_data: The image to match
         :param map_cropped: Cropped and rotated map raster (aligned with image)
+        :param input_data: Input data context
+        :param guess: Initial guess for pose
         :return:
         """
         assert self._map_matching_results is None or self._map_matching_results.ready()
         self._map_matching_results = self._map_matching_pool.starmap_async(
-            self._kp_matcher.worker,
-            [(image_data.image, map_cropped)],
+            self._map_matcher.worker,
+            [(image_data.image, map_cropped, input_data, guess)],
             callback=self.map_matching_worker_callback,
             error_callback=self.map_matching_worker_error_callback
         )
 
     # TODO: harmonize args - other is ImageData, other is np.ndarray?
-    def _vo_match(self, image_data: ImageData, previous_image: np.ndarray) -> None:
+    def _vo_match(self, image_data: ImageData, previous_image: np.ndarray, input_data: InputData,
+                  guess: Optional[Pose]) -> None:
         """Perform visual odometry matching.
 
         See also :meth:`~_match` for the corresponding map matching method.
 
         :param image_data: The image to match
         :param previous_image: Previous image to match
+        :param input_data: Input data context
+        :param guess: Initial guess for pose
         :return:
         """
         assert self._vo_matching_results is None or self._vo_matching_results.ready()
         self._vo_matching_results = self._vo_matching_pool.starmap_async(
             self._vo_matcher.worker,
-            [(image_data.image, previous_image)],
+            [(image_data.image, previous_image, input_data, guess)],
             callback=self.vo_matching_worker_callback,
             error_callback=self.vo_matching_worker_error_callback
         )

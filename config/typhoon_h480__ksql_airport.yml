@@ -15,7 +15,6 @@ map_nav_node:
       min_match_altitude: 80
       blur_threshold: 1.5  # standard deviations
       blur_window_length: 100
-      min_matches: 15
       visual_odometry: True
       visual_odometry_update_t_threshold: 0.5  # multiple of focal length, translation threshold
       visual_odometry_update_r_threshold: 0.5  # radians, rotation threshold
@@ -31,8 +30,8 @@ map_nav_node:
       map_radius_meters_default: 400
       update_map_center_threshold: 50
       update_map_radius_threshold: 50
-    matcher:
-      #class: 'python_px4_ros2_map_nav.keypoint_matchers.superglue.SuperGlue'  # Imported dynamically
-      #params_file: 'config/superglue_params.yml' # For parsing args for matcher's static initializer method
-      class: 'python_px4_ros2_map_nav.keypoint_matchers.loftr.LoFTRMatcher'
+    map_matcher:
+      #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
       params_file: 'config/loftr_params.yml'
+    vo_matcher:
+      params_file: 'config/orb_params.yml'

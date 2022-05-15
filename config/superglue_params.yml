@@ -1,4 +1,6 @@
+class_name: 'python_px4_ros2_map_nav.matchers.superglue.SuperGlue'
 args:  # Recommended outdoor config from SuperGlue repo's README.md
+  - 15  # min_matches
   - superpoint:
       nms_radius: 3
       keypoint_threshold: 0.005

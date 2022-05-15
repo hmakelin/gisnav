@@ -52,7 +52,7 @@ class Visualization:
             if self._vo_visualization is None:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
-        out = np.vstack((self._map_visualization, self._vo_visualization))
+        out = np.vstack((self._map_visualization, self._vo_visualization, output_data.input.image_data.image))
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
             if visual_odometry:
                 cv2.imshow(self.name, out)
@@ -61,6 +61,7 @@ class Visualization:
             cv2.imshow(self.name, out)
             cv2.waitKey(1)
 
+    # TODO: optionally return mkp's from worker and pass them onto this function?
     @staticmethod
     def _create_visualization(output_data: OutputData, display_text: str, visual_odometry: bool) -> np.ndarray:
         """Visualizes a homography including keypoint matches and field of view.
@@ -71,26 +72,27 @@ class Visualization:
         :return: Visualized image as numpy array
         """
         # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
-        kp_count = len(output_data.mkp_img)
-        assert kp_count == len(output_data.mkp_map), 'Keypoint counts for img and map did not match.'
-        matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
+        #kp_count = len(output_data.mkp_img)
+        #assert kp_count == len(output_data.mkp_map), 'Keypoint counts for img and map did not match.'
+        #matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
 
         # Need cv2.KeyPoints for keypoints
-        mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
-        mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
+        #mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
+        #mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
 
         ref_img = output_data.input.previous_image if visual_odometry else output_data.input.map_cropped
         map_with_fov = cv2.polylines(ref_img.copy(), [np.int32(output_data.fov_pix)], True, 255, 3, cv2.LINE_AA)
-        draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
-        out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,
-                              **draw_params)
+        #draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
+        #out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,
+        #                      **draw_params)
 
         # Add text (need to manually handle newlines)
-        for i, text_line in enumerate(display_text.split('\n')):
-            y = (i + 1) * 30
-            cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
+        #for i, text_line in enumerate(display_text.split('\n')):
+        #    y = (i + 1) * 30
+        #    cv2.putText(out, text_line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, 2)
 
-        return out
+        #return out
+        return map_with_fov
 
     @staticmethod
     def _attitude_text(attitude: Rotation):

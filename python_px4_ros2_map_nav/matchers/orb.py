@@ -1,4 +1,4 @@
-"""Module that contains an adapter for the ORB descriptor based matcher."""
+"""Module that contains an adapter for the ORBMatcher descriptor based matcher."""
 import os
 import sys
 import cv2
@@ -7,12 +7,12 @@ import numpy as np
 from typing import Tuple
 from enum import Enum
 
-from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
+from python_px4_ros2_map_nav.matchers.keypoint_matcher import KeypointMatcher
 from python_px4_ros2_map_nav.assertions import assert_type
 
 
-class ORB(KeypointMatcher):
-    """Adapter for ORB based keypoint matcher"""
+class ORBMatcher(KeypointMatcher):
+    """Adapter for ORBMatcher based keypoint matcher"""
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad matches"""
@@ -20,22 +20,22 @@ class ORB(KeypointMatcher):
     MAX_KEYPOINTS = 40  # Should be 2x (?) larger than minimum required matches
     """Maximum number of keypoints and descriptors to return for matching"""
 
-    def __init__(self, params: dict) -> None:
+    def __init__(self, min_matches: int) -> None:
         """Initializes instance attributes
 
         This method is intended to be called inside :meth:`~initializer` together with a global variable declaration
         so that attributes initialized here are also available for :meth:`~worker`. This way we avoid having to declare
         a separate global variable for each attribute.
 
-        :param params: ORB config to be passed to :class:`models.matching.Matching`
+        :param min_matches: Minimum required keypoint matches (should be >= 4)
         """
-        self._config = params  # TODO: this needed?
+        super(ORBMatcher, self).__init__(min_matches)
         self._orb = cv2.ORB_create()
         self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
     @property
     def _orb(self) -> cv2.ORB:
-        """ORB keypoint detector and descriptor"""
+        """ORBMatcher keypoint detector and descriptor"""
         return self.__orb
 
     @_orb.setter
@@ -53,40 +53,9 @@ class ORB(KeypointMatcher):
         assert_type(value, cv2.BFMatcher)
         self.__bf = value
 
-    @staticmethod
-    def initializer(params: dict) -> None:
-        """Instantiates :class:`~ORB` as a global variable
-
-        This makes the :class:`cv2.ORB` instance of :py:attr:`~_orb` available to be called by :meth:`~worker` as long
-        as it is called in the same process.
-
-        :param params: ORB config to be passed to :func:`cv2.ORB_create`
-        :return:
-        """
-        # noinspection PyGlobalUndefined
-        global orb
-        orb = ORB(params)
-
-    @staticmethod
-    def worker(img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Returns matching keypoints between provided image and map
-
-        Requires a global :class:`~ORB` instance to work.
-
-        :param img: The image captured from drone camera
-        :param map_: The map raster of the same area (from e.g. WMS endpoint)
-        :return: Tuple of two arrays containing matching keypoints in img and map respectively
-        """
-        try:
-            assert_type(orb, ORB)
-            return orb._match(img, map_)
-        except Exception as e:
-            # TODO: handle exception
-            raise e
-
     def _match(self, img: np.ndarray, map_: np.ndarray, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
             -> Tuple[np.ndarray, np.ndarray]:
-        """Uses ORB to find matching keypoints between provided image and map
+        """Uses ORBMatcher to find matching keypoints between provided image and map
 
         Note: map_ may be any image, not necessarily a map if this is used for visual odometry.
 

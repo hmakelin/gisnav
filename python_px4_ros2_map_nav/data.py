@@ -126,8 +126,6 @@ class OutputData:
     """Algorithm output passed onto publish method.
 
     :param input: The input data used for the match
-    :param mkp_img: Matching keypoints in the image
-    :param mkp_map: Matching keypoints in the map
     :param pose: Estimated pose for the image frame vs. the map frame
     :param pose_map: Estimated pose for the image frame vs. the map frame (in WGS84)
     :param fov: Camera field of view projected to WGS84 coordinates
@@ -141,8 +139,6 @@ class OutputData:
     :return:
     """
     input: InputData
-    mkp_img: np.ndarray
-    mkp_map: np.ndarray
     pose: Pose
     pose_map: Pose
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?

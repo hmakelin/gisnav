@@ -8,7 +8,7 @@ import numpy as np
 from typing import Tuple
 from enum import Enum
 from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.keypoint_matchers.keypoint_matcher import KeypointMatcher
+from python_px4_ros2_map_nav.matchers.keypoint_matcher import KeypointMatcher
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor
 
@@ -24,15 +24,17 @@ class SuperGlue(KeypointMatcher):
         CPU = 'cpu'
         CUDA = 'cuda'
 
-    def __init__(self, params: dict) -> None:
+    def __init__(self, min_matches: int, params: dict) -> None:
         """Initializes instance attributes
 
         This method is intended to be called inside :meth:`~initializer` together with a global variable declaration
         so that attributes initialized here are also available for :meth:`~worker`. This way we avoid having to declare
         a separate global variable for each attribute.
 
+        :param min_matches: Minimum required keypoint matches (should be >= 4)
         :param params: SuperGlue config to be passed to :class:`models.matching.Matching`
         """
+        super(SuperGlue, self).__init__(min_matches)
         self._device = SuperGlue.TorchDevice.CUDA.value if torch.cuda.is_available() else \
             SuperGlue.TorchDevice.CPU.value
         self._matching = Matching(params).eval().to(self._device)
@@ -56,37 +58,6 @@ class SuperGlue(KeypointMatcher):
     def _matching(self, value: Matching) -> None:
         assert_type(value, Matching)
         self.__matching = value
-
-    @staticmethod
-    def initializer(params: dict) -> None:
-        """Instantiates :class:`~SuperGlue` as a global variable
-
-        This makes the :class:`models.matching.Matching` instance of :py:attr:`~_matching` and the neural network
-        within available to be called by :meth:`~worker` as long as it is called in the same process.
-
-        :param params: SuperGlue config to be passed to :class:`models.matching.Matching`
-        :return:
-        """
-        # noinspection PyGlobalUndefined
-        global superglue
-        superglue = SuperGlue(params)
-
-    @staticmethod
-    def worker(img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Returns matching keypoints between provided image and map
-
-        Requires a global :class:`~SuperGlue` instance to work.
-
-        :param img: The image captured from drone camera
-        :param map_: The map raster of the same area (from e.g. WMS endpoint)
-        :return: Tuple of two lists containing matching keypoints in img and map respectively
-        """
-        try:
-            assert_type(superglue, SuperGlue)
-            return superglue._match(img, map_)
-        except Exception as e:
-            # TODO: handle exception
-            raise e
 
     def _match(self, img: np.ndarray, map_: np.ndarray, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
             -> Tuple[np.ndarray, np.ndarray]:

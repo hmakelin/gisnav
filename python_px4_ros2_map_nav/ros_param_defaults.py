@@ -55,9 +55,6 @@ class Defaults:
     MISC_BLUR_WINDOW_LENGTH = 20
     """Window length for rolling blur filtering"""
 
-    MISC_MIN_MATCHES = 15
-    """Minimum number of keypoint matches required from matcher for continuing with match post-processing"""
-
     MISC_VISUAL_ODOMETRY = True
     """Flag that enables use of self referential visual odometry in addition to map matching."""
 
@@ -137,11 +134,19 @@ class Defaults:
     and almost the same size. This parameter is used during :meth:`map_nav_node.MapNavNode._should_update_map` calls.
     """
 
-    MATCHER_CLASS = 'python_px4_ros2_map_nav.keypoint_matchers.loftr.LoFTRMatcher'
-    """Default :class:`~keypoint_matchers.keypoint_matcher.KeyPointMatcher` to use for matching images to maps."""
+    MAP_MATCHER_CLASS = 'python_px4_ros2_map_nav.matchers.loftr.LoFTRMatcher'
+    """Default :class:`~matchers.keypoint_matcher.Matcher` to use for matching images to maps."""
 
-    MATCHER_PARAMS_FILE = 'config/loftr_params.yml'
-    """Default parameter file with args for the default :class:`~keypoint_matchers.keypoint_matcher.KeyPointMatcher`'s 
-    :meth:keypoint_matchers.keypoint_matcher.KeyPointMatcher.initializer method."""
+    MAP_MATCHER_PARAMS_FILE = 'config/loftr_params.yml'
+    """Default parameter file with args for the default :class:`~matchers.keypoint_matcher.KeyPointMatcher`'s 
+    :meth:matchers.keypoint_matcher.KeyPointMatcher.initializer method."""
+
+    VO_MATCHER_CLASS = 'python_px4_ros2_map_nav.matchers.orb.LoFTRMatcher'
+    """Default :class:`~matchers.keypoint_matcher.Matcher` to use for matching images to previous image frames (self
+    referential matching)"""
+
+    VO_MATCHER_PARAMS_FILE = 'config/orb_params.yml'
+    """Default parameter file with args for the default :class:`~matchers.keypoint_matcher.Matcher`'s 
+    :meth:matchers.keypoint_matcher.Matcher.initializer method."""
 
 

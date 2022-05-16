@@ -1203,15 +1203,6 @@ class MapNavNode(Node, ABC):
                                         f'Skipping visual odometry matching.')
                 return
             self._vo_input_data = inputs
-
-            # TODO: just use inputs.previous_image here! Use this logic to set previous_image in _match_inputs!
-            #if self._vo_output_data_fix is not None:
-            #    self._vo_match(image_data, self._vo_output_data_fix.input.image_data)
-            #elif self._vo_input_data_prev is not None:
-            #    self._vo_match(image_data, self._vo_input_data_prev.image_data)
-            #else:
-            #    assert self._map_input_data_prev is not None  # Should have this if passed self._should_vo_match
-            #    self._vo_match(image_data, self._map_input_data_prev.image_data)
             self._vo_match(image_data, inputs.previous_image, inputs, self._retrieve_extrinsic_guess(True))
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
@@ -1541,15 +1532,6 @@ class MapNavNode(Node, ABC):
         
         :return: Previous frame from either map or vo matching, or None if not available
         """
-        #if self._vo_input_data_prev is not None:
-        #    assert self._map_input_data_prev is not None
-        #    assert self._vo_input_data_prev.image_data.timestamp >= self._map_input_data_prev.image_data.timestamp
-        #    return self._vo_input_data_prev.image_data.image
-        #elif self._map_input_data_prev is not None:
-        #    return self._map_input_data_prev.image_data.image
-        #else:
-        #    self.get_logger().debug('No previous frame available, returning None.')
-        #    return None
         if self._vo_output_data_fix is not None:
             return self._vo_output_data_fix.input.image_data.image
         elif self._vo_input_data_prev is not None:

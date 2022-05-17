@@ -1468,7 +1468,6 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), False)
             if self._variance_window_full(False):
                 output_data.sd = np.std(self._map_estimation_history, axis=0)
-                #self.get_logger().info(f'Publishing map image data')
                 self.publish_position(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -1510,7 +1509,6 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), True)
             if self._variance_window_full(True):
                 output_data.sd = np.std(self._vo_estimation_history, axis=0)
-                #self.get_logger().info(f'Publishing vo image data')
                 self.publish_position(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
@@ -1543,15 +1541,6 @@ class MapNavNode(Node, ABC):
         
         :return: Previous ImageData from either map or vo matching, or None if not available
         """
-        #if self._vo_output_data_fix is not None:
-        #    return self._vo_output_data_fix.input.image_data
-        #elif self._vo_input_data_prev is not None:
-        #    return self._vo_input_data_prev.image_data  # TODO: is this needed? In this case there should always be a vo fixed frame. Assert it here?
-        #elif self._map_input_data_prev is not None:
-        #    return self._map_input_data_prev.image_data
-        #else:
-        #    self.get_logger().debug('No previous frame available, returning None.')
-        #    return None
         if self._vo_output_data_fix is not None:
             return self._vo_output_data_fix.image_pair.img
         elif self._map_output_data_prev is not None:

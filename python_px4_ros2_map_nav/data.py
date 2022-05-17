@@ -95,6 +95,7 @@ class AsyncQuery:
 @dataclass(frozen=True)
 class Pose:
     """Represents camera pose (rotation and translation) along with camera intrinsics"""
+    image_pair: ImagePair
     k: np.ndarray
     r: np.ndarray
     t: np.ndarray
@@ -131,7 +132,8 @@ class Pose:
         pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        return Pose(self.k, self.r @ pose.r, self.t + self.r @ (pose.t + pose.camera_center))  # TODO: need to fix sign somehow? Would think minus sign is needed here?
+        # TODO: what is image pair if this is a 'chained' pose? Need to reconstruct a new image pair from the two poses?
+        return Pose(self.image_pair, self.k, self.r @ pose.r, self.t + self.r @ (pose.t + pose.camera_center))  # TODO: need to fix sign somehow? Would think minus sign is needed here?
 
 
 # noinspection PyClassHasNoInit
@@ -183,7 +185,6 @@ class OutputData:
     :param sd: Standard deviation of position estimate
     :return:
     """
-    image_pair: ImagePair
     input: InputData
     pose: Pose
     pose_map: Pose

@@ -3,7 +3,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from python_px4_ros2_map_nav.data import Pose, InputData
+from python_px4_ros2_map_nav.data import Pose, InputData, ImagePair
 
 
 class Matcher(ABC):
@@ -27,12 +27,10 @@ class Matcher(ABC):
 
     @staticmethod
     @abstractmethod
-    def worker(image: np.ndarray, reference_image: np.ndarray, input_data: InputData, guess: Optional[Pose]) -> \
-            Optional[Pose]:
+    def worker(image_pair: ImagePair, input_data: InputData, guess: Optional[Pose]) -> Optional[Pose]:
         """Returns camera pose between input images
 
-        :param image: Image captured from vehicle camera
-        :param reference_image: Map raster retrieved from e.g. WMS endpoint, or previous frame from vehicle camera
+        :param image_pair: Image pair to match
         :param input_data: The input data context for the image pair that may be needed in pose estimation
         :param guess: Optional guess for the solution
         :return: Camera pose between the images, or None if estimate could not be obtained

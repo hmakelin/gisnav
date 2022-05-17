@@ -1322,9 +1322,9 @@ class MapNavNode(Node, ABC):
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         if self._map_input_data_prev is not None:
-            if not (abs(self._distance(center, self._map_output_data_prev.image_pair.ref.map_data.center)) >
+            if not (abs(self._distance(center, self._map_output_data_prev.pose.image_pair.ref.map_data.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._map_output_data_prev.image_pair.ref.map_data.radius) >
+                    abs(radius - self._map_output_data_prev.pose.image_pair.ref.map_data.radius) >
                     self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return True
 
@@ -1426,7 +1426,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Could not compute pose, returning None.')
             return None
         query = self._vo_matching_query if visual_odometry else self._map_matching_query
-        output_data = self._process_matches(pose, query.image_pair, query.input_data)
+        output_data = self._process_matches(pose, query.input_data)
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
@@ -1534,9 +1534,9 @@ class MapNavNode(Node, ABC):
         :return: Previous ImageData from either map or vo matching, or None if not available
         """
         if self._vo_output_data_fix is not None:
-            return self._vo_output_data_fix.image_pair.img
+            return self._vo_output_data_fix.pose.image_pair.img
         elif self._map_output_data_prev is not None:
-            return self._map_output_data_prev.image_pair.img
+            return self._map_output_data_prev.pose.image_pair.img
         else:
             self.get_logger().debug('No previous frame available, returning None.')
             return None
@@ -1784,16 +1784,15 @@ g
     @staticmethod
     # TODO: just pass input data (not the two poses?) - how to ensure that at least one pose is not None?
     def _estimate_map_pose(pose: Pose, map_output_data_prev_pose: Optional[Pose],
-                           vo_output_data_fix_map_pose: Optional[Pose], visual_odometry: bool) -> Pose:
+                           vo_output_data_fix_map_pose: Optional[Pose]) -> Pose:
         """Estimates pose against the latest map frame
 
         :param pose: Pose for the match
         :param map_output_data_prev_pose: Pose against map
         :param vo_output_data_fix_map_pose: Pose against map (via vo reference)
-        :param visual_odometry: True if this is a visual odometry match
         :return: Estimated pose against map
         """
-        if visual_odometry:
+        if not pose.image_pair.mapful():
             # Combine with latest map match
             if vo_output_data_fix_map_pose is None:
                 assert map_output_data_prev_pose is not None  # TODO: remove double args from signature - just give one arg if going with this kind of implementation!
@@ -1805,7 +1804,7 @@ g
             return pose  # This is a map match so the map pose is just the pose itself
 
     #region Match
-    def _process_matches(self, pose: Pose, image_pair: ImagePair, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
+    def _process_matches(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
         """Process the estimated camera pose into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition` message
 
         :param pose: Estimated pose between images
@@ -1814,22 +1813,20 @@ g
         """
         assert_shape(input_data.k, (3, 3))
 
-        visual_odometry = not image_pair.mapful()
-
         # Init output
-        output_data = OutputData(image_pair=image_pair, input=input_data, pose=pose, pose_map=None, fov=None,
+        output_data = OutputData(input=input_data, pose=pose, pose_map=None, fov=None,
                                  fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
                                  sd=None)
 
         # TODO: fix estimate_map_pose method signature (two redudnant args?)
         output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.map_output_data_prev_pose,
-                                                       input_data.vo_output_data_fix_map_pose, visual_odometry)
+                                                       input_data.vo_output_data_fix_map_pose)
 
-        if not visual_odometry:
+        if pose.image_pair.mapful():
             # Transforms from rotated and cropped map pixel coordinates to WGS84
-            assert isinstance(image_pair.ref, ContextualMapData)
+            assert isinstance(pose.image_pair.ref, ContextualMapData)
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, image_pair.ref.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
+                input_data.map_dim_with_padding, pose.image_pair.ref.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
 
         assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.c_pix, output_data.fov, output_data.c = self._estimate_fov(
@@ -1843,7 +1840,7 @@ g
         if self._good_match(output_data):
             return output_data
         else:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
+            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {pose.image_pair.mapful()}.')
             return None
 
     def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
@@ -1994,7 +1991,7 @@ f
             self._map_matching_query = AsyncQuery(
                 result=self._map_matching_pool.starmap_async(
                     self._map_matcher.worker,
-                    [(image_pair.img.image, image_pair.ref.image, input_data, self._retrieve_extrinsic_guess(False))],
+                    [(image_pair, input_data, self._retrieve_extrinsic_guess(False))],
                     callback=self.map_matching_worker_callback,
                     error_callback=self.map_matching_worker_error_callback
                 ),
@@ -2006,7 +2003,7 @@ f
             self._vo_matching_query = AsyncQuery(
                 result=self._vo_matching_pool.starmap_async(
                     self._vo_matcher.worker,
-                    [(image_pair.img.image, image_pair.ref.image, input_data, self._retrieve_extrinsic_guess(True))],
+                    [(image_pair, input_data, self._retrieve_extrinsic_guess(True))],
                     callback=self.vo_matching_worker_callback,
                     error_callback=self.vo_matching_worker_callback
                 ),

@@ -7,6 +7,7 @@ import numpy as np
 
 from typing import Tuple
 from enum import Enum
+from python_px4_ros2_map_nav.data import ImagePair
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.matchers.keypoint_matcher import KeypointMatcher
 from SuperGluePretrainedNetwork.models.matching import Matching
@@ -59,17 +60,16 @@ class SuperGlue(KeypointMatcher):
         assert_type(value, Matching)
         self.__matching = value
 
-    def _match(self, img: np.ndarray, map_: np.ndarray, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
+    def _match(self, image_pair: ImagePair, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
             -> Tuple[np.ndarray, np.ndarray]:
         """Uses SuperGlue to find matching keypoints between provided image and map
 
-        :param img: The image captured from drone camera
-        :param map_: The map raster of the same area (retrieved e.g. from a WMS endpoint)
+        :param image_pair: The image pair to match
         :param conf_threshold: Confidence threshold for filtering out bad matches
         :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
         """
-        img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(map_, cv2.COLOR_BGR2GRAY)
+        img_grayscale = cv2.cvtColor(image_pair.img.image, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(image_pair.ref.image, cv2.COLOR_BGR2GRAY)
         img_tensor = frame2tensor(img_grayscale, self._device)
         map_tensor = frame2tensor(map_grayscale, self._device)
 

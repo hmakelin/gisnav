@@ -7,6 +7,7 @@ import numpy as np
 
 from typing import Tuple
 from enum import Enum
+from python_px4_ros2_map_nav.data import ImagePair
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.matchers.keypoint_matcher import KeypointMatcher
 from LoFTR.loftr import LoFTR, default_cfg
@@ -66,15 +67,14 @@ class LoFTRMatcher(KeypointMatcher):
         assert_type(value, LoFTR)
         self.__model = value
 
-    def _match(self, img: np.ndarray, map_: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _match(self, image_pair: ImagePair) -> Tuple[np.ndarray, np.ndarray]:
         """Uses LoFTR to find matching keypoints between provided image and map
 
-        :param img: The image captured from drone camera
-        :param map_: The map raster of the same area (retrieved e.g. from a WMS endpoint)
+        :param image_pair: The image pair to match
         :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
         """
-        img_grayscale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(map_, cv2.COLOR_BGR2GRAY)
+        img_grayscale = cv2.cvtColor(image_pair.img.image, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(image_pair.ref.image, cv2.COLOR_BGR2GRAY)
         img_tensor = torch.from_numpy(img_grayscale)[None][None].cuda() / 255.
         map_tensor = torch.from_numpy(map_grayscale)[None][None].cuda() / 255.
 

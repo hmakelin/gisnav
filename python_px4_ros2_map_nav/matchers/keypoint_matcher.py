@@ -7,7 +7,7 @@ from typing import Tuple, Optional
 
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.data import Pose, InputData
+from python_px4_ros2_map_nav.data import Pose, InputData, ImagePair
 
 
 # TODO: move keypoint visualization here
@@ -49,13 +49,12 @@ class KeypointMatcher(Matcher):
         matcher = class_name(*args)
 
     @staticmethod
-    def worker(img: np.ndarray, map_: np.ndarray, input_data: InputData, guess: Optional[Pose]) -> Optional[Pose]:
+    def worker(image_pair: ImagePair, input_data: InputData, guess: Optional[Pose]) -> Optional[Pose]:
         """Returns matching keypoints between provided image and map
 
         Requires a global :class:`~LoFTRMatcher` instance to work.
 
-        :param img: The image captured from drone camera
-        :param map_: The map raster of the same area (from e.g. WMS endpoint)
+        :param image_pair: Image pair to match
         :param input_data: The input data context
         :param guess: Optional initial guess for camera pose
         :return: Tuple of two lists containing matching keypoints in img and map respectively
@@ -63,17 +62,18 @@ class KeypointMatcher(Matcher):
         try:
             assert_type(matcher, KeypointMatcher)  # see matcher.py for initialization of 'matcher'
             # noinspection PyProtectedMember
-            mkp_img, mkp_map = matcher._match(img, map_)
+            mkp_img, mkp_map = matcher._match(image_pair)
             assert hasattr(input_data, 'k')
-            return matcher._estimate_pose(mkp_img, mkp_map, input_data.k, guess)  # noqa (PyProtectedMember)
+            return matcher._estimate_pose(image_pair, mkp_img, mkp_map, input_data.k, guess)  # noqa (PyProtectedMember)
         except Exception as e:
             #raise e  # TODO: handle exception
             return None
 
-    def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, guess: Optional[Pose]) -> \
-            Optional[Pose]:
+    def _estimate_pose(self, image_pair: ImagePair, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray,
+                       guess: Optional[Pose]) -> Optional[Pose]:
         """Estimates pose (rotation and translation) based on found keypoint matches
 
+        :param image_pair: Image pair to estimate pose for  # TODO: refactor this arg out - it's just passing through
         :param mkp1: Matching keypoints for image #1 (current frame)
         :param mkp2: Matching keypoints for image #2 (map or previous frame)
         :param k: Camera intrinsics matrix
@@ -94,9 +94,9 @@ class KeypointMatcher(Matcher):
                                          iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
         try:
-            pose = Pose(k, r, t)
+            pose = Pose(image_pair, k, r, t)
         except np.linalg.LinAlgError as _:  # e:
-            # TODO: logging?
+            # TODO: handle error
             return None
 
         return pose

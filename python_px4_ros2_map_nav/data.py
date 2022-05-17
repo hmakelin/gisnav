@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 from typing import Optional, Union, get_args
 from collections import namedtuple
 from dataclasses import dataclass, field
+from multiprocessing.pool import AsyncResult
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
 
@@ -37,6 +38,37 @@ class MapData:
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
     bbox: BBox
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class ImagePair:
+    """Atomic image pair to represent a matched pair of images"""
+    img: ImageData
+    ref: Union[ImageData, MapData]
+
+    def has_map(self) -> bool:
+        """Returns True if this image pair is for a map match
+
+        :return: True for map match, False for visual odometry match
+        """
+        return isinstance(self.ref, MapData)
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class AsyncQuery:
+    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+
+    The intention is to keep the result of the query in the same place along with the inputs so that they can be
+    easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.matchers.matcher.Matcher.worker`
+    interface expects an image_pair and an input_data context as arguments (along with a guess which is not stored
+    since it is no longer needed after the pose estimation).
+    """
+    result: AsyncResult
+    #query: Union[ImagePair, ]  # TODO: what is used for WMS?
+    image_pair: ImagePair  # TODO: what is used for WMS?
+    input_data: InputData
 
 
 # noinspection PyClassHasNoInit
@@ -87,28 +119,22 @@ class Pose:
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
-    :param image_data: The drone image
-    :param map_data: The map raster
     :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
     :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # TODO: Rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
     :param vehicle_attitude: Vehicle attitude
     :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
     :param map_cropped: - np.ndarray Rotated and cropped map raster from map_data.image
-    :param previous_image: - np.ndarray Previous image in case needed for visual odometry visualization
     :param vo_output_data_fix_map_pose: - Pose (chained) map pose from previous vo output data fix
     :param map_output_data_prev_pose: - Pose (unchained) (map) pose from previous map output data
     :return:
     """
-    image_data: ImageData
-    map_data: Union[ImageData, MapData]  # TODO: if vo, this should just be a another ImageData instead of MapData?
     k: np.ndarray
     camera_yaw: np.ndarray
     vehicle_attitude: np.ndarray
     map_dim_with_padding: Dim
     img_dim: Dim
     map_cropped: np.ndarray
-    previous_image: Optional[np.ndarray]
     vo_output_data_fix_map_pose: Optional[Pose]
     map_output_data_prev_pose: Optional[Pose]
 
@@ -125,6 +151,7 @@ class OutputData:
     # TODO: freeze this data structure to reduce unintentional re-assignment?
     """Algorithm output passed onto publish method.
 
+    :param image_pair: The matching image pair
     :param input: The input data used for the match
     :param pose: Estimated pose for the image frame vs. the map frame
     :param pose_map: Estimated pose for the image frame vs. the map frame (in WGS84)
@@ -138,6 +165,7 @@ class OutputData:
     :param sd: Standard deviation of position estimate
     :return:
     """
+    image_pair: ImagePair
     input: InputData
     pose: Pose
     pose_map: Pose

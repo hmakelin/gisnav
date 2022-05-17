@@ -67,8 +67,7 @@ class KeypointMatcher(Matcher):
             assert hasattr(input_data, 'k')
             return matcher._estimate_pose(mkp_img, mkp_map, input_data.k, guess)  # noqa (PyProtectedMember)
         except Exception as e:
-            print(e)  # TODO: handle exception
-            #raise e
+            #raise e  # TODO: handle exception
             return None
 
     def _estimate_pose(self, mkp1: np.ndarray, mkp2: np.ndarray, k: np.ndarray, guess: Optional[Pose]) -> \

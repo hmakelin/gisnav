@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from scipy.spatial.transform import Rotation
-from python_px4_ros2_map_nav.data import OutputData, RPY
+from python_px4_ros2_map_nav.data import OutputData, RPY, ImagePair
 from python_px4_ros2_map_nav.transform import make_keypoint
 
 
@@ -27,7 +27,7 @@ class Visualization:
         self._map_visualization = None
         self._vo_visualization = None
 
-    def update(self, output_data: OutputData, visual_odometry: bool, vo_enabled: bool) -> None:
+    def update(self, output_data: OutputData, vo_enabled: bool) -> None:
         """Updates the visualization
 
         TODO: Remove vo_enabled parameter. This parameter is used to get around problem of cv2.imshow hanging when
@@ -35,15 +35,15 @@ class Visualization:
         when visual_odometry==True
 
         :param output_data: Data to update the visualization with
-        :param visual_odometry: True to update visual odometry visualization, False for map visualization
+        ####:param visual_odometry: True to update visual odometry visualization, False for map visualization
         :param vo_enabled: Flag indicating whether visual odometry is enabled
         :return:
         """
-        img = self._create_visualization(output_data, self._attitude_text(output_data.attitude), visual_odometry)
+        img = self._create_visualization(output_data, self._attitude_text(output_data.attitude))
         img = img.astype(np.uint8)
 
         # TODO: check that image shapes do not change?
-        if visual_odometry:
+        if not output_data.image_pair.has_map():
             self._vo_visualization = img
             if self._map_visualization is None:
                 self._map_visualization = np.zeros(img.shape, dtype=np.uint8)
@@ -52,9 +52,9 @@ class Visualization:
             if self._vo_visualization is None:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
-        out = np.vstack((self._map_visualization, self._vo_visualization, output_data.input.image_data.image))
+        out = np.vstack((self._map_visualization, self._vo_visualization, output_data.image_pair.img.image))
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
-            if visual_odometry:
+            if output_data.image_pair.has_map():
                 cv2.imshow(self.name, out)
                 cv2.waitKey(1)
         else:
@@ -63,12 +63,11 @@ class Visualization:
 
     # TODO: optionally return mkp's from worker and pass them onto this function?
     @staticmethod
-    def _create_visualization(output_data: OutputData, display_text: str, visual_odometry: bool) -> np.ndarray:
+    def _create_visualization(output_data: OutputData, display_text: str) -> np.ndarray:
         """Visualizes a homography including keypoint matches and field of view.
 
         :param output_data: OutputData from the matching
         :param display_text: Text to display on visualization
-        :param visual_odometry: True to update visual odometry visualization, False for map visualization
         :return: Visualized image as numpy array
         """
         # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
@@ -80,7 +79,7 @@ class Visualization:
         #mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
         #mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
 
-        ref_img = output_data.input.previous_image if visual_odometry else output_data.input.map_cropped
+        ref_img = output_data.image_pair.ref.image if not output_data.image_pair.has_map() else output_data.input.map_cropped  # Map cropped should be somehow in the ref too!
         map_with_fov = cv2.polylines(ref_img.copy(), [np.int32(output_data.fov_pix)], True, 255, 3, cv2.LINE_AA)
         #draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
         #out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,

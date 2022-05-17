@@ -38,7 +38,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose,\
-    InputData, OutputData, ImagePair, AsyncQuery
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -1196,7 +1196,7 @@ class MapNavNode(Node, ABC):
             assert self._vo_matching_pool is not None
             assert self._map_input_data_prev is not None
             try:
-                inputs = self._match_inputs()
+                inputs, contextual_map_data = self._match_inputs()
             except TypeError as e:
                 # TODO: handle invalid/unavailable inputs with a warning, not error
                 self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
@@ -1217,7 +1217,7 @@ class MapNavNode(Node, ABC):
             if inputs is None:
                 # Get inputs if did not yet get them earlier for viz odom
                 try:
-                    inputs = self._match_inputs()
+                    inputs, contextual_map_data = self._match_inputs()
                 except TypeError as e:
                     # TODO: handle invalid/unavailable inputs with a warning, not error
                     self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
@@ -1228,7 +1228,8 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
             assert self._map_data is not None  # TODO: check in should_map_match
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
-            image_pair = ImagePair(image_data, self._map_data)
+
+            image_pair = ImagePair(image_data, contextual_map_data)
             self._match(image_pair, inputs)
 
     def camera_info_callback(self, msg: CameraInfo) -> None:
@@ -1321,9 +1322,9 @@ class MapNavNode(Node, ABC):
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         if self._map_input_data_prev is not None:
-            if not (abs(self._distance(center, self._map_output_data_prev.image_pair.ref.center)) >
+            if not (abs(self._distance(center, self._map_output_data_prev.image_pair.ref.map_data.center)) >
                     self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._map_output_data_prev.image_pair.ref.radius) >
+                    abs(radius - self._map_output_data_prev.image_pair.ref.map_data.radius) >
                     self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
                 return True
 
@@ -1852,9 +1853,9 @@ g
 
         if not visual_odometry:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
-            assert isinstance(image_pair.ref, MapData)
+            assert isinstance(image_pair.ref, ContextualMapData)
             self._pix_to_wgs84, unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, image_pair.ref.bbox, -input_data.camera_yaw, input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
+                input_data.map_dim_with_padding, image_pair.ref.map_data.bbox, -input_data.camera_yaw, input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
 
         assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.c_pix, output_data.fov, output_data.c = self._estimate_fov(
@@ -1871,13 +1872,13 @@ g
             self.get_logger().debug(f'Bad match computed, returning None for this frame (viz odom: {visual_odometry}.')
             return None
 
-    def _match_inputs(self) -> InputData:
+    def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
         """Returns a dictionary input_data of the input data required to perform and process a match.
 
         Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
         to :meth:`_process_matches` from the time image used for the matching was taken.
-
-        :return: :class:`python_px4_ros2_map_nav.data.InputData` with matching input data
+f
+        :return: The input data
         """
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
@@ -1887,16 +1888,17 @@ g
                                vehicle_attitude=self._get_vehicle_attitude(),
                                map_dim_with_padding=self._map_dim_with_padding(),
                                img_dim=img_dim,
-                               map_cropped=rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim)
-                               if all((camera_yaw, self._map_data, img_dim)) else None,
                                vo_output_data_fix_map_pose=None if self._vo_output_data_fix is None else self._vo_output_data_fix.pose_map,  # TODO: this is ugly!
                                map_output_data_prev_pose=None if self._map_output_data_prev is None else self._map_output_data_prev.pose)  # TODO: this is ugly!
+
 
         # Get cropped and rotated map
         if all((camera_yaw, img_dim)):
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
 
-        return copy.deepcopy(input_data)
+        map_cropped = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if all((camera_yaw, self._map_data, img_dim)) else None
+        contextual_map_data = ContextualMapData(image=map_cropped, rotation=camera_yaw, img_dim=img_dim, map_data=self._map_data)
+        return copy.deepcopy(input_data), contextual_map_data
 
     def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
@@ -2018,7 +2020,7 @@ g
             self._map_matching_query = AsyncQuery(
                 result=self._map_matching_pool.starmap_async(
                     self._map_matcher.worker,
-                    [(image_pair.img.image, input_data.map_cropped, input_data, self._retrieve_extrinsic_guess(False))],  # TODO: this is ugly, map cropped should be accessed in some smarter way, not via input_data
+                    [(image_pair.img.image, image_pair.ref.image, input_data, self._retrieve_extrinsic_guess(False))],
                     callback=self.map_matching_worker_callback,
                     error_callback=self.map_matching_worker_error_callback
                 ),

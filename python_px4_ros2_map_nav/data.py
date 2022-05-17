@@ -23,18 +23,28 @@ TimePair = namedtuple('TimePair', 'local foreign')
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class ImageData:
-    """Keeps image frame related data in one place and protects it from corruption."""
+class _Image:
+    """Parent dataclass for image holders
+
+    Should not be instantiated directly.
+    """
     image: np.ndarray
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class ImageData(_Image):
+    """Keeps image frame related data in one place and protects it from corruption."""
+    #image: np.ndarray
     frame_id: str
     timestamp: int
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class MapData:
+class MapData(_Image):
     """Keeps map frame related data in one place and protects it from corruption."""
-    image: np.ndarray
+    #image: np.ndarray
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
     bbox: BBox
@@ -42,17 +52,27 @@ class MapData:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
+class ContextualMapData(_Image):
+    """Contains the rotated and cropped map image for pose estimation"""
+    #image: np.ndarray
+    rotation: Union[float, int]
+    img_dim: Dim
+    map_data: MapData
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
 class ImagePair:
     """Atomic image pair to represent a matched pair of images"""
     img: ImageData
-    ref: Union[ImageData, MapData]
+    ref: Union[ImageData, ContextualMapData]  # TODO: _Image? Or exclude MapData?
 
     def mapful(self) -> bool:
         """Returns True if this image pair is for a map match
 
         :return: True for map match, False for visual odometry match
         """
-        return isinstance(self.ref, MapData)
+        return isinstance(self.ref, ContextualMapData)  # TODO: get_args(Union[ContextualMapData, MapData]) ?
 
 
 # noinspection PyClassHasNoInit
@@ -124,7 +144,6 @@ class InputData:
     :param vehicle_attitude: Vehicle attitude
     :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
-    :param map_cropped: - np.ndarray Rotated and cropped map raster from map_data.image
     :param vo_output_data_fix_map_pose: - Pose (chained) map pose from previous vo output data fix
     :param map_output_data_prev_pose: - Pose (unchained) (map) pose from previous map output data
     :return:
@@ -134,7 +153,6 @@ class InputData:
     vehicle_attitude: np.ndarray
     map_dim_with_padding: Dim
     img_dim: Dim
-    map_cropped: np.ndarray
     vo_output_data_fix_map_pose: Optional[Pose]
     map_output_data_prev_pose: Optional[Pose]
 

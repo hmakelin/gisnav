@@ -1794,16 +1794,11 @@ g
         :return: Estimated pose against map
         """
         if visual_odometry:
-            #assert self._have_map_match()  # Should already be checked in :meth:`_should_vo_match`
-            #assert self._map_output_data_prev is not None
             # Combine with latest map match
-            #if self._vo_output_data_fix is None:
             if vo_output_data_fix_map_pose is None:
                 assert map_output_data_prev_pose is not None  # TODO: remove double args from signature - just give one arg if going with this kind of implementation!
-                #map_pose = self._map_output_data_prev.pose @ pose
                 map_pose = pose @ map_output_data_prev_pose
             else:
-                #map_pose = self._map_output_data_prev.pose @ self._vo_output_data_fix.pose @ pose
                 map_pose = pose @ vo_output_data_fix_map_pose
             return map_pose
         else:

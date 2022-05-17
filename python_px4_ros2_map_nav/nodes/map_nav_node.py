@@ -1837,7 +1837,7 @@ g
         """
         assert_shape(input_data.k, (3, 3))
 
-        visual_odometry = not image_pair.has_map()
+        visual_odometry = not image_pair.mapful()
 
         # Init output
         output_data = OutputData(image_pair=image_pair, input=input_data, pose=pose, pose_map=None, fov=None,
@@ -2013,7 +2013,7 @@ g
         :param input_data: Input data context
         :return:
         """
-        if image_pair.has_map():
+        if image_pair.mapful():
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
             self._map_matching_query = AsyncQuery(
                 result=self._map_matching_pool.starmap_async(

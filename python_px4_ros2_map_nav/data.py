@@ -47,7 +47,7 @@ class ImagePair:
     img: ImageData
     ref: Union[ImageData, MapData]
 
-    def has_map(self) -> bool:
+    def mapful(self) -> bool:
         """Returns True if this image pair is for a map match
 
         :return: True for map match, False for visual odometry match

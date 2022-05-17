@@ -1421,20 +1421,14 @@ class MapNavNode(Node, ABC):
         :param visual_odometry: True if results are from visual odometry worker
         :return: Parsed output data
         """
-        #mkp_img, mkp_map = results[0]
         pose = results[0]
         if pose is not None:
             self._store_extrinsic_guess(pose, odom=visual_odometry)
         else:
             self.get_logger().warn(f'Could not compute pose, returning None.')
             return None
-        #assert_len(mkp_img, len(mkp_map))
-        #input_data = self._vo_input_data if visual_odometry else self._map_input_data  # TODO: get image pair from the query object, then based on that get the input data, visual odometry arg not needed since it is included in image_pair
-        #output_data = self._process_matches(mkp_img, mkp_map, input_data, visual_odometry=visual_odometry)
-        # TODO: refactor out redundancy in this section, two similar if clauses
-        input_data = self._vo_matching_query.input_data if visual_odometry else self._map_matching_query.input_data
-        image_pair = self._vo_matching_query.image_pair if visual_odometry else self._map_matching_query.image_pair
-        output_data = self._process_matches(pose, image_pair, input_data)
+        query = self._vo_matching_query if visual_odometry else self._map_matching_query
+        output_data = self._process_matches(pose, query.image_pair, query.input_data)
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:

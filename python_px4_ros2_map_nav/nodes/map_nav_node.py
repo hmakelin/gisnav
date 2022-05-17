@@ -1826,8 +1826,6 @@ g
                                  fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
                                  sd=None)
 
-        #pose = self._estimate_pose(mkp_img, mkp_map, input_data.k, visual_odometry)
-
         # TODO: fix estimate_map_pose method signature (two redudnant args?)
         output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.map_output_data_prev_pose,
                                                        input_data.vo_output_data_fix_map_pose, visual_odometry)

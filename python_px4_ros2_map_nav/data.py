@@ -1,4 +1,4 @@
-"""Module containing utility functions for map_nav_node."""
+"""Module containing data structures to protect atomicity of related information"""
 from __future__ import annotations  # Python version 3.7+
 
 import cv2

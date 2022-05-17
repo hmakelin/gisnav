@@ -1831,12 +1831,12 @@ g
 
         assert self._pix_to_wgs84 is not None
         output_data.fov_pix, output_data.c_pix, output_data.fov, output_data.c = self._estimate_fov(
-            input_data.img_dim, output_data.pose.inv_h, output_data.pose_map.inv_h, self._pix_to_wgs84)
+            input_data.img_dim, output_data.pose.inv_h, output_data.pose_map.inv_h, self._pix_to_wgs84)  # TODO: img_dim included also in pose_map.image_pair.ref (ContextualMapData) .img_dim?
         output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.pose_map,
                                                                                      self._pix_to_wgs84,
                                                                                      output_data.fov_pix,
                                                                                      output_data.fov)
-        output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)
+        output_data.attitude = self._estimate_attitude(output_data.pose_map, input_data.camera_yaw)  # TODO: camera_yaw included in pose_map.image_pair.ref (ContextualMapData) .rotation?
 
         if self._good_match(output_data):
             return output_data

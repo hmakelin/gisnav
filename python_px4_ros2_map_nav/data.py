@@ -60,6 +60,7 @@ class ContextualMapData(_Image):
     map_data: MapData
 
 
+# TODO: enforce types for ImagePair (img cannot be MapData, can happen if pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
@@ -130,10 +131,17 @@ class Pose:
         Returns a new pose by combining two camera relative poses:
 
         pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
+
+        A new 'synthetic' image pair is created by combining the two others.
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        # TODO: what is image pair if this is a 'chained' pose? Need to reconstruct a new image pair from the two poses?
-        return Pose(self.image_pair, self.k, self.r @ pose.r, self.t + self.r @ (pose.t + pose.camera_center))  # TODO: need to fix sign somehow? Would think minus sign is needed here?
+        # TODO: ensure that the ref is either ContextualMapData or ImageData, while img is always ImageData
+        return Pose(
+            ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
+            self.k,
+            self.r @ pose.r,
+            self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
+        )
 
 
 # noinspection PyClassHasNoInit

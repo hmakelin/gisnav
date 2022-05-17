@@ -1400,8 +1400,6 @@ class MapNavNode(Node, ABC):
         assert_type(result, MapData)
         assert result.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
         self.get_logger().info(f'Map received for bbox: {result.bbox}.')
-        if self._map_data is not None:
-            self._previous_map_data = self._map_data
         self._map_data = result
 
     def wms_pool_worker_error_callback(self, e: BaseException) -> None:

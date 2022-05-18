@@ -163,8 +163,7 @@ class InputData:
     vehicle_attitude: np.ndarray
     map_dim_with_padding: Dim
     img_dim: Dim
-    vo_output_data_fix_map_pose: Optional[Pose]
-    map_output_data_prev_pose: Optional[Pose]
+    vo_fix_map_pose: Optional[Pose]
 
     def __post_init__(self):
         """Validate the data structure"""

@@ -1203,8 +1203,8 @@ class MapNavNode(Node, ABC):
                                         f'Skipping visual odometry matching.')
                 return
             self._vo_input_data = inputs
-            vo_reference = self._vo_reference()
-            if vo_reference is not None:  # TODO: move this check to should_vo_match!
+            vo_reference = self._vo_reference().pose.image_pair.img
+            if vo_reference is not None and inputs.vo_fix_map_pose is not None:  # Need both previous frame and a map fix  # TODO: move this check to should_vo_match!
                 image_pair = ImagePair(image_data, vo_reference)
                 self._match(image_pair, inputs)
             else:
@@ -1527,17 +1527,17 @@ class MapNavNode(Node, ABC):
         assert_type(rpy, RPY)
         return rpy.pitch
 
-    def _vo_reference(self) -> Optional[ImageData]:
+    def _vo_reference(self) -> Optional[OutputData]:
         """Returns previous image data that should be used for visual odometry matching.
 
         First priority is the vo fixed frame reference. If no fixed frame exists, try latest map frame.
         
-        :return: Previous ImageData from either map or vo matching, or None if not available
+        :return: Previous OutputData from either map or vo matching, or None if not available
         """
         if self._vo_output_data_fix is not None:
-            return self._vo_output_data_fix.pose.image_pair.img
+            return self._vo_output_data_fix
         elif self._map_output_data_prev is not None:
-            return self._map_output_data_prev.pose.image_pair.img
+            return self._map_output_data_prev
         else:
             self.get_logger().debug('No previous frame available, returning None.')
             return None
@@ -1784,22 +1784,17 @@ g
 
     @staticmethod
     # TODO: just pass input data (not the two poses?) - how to ensure that at least one pose is not None?
-    def _estimate_map_pose(pose: Pose, map_output_data_prev_pose: Optional[Pose],
-                           vo_output_data_fix_map_pose: Optional[Pose]) -> Pose:
+    def _estimate_map_pose(pose: Pose, vo_fix_map_pose: Pose) -> Pose:
         """Estimates pose against the latest map frame
 
         :param pose: Pose for the match
-        :param map_output_data_prev_pose: Pose against map
-        :param vo_output_data_fix_map_pose: Pose against map (via vo reference)
+        :param vo_fix_map_pose: Pose against map (via vo reference)
         :return: Estimated pose against map
         """
         if not pose.image_pair.mapful():
             # Combine with latest map match
-            if vo_output_data_fix_map_pose is None:
-                assert map_output_data_prev_pose is not None  # TODO: remove double args from signature - just give one arg if going with this kind of implementation!
-                map_pose = pose @ map_output_data_prev_pose
-            else:
-                map_pose = pose @ vo_output_data_fix_map_pose
+            assert vo_fix_map_pose is not None  # Should be checked in image_raw_callback and/or _should_vo_match
+            map_pose = pose @ vo_fix_map_pose
             return map_pose
         else:
             return pose  # This is a map match so the map pose is just the pose itself
@@ -1820,8 +1815,7 @@ g
                                  sd=None)
 
         # TODO: fix estimate_map_pose method signature (two redudnant args?)
-        output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.map_output_data_prev_pose,
-                                                       input_data.vo_output_data_fix_map_pose)
+        output_data.pose_map = self._estimate_map_pose(output_data.pose, input_data.vo_fix_map_pose)
 
         if pose.image_pair.mapful():
             # Transforms from rotated and cropped map pixel coordinates to WGS84
@@ -1860,8 +1854,8 @@ f
                                vehicle_attitude=self._get_vehicle_attitude(),
                                map_dim_with_padding=self._map_dim_with_padding(),
                                img_dim=img_dim,
-                               vo_output_data_fix_map_pose=None if self._vo_output_data_fix is None else self._vo_output_data_fix.pose_map,  # TODO: this is ugly!
-                               map_output_data_prev_pose=None if self._map_output_data_prev is None else self._map_output_data_prev.pose)  # TODO: this is ugly!
+                               vo_fix_map_pose=self._vo_reference().pose_map if self._vo_reference() is not None else None
+                               )
 
 
         # Get cropped and rotated map

@@ -1,4 +1,4 @@
-"""Interface implemented by all matchers (:=pose estimators)"""
+"""Interface implemented by all matchers (:=_pose estimators)"""
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -28,11 +28,11 @@ class Matcher(ABC):
     @staticmethod
     @abstractmethod
     def worker(image_pair: ImagePair, input_data: InputData, guess: Optional[Pose]) -> Optional[Pose]:
-        """Returns camera pose between input images
+        """Returns camera _pose between input images
 
         :param image_pair: Image pair to match
-        :param input_data: The input data context for the image pair that may be needed in pose estimation
+        :param input_data: The input data context for the image pair that may be needed in _pose estimation
         :param guess: Optional guess for the solution
-        :return: Camera pose between the images, or None if estimate could not be obtained
+        :return: Camera _pose between the images, or None if estimate could not be obtained
         """
         pass

@@ -53,14 +53,14 @@ class MapData(_Image):
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ContextualMapData(_Image):
-    """Contains the rotated and cropped map image for pose estimation"""
+    """Contains the rotated and cropped map image for _pose estimation"""
     #image: np.ndarray
     rotation: Union[float, int]
     img_dim: Dim
     map_data: MapData
 
 
-# TODO: enforce types for ImagePair (img cannot be MapData, can happen if pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
+# TODO: enforce types for ImagePair (img cannot be MapData, can happen if _pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
@@ -84,7 +84,7 @@ class AsyncQuery:
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
     easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.matchers.matcher.Matcher.worker`
     interface expects an image_pair and an input_data context as arguments (along with a guess which is not stored
-    since it is no longer needed after the pose estimation).
+    since it is no longer needed after the _pose estimation).
     """
     result: AsyncResult
     #query: Union[ImagePair, ]  # TODO: what is used for WMS?
@@ -95,7 +95,7 @@ class AsyncQuery:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Pose:
-    """Represents camera pose (rotation and translation) along with camera intrinsics"""
+    """Represents camera _pose (rotation and translation) along with camera intrinsics"""
     image_pair: ImagePair
     k: np.ndarray
     r: np.ndarray
@@ -125,23 +125,41 @@ class Pose:
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
-    def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
+    def __matmul__(self, pose: Union[Pose, FixedPose]) -> Union[Pose, FixedPose]:  # Python version 3.5+
         """Matrix multiplication operator for convenience
 
-        Returns a new pose by combining two camera relative poses:
+        Returns a new _pose by combining two camera relative poses:
 
         pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
 
         A new 'synthetic' image pair is created by combining the two others.
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        # TODO: ensure that the ref is either ContextualMapData or ImageData, while img is always ImageData
-        return Pose(
-            ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
-            self.k,
-            self.r @ pose.r,
-            self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
-        )
+        # TODO: if other is map map_pose, make this a FixedPose!
+        assert isinstance(pose, get_args(Union[Pose, FixedPose]))  # Current assumption, maybe not requirement
+        assert isinstance(self, Pose)
+        if isinstance(pose, FixedPose):
+            return FixedPose(
+                image_pair=ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
+                k=self.k,
+                r=self.r @ pose.r,
+                t=self.t + self.r @ (pose.t + pose.camera_center),  # TODO: need to fix sign somehow? Would think minus sign is needed here?
+                pix_to_wgs84=pose.pix_to_wgs84
+            )
+        else:
+            return Pose(
+                    ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
+                    self.k,
+                    self.r @ pose.r,
+                    self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
+                )
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class FixedPose(Pose):
+    """Represents a map_pose that has been fixed to a map"""
+    pix_to_wgs84: np.ndarray
 
 
 # noinspection PyClassHasNoInit
@@ -154,8 +172,8 @@ class InputData:
     :param vehicle_attitude: Vehicle attitude
     :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
-    :param vo_output_data_fix_map_pose: - Pose (chained) map pose from previous vo output data fix
-    :param map_output_data_prev_pose: - Pose (unchained) (map) pose from previous map output data
+    :param vo_output_data_fix_map_pose: - Pose (chained) map _pose from previous vo output data fix
+    :param map_output_data_prev_pose: - Pose (unchained) (map) _pose from previous map output data
     :return:
     """
     k: np.ndarray
@@ -163,7 +181,7 @@ class InputData:
     vehicle_attitude: np.ndarray
     map_dim_with_padding: Dim
     img_dim: Dim
-    vo_fix_map_pose: Optional[Pose]
+    vo_fix: Optional[FixedPose]  # None if successful map match has not yet happened
 
     def __post_init__(self):
         """Validate the data structure"""
@@ -174,14 +192,14 @@ class InputData:
 # noinspection PyClassHasNoInit
 @dataclass
 class OutputData:
-    # TODO: add extrinsic matrix / pose, pix_to_wgs84 transformation?
+    # TODO: add extrinsic matrix / _pose, pix_to_wgs84 transformation?
     # TODO: freeze this data structure to reduce unintentional re-assignment?
     """Algorithm output passed onto publish method.
 
-    :param image_pair: The matching image pair
     :param input: The input data used for the match
-    :param pose: Estimated pose for the image frame vs. the map frame
-    :param pose_map: Estimated pose for the image frame vs. the map frame (in WGS84)
+    :param _pose: Estimated _pose for the image frame vs. the map frame
+    :param map_pose: Estimated _pose for the image frame vs. the map frame (in WGS84)
+    :param pix_to_wgs84: Transformation from map pixels to WGS84 coordinates
     :param fov: Camera field of view projected to WGS84 coordinates
     :param fov_pix: Camera field of view in pixels in reference frame (map or previous frame)
     :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
@@ -193,8 +211,8 @@ class OutputData:
     :return:
     """
     input: InputData
-    pose: Pose
-    pose_map: Pose
+    _pose: Pose  # should not be accessed directly except e.g. for debug visualization, use map_pose instead
+    map_pose: Pose
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     fov_pix: np.ndarray
     position: LatLonAlt

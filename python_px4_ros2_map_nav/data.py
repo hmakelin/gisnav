@@ -172,7 +172,6 @@ class FixedPose(Pose):
         pass
 
 
-
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class InputData:

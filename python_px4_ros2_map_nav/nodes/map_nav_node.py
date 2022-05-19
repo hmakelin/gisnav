@@ -1814,8 +1814,6 @@ g
 f
         :return: The input data
         """
-        camera_yaw_deg = self._camera_yaw()
-        camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
         input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
                                map_dim_with_padding=self._map_dim_with_padding(),
@@ -1825,6 +1823,8 @@ f
 
 
         # Get cropped and rotated map
+        camera_yaw_deg = self._camera_yaw()
+        camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         if all((camera_yaw, img_dim)):
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
 

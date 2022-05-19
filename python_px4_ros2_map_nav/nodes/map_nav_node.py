@@ -38,7 +38,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedPose
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV
 from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
     inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -1718,36 +1718,39 @@ g
         return gimbal_estimated_attitude
 
     @staticmethod
-    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, h_map_pose: np.ndarray, pix_to_wgs84: np.ndarray) -> \
-            Tuple[4*(np.ndarray,)]:
+    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_pose: Pose, pix_to_wgs84: np.ndarray) -> FOV:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
         :param img_dim: Image dimensions
         :param h_pose: Homography matrix against reference image (map or previous frame)
-        :param h_map_pose: Homography matrix against map
+        :param map_pose: Fixed pose against map
         :param pix_to_wgs84: Transformation from 2D pixel space to WGS84 coordinates
         :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
         """
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        h_wgs84 = pix_to_wgs84 @ h_map_pose
+        h_wgs84 = pix_to_wgs84 @ map_pose.inv_h
         fov_pix, c_pix = get_fov_and_c(img_dim, h_pose)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
 
-        return fov_pix, c_pix, fov_wgs84, c_wgs84
+        fov = FOV(fov_pix=fov_pix,
+                  fov=fov_wgs84,
+                  c_pix=c_pix,
+                  c=c_wgs84,
+                  pix_to_wgs84=pix_to_wgs84)
 
-    def _estimate_position(self, map_pose: Pose, fov_pix: np.ndarray, fov: np.ndarray) -> \
-            Tuple[LatLonAlt, float]:
+        return fov
+
+    def _estimate_position(self, map_pose: Pose, fov: FOV) -> Tuple[LatLonAlt, float]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
         :param map_pose: Camera map pose in pixel (world) space
-        :param fov_pix: Field of view in pixel coordinates
-        :param fov: Field of view in WGS84
+        :param fov: Camera field of view estimate
         :return: Camera position LatLonAlt, and altitude from ground in meters
         """
-        altitude_scaling = self._estimate_altitude_scaling(fov_pix, fov)
+        altitude_scaling = self._estimate_altitude_scaling(fov.fov_pix, fov.fov)
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        t_wgs84 = map_pose.pix_to_wgs84 @ np.append(map_pose.camera_position[0:2], 1)
+        t_wgs84 = fov.pix_to_wgs84 @ np.append(map_pose.camera_position[0:2], 1)
         t_wgs84[2] = -altitude_scaling * map_pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
@@ -1771,17 +1774,18 @@ g
 
     @staticmethod
     # TODO: just pass input data (not the two poses?) - how to ensure that at least one _pose is not None?
-    def _estimate_map_pose(pose: Union[Pose, FixedPose], input_data: InputData) -> FixedPose:
+    def _estimate_map_pose(pose: Pose, input_data: InputData) -> Pose:
         """Estimates _pose against the latest map frame
 
         :param pose: Pose for the match
-        :param fo_fix: Pose against map (via vo reference)
+        :param input_data: Input data context
         :return: Estimated _pose against map
         """
-        if not pose.image_pair.mapful():  # TODO: is "mapful" now the same as FixedPose? A mapful() map_pose always has pix_to_wgs84!
+        if not pose.image_pair.mapful():
             # Combine with latest map match
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
-            map_pose = pose @ input_data.vo_fix  # TODO: this needs to be a "fixed" map_pose, need to edit matmul to preserve FixedPose?
+            map_pose = pose @ input_data.vo_fix.map_pose  # TODO: this needs to be a "fixed" map_pose, need to edit matmul to preserve FixedPose?
+            pix_to_wgs84 = input_data.vo_fix.fov.pix_to_wgs84  # TODO: refactor this, a bit clunky
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             assert isinstance(pose.image_pair.ref, ContextualMapData)
@@ -1790,15 +1794,14 @@ g
                 input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
 
             # TODO: return a FixedPose with the pix_to_wgs84 added
-            map_pose = FixedPose(
+            map_pose = Pose(
                 image_pair=pose.image_pair,
                 k=pose.k,
                 r=pose.r,
-                t=pose.t,
-                pix_to_wgs84=pix_to_wgs84
+                t=pose.t
             )
 
-        return map_pose  # This is a map match so the map _pose is just the _pose itself
+        return map_pose, pix_to_wgs84   # TODO: get pix_to_wgs84 out of here
 
     #region Match
     def _process_matches(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
@@ -1810,23 +1813,20 @@ g
         """
         assert_shape(input_data.k, (3, 3))
 
+        map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
+        fov = self._estimate_fov(input_data.img_dim, pose.inv_h, map_pose, pix_to_wgs84)  # TODO: img_dim included also in map_pose.image_pair.ref (ContextualMapData) .img_dim?
+        position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
+        attitude = self._estimate_attitude(map_pose, input_data.camera_yaw)  # TODO: camera_yaw included in map_pose.image_pair.ref (ContextualMapData) .rotation?  # Make a dataclass out of attitude?
+
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
-        output_data = OutputData(input=input_data, _pose=pose, map_pose=None, fov=None,
-                                 fov_pix=None, position=None, terrain_altitude=None, attitude=None, c=None, c_pix=None,
+        output_data = OutputData(input=input_data,
+                                 _pose=pose,
+                                 fixed_camera=FixedCamera(fov=fov, map_pose=map_pose),
+                                 position=position,
+                                 terrain_altitude=terrain_altitude,
+                                 attitude=attitude,
                                  sd=None)
-
-        # TODO: fix estimate_map_pose method signature (two redudnant args?)
-        output_data.map_pose = self._estimate_map_pose(output_data._pose, input_data)
-
-        assert output_data.map_pose.pix_to_wgs84 is not None  # visual odometry matching should not happen unless map fix already exists, this should be computed in est map map_pose when the map map_pose is created
-        # TODO refactor estimate_fov method signature (redundant inputs)
-        output_data.fov_pix, output_data.c_pix, output_data.fov, output_data.c = self._estimate_fov(
-            input_data.img_dim, output_data._pose.inv_h, output_data.map_pose.inv_h, output_data.map_pose.pix_to_wgs84)  # TODO: img_dim included also in map_pose.image_pair.ref (ContextualMapData) .img_dim?
-        output_data.position, output_data.terrain_altitude = self._estimate_position(output_data.map_pose,
-                                                                                     output_data.fov_pix,
-                                                                                     output_data.fov)
-        output_data.attitude = self._estimate_attitude(output_data.map_pose, input_data.camera_yaw)  # TODO: camera_yaw included in map_pose.image_pair.ref (ContextualMapData) .rotation?
 
         if self._good_match(output_data):
             return output_data
@@ -1845,12 +1845,13 @@ f
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
+        img_dim = self._img_dim()
         input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
                                camera_yaw=camera_yaw,
                                vehicle_attitude=self._get_vehicle_attitude(),
                                map_dim_with_padding=self._map_dim_with_padding(),
                                img_dim=img_dim,
-                               vo_fix=self._vo_reference().map_pose if self._vo_reference() is not None else None
+                               vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None
                                )
 
 
@@ -1875,16 +1876,16 @@ f
             return False
 
         # Estimated field of view has unexpected shape?
-        if not is_convex_isosceles_trapezoid(output_data.fov_pix):
-            self.get_logger().warn(f'Match fov_pix {output_data.fov_pix.squeeze().tolist()} was not a convex isosceles '
+        if not is_convex_isosceles_trapezoid(output_data.fixed_camera.fov.fov_pix):
+            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
             return False
 
         # Estimated translation vector blows up?
         reference = np.array([output_data.input.k[0][2], output_data.input.k[1][2], output_data.input.k[0][0]])  # TODO: refactor using Pose inside InputData, can access these values directly
         if (np.abs(output_data._pose.t).squeeze() >= 3 * reference).any() or \
-                (np.abs(output_data.map_pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'Pose.t {output_data._pose.t} & pose_map.t {output_data.map_pose.t} have values '
+                (np.abs(output_data.fixed_camera.map_pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
+            self.get_logger().error(f'Pose.t {output_data._pose.t} & pose_map.t {output_data.fixed_camera.map_pose.t} have values '
                                     f'too large compared to (cx, cy, fx): {reference}.')
             return False
 

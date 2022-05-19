@@ -47,7 +47,7 @@ class MockGPSNode(MapNavNode):
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
-            self._export_position(output_data.position, output_data.fov, export_geojson)
+            self._export_position(output_data.position, output_data.fixed_camera.fov.fov, export_geojson)
 
     def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
         """Writes field of view (FOV) and map center into GeoJSON file"""

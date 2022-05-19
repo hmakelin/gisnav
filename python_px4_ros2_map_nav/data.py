@@ -125,7 +125,7 @@ class Pose:
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
-    def __matmul__(self, pose: Union[Pose, FixedPose]) -> Union[Pose, FixedPose]:  # Python version 3.5+
+    def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
         """Matrix multiplication operator for convenience
 
         Returns a new _pose by combining two camera relative poses:
@@ -136,40 +136,12 @@ class Pose:
         """
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         # TODO: if other is map map_pose, make this a FixedPose!
-        assert isinstance(pose, get_args(Union[Pose, FixedPose]))  # Current assumption, maybe not requirement
-        assert isinstance(self, Pose)
-        if isinstance(pose, FixedPose):
-            return FixedPose(
-                image_pair=ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
-                k=self.k,
-                r=self.r @ pose.r,
-                t=self.t + self.r @ (pose.t + pose.camera_center),  # TODO: need to fix sign somehow? Would think minus sign is needed here?
-                pix_to_wgs84=pose.pix_to_wgs84
-            )
-        else:
-            return Pose(
-                    ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
-                    self.k,
-                    self.r @ pose.r,
-                    self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
-                )
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class FixedPose(Pose):
-    """Represents a map_pose that has been fixed to a map
-
-    This dataclass was introduced because needed an intermediate scope between Pose and OutputData that could hold
-    the pix_to_wgs84 transformation matrix and be stored in InputData. OutputData cannot be stored in InputData because
-    of circular reference.
-    """
-    pix_to_wgs84: np.ndarray
-
-    def __post_init__(self):
-        """Validate the data structure"""
-        # TODO: Enforce self.image_pair.mapful() consistency check? FixedPose should always have a mapful image pair
-        pass
+        return Pose(
+                ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
+                self.k,
+                self.r @ pose.r,
+                self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
+        )
 
 
 # noinspection PyClassHasNoInit
@@ -201,6 +173,29 @@ class InputData:
 
 # noinspection PyClassHasNoInit
 @dataclass
+class FOV:
+    """Camera field of view related attributes"""
+    fov_pix: np.ndarray
+    fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
+    c: np.ndarray
+    c_pix: np.ndarray
+    pix_to_wgs84: Optional[np.ndarray]  # TODO: None if cannot be projected to wgs84?
+
+
+# noinspection PyClassHasNoInit
+@dataclass
+class FixedCamera:
+    """WGS84-fixed camera attributes
+
+    Colletcts field of view and pose under a single structure that is intended to be stored in input data context as
+    visual odometry fix reference. Includes the needed map_pose and pix_to_wgs84 transformation for the vo fix.
+    """
+    fov: FOV
+    map_pose: Pose
+
+
+# noinspection PyClassHasNoInit
+@dataclass
 class OutputData:
     # TODO: add extrinsic matrix / _pose, pix_to_wgs84 transformation?
     # TODO: freeze this data structure to reduce unintentional re-assignment?
@@ -208,29 +203,25 @@ class OutputData:
 
     :param input: The input data used for the match
     :param _pose: Estimated _pose for the image frame vs. the map frame
-    :param map_pose: Estimated _pose for the image frame vs. the map frame (in WGS84)
-    :param pix_to_wgs84: Transformation from map pixels to WGS84 coordinates
-    :param fov: Camera field of view projected to WGS84 coordinates
-    :param fov_pix: Camera field of view in pixels in reference frame (map or previous frame)
+    :param fixed_camera: Camera that is fixed to wgs84 coordinates (pose and field of view)
     :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
     :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
     :param attitude: Camera attitude quaternion
-    :param c: Principal point projected to ground in WGS84 coordinates
-    :param c_pix: Principal point projected in pixel coordinates
     :param sd: Standard deviation of position estimate
     :return:
     """
     input: InputData
     _pose: Pose  # should not be accessed directly except e.g. for debug visualization, use map_pose instead
-    map_pose: Pose
-    fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
-    fov_pix: np.ndarray
+    fixed_camera: FixedCamera
     position: LatLonAlt
     terrain_altitude: float
     attitude: np.ndarray
-    c: np.ndarray
-    c_pix: np.ndarray
-    sd: np.ndarray
+    sd: np.ndarray  # TODO This should be part of Position? Keep future position dataclass mutable so this can be assigned while outputdata itself is immutable
+
+    # Target structure:
+    # input
+    # vehicle (position, attitude, terrain_altitude, sd)
+    # camera (pose, fov)  +  camera attitude which is actually what we have now
 
     def __post_init__(self):
         """Validate the data structure"""

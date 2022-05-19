@@ -158,7 +158,6 @@ class InputData:
     :return:
     """
     k: np.ndarray  # TODO: redundant?
-    vehicle_attitude: np.ndarray  # TODO: not used?
     map_dim_with_padding: Dim  # TODO: redundant?
     img_dim: Dim  # TODO: redundant?
     vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened

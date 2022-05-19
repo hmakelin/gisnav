@@ -32,7 +32,7 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
+from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
 
@@ -99,7 +99,6 @@ class MapNavNode(Node, ABC):
         self._topics = {
             'VehicleLocalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleLocalPosition},
             'VehicleGlobalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleGlobalPosition},
-            'VehicleAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleAttitude},
             'GimbalDeviceAttitudeStatus_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
             'GimbalDeviceSetAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceSetAttitude},
             'camera_info': {self.TOPICS_MSG_KEY: CameraInfo},
@@ -159,7 +158,6 @@ class MapNavNode(Node, ABC):
         self._camera_info = None
         self._vehicle_local_position = None
         self._vehicle_global_position = None
-        self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 
@@ -454,16 +452,6 @@ class MapNavNode(Node, ABC):
     def _vehicle_global_position(self, value: Optional[VehicleGlobalPosition]) -> None:
         assert_type(value, get_args(Optional[VehicleGlobalPosition]))
         self.__vehicle_global_position = value
-
-    @property
-    def _vehicle_attitude(self) -> Optional[VehicleAttitude]:
-        """VehicleAttitude received via the PX4-ROS 2 bridge."""
-        return self.__vehicle_attitude
-
-    @_vehicle_attitude.setter
-    def _vehicle_attitude(self, value: Optional[VehicleAttitude]) -> None:
-        assert_type(value, get_args(Optional[VehicleAttitude]))
-        self.__vehicle_attitude = value
 
     @property
     def _gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
@@ -1074,18 +1062,6 @@ class MapNavNode(Node, ABC):
         camera_yaw = rpy.yaw
         return camera_yaw
 
-    def _get_vehicle_attitude(self) -> Optional[Rotation]:
-        """Returns vehicle attitude from :class:`px4_msgs.msg.VehicleAttitude` or None if not available
-
-        :return: Vehicle attitude or None if not available
-        """
-        if self._vehicle_attitude is None:
-            self.get_logger().warn('No VehicleAttitude message has been received yet.')
-            return None
-        else:
-            vehicle_attitude = Rotation.from_quat(self._vehicle_attitude.q)
-            return vehicle_attitude
-
     def _get_gimbal_set_attitude(self) -> Optional[Rotation]:
         """Returns gimbal set attitude from :class:`px4_msgs.msg.GimbalDeviceSetAttitude` or None if not available
 
@@ -1364,14 +1340,6 @@ class MapNavNode(Node, ABC):
         """
         """Handles latest GimbalDeviceSetAttitude message."""
         self._gimbal_device_set_attitude = msg
-
-    def vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
-        """Handles latest VehicleAttitude message.
-
-        :param msg: VehicleAttitude from the PX4-ROS 2 bridge
-        :return:
-        """
-        self._vehicle_attitude = msg
     #endregion
 
     #region WMSWorkerCallbacks
@@ -1850,7 +1818,6 @@ f
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
         input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                               vehicle_attitude=self._get_vehicle_attitude(),
                                map_dim_with_padding=self._map_dim_with_padding(),
                                img_dim=img_dim,
                                vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None

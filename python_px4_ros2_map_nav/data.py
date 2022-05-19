@@ -166,6 +166,12 @@ class FixedPose(Pose):
     """
     pix_to_wgs84: np.ndarray
 
+    def __post_init__(self):
+        """Validate the data structure"""
+        # TODO: Enforce self.image_pair.mapful() consistency check? FixedPose should always have a mapful image pair
+        pass
+
+
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

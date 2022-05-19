@@ -158,7 +158,12 @@ class Pose:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class FixedPose(Pose):
-    """Represents a map_pose that has been fixed to a map"""
+    """Represents a map_pose that has been fixed to a map
+
+    This dataclass was introduced because needed an intermediate scope between Pose and OutputData that could hold
+    the pix_to_wgs84 transformation matrix and be stored in InputData. OutputData cannot be stored in InputData because
+    of circular reference.
+    """
     pix_to_wgs84: np.ndarray
 
 

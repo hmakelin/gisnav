@@ -1845,7 +1845,6 @@ f
         camera_yaw_deg = self._camera_yaw()
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
-        img_dim = self._img_dim()
         input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
                                camera_yaw=camera_yaw,
                                vehicle_attitude=self._get_vehicle_attitude(),

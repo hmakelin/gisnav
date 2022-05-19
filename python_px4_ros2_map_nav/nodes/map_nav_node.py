@@ -1415,7 +1415,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Could not compute _pose, returning None.')
             return None
         query = self._vo_matching_query if visual_odometry else self._map_matching_query
-        output_data = self._process_matches(pose, query.input_data)
+        output_data = self._compute_output(pose, query.input_data)
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
@@ -1807,12 +1807,12 @@ g
         return map_pose, pix_to_wgs84   # TODO: get pix_to_wgs84 out of here
 
     #region Match
-    def _process_matches(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
-        """Process the estimated camera _pose into an outgoing :class:`px4_msgs.msg.VehicleGpsPosition` message
+    def _compute_output(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
+        """Process the estimated camera _pose into OutputData
 
         :param pose: Estimated _pose between images
         :param input_data: InputData of vehicle state variables from the time the image was taken
-        :return: Computed output_data is a valid estimate was obtained
+        :return: Computed output_data if a valid estimate was obtained
         """
         assert_shape(input_data.k, (3, 3))
 

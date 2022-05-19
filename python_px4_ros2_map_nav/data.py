@@ -54,10 +54,10 @@ class MapData(_Image):
 @dataclass(frozen=True)
 class ContextualMapData(_Image):
     """Contains the rotated and cropped map image for _pose estimation"""
-    #image: np.ndarray
+    #image: np.ndarray  # This is the map_cropped image which is same size as the camera frames
     rotation: Union[float, int]
-    img_dim: Dim
-    map_data: MapData
+    img_dim: Dim  # TODO: unnecessary, just get image.shape?
+    map_data: MapData   # This is the original larger (square) map with padding
 
 
 # TODO: enforce types for ImagePair (img cannot be MapData, can happen if _pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
@@ -137,7 +137,8 @@ class Pose:
         assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         # TODO: if other is map map_pose, make this a FixedPose!
         return Pose(
-                ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref
+                ImagePair(img=self.image_pair.img, ref=pose.image_pair.ref),  # latest frame is img, map/previous frame is ref
+                #ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref  # TODO: this is wrong way around?
                 self.k,
                 self.r @ pose.r,
                 self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
@@ -150,20 +151,17 @@ class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
     :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
-    :param camera_yaw: Camera yaw in radians from time of match (from _match_inputs)  # TODO: Rename map rotation so less confusion with gimbal attitude stuff extractd from rotation matrix?
     :param vehicle_attitude: Vehicle attitude
     :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
-    :param vo_output_data_fix_map_pose: - Pose (chained) map _pose from previous vo output data fix
-    :param map_output_data_prev_pose: - Pose (unchained) (map) _pose from previous map output data
+    :param vo_fix: - The WGS84-fixed FixedCamera for the VO reference frame, or None if not available
     :return:
     """
     k: np.ndarray
-    camera_yaw: np.ndarray
     vehicle_attitude: np.ndarray
     map_dim_with_padding: Dim
     img_dim: Dim
-    vo_fix: Optional[FixedPose]  # None if successful map match has not yet happened
+    vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
 
     def __post_init__(self):
         """Validate the data structure"""
@@ -187,7 +185,7 @@ class FOV:
 class FixedCamera:
     """WGS84-fixed camera attributes
 
-    Colletcts field of view and pose under a single structure that is intended to be stored in input data context as
+    Colletcts field of view and map_pose under a single structure that is intended to be stored in input data context as
     visual odometry fix reference. Includes the needed map_pose and pix_to_wgs84 transformation for the vo fix.
     """
     fov: FOV
@@ -203,7 +201,7 @@ class OutputData:
 
     :param input: The input data used for the match
     :param _pose: Estimated _pose for the image frame vs. the map frame
-    :param fixed_camera: Camera that is fixed to wgs84 coordinates (pose and field of view)
+    :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_pose and field of view)
     :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
     :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
     :param attitude: Camera attitude quaternion
@@ -221,7 +219,7 @@ class OutputData:
     # Target structure:
     # input
     # vehicle (position, attitude, terrain_altitude, sd)
-    # camera (pose, fov)  +  camera attitude which is actually what we have now
+    # camera (map_pose, fov)  +  camera attitude which is actually what we have now
 
     def __post_init__(self):
         """Validate the data structure"""

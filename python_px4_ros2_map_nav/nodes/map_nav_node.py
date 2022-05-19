@@ -1697,19 +1697,22 @@ g
         return altitude_scaling
 
     @staticmethod
-    def _estimate_attitude(pose: Pose, camera_yaw: float) -> np.ndarray:
+    def _estimate_attitude(map_pose: Pose) -> np.ndarray:
         """Estimates gimbal attitude from _pose and camera yaw in global NED frame
 
-        :param pose: Camera _pose in rotated frame
-        :param camera_yaw: Rotation (yaw) of the frame
+        Estimates attitude in NED frame so need map pose (uses ContextualMapData.rotation), not just any pose
+
+        :param map_pose: Map pose
         """
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(pose.r.T)  # in rotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(map_pose.r.T)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _pose
-        gimbal_estimated_attitude *= Rotation.from_rotvec(camera_yaw * np.array([0, 0, 1]))  # unrotated map pixel frame
+        assert (map_pose.image_pair.mapful())
+        assert (map_pose.image_pair.ref, ContextualMapData)  # Alternative way to assert mapful()
+        gimbal_estimated_attitude *= Rotation.from_rotvec(map_pose.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
@@ -1723,7 +1726,7 @@ g
 
         :param img_dim: Image dimensions
         :param h_pose: Homography matrix against reference image (map or previous frame)
-        :param map_pose: Fixed pose against map
+        :param map_pose: Fixed map_pose against map
         :param pix_to_wgs84: Transformation from 2D pixel space to WGS84 coordinates
         :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
         """
@@ -1744,7 +1747,7 @@ g
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
-        :param map_pose: Camera map pose in pixel (world) space
+        :param map_pose: Camera map map_pose in pixel (world) space
         :param fov: Camera field of view estimate
         :return: Camera position LatLonAlt, and altitude from ground in meters
         """
@@ -1790,7 +1793,7 @@ g
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             assert isinstance(pose.image_pair.ref, ContextualMapData)
             pix_to_wgs84, _, __, ___ = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, pose.image_pair.ref.map_data.bbox, -input_data.camera_yaw,
+                input_data.map_dim_with_padding, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
                 input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
 
             # TODO: return a FixedPose with the pix_to_wgs84 added
@@ -1813,10 +1816,11 @@ g
         """
         assert_shape(input_data.k, (3, 3))
 
+        # TODO: looks like map_pose is not always mapful!
         map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
         fov = self._estimate_fov(input_data.img_dim, pose.inv_h, map_pose, pix_to_wgs84)  # TODO: img_dim included also in map_pose.image_pair.ref (ContextualMapData) .img_dim?
         position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
-        attitude = self._estimate_attitude(map_pose, input_data.camera_yaw)  # TODO: camera_yaw included in map_pose.image_pair.ref (ContextualMapData) .rotation?  # Make a dataclass out of attitude?
+        attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
@@ -1846,7 +1850,6 @@ f
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         img_dim = self._img_dim()
         input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                               camera_yaw=camera_yaw,  # TODO: included in image_pair.ref.
                                vehicle_attitude=self._get_vehicle_attitude(),
                                map_dim_with_padding=self._map_dim_with_padding(),
                                img_dim=img_dim,

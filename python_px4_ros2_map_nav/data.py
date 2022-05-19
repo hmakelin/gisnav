@@ -157,10 +157,10 @@ class InputData:
     :param vo_fix: - The WGS84-fixed FixedCamera for the VO reference frame, or None if not available
     :return:
     """
-    k: np.ndarray
-    vehicle_attitude: np.ndarray
-    map_dim_with_padding: Dim
-    img_dim: Dim
+    k: np.ndarray  # TODO: redundant?
+    vehicle_attitude: np.ndarray  # TODO: not used?
+    map_dim_with_padding: Dim  # TODO: redundant?
+    img_dim: Dim  # TODO: redundant?
     vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
 
     def __post_init__(self):

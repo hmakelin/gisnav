@@ -32,7 +32,7 @@ class MockGPSNode(MapNavNode):
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
-    def publish_position(self, output_data: OutputData) -> None:
+    def publish(self, output_data: OutputData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
         if not all(output_data.position) or any(map(np.isnan, output_data.position)) or \
                 not all(output_data.sd) or any(map(np.isnan, output_data.sd)):

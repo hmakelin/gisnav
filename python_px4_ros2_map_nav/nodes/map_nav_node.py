@@ -1449,7 +1449,7 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), False)
             if self._variance_window_full(False):
                 output_data.sd = np.std(self._map_estimation_history, axis=0)
-                self.publish_position(output_data)
+                self.publish(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
@@ -1490,7 +1490,7 @@ class MapNavNode(Node, ABC):
             self._push_estimates(np.array(output_data.position), True)
             if self._variance_window_full(True):
                 output_data.sd = np.std(self._vo_estimation_history, axis=0)
-                self.publish_position(output_data)
+                self.publish(output_data)
             else:
                 self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
@@ -2083,7 +2083,7 @@ f
 
     #region PublicAPI
     @abstractmethod
-    def publish_position(self, output_data: OutputData) -> None:
+    def publish(self, output_data: OutputData) -> None:
         """Publishes or exports computed output
 
         This method should be implemented by an extending class to adapt for any given use case.

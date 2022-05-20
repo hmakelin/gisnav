@@ -1770,7 +1770,6 @@ g
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained
         """
-        # TODO: looks like map_pose is not always mapful!
         map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
         fov = self._estimate_fov(pose.image_pair.img.img_dim, pose.inv_h, map_pose, pix_to_wgs84)
         position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too

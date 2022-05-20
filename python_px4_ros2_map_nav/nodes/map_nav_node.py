@@ -1261,12 +1261,8 @@ class MapNavNode(Node, ABC):
 
         :return: True if there are pending results.
         """
-        if self._wms_results is not None:
-            if not self._wms_results.ready():
-                # Previous request still running
-                return True
+        return not self._wms_results.ready() if self._wms_results is not None else False
 
-        return False
 
     # TODO: reduce input scope to map_data?
     def _previous_map_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:

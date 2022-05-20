@@ -1753,7 +1753,6 @@ g
                 pose.image_pair.ref.map_data.dim, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
                 pose.image_pair.img.img_dim)  # TODO: refactor this interface
 
-            # TODO: return a FixedPose with the pix_to_wgs84 added
             map_pose = Pose(
                 image_pair=pose.image_pair,
                 r=pose.r,

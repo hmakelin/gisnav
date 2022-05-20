@@ -1762,7 +1762,7 @@ g
         return map_pose, pix_to_wgs84   # TODO: get pix_to_wgs84 out of here
 
     #region Match
-    def _compute_output(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:  # TODO: need image_pair!
+    def _compute_output(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:
         """Process the estimated camera _pose into OutputData
 
         :param pose: Estimated _pose between images

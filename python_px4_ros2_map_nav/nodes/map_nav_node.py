@@ -1152,7 +1152,7 @@ class MapNavNode(Node, ABC):
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
         # Do visual odometry if enabled
-        if self._should_vo_match(image_data.image.image):  # TODO: make it image.image!
+        if self._should_vo_match(image_data.image.arr):
             assert self._vo_matching_query is None or self._vo_matching_query.result.ready()
             assert self._vo_matching_pool is not None
             assert self._map_input_data_prev is not None
@@ -1173,7 +1173,7 @@ class MapNavNode(Node, ABC):
                 return
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_map_match(image_data.image.image):  # TODO: possibly redundant checking with _odom_should_match?  # TODO: make it e.g. image.arr!
+        if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
             if inputs is None:
                 # Get inputs if did not yet get them earlier for viz odom
@@ -1352,8 +1352,7 @@ class MapNavNode(Node, ABC):
         assert_len(result, 1)
         result = result[0]
         assert_type(result, MapData)
-        # TODO: refactor "MapData.image.image!" Make Image.image somthing like Image.arr?
-        assert result.image.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
+        assert result.image.arr.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
         self.get_logger().info(f'Map received for bbox: {result.bbox}.')
         self._map_data = result
 
@@ -1812,9 +1811,6 @@ g
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
         assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
 
-
-        # Make it e.g. Image.arr so that wont have image.image!
-        #map_cropped = rotate_and_crop_map(self._map_data.image.image, camera_yaw, img_dim) if all((camera_yaw, self._map_data, img_dim)) else None
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=img_dim)
         return copy.deepcopy(input_data), contextual_map_data
 

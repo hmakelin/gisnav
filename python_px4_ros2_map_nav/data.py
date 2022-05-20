@@ -59,13 +59,13 @@ class _ImageHolder:
 @dataclass(frozen=True)
 class Img:
     """Image class to hold image raster and related metadata"""
-    image: np.ndarray
+    arr: np.ndarray
     dim: Dim = field(init=False)
 
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'dim', Dim(*self.image.shape[0:2]))  # TODO: correct order of unpack?
+        object.__setattr__(self, 'dim', Dim(*self.arr.shape[0:2]))  # TODO: correct order of unpack?
 
 
 # noinspection PyClassHasNoInit
@@ -109,7 +109,6 @@ class ContextualMapData(_ImageHolder):
         and uncropped map pixel coordinates to WGS84, 3. from rotated map coordinates to unrotated map coordinates, and 4.
         from cropped map coordinates to uncropped (but still rotated) map pixel coordinates.
         """
-        # TODO: make it Img.arr not "image.image"
         map_dim_arr = np.array(self.map_data.image.dim)
         img_dim_arr = np.array(self.image.dim)
         crop_padding = map_dim_arr - img_dim_arr
@@ -150,10 +149,10 @@ class ContextualMapData(_ImageHolder):
 
         :return: Rotated and cropped map raster
         """
-        cx, cy = tuple(np.array(self.map_data.image.image.shape[0:2]) / 2)  # TODO: Use k, dim etc?
+        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)  # TODO: Use k, dim etc?
         degrees = math.degrees(self.rotation)
         r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-        map_rotated = cv2.warpAffine(self.map_data.image.image, r, self.map_data.image.image.shape[1::-1])  # TODO: use .dim?
+        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
         map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
         #if visualize:
         #    cv2.imshow('padded', self.map_data.image.image)

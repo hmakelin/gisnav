@@ -1263,8 +1263,6 @@ class MapNavNode(Node, ABC):
         """
         return not self._wms_results.ready() if self._wms_results is not None else False
 
-
-    # TODO: reduce input scope to map_data?
     def _previous_map_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
         """Checks if previous map is too close to new requested one.
 

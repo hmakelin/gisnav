@@ -38,6 +38,8 @@ class ImageData(_Image):
     #image: np.ndarray
     frame_id: str
     timestamp: int
+    k: np.ndarray
+    img_dim: Dim  # TODO: redundant, or make this declared, k overrides!
 
 
 # noinspection PyClassHasNoInit
@@ -97,7 +99,6 @@ class AsyncQuery:
 class Pose:
     """Represents camera _pose (rotation and translation) along with camera intrinsics"""
     image_pair: ImagePair
-    k: np.ndarray
     r: np.ndarray
     t: np.ndarray
     e: np.ndarray = field(init=False)
@@ -115,12 +116,12 @@ class Pose:
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
-        object.__setattr__(self, 'h', self.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
+        object.__setattr__(self, 'h', self.image_pair.img.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
         object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
-        object.__setattr__(self, 'fx', self.k[0][0])
-        object.__setattr__(self, 'fy', self.k[1][1])
-        object.__setattr__(self, 'cx', self.k[0][2])
-        object.__setattr__(self, 'cy', self.k[1][2])
+        object.__setattr__(self, 'fx', self.image_pair.img.k[0][0])
+        object.__setattr__(self, 'fy', self.image_pair.img.k[1][1])
+        object.__setattr__(self, 'cx', self.image_pair.img.k[0][2])
+        object.__setattr__(self, 'cy', self.image_pair.img.k[1][2])
         object.__setattr__(self, 'camera_position', -self.r.T @ self.t)
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
@@ -134,14 +135,11 @@ class Pose:
 
         A new 'synthetic' image pair is created by combining the two others.
         """
-        assert (self.k == pose.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        # TODO: if other is map map_pose, make this a FixedPose!
+        assert (self.image_pair.img.k == pose.image_pair.img.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         return Pose(
-                ImagePair(img=self.image_pair.img, ref=pose.image_pair.ref),  # latest frame is img, map/previous frame is ref
-                #ImagePair(img=pose.image_pair.img, ref=self.image_pair.ref),  # latest frame is img, map/previous frame is ref  # TODO: this is wrong way around?
-                self.k,
-                self.r @ pose.r,
-                self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
+                image_pair=ImagePair(img=self.image_pair.img, ref=pose.image_pair.ref),
+                r=self.r @ pose.r,
+                t=self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
         )
 
 
@@ -150,16 +148,12 @@ class Pose:
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
-    :param k: Camera intrinsics matrix from CameraInfo from time of match (from _match_inputs)
-    :param vehicle_attitude: Vehicle attitude
     :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
     :param img_dim: Drone image dimensions from time of match (from _match_inputs)
     :param vo_fix: - The WGS84-fixed FixedCamera for the VO reference frame, or None if not available
     :return:
     """
-    k: np.ndarray  # TODO: redundant?
     map_dim_with_padding: Dim  # TODO: redundant?
-    img_dim: Dim  # TODO: redundant?
     vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
 
     def __post_init__(self):

@@ -27,11 +27,10 @@ class Matcher(ABC):
 
     @staticmethod
     @abstractmethod
-    def worker(image_pair: ImagePair, input_data: InputData, guess: Optional[Pose]) -> Optional[Pose]:
+    def worker(image_pair: ImagePair, guess: Optional[Pose]) -> Optional[Pose]:
         """Returns camera _pose between input images
 
         :param image_pair: Image pair to match
-        :param input_data: The input data context for the image pair that may be needed in _pose estimation
         :param guess: Optional guess for the solution
         :return: Camera _pose between the images, or None if estimate could not be obtained
         """

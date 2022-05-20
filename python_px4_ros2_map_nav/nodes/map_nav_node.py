@@ -1150,7 +1150,11 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp)
+        assert self._camera_info is not None
+        assert hasattr(self._camera_info, 'k')
+        img_dim = self._img_dim()
+        assert isinstance(img_dim, Dim)
+        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, k=self._camera_info.k.reshape([3, 3]), img_dim=self._img_dim())
 
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
@@ -1762,12 +1766,11 @@ g
             assert isinstance(pose.image_pair.ref, ContextualMapData)
             pix_to_wgs84, _, __, ___ = pix_to_wgs84_affine(
                 input_data.map_dim_with_padding, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
-                input_data.img_dim)  # TODO: img_dim redundant? Should just use image_pair.img dimensions and not declared size? Why do we even need declared size?
+                pose.image_pair.img.img_dim)
 
             # TODO: return a FixedPose with the pix_to_wgs84 added
             map_pose = Pose(
                 image_pair=pose.image_pair,
-                k=pose.k,
                 r=pose.r,
                 t=pose.t
             )
@@ -1782,11 +1785,9 @@ g
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained
         """
-        assert_shape(input_data.k, (3, 3))
-
         # TODO: looks like map_pose is not always mapful!
         map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
-        fov = self._estimate_fov(input_data.img_dim, pose.inv_h, map_pose, pix_to_wgs84)  # TODO: img_dim included also in map_pose.image_pair.ref (ContextualMapData) .img_dim?
+        fov = self._estimate_fov(pose.image_pair.img.img_dim, pose.inv_h, map_pose, pix_to_wgs84)
         position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
 
@@ -1811,15 +1812,12 @@ g
 
         Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
         to :meth:`_process_matches` from the time image used for the matching was taken.
-f
+
         :return: The input data
         """
         img_dim = self._img_dim()
-        input_data = InputData(k=self._camera_info.k.reshape((3, 3)) if self._camera_info is not None else None,
-                               map_dim_with_padding=self._map_dim_with_padding(),
-                               img_dim=img_dim,
-                               vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None
-                               )
+        input_data = InputData(map_dim_with_padding=self._map_dim_with_padding(),
+                               vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None)
 
 
         # Get cropped and rotated map
@@ -1851,7 +1849,7 @@ f
             return False
 
         # Estimated translation vector blows up?
-        reference = np.array([output_data.input.k[0][2], output_data.input.k[1][2], output_data.input.k[0][0]])  # TODO: refactor using Pose inside InputData, can access these values directly
+        reference = np.array([output_data.fixed_camera.map_pose.image_pair.img.k[0][2], output_data.fixed_camera.map_pose.image_pair.img.k[1][2], output_data.fixed_camera.map_pose.image_pair.img.k[0][0]])  # TODO: refactor this line
         if (np.abs(output_data._pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
             self.get_logger().error(f'Pose.t {output_data._pose.t} & pose_map.t {output_data.fixed_camera.map_pose.t} have values '
@@ -1952,24 +1950,24 @@ f
             self._map_matching_query = AsyncQuery(
                 result=self._map_matching_pool.starmap_async(
                     self._map_matcher.worker,
-                    [(image_pair, input_data, self._retrieve_extrinsic_guess(False))],
+                    [(image_pair, self._retrieve_extrinsic_guess(False))],  # TODO: have k in input data after all? or somehow inside image_pair?
                     callback=self.map_matching_worker_callback,
                     error_callback=self.map_matching_worker_error_callback
                 ),
                 image_pair=image_pair,
-                input_data=input_data
+                input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
             )
         else:
             assert self._vo_matching_query is None or self._vo_matching_query.result.ready()
             self._vo_matching_query = AsyncQuery(
                 result=self._vo_matching_pool.starmap_async(
                     self._vo_matcher.worker,
-                    [(image_pair, input_data, self._retrieve_extrinsic_guess(True))],
+                    [(image_pair, self._retrieve_extrinsic_guess(True))],
                     callback=self.vo_matching_worker_callback,
                     error_callback=self.vo_matching_worker_callback
                 ),
                 image_pair=image_pair,
-                input_data=input_data
+                input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
             )
     #endregion
 

@@ -1733,7 +1733,6 @@ g
         return position, terrain_altitude
 
     @staticmethod
-    # TODO: just pass input data (not the two poses?) - how to ensure that at least one _pose is not None?
     def _estimate_map_pose(pose: Pose, input_data: InputData) -> Pose:
         """Estimates _pose against the latest map frame
 
@@ -1744,7 +1743,7 @@ g
         if not pose.image_pair.mapful():
             # Combine with latest map match
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
-            map_pose = pose @ input_data.vo_fix.map_pose  # TODO: this needs to be a "fixed" map_pose, need to edit matmul to preserve FixedPose?
+            map_pose = pose @ input_data.vo_fix.map_pose
             pix_to_wgs84 = input_data.vo_fix.fov.pix_to_wgs84  # TODO: refactor this, a bit clunky
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84

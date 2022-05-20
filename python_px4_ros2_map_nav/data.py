@@ -96,8 +96,9 @@ class ContextualMapData(_ImageHolder):
     rotation: Union[float, int]
     crop: Dim  # TODO: Redundant with .image.dim but need this to generate .image
     map_data: MapData   # This is the original larger (square) map with padding
+    pix_to_wgs84: np.ndarray = field(init=False)
 
-    def pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates
         along with intermediate transformations
 
@@ -186,6 +187,7 @@ class ContextualMapData(_ImageHolder):
         # Data class is frozen so need to use object.__setattr__ to assign values
         #super().__post_init__()
         object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))  # TODO: correct order of unpack?
+        object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
 
 
 # TODO: enforce types for ImagePair (img cannot be MapData, can happen if _pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
@@ -293,7 +295,6 @@ class FOV:
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     c: np.ndarray
     c_pix: np.ndarray
-    pix_to_wgs84: Optional[np.ndarray]  # TODO: None if cannot be projected to wgs84?
 
 
 # noinspection PyClassHasNoInit

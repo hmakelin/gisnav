@@ -1687,25 +1687,24 @@ g
         return gimbal_estimated_attitude
 
     @staticmethod
-    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_pose: Pose, pix_to_wgs84: np.ndarray) -> FOV:
+    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_pose: Pose) -> FOV:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
         :param img_dim: Image dimensions
         :param h_pose: Homography matrix against reference image (map or previous frame)
         :param map_pose: Fixed map_pose against map
-        :param pix_to_wgs84: Transformation from 2D pixel space to WGS84 coordinates
         :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
         """
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        h_wgs84 = pix_to_wgs84 @ map_pose.inv_h
+        assert_type(map_pose.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84
+        h_wgs84 = map_pose.image_pair.ref.pix_to_wgs84 @ map_pose.inv_h
         fov_pix, c_pix = get_fov_and_c(img_dim, h_pose)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
 
         fov = FOV(fov_pix=fov_pix,
                   fov=fov_wgs84,
                   c_pix=c_pix,
-                  c=c_wgs84,
-                  pix_to_wgs84=pix_to_wgs84)
+                  c=c_wgs84)
 
         return fov
 
@@ -1719,7 +1718,8 @@ g
         """
         altitude_scaling = self._estimate_altitude_scaling(fov.fov_pix, fov.fov)
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        t_wgs84 = fov.pix_to_wgs84 @ np.append(map_pose.camera_position[0:2], 1)
+        assert_type(map_pose.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
+        t_wgs84 = map_pose.image_pair.ref.pix_to_wgs84 @ np.append(map_pose.camera_position[0:2], 1)
         t_wgs84[2] = -altitude_scaling * map_pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
@@ -1753,19 +1753,17 @@ g
             # Combine with latest map match
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
             map_pose = pose @ input_data.vo_fix.map_pose
-            pix_to_wgs84 = input_data.vo_fix.fov.pix_to_wgs84  # TODO: refactor this, a bit clunky
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             assert_type(pose.image_pair.ref, ContextualMapData)
-            pix_to_wgs84 = pose.image_pair.ref.pix_to_wgs84()  # TODO: auto compute when initializing ContextualMapData
-
+            # TODO: just return Pose or need a copy()
             map_pose = Pose(
                 image_pair=pose.image_pair,
                 r=pose.r,
                 t=pose.t
             )
 
-        return map_pose, pix_to_wgs84   # TODO: get pix_to_wgs84 out of here
+        return map_pose
 
     #region Match
     def _compute_output(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:
@@ -1775,8 +1773,8 @@ g
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained
         """
-        map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
-        fov = self._estimate_fov(pose.image_pair.img.image.dim, pose.inv_h, map_pose, pix_to_wgs84)
+        map_pose = self._estimate_map_pose(pose, input_data)
+        fov = self._estimate_fov(pose.image_pair.img.image.dim, pose.inv_h, map_pose)
         position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
 

@@ -1772,7 +1772,7 @@ g
         """
         map_pose = self._estimate_map_pose(pose, input_data)
         fov = self._estimate_fov(pose.image_pair.img.image.dim, pose.inv_h, map_pose)
-        position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
+        position, terrain_altitude = self._estimate_position(map_pose, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
 
         # Init output

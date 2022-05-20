@@ -858,21 +858,6 @@ class MapNavNode(Node, ABC):
         assert_type(diagonal, int)  # TODO: What if this is float?
         return diagonal, diagonal
 
-    def _map_dim_with_padding(self) -> Optional[Dim]:
-        """Returns map dimensions with padding for rotation without clipping corners.
-
-        This method is a wrapper for :meth:`~map_size_with_padding`.
-
-        :return: Map dimensions or None if the info is not available
-        """
-        map_size = self._map_size_with_padding()
-        if map_size is None:
-            self.get_logger().warn(f'Map size with padding not available - returning None as map dimensions.')
-            return None
-        assert_type(map_size, tuple)
-        assert_len(map_size, 2)
-        return Dim(*map_size)
-
     def _declared_img_size(self) -> Optional[Tuple[int, int]]:
         """Returns image resolution size as it is declared in the latest CameraInfo message.
 
@@ -1763,10 +1748,10 @@ g
             pix_to_wgs84 = input_data.vo_fix.fov.pix_to_wgs84  # TODO: refactor this, a bit clunky
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
-            assert isinstance(pose.image_pair.ref, ContextualMapData)
+            assert_type(pose.image_pair.ref, ContextualMapData)
             pix_to_wgs84, _, __, ___ = pix_to_wgs84_affine(
-                input_data.map_dim_with_padding, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
-                pose.image_pair.img.img_dim)
+                pose.image_pair.ref.map_data.dim, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
+                pose.image_pair.img.img_dim)  # TODO: refactor this interface
 
             # TODO: return a FixedPose with the pix_to_wgs84 added
             map_pose = Pose(
@@ -1816,8 +1801,7 @@ g
         :return: The input data
         """
         img_dim = self._img_dim()
-        input_data = InputData(map_dim_with_padding=self._map_dim_with_padding(),
-                               vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None)
+        input_data = InputData(vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None)
 
 
         # Get cropped and rotated map

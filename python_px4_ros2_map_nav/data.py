@@ -50,6 +50,7 @@ class MapData(_Image):
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
     bbox: BBox
+    dim: Dim  # this is the original map dimension/resolution with padding, .image shape
 
 
 # noinspection PyClassHasNoInit
@@ -148,12 +149,9 @@ class Pose:
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
-    :param map_dim_with_padding: Map dimensions with padding from time of match (from _match_inputs)
-    :param img_dim: Drone image dimensions from time of match (from _match_inputs)
     :param vo_fix: - The WGS84-fixed FixedCamera for the VO reference frame, or None if not available
     :return:
     """
-    map_dim_with_padding: Dim  # TODO: redundant?
     vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
 
     def __post_init__(self):

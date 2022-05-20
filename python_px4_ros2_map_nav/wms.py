@@ -6,7 +6,7 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, get_args
+from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, Dim, get_args
 
 
 class WMSClient:
@@ -94,7 +94,7 @@ class WMSClient:
         assert_type(radius, get_args(Union[int, float]))
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
-        map_data = MapData(center=center, radius=radius, bbox=bbox, image=map_)
+        map_data = MapData(center=center, radius=radius, bbox=bbox, image=map_, dim=Dim(*map_size))  # TODO: map size unpacked in correct order? even if its assumed to be a square
         return map_data
 
     def _get_map(self, layer_str: str, srs_str: str, bbox_: BBox, size_: Tuple[int, int], format_: str,

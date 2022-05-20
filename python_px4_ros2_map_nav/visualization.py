@@ -52,7 +52,7 @@ class Visualization:
             if self._vo_visualization is None:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
-        out = np.vstack((self._map_visualization, self._vo_visualization, output_data._pose.image_pair.img.image))
+        out = np.vstack((self._map_visualization, self._vo_visualization, output_data._pose.image_pair.img.image.image))  # TODO: make it e.g. image.arr, not image.image
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
             if output_data._pose.image_pair.mapful():
                 cv2.imshow(self.name, out)
@@ -79,7 +79,7 @@ class Visualization:
         #mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
         #mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
 
-        ref_img = output_data._pose.image_pair.ref.image
+        ref_img = output_data._pose.image_pair.ref.image.image  # TODO: make it e.g. image.arr!
         map_with_fov = cv2.polylines(ref_img.copy(), [np.int32(output_data.fixed_camera.fov.fov_pix)], True, 255, 3, cv2.LINE_AA)
         #draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
         #out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,

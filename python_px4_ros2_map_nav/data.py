@@ -4,6 +4,7 @@ from __future__ import annotations  # Python version 3.7+
 import cv2
 import numpy as np
 import os
+import math
 
 from xml.etree import ElementTree
 from typing import Optional, Union, get_args
@@ -12,18 +13,41 @@ from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
+from python_px4_ros2_map_nav.transform import create_src_corners
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Dim = namedtuple('Dim', 'height width')
-RPY = namedtuple('RPY', 'roll pitch yaw')
+#RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class _Image:
+class RPY:
+    """Roll-pitch-yaw"""
+    roll: float
+    pitch: float
+    yaw: float
+
+    def axes_ned_to_image(self, degrees: bool = True) -> RPY:
+        """Converts roll-pitch-yaw euler angles from NED to image frame"""
+        straight_angle = 180 if degrees else np.pi
+        right_angle = 90 if degrees else np.pi / 2
+        pitch = -self.pitch - right_angle
+        if pitch < 0:
+            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
+            pitch += straight_angle
+        roll = pitch
+        pitch = self.roll
+        yaw = self.yaw
+        rpy = RPY(roll, pitch, yaw)
+        return rpy
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class _ImageHolder:
     """Parent dataclass for image holders
 
     Should not be instantiated directly.
@@ -33,34 +57,135 @@ class _Image:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class ImageData(_Image):
+class Img:
+    """Image class to hold image raster and related metadata"""
+    image: np.ndarray
+    dim: Dim = field(init=False)
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'dim', Dim(*self.image.shape[0:2]))  # TODO: correct order of unpack?
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class ImageData(_ImageHolder):
     """Keeps image frame related data in one place and protects it from corruption."""
-    #image: np.ndarray
+    #image: Img
     frame_id: str
     timestamp: int
     k: np.ndarray
-    img_dim: Dim  # TODO: redundant, or make this declared, k overrides!
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class MapData(_Image):
+class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
-    #image: np.ndarray
+    #image: Img
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
     bbox: BBox
-    dim: Dim  # this is the original map dimension/resolution with padding, .image shape
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class ContextualMapData(_Image):
+class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _pose estimation"""
-    #image: np.ndarray  # This is the map_cropped image which is same size as the camera frames
+    image: Img = field(init=False)  # This is the map_cropped image which is same size as the camera frames, init in __post_init__
     rotation: Union[float, int]
-    img_dim: Dim  # TODO: unnecessary, just get image.shape?
+    crop: Dim  # TODO: Redundant with .image.dim but need this to generate .image
     map_data: MapData   # This is the original larger (square) map with padding
+
+    def pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates
+        along with intermediate transformations
+
+        These transformations can be used to reverse the rotation and cropping that :func:`~rotate_and_crop_map` did to
+        the original map.
+
+        :return: Tuple containing 2D affinre transformations from 1. pixel coordinates to WGS84, 2. from original unrotated
+        and uncropped map pixel coordinates to WGS84, 3. from rotated map coordinates to unrotated map coordinates, and 4.
+        from cropped map coordinates to uncropped (but still rotated) map pixel coordinates.
+        """
+        # TODO: make it Img.arr not "image.image"
+        map_dim_arr = np.array(self.map_data.image.dim)
+        img_dim_arr = np.array(self.image.dim)
+        crop_padding = map_dim_arr - img_dim_arr
+        crop_translation = (crop_padding / 2)
+        pix_to_uncropped = np.identity(3)
+        # Invert order x<->y in translation vector since height comes first in Dim tuple (inputs should be Dims)
+        pix_to_uncropped[0:2][:, 2] = crop_translation[::-1]
+
+        rotation_center = map_dim_arr / 2
+        rotation = cv2.getRotationMatrix2D(rotation_center, np.degrees(self.rotation), 1.0)
+        rotation_padding = np.array([[0, 0, 1]])
+        uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
+
+        src_corners = create_src_corners(*self.map_data.image.dim)
+        dst_corners = self._bbox_to_polygon(self.map_data.bbox)
+        unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
+                                                         np.float32(dst_corners).squeeze())
+
+        pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped
+        return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
+
+    # TODO: make bbox dataclass, make this public method for that class
+    @staticmethod
+    def _bbox_to_polygon(bbox: BBox) -> np.ndarray:
+        """Converts BBox to a np.ndarray polygon format
+
+        :param bbox: BBox to convert
+        :return: bbox corners in np.ndarray"""
+        return np.array([[bbox.top, bbox.left],
+                         [bbox.bottom, bbox.left],
+                         [bbox.bottom, bbox.right],
+                         [bbox.top, bbox.right]]).reshape(-1, 1, 2)
+
+    def _rotate_and_crop_map(self) -> np.ndarray:
+        """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
+
+        Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map.
+
+        :return: Rotated and cropped map raster
+        """
+        cx, cy = tuple(np.array(self.map_data.image.image.shape[0:2]) / 2)  # TODO: Use k, dim etc?
+        degrees = math.degrees(self.rotation)
+        r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
+        map_rotated = cv2.warpAffine(self.map_data.image.image, r, self.map_data.image.image.shape[1::-1])  # TODO: use .dim?
+        map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
+        #if visualize:
+        #    cv2.imshow('padded', self.map_data.image.image)
+        #    cv2.waitKey(1)
+        #    cv2.imshow('rotated', map_rotated)
+        #    cv2.waitKey(1)
+        #    cv2.imshow('cropped', map_cropped)
+        #    cv2.waitKey(1)
+        # TODO: below assertion should not be!
+        assert map_cropped.shape[0:2] == self.crop, f'Cropped shape {map_cropped.shape} did not match dims {self.crop}.'
+        return map_cropped
+
+    @staticmethod
+    def _crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
+        """Crops dimensions sized part from center.
+
+        :param img: Image to crop
+        :param dimensions: Dimensions of area to crop (not of image itself)
+        :return: Cropped image
+        """
+        cx, cy = tuple(np.array(img.shape[0:2]) / 2)
+        img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
+                      math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]
+        assert (
+        img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
+                                                                        'map raster. '
+        return img_cropped
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        #super().__post_init__()
+        object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))  # TODO: correct order of unpack?
 
 
 # TODO: enforce types for ImagePair (img cannot be MapData, can happen if _pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose

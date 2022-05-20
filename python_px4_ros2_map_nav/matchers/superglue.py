@@ -68,8 +68,9 @@ class SuperGlue(KeypointMatcher):
         :param conf_threshold: Confidence threshold for filtering out bad matches
         :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
         """
-        img_grayscale = cv2.cvtColor(image_pair.img.image, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(image_pair.ref.image, cv2.COLOR_BGR2GRAY)
+        # TODO Make it Img.arr so that no image.image
+        img_grayscale = cv2.cvtColor(image_pair.img.image.iamge, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(image_pair.ref.image.image, cv2.COLOR_BGR2GRAY)
         img_tensor = frame2tensor(img_grayscale, self._device)
         map_tensor = frame2tensor(map_grayscale, self._device)
 

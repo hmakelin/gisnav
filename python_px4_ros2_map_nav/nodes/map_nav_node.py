@@ -38,9 +38,9 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV
-from python_px4_ros2_map_nav.transform import fov_center, get_fov_and_c, pix_to_wgs84_affine, rotate_and_crop_map, \
-    inv_homography_from_k_and_e, get_azimuth, axes_ned_to_image, make_keypoint, is_convex_isosceles_trapezoid, \
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img
+from python_px4_ros2_map_nav.transform import get_fov_and_c, \
+    inv_homography_from_k_and_e, get_azimuth, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
@@ -901,9 +901,9 @@ class MapNavNode(Node, ABC):
             return None
 
         # Need coordinates in image frame
-        rpy = axes_ned_to_image(rpy)
+        rpy = rpy.axes_ned_to_image()
 
-        r = Rotation.from_euler('XYZ', list(rpy), degrees=True).as_matrix()
+        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
         e = np.hstack((r, np.expand_dims(translation, axis=1)))
         assert_shape(e, (3, 4))
 
@@ -967,8 +967,16 @@ class MapNavNode(Node, ABC):
                 gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
+                # TODO: make this a method of FOV after refactoring this function to use FOV
                 # Use projected field of view center instead of global position as map center
-                map_center_latlon = fov_center(gimbal_fov_wgs84)
+                #map_center_latlon = fov_center(gimbal_fov_wgs84)
+                left, bottom, right, top = 180, 90, -180, -90
+                for pt in gimbal_fov_wgs84:
+                    right = pt[1] if pt[1] >= right else right
+                    left = pt[1] if pt[1] <= left else left
+                    top = pt[0] if pt[0] >= top else top
+                    bottom = pt[0] if pt[0] <= bottom else bottom
+                map_center_latlon = LatLon((top + bottom) / 2, (left + right) / 2)
 
                 self.publish_projected_fov(gimbal_fov_wgs84, map_center_latlon)  # Note: map center, not principal point
             else:
@@ -1139,12 +1147,12 @@ class MapNavNode(Node, ABC):
         assert hasattr(self._camera_info, 'k')
         img_dim = self._img_dim()
         assert isinstance(img_dim, Dim)
-        image_data = ImageData(image=cv_image, frame_id=msg.header.frame_id, timestamp=timestamp, k=self._camera_info.k.reshape([3, 3]), img_dim=self._img_dim())
+        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp, k=self._camera_info.k.reshape([3, 3]))
 
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
         # Do visual odometry if enabled
-        if self._should_vo_match(image_data.image):
+        if self._should_vo_match(image_data.image.image):  # TODO: make it image.image!
             assert self._vo_matching_query is None or self._vo_matching_query.result.ready()
             assert self._vo_matching_pool is not None
             assert self._map_input_data_prev is not None
@@ -1165,7 +1173,7 @@ class MapNavNode(Node, ABC):
                 return
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_map_match(image_data.image):  # TODO: possibly redundant checking with _odom_should_match?
+        if self._should_map_match(image_data.image.image):  # TODO: possibly redundant checking with _odom_should_match?  # TODO: make it e.g. image.arr!
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
             if inputs is None:
                 # Get inputs if did not yet get them earlier for viz odom
@@ -1344,7 +1352,8 @@ class MapNavNode(Node, ABC):
         assert_len(result, 1)
         result = result[0]
         assert_type(result, MapData)
-        assert result.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
+        # TODO: refactor "MapData.image.image!" Make Image.image somthing like Image.arr?
+        assert result.image.image.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
         self.get_logger().info(f'Map received for bbox: {result.bbox}.')
         self._map_data = result
 
@@ -1748,9 +1757,7 @@ g
         else:
             # Transforms from rotated and cropped map pixel coordinates to WGS84
             assert_type(pose.image_pair.ref, ContextualMapData)
-            pix_to_wgs84, _, __, ___ = pix_to_wgs84_affine(
-                pose.image_pair.ref.map_data.dim, pose.image_pair.ref.map_data.bbox, -pose.image_pair.ref.rotation,
-                pose.image_pair.img.img_dim)  # TODO: refactor this interface
+            pix_to_wgs84 = pose.image_pair.ref.pix_to_wgs84()  # TODO: auto compute when initializing ContextualMapData
 
             map_pose = Pose(
                 image_pair=pose.image_pair,
@@ -1769,7 +1776,7 @@ g
         :return: Computed output_data if a valid estimate was obtained
         """
         map_pose, pix_to_wgs84 = self._estimate_map_pose(pose, input_data)  # TODO: get pix_to_wgs84 out of there and into estimte_fov
-        fov = self._estimate_fov(pose.image_pair.img.img_dim, pose.inv_h, map_pose, pix_to_wgs84)
+        fov = self._estimate_fov(pose.image_pair.img.image.dim, pose.inv_h, map_pose, pix_to_wgs84)
         position, terrain_altitude = self._estimate_position(map_pose, fov)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
 
@@ -1797,18 +1804,20 @@ g
 
         :return: The input data
         """
-        img_dim = self._img_dim()
         input_data = InputData(vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None)
 
+        img_dim = self._img_dim()
+        assert_type(img_dim, Dim)  # TODO: handle None?
 
         # Get cropped and rotated map
-        camera_yaw_deg = self._camera_yaw()
+        camera_yaw_deg = self._camera_yaw()  # TODO: handle None?
         camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
-        if all((camera_yaw, img_dim)):
-            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+        assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
 
-        map_cropped = rotate_and_crop_map(self._map_data.image, camera_yaw, img_dim) if all((camera_yaw, self._map_data, img_dim)) else None
-        contextual_map_data = ContextualMapData(image=map_cropped, rotation=camera_yaw, img_dim=img_dim, map_data=self._map_data)
+
+        # Make it e.g. Image.arr so that wont have image.image!
+        #map_cropped = rotate_and_crop_map(self._map_data.image.image, camera_yaw, img_dim) if all((camera_yaw, self._map_data, img_dim)) else None
+        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=img_dim)
         return copy.deepcopy(input_data), contextual_map_data
 
     def _good_match(self, output_data: OutputData) -> bool:

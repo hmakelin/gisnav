@@ -73,8 +73,9 @@ class LoFTRMatcher(KeypointMatcher):
         :param image_pair: The image pair to match
         :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
         """
-        img_grayscale = cv2.cvtColor(image_pair.img.image, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(image_pair.ref.image, cv2.COLOR_BGR2GRAY)
+        # TODO: make it Image.arr so that no image.image
+        img_grayscale = cv2.cvtColor(image_pair.img.image.image, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(image_pair.ref.image.image, cv2.COLOR_BGR2GRAY)
         img_tensor = torch.from_numpy(img_grayscale)[None][None].cuda() / 255.
         map_tensor = torch.from_numpy(map_grayscale)[None][None].cuda() / 255.
 

@@ -64,8 +64,9 @@ class ORBMatcher(KeypointMatcher):
         :param conf_threshold: Confidence threshold for filtering out bad matches
         :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
         """
-        img_grayscale = cv2.cvtColor(image_pair.img.image, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(image_pair.ref.image, cv2.COLOR_BGR2GRAY)
+        # TODO Make it Img.arr so that no image.image
+        img_grayscale = cv2.cvtColor(image_pair.img.image.image, cv2.COLOR_BGR2GRAY)
+        map_grayscale = cv2.cvtColor(image_pair.ref.image.image, cv2.COLOR_BGR2GRAY)
 
         kp_img, desc_img = self._orb.detectAndCompute(img_grayscale, None)
         kp_map, desc_map = self._orb.detectAndCompute(map_grayscale, None)

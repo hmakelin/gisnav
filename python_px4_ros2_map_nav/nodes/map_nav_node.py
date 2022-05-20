@@ -1283,11 +1283,12 @@ class MapNavNode(Node, ABC):
         """
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
-        if self._map_input_data_prev is not None:
-            if not (abs(self._distance(center, self._map_output_data_prev._pose.image_pair.ref.map_data.center)) >
-                    self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value or
-                    abs(radius - self._map_output_data_prev._pose.image_pair.ref.map_data.radius) >
-                    self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value):
+        if self._map_output_data_prev is not None:
+            previous_map_data = self._map_output_data_prev._pose.image_pair.ref.map_data
+            center_threshold = self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value
+            radius_threshold = self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value
+            if abs(self._distance(center, previous_map_data.center)) <= center_threshold and \
+                    abs(radius - previous_map_data.radius) <= radius_threshold:
                 return True
 
         return False

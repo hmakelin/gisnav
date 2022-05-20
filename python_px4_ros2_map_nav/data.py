@@ -280,6 +280,7 @@ class InputData:
     :return:
     """
     vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
+    ground_elevation: Optional[float]  # Assumed elevation of ground plane above mean sea level (AMSL)
 
     def __post_init__(self):
         """Validate the data structure"""

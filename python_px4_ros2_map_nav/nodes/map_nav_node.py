@@ -1708,7 +1708,7 @@ g
 
         return fov
 
-    def _estimate_position(self, map_pose: Pose, fov: FOV) -> Tuple[LatLonAlt, float]:
+    def _estimate_position(self, map_pose: Pose, fov: FOV, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
@@ -1732,9 +1732,8 @@ g
 
         # Get altitude above mean sea level (AMSL)
         terrain_altitude = position.alt
-        ground_elevation = self._local_position_ref_alt()  # assume this is ground elevation
         if ground_elevation is None:
-            self.get_logger().debug('Could not determine ground elevation (AMSL). Setting position.alt as None.')
+            self.get_logger().debug('Ground plane elevation (AMSL) unavailable. Setting position.alt as None.')  # TODO: or return LatLon instead?
             position = LatLonAlt(*position[0:2], None)
         else:
             position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
@@ -1800,7 +1799,10 @@ g
 
         :return: The input data
         """
-        input_data = InputData(vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None)
+        input_data = InputData(
+            vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None,
+            ground_elevation=self._local_position_ref_alt()
+        )
 
         img_dim = self._img_dim()
         assert_type(img_dim, Dim)  # TODO: handle None?

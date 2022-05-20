@@ -1849,7 +1849,6 @@ g
         return self._map_output_data_prev is not None
 
     def _should_vo_match(self, img: np.ndarray) -> bool:
-        # TODO: pass collected InputData instead of img?
         """Determines whether _odom_match should be called based on whether previous match is still being processed.
 
         Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there

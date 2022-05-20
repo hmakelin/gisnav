@@ -1754,8 +1754,6 @@ g
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
             map_pose = pose @ input_data.vo_fix.map_pose
         else:
-            # Transforms from rotated and cropped map pixel coordinates to WGS84
-            assert_type(pose.image_pair.ref, ContextualMapData)
             # TODO: just return Pose or need a copy()
             map_pose = Pose(
                 image_pair=pose.image_pair,

@@ -1605,7 +1605,7 @@ g
         # Check whether camera translation is over threshold
         t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
         camera_translation = np.linalg.norm(output_data._match.camera_position_difference.squeeze())
-        threshold = t_threshold * output_data._match.fx
+        threshold = t_threshold * output_data._match.image_pair.img.fx
         if camera_translation > threshold:
             self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
                                    f'frame.')

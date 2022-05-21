@@ -76,6 +76,18 @@ class ImageData(_ImageHolder):
     frame_id: str
     timestamp: int
     k: np.ndarray
+    fx: float = field(init=False)
+    fy: float = field(init=False)
+    cx: float = field(init=False)  # TODO: int?
+    cy: float = field(init=False)  # TODO: int?
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'fx', self.k[0][0])
+        object.__setattr__(self, 'fy', self.k[1][1])
+        object.__setattr__(self, 'cx', self.k[0][2])
+        object.__setattr__(self, 'cy', self.k[1][2])
 
 
 # noinspection PyClassHasNoInit
@@ -243,10 +255,6 @@ class Match:
     pose: Pose
     h: np.ndarray = field(init=False)
     inv_h: np.ndarray = field(init=False)
-    fx: float = field(init=False)
-    fy: float = field(init=False)
-    cx: float = field(init=False)  # TODO: int?
-    cy: float = field(init=False)  # TODO: int?
     camera_position: np.ndarray = field(init=False)
     camera_center: np.ndarray = field(init=False)
     camera_position_difference: np.ndarray = field(init=False)
@@ -254,14 +262,11 @@ class Match:
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'h', self.image_pair.img.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
+        img = self.image_pair.img
+        object.__setattr__(self, 'h', img.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
-        object.__setattr__(self, 'fx', self.image_pair.img.k[0][0])
-        object.__setattr__(self, 'fy', self.image_pair.img.k[1][1])
-        object.__setattr__(self, 'cx', self.image_pair.img.k[0][2])
-        object.__setattr__(self, 'cy', self.image_pair.img.k[1][2])
         object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
-        object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
+        object.__setattr__(self, 'camera_center', np.array((img.cx, img.cy, -img.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
     def __matmul__(self, match: Match) -> Match:  # Python version 3.5+

@@ -194,7 +194,7 @@ class ContextualMapData(_ImageHolder):
 @dataclass(frozen=True)
 class ImagePair:
     """Atomic image pair to represent a matched pair of images"""
-    img: ImageData
+    img: ImageData  # TODO: rename qry (query) ?
     ref: Union[ImageData, ContextualMapData]  # TODO: _Image? Or exclude MapData?
 
     def mapful(self) -> bool:

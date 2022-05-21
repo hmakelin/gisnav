@@ -64,7 +64,6 @@ class KeypointMatcher(Matcher):
             return matcher._estimate_pose(image_pair, mkp_img, mkp_map, guess)  # noqa (PyProtectedMember)
         except Exception as e:
             #raise e  # TODO: handle exception
-            print(e)
             return None
 
     def _estimate_pose(self, image_pair: ImagePair, mkp1: np.ndarray, mkp2: np.ndarray, guess: Optional[Pose]) \
@@ -93,7 +92,6 @@ class KeypointMatcher(Matcher):
         try:
             pose = Pose(r, t)
         except np.linalg.LinAlgError as _:  # e:
-            print(_)
             # TODO: handle error
             return None
 

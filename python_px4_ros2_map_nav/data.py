@@ -367,27 +367,27 @@ class PackageData:
     maintainer_email: str
     license_name: str
 
+    @staticmethod
+    def parse_package_data(package_file: str) -> PackageData:
+        """Parses package.xml in current folder
 
-def parse_package_data(package_file: str) -> PackageData:
-    """Parses package.xml in current folder
-
-    :param package_file: Absolute path to package.xml file
-    :return: Parsed package data
-    :raise FileNotFoundError: If package.xml file is not found
-    """
-    if os.path.isfile(package_file):
-        tree = ElementTree.parse(package_file)
-        root = tree.getroot()
-        package_data = PackageData(
-            package_name=root.find('name').text,
-            version=root.find('version').text,
-            description=root.find('description').text,
-            author=root.find('author').text,
-            author_email=root.find('author').attrib.get('email', ''),
-            maintainer=root.find('maintainer').text,
-            maintainer_email=root.find('maintainer').attrib.get('email', ''),
-            license_name=root.find('license').text
-        )
-        return package_data
-    else:
-        raise FileNotFoundError(f'Could not find package file at {package_file}.')
+        :param package_file: Absolute path to package.xml file
+        :return: Parsed package data
+        :raise FileNotFoundError: If package.xml file is not found
+        """
+        if os.path.isfile(package_file):
+            tree = ElementTree.parse(package_file)
+            root = tree.getroot()
+            package_data = PackageData(
+                package_name=root.find('name').text,
+                version=root.find('version').text,
+                description=root.find('description').text,
+                author=root.find('author').text,
+                author_email=root.find('author').attrib.get('email', ''),
+                maintainer=root.find('maintainer').text,
+                maintainer_email=root.find('maintainer').attrib.get('email', ''),
+                license_name=root.find('license').text
+            )
+            return package_data
+        else:
+            raise FileNotFoundError(f'Could not find package file at {package_file}.')

@@ -15,8 +15,8 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 # -- Version information -----------------------------------------------------
-from python_px4_ros2_map_nav.data import parse_package_data
-package_data = parse_package_data(os.path.abspath('../package.xml'))
+from python_px4_ros2_map_nav.data import PackageData
+package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 
 
 #version_string = f'v{version}'

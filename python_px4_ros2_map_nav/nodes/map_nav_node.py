@@ -1164,7 +1164,7 @@ class MapNavNode(Node, ABC):
                                         f'Skipping visual odometry matching.')
                 return
             self._vo_input_data = inputs
-            vo_reference = self._vo_reference()._match.image_pair.img  # Access _match intentional, need the raw vo pose, not map pose
+            vo_reference = self._vo_reference()._match.image_pair.qry  # Access _match intentional, need the raw vo pose, not map pose
             if vo_reference is not None and inputs.vo_fix is not None:  # Need both previous frame and a map fix  # TODO: move this check to should_vo_match!
                 image_pair = ImagePair(image_data, vo_reference)
                 self._match(image_pair, inputs)
@@ -1605,7 +1605,7 @@ g
         # Check whether camera translation is over threshold
         t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
         camera_translation = np.linalg.norm(output_data._match.camera_position_difference.squeeze())
-        threshold = t_threshold * output_data._match.image_pair.img.fx
+        threshold = t_threshold * output_data._match.image_pair.qry.fx
         if camera_translation > threshold:
             self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
                                    f'frame.')
@@ -1764,7 +1764,7 @@ g
         :return: Computed output_data if a valid estimate was obtained
         """
         map_match = self._estimate_map_match(match, input_data)
-        fov = self._estimate_fov(match.image_pair.img.image.dim, match.inv_h, map_match)
+        fov = self._estimate_fov(match.image_pair.qry.image.dim, match.inv_h, map_match)
         position, terrain_altitude = self._estimate_position(map_match, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
 
@@ -1827,7 +1827,7 @@ g
             return False
 
         # Estimated translation vector blows up?
-        reference = np.array([output_data.fixed_camera.map_match.image_pair.img.k[0][2], output_data.fixed_camera.map_match.image_pair.img.k[1][2], output_data.fixed_camera.map_match.image_pair.img.k[0][0]])  # TODO: refactor this line
+        reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.k[0][0]])  # TODO: refactor this line
         if (np.abs(output_data._match.pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
             self.get_logger().error(f'Match.pose.t {output_data._match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
@@ -1872,7 +1872,7 @@ g
             return False
 
         # Check if is image too blurry
-        # if self._image_too_blurry(img):
+        # if self._image_too_blurry(qry):
         #    self.get_logger().warn('ODOM TOO BLURRY.')
         #    return False
 

@@ -201,12 +201,12 @@ class ContextualMapData(_ImageHolder):
         object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
 
 
-# TODO: enforce types for ImagePair (img cannot be MapData, can happen if _match.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
+# TODO: enforce types for ImagePair (qry cannot be MapData, can happen if _match.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
     """Atomic image pair to represent a matched pair of images"""
-    img: ImageData  # TODO: rename qry (query) ?
+    qry: ImageData
     ref: Union[ImageData, ContextualMapData]  # TODO: _Image? Or exclude MapData?
 
     def mapful(self) -> bool:
@@ -262,7 +262,7 @@ class Match:
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
-        img = self.image_pair.img
+        img = self.image_pair.qry
         object.__setattr__(self, 'h', img.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
         object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
@@ -275,9 +275,9 @@ class Match:
         Returns a new Match by combining two matches by chaining the poses and image pairs: a new 'synthetic' image
         pair is created by combining the two others.
         """
-        assert (self.image_pair.img.k == match.image_pair.img.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
+        assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         return Match(
-                image_pair=ImagePair(img=self.image_pair.img, ref=match.image_pair.ref),
+                image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),
                 pose=Pose(
                     self.pose.r @ match.pose.r,
                     self.pose.t + self.pose.r @ (match.pose.t + match.camera_center)

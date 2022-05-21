@@ -52,7 +52,7 @@ class Visualization:
             if self._vo_visualization is None:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
-        out = np.vstack((self._map_visualization, self._vo_visualization, output_data._match.image_pair.img.image.arr))
+        out = np.vstack((self._map_visualization, self._vo_visualization, output_data._match.image_pair.qry.image.arr))
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
             if output_data._match.image_pair.mapful():
                 cv2.imshow(self.name, out)
@@ -72,7 +72,7 @@ class Visualization:
         """
         # Make a list of cv2.DMatches that match mkp_img and mkp_map one-to-one
         #kp_count = len(output_data.mkp_img)
-        #assert kp_count == len(output_data.mkp_map), 'Keypoint counts for img and map did not match.'
+        #assert kp_count == len(output_data.mkp_map), 'Keypoint counts for qry and map did not match.'
         #matches = list(map(lambda i_: cv2.DMatch(i_, i_, 0), range(0, kp_count)))
 
         # Need cv2.KeyPoints for keypoints

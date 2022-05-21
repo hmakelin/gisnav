@@ -29,7 +29,7 @@ class KeypointMatcher(Matcher):
         """Uses the keypoint matcher to find matching keypoints between provided image and map
 
         :param image_pair: The image pair to match
-        :return: Tuple of two numpy arrays containing matched keypoint coordinates in img and map respectively
+        :return: Tuple of two numpy arrays containing matched keypoint coordinates in qry and map respectively
         """
         pass
 
@@ -55,7 +55,7 @@ class KeypointMatcher(Matcher):
 
         :param image_pair: Image pair to match
         :param guess: Optional initial guess for camera _pose
-        :return: Tuple of two lists containing matching keypoints in img and map respectively
+        :return: Tuple of two lists containing matching keypoints in qry and map respectively
         """
         try:
             assert_type(matcher, KeypointMatcher)  # see matcher.py for initialization of 'matcher'
@@ -86,7 +86,7 @@ class KeypointMatcher(Matcher):
         dist_coeffs = np.zeros((4, 1))
         use_guess = guess is not None
         r, t = (guess.r, guess.t) if use_guess else (None, None)
-        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, image_pair.img.k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
+        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, image_pair.qry.k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
                                          iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
         try:

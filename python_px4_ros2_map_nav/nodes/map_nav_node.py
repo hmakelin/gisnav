@@ -37,8 +37,8 @@ from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDevi
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Pose,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img
+from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose
 from python_px4_ros2_map_nav.transform import get_fov_and_c, \
     inv_homography_from_k_and_e, get_azimuth, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -1164,7 +1164,7 @@ class MapNavNode(Node, ABC):
                                         f'Skipping visual odometry matching.')
                 return
             self._vo_input_data = inputs
-            vo_reference = self._vo_reference()._pose.image_pair.img
+            vo_reference = self._vo_reference()._match.image_pair.img  # Access _match intentional, need the raw vo pose, not map pose
             if vo_reference is not None and inputs.vo_fix is not None:  # Need both previous frame and a map fix  # TODO: move this check to should_vo_match!
                 image_pair = ImagePair(image_data, vo_reference)
                 self._match(image_pair, inputs)
@@ -1278,7 +1278,7 @@ class MapNavNode(Node, ABC):
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         if self._map_output_data_prev is not None:
-            previous_map_data = self._map_output_data_prev._pose.image_pair.ref.map_data
+            previous_map_data = self._map_output_data_prev._match.image_pair.ref.map_data
             center_threshold = self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value
             radius_threshold = self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value
             if abs(self._distance(center, previous_map_data.center)) <= center_threshold and \
@@ -1372,10 +1372,11 @@ class MapNavNode(Node, ABC):
         if pose is not None:
             self._store_extrinsic_guess(pose, odom=visual_odometry)
         else:
-            self.get_logger().warn(f'Could not compute _pose, returning None.')
+            self.get_logger().warn(f'Could not compute _match, returning None.')
             return None
         query = self._vo_matching_query if visual_odometry else self._map_matching_query
-        output_data = self._compute_output(pose, query.input_data)
+        match = Match(image_pair=query.image_pair, pose=pose)
+        output_data = self._compute_output(match, query.input_data)
 
         # noinspection PyUnreachableCode
         if __debug__ and output_data is not None:
@@ -1603,8 +1604,8 @@ g
 
         # Check whether camera translation is over threshold
         t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
-        camera_translation = np.linalg.norm(output_data._pose.camera_position_difference.squeeze())
-        threshold = t_threshold * output_data._pose.fx
+        camera_translation = np.linalg.norm(output_data._match.camera_position_difference.squeeze())
+        threshold = t_threshold * output_data._match.fx
         if camera_translation > threshold:
             self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
                                    f'frame.')
@@ -1612,7 +1613,7 @@ g
 
         # Check whether camera rotation is over threshold
         r_threshold = self.get_parameter('misc.visual_odometry_update_r_threshold').get_parameter_value().double_value
-        rotvec = Rotation.from_matrix(output_data._pose.r).as_rotvec()
+        rotvec = Rotation.from_matrix(output_data._match.pose.r).as_rotvec()
         camera_rotation = np.linalg.norm(rotvec)
         threshold = r_threshold
         if camera_rotation > threshold:
@@ -1623,14 +1624,13 @@ g
         return False
 
     def _vo_reset(self) -> None:
-        """Resets accumulated _pose
+        """Resets accumulated _match
 
         Used when a new map match is found or visual odometry has lost track (bad match with visual odometry).
 
         :param k: Camera intrinsics matrix
         """
         # Reset accumulated position differential
-        #self._pose_vo = Pose(k, np.identity(3), np.zeros((3, 1)))  # Can't init with zero t, not invertible
         self._vo_input_data = None
         self._vo_input_data_prev = None
         self._vo_output_data_prev = None
@@ -1657,22 +1657,22 @@ g
         return altitude_scaling
 
     @staticmethod
-    def _estimate_attitude(map_pose: Pose) -> np.ndarray:
-        """Estimates gimbal attitude from _pose and camera yaw in global NED frame
+    def _estimate_attitude(map_match: Match) -> np.ndarray:
+        """Estimates gimbal attitude from _match and camera yaw in global NED frame
 
-        Estimates attitude in NED frame so need map pose (uses ContextualMapData.rotation), not just any pose
+        Estimates attitude in NED frame so need map match (uses ContextualMapData.rotation), not just any match
 
-        :param map_pose: Map pose
+        :param map_match: Map match
         """
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(map_pose.r.T)  # in rotated map pixel frame
-        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _pose
-        assert (map_pose.image_pair.mapful())
-        assert (map_pose.image_pair.ref, ContextualMapData)  # Alternative way to assert mapful()
-        gimbal_estimated_attitude *= Rotation.from_rotvec(map_pose.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(map_match.pose.r.T)  # in rotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _match
+        assert (map_match.image_pair.mapful())
+        assert (map_match.image_pair.ref, ContextualMapData)  # Alternative way to assert mapful()
+        gimbal_estimated_attitude *= Rotation.from_rotvec(map_match.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
@@ -1681,17 +1681,17 @@ g
         return gimbal_estimated_attitude
 
     @staticmethod
-    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_pose: Pose) -> FOV:
+    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_match: Match) -> FOV:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
         :param img_dim: Image dimensions
         :param h_pose: Homography matrix against reference image (map or previous frame)
-        :param map_pose: Fixed map_pose against map
+        :param map_match: Fixed map_match against map
         :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
         """
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        assert_type(map_pose.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84
-        h_wgs84 = map_pose.image_pair.ref.pix_to_wgs84 @ map_pose.inv_h
+        assert_type(map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84
+        h_wgs84 = map_match.image_pair.ref.pix_to_wgs84 @ map_match.inv_h
         fov_pix, c_pix = get_fov_and_c(img_dim, h_pose)
         fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
 
@@ -1702,19 +1702,19 @@ g
 
         return fov
 
-    def _estimate_position(self, map_pose: Pose, fov: FOV, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
+    def _estimate_position(self, map_match: Match, fov: FOV, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
-        :param map_pose: Camera map map_pose in pixel (world) space
+        :param map_match: Camera map map_match in pixel (world) space
         :param fov: Camera field of view estimate
         :return: Camera position LatLonAlt, and altitude from ground in meters
         """
         altitude_scaling = self._estimate_altitude_scaling(fov.fov_pix, fov.fov)
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        assert_type(map_pose.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
-        t_wgs84 = map_pose.image_pair.ref.pix_to_wgs84 @ np.append(map_pose.camera_position[0:2], 1)
-        t_wgs84[2] = -altitude_scaling * map_pose.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        assert_type(map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
+        t_wgs84 = map_match.image_pair.ref.pix_to_wgs84 @ np.append(map_match.camera_position[0:2], 1)
+        t_wgs84[2] = -altitude_scaling * map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         position = t_wgs84.squeeze().tolist()
         position = LatLonAlt(*position)
 
@@ -1735,45 +1735,44 @@ g
         return position, terrain_altitude
 
     @staticmethod
-    def _estimate_map_pose(pose: Pose, input_data: InputData) -> Pose:
-        """Estimates _pose against the latest map frame
+    def _estimate_map_match(match: Match, input_data: InputData) -> Match:
+        """Estimates _match against the latest map frame
 
-        :param pose: Pose for the match
+        :param match: Match for the match
         :param input_data: Input data context
-        :return: Estimated _pose against map
+        :return: Estimated _match against map
         """
-        if not pose.image_pair.mapful():
+        if not match.image_pair.mapful():
             # Combine with latest map match
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
-            map_pose = pose @ input_data.vo_fix.map_pose
+            map_match = match @ input_data.vo_fix.map_match
         else:
-            # TODO: just return Pose or need a copy()
-            map_pose = Pose(
-                image_pair=pose.image_pair,
-                r=pose.r,
-                t=pose.t
+            # TODO: just return Match or need a copy()
+            map_match = Match(
+                image_pair=match.image_pair,
+                pose=Pose(match.pose.r, match.pose.t)
             )
 
-        return map_pose
+        return map_match
 
     #region Match
-    def _compute_output(self, pose: Pose, input_data: InputData) -> Optional[OutputData]:
-        """Process the estimated camera _pose into OutputData
+    def _compute_output(self, match: Match, input_data: InputData) -> Optional[OutputData]:
+        """Process the estimated camera _match into OutputData
 
-        :param pose: Estimated _pose between images
+        :param match: Estimated _match between images
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained
         """
-        map_pose = self._estimate_map_pose(pose, input_data)
-        fov = self._estimate_fov(pose.image_pair.img.image.dim, pose.inv_h, map_pose)
-        position, terrain_altitude = self._estimate_position(map_pose, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
-        attitude = self._estimate_attitude(map_pose)  # TODO Make a dataclass out of attitude?
+        map_match = self._estimate_map_match(match, input_data)
+        fov = self._estimate_fov(match.image_pair.img.image.dim, match.inv_h, map_match)
+        position, terrain_altitude = self._estimate_position(map_match, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
+        attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
         output_data = OutputData(input=input_data,
-                                 _pose=pose,
-                                 fixed_camera=FixedCamera(fov=fov, map_pose=map_pose),
+                                 _match=match,
+                                 fixed_camera=FixedCamera(fov=fov, map_match=map_match),
                                  position=position,
                                  terrain_altitude=terrain_altitude,
                                  attitude=attitude,
@@ -1782,7 +1781,7 @@ g
         if self._good_match(output_data):
             return output_data
         else:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {pose.image_pair.mapful()}.')
+            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {match.image_pair.mapful()}.')
             return None
 
     def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
@@ -1828,10 +1827,10 @@ g
             return False
 
         # Estimated translation vector blows up?
-        reference = np.array([output_data.fixed_camera.map_pose.image_pair.img.k[0][2], output_data.fixed_camera.map_pose.image_pair.img.k[1][2], output_data.fixed_camera.map_pose.image_pair.img.k[0][0]])  # TODO: refactor this line
-        if (np.abs(output_data._pose.t).squeeze() >= 3 * reference).any() or \
-                (np.abs(output_data.fixed_camera.map_pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'Pose.t {output_data._pose.t} & pose_map.t {output_data.fixed_camera.map_pose.t} have values '
+        reference = np.array([output_data.fixed_camera.map_match.image_pair.img.k[0][2], output_data.fixed_camera.map_match.image_pair.img.k[1][2], output_data.fixed_camera.map_match.image_pair.img.k[0][0]])  # TODO: refactor this line
+        if (np.abs(output_data._match.pose.t).squeeze() >= 3 * reference).any() or \
+                (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
+            self.get_logger().error(f'Match.pose.t {output_data._match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
                                     f'too large compared to (cx, cy, fx): {reference}.')
             return False
 
@@ -1917,7 +1916,7 @@ g
         return True
 
     def _match(self, image_pair: ImagePair, input_data: InputData) -> None:
-        """Instructs the _pose estimator to estimate the camera _pose for the image pair
+        """Instructs the _match estimator to estimate the camera _match for the image pair
 
         :param image_pair: The image pair to match
         :param input_data: Input data context
@@ -2014,7 +2013,7 @@ g
 
         Pops the oldest estimate from the window if needed.
 
-        :param position: Pose translation (x, y, z) in WGS84
+        :param position: Match translation (x, y, z) in WGS84
         :param visual_odometry: True input is from visual odometry, map is assumed otherwise
         :return:
         """

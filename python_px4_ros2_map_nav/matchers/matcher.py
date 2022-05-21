@@ -3,7 +3,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from python_px4_ros2_map_nav.data import Pose, InputData, ImagePair
+from python_px4_ros2_map_nav.data import InputData, ImagePair, Pose
 
 
 class Matcher(ABC):

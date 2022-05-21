@@ -91,7 +91,7 @@ class MapData(_ImageHolder):
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ContextualMapData(_ImageHolder):
-    """Contains the rotated and cropped map image for _pose estimation"""
+    """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the map_cropped image which is same size as the camera frames, init in __post_init__
     rotation: Union[float, int]
     crop: Dim  # TODO: Redundant with .image.dim but need this to generate .image
@@ -118,7 +118,7 @@ class ContextualMapData(_ImageHolder):
         pix_to_uncropped[0:2][:, 2] = crop_translation[::-1]
 
         rotation_center = map_dim_arr / 2
-        rotation = cv2.getRotationMatrix2D(rotation_center, np.degrees(self.rotation), 1.0)
+        rotation = cv2.getRotationMatrix2D(rotation_center, np.degrees(-self.rotation), 1.0)
         rotation_padding = np.array([[0, 0, 1]])
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
@@ -189,7 +189,7 @@ class ContextualMapData(_ImageHolder):
         object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
 
 
-# TODO: enforce types for ImagePair (img cannot be MapData, can happen if _pose.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
+# TODO: enforce types for ImagePair (img cannot be MapData, can happen if _match.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
@@ -213,7 +213,7 @@ class AsyncQuery:
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
     easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.matchers.matcher.Matcher.worker`
     interface expects an image_pair and an input_data context as arguments (along with a guess which is not stored
-    since it is no longer needed after the _pose estimation).
+    since it is no longer needed after the _match estimation).
     """
     result: AsyncResult
     #query: Union[ImagePair, ]  # TODO: what is used for WMS?
@@ -224,11 +224,23 @@ class AsyncQuery:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Pose:
-    """Represents camera _pose (rotation and translation) along with camera intrinsics"""
-    image_pair: ImagePair
+    """Represents camera match (rotation and translation)"""
     r: np.ndarray
     t: np.ndarray
     e: np.ndarray = field(init=False)
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class Match:
+    """Represents a matched image pair with estimated match and camera position"""
+    image_pair: ImagePair
+    pose: Pose
     h: np.ndarray = field(init=False)
     inv_h: np.ndarray = field(init=False)
     fx: float = field(init=False)
@@ -242,31 +254,29 @@ class Pose:
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
-        object.__setattr__(self, 'h', self.image_pair.img.k @ np.delete(self.e, 2, 1))  # Remove z-column, making the matrix square
+        object.__setattr__(self, 'h', self.image_pair.img.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
         object.__setattr__(self, 'fx', self.image_pair.img.k[0][0])
         object.__setattr__(self, 'fy', self.image_pair.img.k[1][1])
         object.__setattr__(self, 'cx', self.image_pair.img.k[0][2])
         object.__setattr__(self, 'cy', self.image_pair.img.k[1][2])
-        object.__setattr__(self, 'camera_position', -self.r.T @ self.t)
+        object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
         object.__setattr__(self, 'camera_center', np.array((self.cx, self.cy, -self.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
-    def __matmul__(self, pose: Pose) -> Pose:  # Python version 3.5+
+    def __matmul__(self, match: Match) -> Match:  # Python version 3.5+
         """Matrix multiplication operator for convenience
 
-        Returns a new _pose by combining two camera relative poses:
-
-        pose1 @ pose2 =: Pose(pose1.r @ pose2.r, pose1.t + pose1.r @ pose2.t)
-
-        A new 'synthetic' image pair is created by combining the two others.
+        Returns a new Match by combining two matches by chaining the poses and image pairs: a new 'synthetic' image
+        pair is created by combining the two others.
         """
-        assert (self.image_pair.img.k == pose.image_pair.img.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        return Pose(
-                image_pair=ImagePair(img=self.image_pair.img, ref=pose.image_pair.ref),
-                r=self.r @ pose.r,
-                t=self.t + self.r @ (pose.t + pose.camera_center) # TODO: need to fix sign somehow? Would think minus sign is needed here?
+        assert (self.image_pair.img.k == match.image_pair.img.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
+        return Match(
+                image_pair=ImagePair(img=self.image_pair.img, ref=match.image_pair.ref),
+                pose=Pose(
+                    self.pose.r @ match.pose.r,
+                    self.pose.t + self.pose.r @ (match.pose.t + match.camera_center)
+                )  # TODO: need to fix sign somehow? Would think minus sign is needed here?
         )
 
 
@@ -302,23 +312,23 @@ class FOV:
 class FixedCamera:
     """WGS84-fixed camera attributes
 
-    Colletcts field of view and map_pose under a single structure that is intended to be stored in input data context as
-    visual odometry fix reference. Includes the needed map_pose and pix_to_wgs84 transformation for the vo fix.
+    Colletcts field of view and map_match under a single structure that is intended to be stored in input data context as
+    visual odometry fix reference. Includes the needed map_match and pix_to_wgs84 transformation for the vo fix.
     """
-    fov: FOV
-    map_pose: Pose
+    fov: FOV  # TODO: move down to Match and get rid of FixedCamera? Use 'Match' for storing the vo fix instead
+    map_match: Match
 
 
 # noinspection PyClassHasNoInit
 @dataclass
 class OutputData:
-    # TODO: add extrinsic matrix / _pose, pix_to_wgs84 transformation?
+    # TODO: add extrinsic matrix / _match, pix_to_wgs84 transformation?
     # TODO: freeze this data structure to reduce unintentional re-assignment?
     """Algorithm output passed onto publish method.
 
     :param input: The input data used for the match
-    :param _pose: Estimated _pose for the image frame vs. the map frame
-    :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_pose and field of view)
+    :param _match: Estimated _match for the image frame vs. the map frame
+    :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_match and field of view)
     :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
     :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
     :param attitude: Camera attitude quaternion
@@ -326,7 +336,7 @@ class OutputData:
     :return:
     """
     input: InputData
-    _pose: Pose  # should not be accessed directly except e.g. for debug visualization, use map_pose instead
+    _match: Match  # should not be accessed directly except e.g. for debug visualization, use fixed_camera.map_match instead
     fixed_camera: FixedCamera
     position: LatLonAlt
     terrain_altitude: float
@@ -336,7 +346,7 @@ class OutputData:
     # Target structure:
     # input
     # vehicle (position, attitude, terrain_altitude, sd)
-    # camera (map_pose, fov)  +  camera attitude which is actually what we have now
+    # camera (map_match, fov)  +  camera attitude which is actually what we have now
 
     def __post_init__(self):
         """Validate the data structure"""

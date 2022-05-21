@@ -7,7 +7,7 @@ from typing import Tuple, Optional
 
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.data import Pose, InputData, ImagePair
+from python_px4_ros2_map_nav.data import InputData, ImagePair, Pose
 
 
 # TODO: move keypoint visualization here
@@ -16,7 +16,7 @@ class KeypointMatcher(Matcher):
     """Abstract base class for all keypoint based matchers
 
     This class defines a worker method that is intended to be passed to a separate process in a
-    :class:`multiprocessing.pool.Pool`, along with a method for computing _pose from keypoint mathces.
+    :class:`multiprocessing.pool.Pool`, along with a method for computing _match from keypoint mathces.
     """
     # Minimum matches for homography estimation, should be at least 4
     HOMOGRAPHY_MINIMUM_MATCHES = 4
@@ -54,7 +54,6 @@ class KeypointMatcher(Matcher):
         Requires a global :class:`~LoFTRMatcher` instance to work.
 
         :param image_pair: Image pair to match
-        :param input_data: The input data context
         :param guess: Optional initial guess for camera _pose
         :return: Tuple of two lists containing matching keypoints in img and map respectively
         """
@@ -65,6 +64,7 @@ class KeypointMatcher(Matcher):
             return matcher._estimate_pose(image_pair, mkp_img, mkp_map, guess)  # noqa (PyProtectedMember)
         except Exception as e:
             #raise e  # TODO: handle exception
+            print(e)
             return None
 
     def _estimate_pose(self, image_pair: ImagePair, mkp1: np.ndarray, mkp2: np.ndarray, guess: Optional[Pose]) \
@@ -91,8 +91,9 @@ class KeypointMatcher(Matcher):
                                          iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
         try:
-            pose = Pose(image_pair, r, t)
+            pose = Pose(r, t)
         except np.linalg.LinAlgError as _:  # e:
+            print(_)
             # TODO: handle error
             return None
 

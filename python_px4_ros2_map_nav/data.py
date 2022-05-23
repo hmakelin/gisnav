@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
-from python_px4_ros2_map_nav.transform import create_src_corners
+from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
+from python_px4_ros2_map_nav.proj import Proj
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -310,6 +311,31 @@ class FOV:
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     c: np.ndarray
     c_pix: np.ndarray
+    scaling: float = field(init=False)
+
+    # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
+    def _estimate_altitude_scaling(self) -> float:
+        """Estimates altitude scaling factor from field of view matched against known map
+
+        Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
+        find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
+        of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
+        the corresponding WGS84 latitude and latitude coordinates.
+
+        :return: Altitude scaling factor
+        """
+        proj = Proj.instance()  # Get cached geod instance
+        distance_in_pixels = np.linalg.norm(self.fov_pix[1]-self.fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
+        distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
+                                           LatLon(*self.fov[2].squeeze().tolist()))
+        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
+
+        return altitude_scaling
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'scaling', self._estimate_altitude_scaling())
 
 
 # noinspection PyClassHasNoInit
@@ -320,8 +346,69 @@ class FixedCamera:
     Colletcts field of view and map_match under a single structure that is intended to be stored in input data context as
     visual odometry fix reference. Includes the needed map_match and pix_to_wgs84 transformation for the vo fix.
     """
-    fov: FOV  # TODO: move down to Match and get rid of FixedCamera? Use 'Match' for storing the vo fix instead
+    fov: FOV = field(init=False)  # TODO: move down to Match and get rid of FixedCamera? Use 'Match' for storing the vo fix instead
+    ground_elevation: Optional[float]
+    position: np.ndarray = field(init=False)
+    terrain_altitude: np.ndarray = field(init=False)
     map_match: Match
+
+    def _estimate_fov(self) -> FOV:
+        """Estimates field of view and principal point in both pixel and WGS84 coordinates
+
+        :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
+        """
+        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
+        assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
+        h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
+        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
+        fov_wgs84, c_wgs84 = get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
+
+        fov = FOV(fov_pix=fov_pix,
+                  fov=fov_wgs84,  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
+                  c_pix=c_pix,
+                  c=c_wgs84)
+
+        return fov
+
+    def _estimate_position(self, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
+        """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
+        terrain altitude in meters.
+
+        :param ground_elevation: Optional ground elevation (needed to estimate altitude from sea level)
+        :return: Camera position LatLonAlt, and altitude from ground in meters
+        """
+        assert self.fov is not None  # Call _estimate_fov before _estimate_position!
+        # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
+        assert_type(self.map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
+        t_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ np.append(self.map_match.camera_position[0:2], 1)
+        t_wgs84[2] = -self.fov.scaling * self.map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        position = t_wgs84.squeeze().tolist()
+        position = LatLonAlt(*position)
+
+        # Check that we have all the values needed for a global position
+        # if not all(position) or any(map(np.isnan, position)):
+        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
+            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
+            return None
+
+        # Get altitude above mean sea level (AMSL)
+        terrain_altitude = position.alt
+        if ground_elevation is None:
+            # TODO: need to give warning of lack of altitude above amsl estimate?
+            #self.get_logger().debug('Ground plane elevation (AMSL) unavailable. Setting position.alt as None.')  # TODO: or return LatLon instead?
+            position = LatLonAlt(*position[0:2], None)
+        else:
+            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
+
+        return position, terrain_altitude
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'fov', self._estimate_fov())  # Need to do before calling self._estimate_position
+        position, terrain_altitude = self._estimate_position(self.ground_elevation)
+        object.__setattr__(self, 'position', position)
+        object.__setattr__(self, 'terrain_altitude', terrain_altitude)
 
 
 # noinspection PyClassHasNoInit
@@ -343,8 +430,8 @@ class OutputData:
     input: InputData
     _match: Match  # should not be accessed directly except e.g. for debug visualization, use fixed_camera.map_match instead
     fixed_camera: FixedCamera
-    position: LatLonAlt
-    terrain_altitude: float
+    #position: LatLonAlt
+    #terrain_altitude: float
     attitude: np.ndarray
     sd: np.ndarray  # TODO This should be part of Position? Keep future position dataclass mutable so this can be assigned while outputdata itself is immutable
 

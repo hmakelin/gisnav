@@ -24,7 +24,6 @@ torch.set_num_threads(1)
 
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool, AsyncResult  # Used for WMS client process, not for torch
-from pyproj import Geod
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -48,15 +47,13 @@ from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.matchers.orb import ORBMatcher
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.visualization import Visualization
+from python_px4_ros2_map_nav.proj import Proj
 
 
 class MapNavNode(Node, ABC):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
     # Encoding of input video (input to CvBridge)
     IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
-
-    # Ellipsoid model used by pyproj
-    PYPROJ_ELLIPSOID = 'WGS84'
 
     # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
     TOPICS_MSG_KEY = 'message'
@@ -124,11 +121,11 @@ class MapNavNode(Node, ABC):
             self._vo_matcher = None
             self._vo_matching_pool = None
 
-        # Used for pyproj transformations
-        self._geod = Geod(ellps=self.PYPROJ_ELLIPSOID)
-
         # Stored blur values for blur detection
         self._blurs = None
+
+        # WGS84 projections
+        self._proj = Proj.instance()
 
         self._visualization = Visualization('Keypoint matches and homography') if __debug__ else None
 
@@ -384,14 +381,14 @@ class MapNavNode(Node, ABC):
         self.__topics = value
 
     @property
-    def _geod(self) -> Geod:
-        """Stored pyproj Geod instance for performing geodetic computations."""
-        return self.__geod
+    def _proj(self) -> Proj:
+        """Stored pyproj Proj instance for performing geodetic computations."""
+        return self.__proj
 
-    @_geod.setter
-    def _geod(self, value: Geod) -> None:
-        assert_type(value, Geod)
-        self.__geod = value
+    @_proj.setter
+    def _proj(self, value: Proj) -> None:
+        assert_type(value, Proj)
+        self.__proj = value
 
     @property
     def _cv_bridge(self) -> CvBridge:
@@ -802,39 +799,9 @@ class MapNavNode(Node, ABC):
         assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
         assert_type(radius_meters, get_args(Union[int, float]))
         corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
-        ul = self._move_distance(latlon, (-45, corner_distance))
-        lr = self._move_distance(latlon, (135, corner_distance))
+        ul = LatLon(*self._proj.move_distance(latlon, (-45, corner_distance)))
+        lr = LatLon(*self._proj.move_distance(latlon, (135, corner_distance)))
         return BBox(ul.lon, lr.lat, lr.lon, ul.lat)
-
-    def _distance(self, latlon1: Union[LatLon, LatLonAlt], latlon2: Union[LatLon, LatLonAlt]) -> float:
-        """Returns distance between two points in meters.
-
-        The distance computation is based on latitude and longitude only and ignores altitude.
-
-        :param latlon1: The first point
-        :param latlon2: The second point
-        :return: The ground distance in meters between the two points
-        """
-        assert_type(latlon1, get_args(Union[LatLon, LatLonAlt]))
-        assert_type(latlon2, get_args(Union[LatLon, LatLonAlt]))
-        _, __, dist = self._geod.inv(latlon1.lon, latlon1.lat, latlon2.lon, latlon2.lat)
-        return dist
-
-    def _move_distance(self, latlon: Union[LatLon, LatLonAlt], azmth_dist: Tuple[Union[int, float], Union[int, float]])\
-            -> LatLon:
-        """Returns the point that is a given distance in the direction of azimuth from the origin point.
-
-        :param latlon: Origin point
-        :param azmth_dist: Tuple containing azimuth in degrees and distance in meters: (azimuth, distance)
-        :return: The point that is given meters away in the azimuth direction from origin
-        """
-        assert_type(azmth_dist, tuple)
-        assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
-        azmth, dist = azmth_dist  # TODO: silly way of providing these args just to map over a zipped list in _update_map, fix it
-        assert_type(azmth, get_args(Union[int, float]))
-        assert_type(dist, get_args(Union[int, float]))
-        lon, lat, azmth = self._geod.fwd(latlon.lon, latlon.lat, azmth, dist)
-        return LatLon(lat, lon)
 
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         """Returns map size with padding for rotation without clipping corners.
@@ -963,7 +930,7 @@ class MapNavNode(Node, ABC):
                 azmths = list(map(lambda x: get_azimuth(x[0], x[1]), gimbal_fov_pix))
                 dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
                 zipped = list(zip(azmths, dists))
-                to_wgs84 = partial(self._move_distance, origin)
+                to_wgs84 = partial(lambda azmth_dist, latlon: LatLon(*self._proj.move_distance(azmth_dist, latlon)), origin)
                 gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
                 ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
 
@@ -1281,7 +1248,7 @@ class MapNavNode(Node, ABC):
             previous_map_data = self._map_output_data_prev._match.image_pair.ref.map_data
             center_threshold = self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value
             radius_threshold = self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value
-            if abs(self._distance(center, previous_map_data.center)) <= center_threshold and \
+            if abs(self._proj.distance(center, previous_map_data.center)) <= center_threshold and \
                     abs(radius - previous_map_data.radius) <= radius_threshold:
                 return True
 
@@ -1407,7 +1374,7 @@ class MapNavNode(Node, ABC):
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
-            self._push_estimates(np.array(output_data.position), False)
+            self._push_estimates(np.array(output_data.fixed_camera.position), False)
             if self._variance_window_full(False):
                 output_data.sd = np.std(self._map_estimation_history, axis=0)
                 self.publish(output_data)
@@ -1448,7 +1415,7 @@ class MapNavNode(Node, ABC):
             if self._should_fix_vo(output_data):
                 self._vo_output_data_fix = output_data
 
-            self._push_estimates(np.array(output_data.position), True)
+            self._push_estimates(np.array(output_data.fixed_camera.position), True)
             if self._variance_window_full(True):
                 output_data.sd = np.std(self._vo_estimation_history, axis=0)
                 self.publish(output_data)
@@ -1636,26 +1603,6 @@ g
         self._vo_output_data_prev = None
         self._vo_output_data_fix = None
 
-    # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
-    def _estimate_altitude_scaling(self, fov_pix: np.ndarray, fov_wgs84: np.ndarray) -> float:
-        """Estimates altitude scaling factor
-
-        Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
-        find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
-        of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
-        the corresponding WGS84 latitude and latitude coordinates.
-
-        :param fov_pix: Field of view in pixel coordinates
-        :param fov_wgs84: Field of view in WGS84 coordinates
-        :return: Altitude scaling factor
-        """
-        distance_in_pixels = np.linalg.norm(fov_pix[1]-fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        distance_in_meters = self._distance(LatLon(*fov_wgs84[1].squeeze().tolist()),
-                                            LatLon(*fov_wgs84[2].squeeze().tolist()))
-        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
-
-        return altitude_scaling
-
     @staticmethod
     def _estimate_attitude(map_match: Match) -> np.ndarray:
         """Estimates gimbal attitude from _match and camera yaw in global NED frame
@@ -1679,60 +1626,6 @@ g
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
         return gimbal_estimated_attitude
-
-    @staticmethod
-    def _estimate_fov(img_dim: Dim, h_pose: np.ndarray, map_match: Match) -> FOV:
-        """Estimates field of view and principal point in both pixel and WGS84 coordinates
-
-        :param img_dim: Image dimensions
-        :param h_pose: Homography matrix against reference image (map or previous frame)
-        :param map_match: Fixed map_match against map
-        :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
-        """
-        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
-        assert_type(map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84
-        h_wgs84 = map_match.image_pair.ref.pix_to_wgs84 @ map_match.inv_h
-        fov_pix, c_pix = get_fov_and_c(img_dim, h_pose)
-        fov_wgs84, c_wgs84 = get_fov_and_c(img_dim, h_wgs84)
-
-        fov = FOV(fov_pix=fov_pix,
-                  fov=fov_wgs84,
-                  c_pix=c_pix,
-                  c=c_wgs84)
-
-        return fov
-
-    def _estimate_position(self, map_match: Match, fov: FOV, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
-        """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
-        terrain altitude in meters.
-
-        :param map_match: Camera map map_match in pixel (world) space
-        :param fov: Camera field of view estimate
-        :return: Camera position LatLonAlt, and altitude from ground in meters
-        """
-        altitude_scaling = self._estimate_altitude_scaling(fov.fov_pix, fov.fov)
-        # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        assert_type(map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
-        t_wgs84 = map_match.image_pair.ref.pix_to_wgs84 @ np.append(map_match.camera_position[0:2], 1)
-        t_wgs84[2] = -altitude_scaling * map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-        position = t_wgs84.squeeze().tolist()
-        position = LatLonAlt(*position)
-
-        # Check that we have all the values needed for a global position
-        # if not all(position) or any(map(np.isnan, position)):
-        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
-            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
-            return None
-
-        # Get altitude above mean sea level (AMSL)
-        terrain_altitude = position.alt
-        if ground_elevation is None:
-            self.get_logger().debug('Ground plane elevation (AMSL) unavailable. Setting position.alt as None.')  # TODO: or return LatLon instead?
-            position = LatLonAlt(*position[0:2], None)
-        else:
-            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
-
-        return position, terrain_altitude
 
     @staticmethod
     def _estimate_map_match(match: Match, input_data: InputData) -> Match:
@@ -1764,17 +1657,17 @@ g
         :return: Computed output_data if a valid estimate was obtained
         """
         map_match = self._estimate_map_match(match, input_data)
-        fov = self._estimate_fov(match.image_pair.qry.image.dim, match.inv_h, map_match)
-        position, terrain_altitude = self._estimate_position(map_match, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
+        #fov = self._estimate_fov(match.image_pair.qry.image.dim, match.inv_h, map_match)
+        #position, terrain_altitude = self._estimate_position(map_match, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
         output_data = OutputData(input=input_data,
                                  _match=match,
-                                 fixed_camera=FixedCamera(fov=fov, map_match=map_match),
-                                 position=position,
-                                 terrain_altitude=terrain_altitude,
+                                 fixed_camera=FixedCamera(map_match=map_match, ground_elevation=input_data.ground_elevation),
+                                 #position=position,
+                                 #terrain_altitude=terrain_altitude,
                                  attitude=attitude,
                                  sd=None)
 
@@ -1815,8 +1708,8 @@ g
         :return: True if match is good
         """
         # Altitude below startin altitude?
-        if output_data.terrain_altitude < 0:  # TODO: or is nan
-            self.get_logger().warn(f'Match terrain altitude {output_data.terrain_altitude} was negative, assume bad '
+        if output_data.fixed_camera.terrain_altitude < 0:  # TODO: or is nan
+            self.get_logger().warn(f'Match terrain altitude {output_data.fixed_camera.terrain_altitude} was negative, assume bad '
                                    f'match.')
             return False
 

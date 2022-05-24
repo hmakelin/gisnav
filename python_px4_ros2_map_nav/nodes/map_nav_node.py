@@ -1131,7 +1131,7 @@ class MapNavNode(Node, ABC):
                                         f'Skipping visual odometry matching.')
                 return
             self._vo_input_data = inputs
-            vo_reference = self._vo_reference()._match.image_pair.qry  # Access _match intentional, need the raw vo pose, not map pose
+            vo_reference = self._vo_reference().fixed_camera._match.image_pair.qry  # Access _match intentional, need the raw vo pose, not map pose
             if vo_reference is not None and inputs.vo_fix is not None:  # Need both previous frame and a map fix  # TODO: move this check to should_vo_match!
                 image_pair = ImagePair(image_data, vo_reference)
                 self._match(image_pair, inputs)
@@ -1245,7 +1245,7 @@ class MapNavNode(Node, ABC):
         assert_type(radius, get_args(Union[int, float]))
         assert_type(center, get_args(Union[LatLon, LatLonAlt]))
         if self._map_output_data_prev is not None:
-            previous_map_data = self._map_output_data_prev._match.image_pair.ref.map_data
+            previous_map_data = self._map_output_data_prev.fixed_camera._match.image_pair.ref.map_data  # TODO: use map_match not _match?
             center_threshold = self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value
             radius_threshold = self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value
             if abs(self._proj.distance(center, previous_map_data.center)) <= center_threshold and \
@@ -1556,6 +1556,7 @@ class MapNavNode(Node, ABC):
         else:
             return self._pose_map_guess
 
+    # TODO: pass _match, not OutputData?
     def _should_fix_vo(self, output_data: OutputData) -> bool:
         """Returns True if previous visual odometry fixed reference frame should be updated
 
@@ -1571,8 +1572,8 @@ g
 
         # Check whether camera translation is over threshold
         t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
-        camera_translation = np.linalg.norm(output_data._match.camera_position_difference.squeeze())
-        threshold = t_threshold * output_data._match.image_pair.qry.fx
+        camera_translation = np.linalg.norm(output_data.fixed_camera._match.camera_position_difference.squeeze())
+        threshold = t_threshold * output_data.fixed_camera._match.image_pair.qry.fx
         if camera_translation > threshold:
             self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
                                    f'frame.')
@@ -1580,7 +1581,7 @@ g
 
         # Check whether camera rotation is over threshold
         r_threshold = self.get_parameter('misc.visual_odometry_update_r_threshold').get_parameter_value().double_value
-        rotvec = Rotation.from_matrix(output_data._match.pose.r).as_rotvec()
+        rotvec = Rotation.from_matrix(output_data.fixed_camera._match.pose.r).as_rotvec()
         camera_rotation = np.linalg.norm(rotvec)
         threshold = r_threshold
         if camera_rotation > threshold:
@@ -1664,8 +1665,11 @@ g
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
         output_data = OutputData(input=input_data,
-                                 _match=match,
-                                 fixed_camera=FixedCamera(map_match=map_match, ground_elevation=input_data.ground_elevation),
+                                 fixed_camera=FixedCamera(
+                                     map_match=map_match,
+                                     _match=match,
+                                     ground_elevation=input_data.ground_elevation
+                                 ),
                                  #position=position,
                                  #terrain_altitude=terrain_altitude,
                                  attitude=attitude,
@@ -1721,9 +1725,9 @@ g
 
         # Estimated translation vector blows up?
         reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.k[0][0]])  # TODO: refactor this line
-        if (np.abs(output_data._match.pose.t).squeeze() >= 3 * reference).any() or \
+        if (np.abs(output_data.fixed_camera._match.pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'Match.pose.t {output_data._match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
+            self.get_logger().error(f'Match.pose.t {output_data.fixed_camera._match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
                                     f'too large compared to (cx, cy, fx): {reference}.')
             return False
 

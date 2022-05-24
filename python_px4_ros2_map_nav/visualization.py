@@ -43,7 +43,7 @@ class Visualization:
         img = img.astype(np.uint8)
 
         # TODO: check that image shapes do not change?
-        if not output_data._match.image_pair.mapful():
+        if not output_data.fixed_camera._match.image_pair.mapful():
             self._vo_visualization = img
             if self._map_visualization is None:
                 self._map_visualization = np.zeros(img.shape, dtype=np.uint8)
@@ -52,9 +52,9 @@ class Visualization:
             if self._vo_visualization is None:
                 self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
 
-        out = np.vstack((self._map_visualization, self._vo_visualization, output_data._match.image_pair.qry.image.arr))
+        out = np.vstack((self._map_visualization, self._vo_visualization, output_data.fixed_camera._match.image_pair.qry.image.arr))
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
-            if output_data._match.image_pair.mapful():
+            if output_data.fixed_camera._match.image_pair.mapful():
                 cv2.imshow(self.name, out)
                 cv2.waitKey(1)
         else:
@@ -79,7 +79,7 @@ class Visualization:
         #mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
         #mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
 
-        ref_img = output_data._match.image_pair.ref.image.arr
+        ref_img = output_data.fixed_camera._match.image_pair.ref.image.arr
         map_with_fov = cv2.polylines(ref_img.copy(), [np.int32(output_data.fixed_camera.fov.fov_pix)], True, 255, 3, cv2.LINE_AA)
         #draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
         #out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,

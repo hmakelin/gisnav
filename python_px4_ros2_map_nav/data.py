@@ -312,6 +312,8 @@ class FOV:
     fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     c: np.ndarray
     c_pix: np.ndarray
+    fov_pix_map: np.ndarray  # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
+    c_pix_map: np.ndarray  # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
     scaling: float = field(init=False)
 
     # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
@@ -352,6 +354,7 @@ class FixedCamera:
     position: np.ndarray = field(init=False)
     terrain_altitude: np.ndarray = field(init=False)
     map_match: Match
+    _match: Match  # should not be accessed directly except e.g. for debug visualization (fov_pix), use fixed_camera.map_match instead
 
     def _estimate_fov(self) -> FOV:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
@@ -361,13 +364,17 @@ class FixedCamera:
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
         h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
-        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
+        fov_pix_map, c_pix_map = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
+        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self._match.inv_h)
         fov_wgs84, c_wgs84 = get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
 
         fov = FOV(fov_pix=fov_pix,
                   fov=fov_wgs84,  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
                   c_pix=c_pix,
-                  c=c_wgs84)
+                  c=c_wgs84,
+                  fov_pix_map=fov_pix_map,
+                  c_pix_map=c_pix_map
+                  )
 
         return fov
 
@@ -429,7 +436,6 @@ class OutputData:
     :return:
     """
     input: InputData
-    _match: Match  # should not be accessed directly except e.g. for debug visualization, use fixed_camera.map_match instead
     fixed_camera: FixedCamera
     #position: LatLonAlt
     #terrain_altitude: float

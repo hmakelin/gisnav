@@ -168,7 +168,7 @@ class ContextualMapData(_ImageHolder):
         map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
         map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
         #if visualize:
-        #    cv2.imshow('padded', self.map_data.image.image)
+        #    cv2.imshow('padded', self.map_data.image.arr)
         #    cv2.waitKey(1)
         #    cv2.imshow('rotated', map_rotated)
         #    cv2.waitKey(1)
@@ -187,7 +187,6 @@ class ContextualMapData(_ImageHolder):
         :return: Cropped image
         """
         cx, cy = tuple(np.array(img.shape[0:2]) / 2)
-        #cx, cy = dimensions.width / 2, dimensions.height / 2  # TODO: use values from k?
         img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
                       math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]
         assert (

@@ -852,7 +852,7 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _project_gimbal_fov(self, translation: np.ndarray) -> Optional[np.ndarray]:
+    def _project_gimbal_fov_old(self, translation: np.ndarray) -> Optional[np.ndarray]:
         """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
         The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
@@ -899,7 +899,7 @@ class MapNavNode(Node, ABC):
 
         return dst_corners
 
-    def _project_gimbal_fov_new(self, translation: np.ndarray, latlonalt: LatLonAlt):
+    def _project_gimbal_fov(self, translation: np.ndarray, latlonalt: LatLonAlt):
         """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
         The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
@@ -923,7 +923,7 @@ class MapNavNode(Node, ABC):
 
         mock_match = Match(mock_image_pair, pose)
 
-        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
+        mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
         return mock_fixed_camera.fov.fov.squeeze()
 
@@ -952,7 +952,7 @@ class MapNavNode(Node, ABC):
             cy = hypotenuse*math.cos(pitch_rad)
             translation = np.array([cx, cy, origin.alt])
             #gimbal_fov_pix = self._project_gimbal_fov_old(translation)
-            gimbal_fov_pix = self._project_gimbal_fov(translation)  #, origin)
+            gimbal_fov_pix = self._project_gimbal_fov(translation, origin)
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
@@ -1182,7 +1182,6 @@ class MapNavNode(Node, ABC):
                     return
 
             self._map_input_data = inputs
-            self.get_logger().debug(f'Matching image with timestamp {image_data.timestamp} to map.')
             assert self._map_data is not None  # TODO: check in should_map_match
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
@@ -1736,8 +1735,6 @@ g
         # Guess FOV WGS84 boundary in meters from center
         gimbal_fov_pix = scaling*np.float32([[-c_max, c_max], [-c_max, -c_max], [c_max, -c_max], [c_max, c_max]]).reshape(-1, 1, 2)
 
-        #print(gimbal_fov_pix)
-
         gimbal_fov_pix = gimbal_fov_pix.squeeze()
 
         # TODO: redundant logic with _projected_field_of_view_center
@@ -1756,7 +1753,7 @@ g
         #map_center_latlon = LatLon((top + bottom) / 2, (left + right) / 2)
         bbox = BBox(left, bottom, right, top)
 
-        map_data = MapData(center=origin, radius=scaling*c_max, bbox=bbox, image=Img(np.zeros(self._img_dim())))  # TODO: handle no dim yet
+        map_data = MapData(center=origin, radius=scaling*c_max, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
 
         return map_data
 

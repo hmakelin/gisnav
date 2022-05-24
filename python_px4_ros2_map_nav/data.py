@@ -76,7 +76,7 @@ class ImageData(_ImageHolder):
     #image: Img
     frame_id: str
     timestamp: int
-    k: np.ndarray
+    k: np.ndarray  # TODO: make new "CameraIntrinsics" structure
     fx: float = field(init=False)
     fy: float = field(init=False)
     cx: float = field(init=False)  # TODO: int?
@@ -187,6 +187,7 @@ class ContextualMapData(_ImageHolder):
         :return: Cropped image
         """
         cx, cy = tuple(np.array(img.shape[0:2]) / 2)
+        #cx, cy = dimensions.width / 2, dimensions.height / 2  # TODO: use values from k?
         img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
                       math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]
         assert (

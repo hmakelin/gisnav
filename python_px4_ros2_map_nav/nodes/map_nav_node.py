@@ -899,6 +899,34 @@ class MapNavNode(Node, ABC):
 
         return dst_corners
 
+    def _project_gimbal_fov_new(self, translation: np.ndarray, latlonalt: LatLonAlt):
+        """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
+
+        The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
+        by :meth:`~_projected_field_of_view_center` when new coordinates for an outgoing WMS GetMap request are needed.
+
+        :param translation: Translation vector (cx, cy, altitude) in meter coordinates
+        :return: Projected FOV bounding box in pixel coordinates or None if not available
+        """
+        assert_shape(translation, (3,))
+        rpy = self._get_camera_set_rpy()
+        if rpy is None:
+            self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
+            return None
+
+        # Need coordinates in image frame
+        rpy = rpy.axes_ned_to_image()
+        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
+        pose = Pose(r, translation.reshape((3, 1)))
+
+        mock_image_pair = self._mock_image_pair(latlonalt, self._alt_from_vehicle_local_position())  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
+
+        mock_match = Match(mock_image_pair, pose)
+
+        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
+
+        return mock_fixed_camera.fov.fov.squeeze()
+
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
@@ -923,7 +951,8 @@ class MapNavNode(Node, ABC):
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
             translation = np.array([cx, cy, origin.alt])
-            gimbal_fov_pix = self._project_gimbal_fov(translation)
+            #gimbal_fov_pix = self._project_gimbal_fov_old(translation)
+            gimbal_fov_pix = self._project_gimbal_fov(translation)  #, origin)
 
             # Convert gimbal field of view from pixels to WGS84 coordinates
             if gimbal_fov_pix is not None:
@@ -1647,6 +1676,88 @@ g
             )
 
         return map_match
+
+    def _mock_image_pair(self, latlonalt: LatLonAlt, terrain_altitude: float) -> Optional[ImagePair]:
+        """Creates a mock image pair to be used for guessing the projected FOV needed for map updates
+
+        The mock image pair which will be paired with a pose guess to compute the expected field of view. The expected
+        field of view (or its principal point) is used to more accurately retrieve a new map from WMS that matches with
+        where the camera is looking.
+
+        :param latlonalt: Vehicle position (altitude AMSL not required)
+        :param terrain_altitude: Vehicle altitude from ground (assumed ground plane), required
+        :return: Mock image pair that can be paired with a pose guess to generate a FOV guess, or None if required info not yet available
+        """
+        # TODO: handle none return values
+        image_data = self._mock_image_data()
+        map_data = self._mock_map_data(latlonalt, terrain_altitude)
+        contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim(), map_data=map_data)  # TODO: redudnant img dim, check none
+        image_pair = ImagePair(image_data, contextual_map_data)
+        return image_pair
+
+    def _mock_image_data(self) -> Optional[ImageData]:
+        """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
+        # TODO: none checks
+        #if self._camera_info is None:
+        #    self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
+        #    return None
+        image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
+                               frame_id='mock_image_data',
+                               timestamp=self._get_ekf2_time(),
+                               k=self._camera_info.k.reshape([3, 3]))  # TODO: if none?
+        return image_data
+
+    def _mock_map_data(self, origin: LatLonAlt, terrain_altitude: float) -> Optional[MapData]:
+        """Creates a mock MapData to be used for guessing the projected FOV needed for map updates
+
+        The mock map data is used as part of mock image pair which will be paired with a pose guess to compute the
+        expected field of view. The expected field of view (or its principal point) is used to more accurately retrieve
+        a new map from WMS that matches with where the camera is looking.
+
+        :param origin: Vehicle position (altitude AMSL not required)
+        :param terrain_altitude: Vehicle altitude from ground (assumed ground plane), required
+        :return: MapData with mock images but expected bbox based on the image pixel size or None if required info not yet available
+        """
+        # TODO: none checks
+        #if self._camera_info is None:
+        #    self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
+        #    return None
+        # TODO: make a new CameraIntrinsics structure; k, cx, cy currently together with ImageData in flat structure
+        k = self._camera_info.k.reshape([3, 3])  # TODO: None?
+        # TODO: assumes fx == fy
+        fx = k[0][0]
+        cx, cy = k[0][2], k[1][2]
+        c_max = max(cx, cy)  # Use larger value since map is padded
+
+        # Scaling factor of image pixels := terrain_altitude
+        scaling = terrain_altitude / fx
+
+        # Guess FOV WGS84 boundary in meters from center
+        gimbal_fov_pix = scaling*np.float32([[-c_max, c_max], [-c_max, -c_max], [c_max, -c_max], [c_max, c_max]]).reshape(-1, 1, 2)
+
+        #print(gimbal_fov_pix)
+
+        gimbal_fov_pix = gimbal_fov_pix.squeeze()
+
+        # TODO: redundant logic with _projected_field_of_view_center
+        azmths = list(map(lambda x: get_azimuth(x[0], x[1]), gimbal_fov_pix))
+        dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
+        zipped = list(zip(azmths, dists))
+        to_wgs84 = partial(lambda azmth_dist, latlon: LatLon(*self._proj.move_distance(azmth_dist, latlon)), origin)
+        gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
+
+        left, bottom, right, top = 180, 90, -180, -90
+        for pt in gimbal_fov_wgs84:
+            right = pt[1] if pt[1] >= right else right
+            left = pt[1] if pt[1] <= left else left
+            top = pt[0] if pt[0] >= top else top
+            bottom = pt[0] if pt[0] <= bottom else bottom
+        #map_center_latlon = LatLon((top + bottom) / 2, (left + right) / 2)
+        bbox = BBox(left, bottom, right, top)
+
+        map_data = MapData(center=origin, radius=scaling*c_max, bbox=bbox, image=Img(np.zeros(self._img_dim())))  # TODO: handle no dim yet
+
+        return map_data
 
     #region Match
     def _compute_output(self, match: Match, input_data: InputData) -> Optional[OutputData]:

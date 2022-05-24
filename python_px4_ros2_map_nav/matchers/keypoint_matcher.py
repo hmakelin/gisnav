@@ -64,6 +64,7 @@ class KeypointMatcher(Matcher):
             return matcher._estimate_pose(image_pair, mkp_img, mkp_map, guess)  # noqa (PyProtectedMember)
         except Exception as e:
             #raise e  # TODO: handle exception
+            print(e)
             return None
 
     def _estimate_pose(self, image_pair: ImagePair, mkp1: np.ndarray, mkp2: np.ndarray, guess: Optional[Pose]) \
@@ -78,6 +79,7 @@ class KeypointMatcher(Matcher):
         """
         match_count = len(mkp1)
         if match_count < self.min_matches:
+            print('not enough matches')
             return None
         assert len(mkp1) >= 4  # HOMOGRAPHY_MINIMUM_MATCHES == 4
         assert len(mkp2) == len(mkp1)
@@ -93,6 +95,7 @@ class KeypointMatcher(Matcher):
             pose = Pose(r, t)
         except np.linalg.LinAlgError as _:  # e:
             # TODO: handle error
+            print(_)
             return None
 
         return pose

@@ -899,7 +899,7 @@ class MapNavNode(Node, ABC):
 
         return dst_corners
 
-    def _project_gimbal_fov(self, translation: np.ndarray, latlonalt: LatLonAlt):
+    def _project_gimbal_fov(self, translation: np.ndarray, latlonalt: LatLonAlt) -> FixedCamera:
         """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
         The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
@@ -925,7 +925,9 @@ class MapNavNode(Node, ABC):
 
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
-        return mock_fixed_camera.fov.fov.squeeze()
+        #return mock_fixed_camera.fov.fov.squeeze()
+
+        return mock_fixed_camera
 
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
@@ -952,32 +954,10 @@ class MapNavNode(Node, ABC):
             cy = hypotenuse*math.cos(pitch_rad)
             translation = np.array([cx, cy, origin.alt])
             #gimbal_fov_pix = self._project_gimbal_fov_old(translation)
-            gimbal_fov_pix = self._project_gimbal_fov(translation, origin)
-
-            # Convert gimbal field of view from pixels to WGS84 coordinates
-            if gimbal_fov_pix is not None:
-                azmths = list(map(lambda x: get_azimuth(x[0], x[1]), gimbal_fov_pix))
-                dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
-                zipped = list(zip(azmths, dists))
-                to_wgs84 = partial(lambda azmth_dist, latlon: LatLon(*self._proj.move_distance(azmth_dist, latlon)), origin)
-                gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
-                ### TODO: add some sort of assertion hat projected FoV is contained in size and makes sense
-
-                # TODO: make this a method of FOV after refactoring this function to use FOV
-                # Use projected field of view center instead of global position as map center
-                #map_center_latlon = fov_center(gimbal_fov_wgs84)
-                left, bottom, right, top = 180, 90, -180, -90
-                for pt in gimbal_fov_wgs84:
-                    right = pt[1] if pt[1] >= right else right
-                    left = pt[1] if pt[1] <= left else left
-                    top = pt[0] if pt[0] >= top else top
-                    bottom = pt[0] if pt[0] <= bottom else bottom
-                map_center_latlon = LatLon((top + bottom) / 2, (left + right) / 2)
-
-                self.publish_projected_fov(gimbal_fov_wgs84, map_center_latlon)  # Note: map center, not principal point
-            else:
-                self.get_logger().warn('Could not project camera FoV, getting map raster assuming nadir-facing camera.')
-                return None
+            gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
+            center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
+            fov_center = LatLon(*center)
+            return fov_center
         else:
             self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None
@@ -1377,7 +1357,7 @@ class MapNavNode(Node, ABC):
         if __debug__ and output_data is not None:
             # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
             vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-            self._visualization.update(output_data, vo_enabled)
+            #self._visualization.update(output_data, vo_enabled)
 
         return output_data
 
@@ -1733,6 +1713,7 @@ g
         scaling = terrain_altitude / fx
 
         # Guess FOV WGS84 boundary in meters from center
+        # TODO: need to do corner at zero, not center at zero?
         gimbal_fov_pix = scaling*np.float32([[-c_max, c_max], [-c_max, -c_max], [c_max, -c_max], [c_max, c_max]]).reshape(-1, 1, 2)
 
         gimbal_fov_pix = gimbal_fov_pix.squeeze()

@@ -884,7 +884,7 @@ class MapNavNode(Node, ABC):
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
-            translation = np.array([cx, cy, origin.alt])  # TODO: cy, cx? reverse order? see below
+            translation = np.array([cx, cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
 
             # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
             # Add image center to FOV (FOV origin centered at 0,0 currently, this is top left corner of map_cropped)
@@ -892,7 +892,7 @@ class MapNavNode(Node, ABC):
             assert hasattr(self._camera_info, 'k')
             cx, cy = self._camera_info.k.reshape((3,3))[0][2], self._camera_info.k.reshape((3,3))[1][2]
             #print(f'cx cy {cx} {cy}')
-            translation = translation + np.array([cy, cx, 0])
+            #translation = translation + np.array([cy, cx, 0])
 
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
             #print(gimbal_mock_fixed_camera)

@@ -1,6 +1,7 @@
 """:class:`pyproj.Proj` instance and related methods"""
+import math
 from functools import lru_cache
-from typing import Union, Tuple, get_args
+from typing import Optional, Union, Tuple, get_args
 from pyproj import Geod
 
 from python_px4_ros2_map_nav.assertions import assert_type
@@ -59,6 +60,25 @@ class Proj:
         #lon, lat, azmth = self._geod.fwd(latlon.lon, latlon.lat, azmth, dist)
         lon, lat, azmth = self._geod.fwd(latlon[1], latlon[0], azmth, dist)
         return lat, lon
+
+    def get_bbox(self, latlon: Union[Tuple[2*(float,)], Tuple[3*(float,)]], radius_meters: Optional[Union[int, float]] = None) -> Tuple[4*(float,)]:
+        """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
+
+        If the map radius is not provided, a default value is used.
+
+        :param latlon: Center of the bounding box
+        :param radius_meters: Radius of the circle in meters enclosed by the bounding box
+        :return: The bounding box
+        """
+        if radius_meters is None:
+            radius_meters = self.get_parameter('map_update.map_radius_meters_default')\
+                .get_parameter_value().integer_value
+        #assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
+        #assert_type(radius_meters, get_args(Union[int, float]))
+        corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
+        ul = self.move_distance(latlon, (-45, corner_distance))
+        lr = self.move_distance(latlon, (135, corner_distance))
+        return ul[1], lr[0], lr[1], ul[0]  # left, bottom, right, top
 
     @staticmethod
     @lru_cache(1)

@@ -784,25 +784,6 @@ class MapNavNode(Node, ABC):
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec
 
-    def _get_bbox(self, latlon: Union[LatLon, LatLonAlt], radius_meters: Optional[Union[int, float]] = None) -> BBox:
-        """Gets the bounding box containing a circle with given radius centered at given lat-lon fix.
-
-        If the map radius is not provided, a default value is used.
-
-        :param latlon: Center of the bounding box
-        :param radius_meters: Radius of the circle in meters enclosed by the bounding box
-        :return: The bounding box
-        """
-        if radius_meters is None:
-            radius_meters = self.get_parameter('map_update.map_radius_meters_default')\
-                .get_parameter_value().integer_value
-        assert_type(latlon, get_args(Union[LatLon, LatLonAlt]))
-        assert_type(radius_meters, get_args(Union[int, float]))
-        corner_distance = math.sqrt(2) * radius_meters  # Distance to corner of square enclosing circle of radius
-        ul = LatLon(*self._proj.move_distance(latlon, (-45, corner_distance)))
-        lr = LatLon(*self._proj.move_distance(latlon, (135, corner_distance)))
-        return BBox(ul.lon, lr.lat, lr.lon, ul.lat)
-
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         """Returns map size with padding for rotation without clipping corners.
 
@@ -852,53 +833,6 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _project_gimbal_fov_old(self, translation: np.ndarray) -> Optional[np.ndarray]:
-        """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
-
-        The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
-        by :meth:`~_projected_field_of_view_center` when new coordinates for an outgoing WMS GetMap request are needed.
-
-        :param translation: Translation vector (cx, cy, altitude) in meter coordinates
-        :return: Projected FOV bounding box in pixel coordinates or None if not available
-        """
-        assert_shape(translation, (3,))
-        rpy = self._get_camera_set_rpy()
-        if rpy is None:
-            self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
-            return None
-
-        # Need coordinates in image frame
-        rpy = rpy.axes_ned_to_image()
-
-        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
-        e = np.hstack((r, np.expand_dims(translation, axis=1)))
-        assert_shape(e, (3, 4))
-
-        if self._camera_info is None:
-            self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
-            return None
-
-        # Intrinsic matrix
-        k = np.array(self._camera_info.k).reshape([3, 3])
-
-        # Project image corners to z=0 plane (ground)
-        h = inv_homography_from_k_and_e(k, e)
-        if h is None:
-            self.get_logger().warn('Could not invert homography matrix - cannot project gimbal FOV.')
-            return None
-
-        img_dim = self._img_dim()
-        if img_dim is None:
-            self.get_logger().warn('Could determine image dimensions- cannot project gimbal FOV.')
-            return None
-        else:
-            assert_type(h, np.ndarray)
-            # noinspection PyTypeChecker
-            dst_corners, _ = get_fov_and_c(img_dim, h)
-            dst_corners = dst_corners.squeeze()
-
-        return dst_corners
-
     def _project_gimbal_fov(self, translation: np.ndarray, latlonalt: LatLonAlt) -> FixedCamera:
         """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
@@ -925,8 +859,6 @@ class MapNavNode(Node, ABC):
 
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
-        #return mock_fixed_camera.fov.fov.squeeze()
-
         return mock_fixed_camera
 
     def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
@@ -952,9 +884,19 @@ class MapNavNode(Node, ABC):
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
-            translation = np.array([cx, cy, origin.alt])
-            #gimbal_fov_pix = self._project_gimbal_fov_old(translation)
+            translation = np.array([cx, cy, origin.alt])  # TODO: cy, cx? reverse order? see below
+
+            # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
+            # Add image center to FOV (FOV origin centered at 0,0 currently, this is top left corner of map_cropped)
+            assert self._camera_info is not None
+            assert hasattr(self._camera_info, 'k')
+            cx, cy = self._camera_info.k.reshape((3,3))[0][2], self._camera_info.k.reshape((3,3))[1][2]
+            #print(f'cx cy {cx} {cy}')
+            translation = translation + np.array([cy, cx, 0])
+
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
+            #print(gimbal_mock_fixed_camera)
+            self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line
             center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
             fov_center = LatLon(*center)
             return fov_center
@@ -978,7 +920,7 @@ class MapNavNode(Node, ABC):
         # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
         assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
 
-        bbox = self._get_bbox(center, radius)  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
+        bbox = BBox(*self._proj.get_bbox(center, radius))  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
         assert_type(bbox, BBox)
 
         map_size = self._map_size_with_padding()
@@ -1671,6 +1613,9 @@ g
         # TODO: handle none return values
         image_data = self._mock_image_data()
         map_data = self._mock_map_data(latlonalt, terrain_altitude)
+        # Get cropped and rotated map
+        #camera_yaw_deg = self._camera_yaw()  # TODO: handle None?
+        #camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None  # TODO: handle None!
         contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim(), map_data=map_data)  # TODO: redudnant img dim, check none
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair

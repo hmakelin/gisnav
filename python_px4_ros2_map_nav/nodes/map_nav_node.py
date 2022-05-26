@@ -850,7 +850,17 @@ class MapNavNode(Node, ABC):
 
         # Need coordinates in image frame
         rpy = rpy.axes_ned_to_image()
-        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
+        # TODO: in thic case need to do "-yaw"? or -altitude? "-alt" feels more correct (z-axis nadir facing).
+        #r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
+        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
+
+        # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
+        assert self._camera_info is not None
+        assert hasattr(self._camera_info, 'k')
+        cx, cy = self._camera_info.k.reshape((3, 3))[0][2], self._camera_info.k.reshape((3, 3))[1][2]
+
+        translation = translation - r @ np.array([cx, cy, 0])  # Adjust for origin (principal point), move from top left corner of image to center
+
         pose = Pose(r, translation.reshape((3, 1)))
 
         mock_image_pair = self._mock_image_pair(latlonalt, self._alt_from_vehicle_local_position())  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
@@ -858,6 +868,8 @@ class MapNavNode(Node, ABC):
         mock_match = Match(mock_image_pair, pose)
 
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
+
+        self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c.squeeze()))  # TODO: change the c also to np.ndarray?
 
         return mock_fixed_camera
 
@@ -884,18 +896,10 @@ class MapNavNode(Node, ABC):
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
-            translation = np.array([cx, cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
-
-            # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
-            # Add image center to FOV (FOV origin centered at 0,0 currently, this is top left corner of map_cropped)
-            assert self._camera_info is not None
-            assert hasattr(self._camera_info, 'k')
-            cx, cy = self._camera_info.k.reshape((3,3))[0][2], self._camera_info.k.reshape((3,3))[1][2]
-            #print(f'cx cy {cx} {cy}')
-            #translation = translation + np.array([cy, cx, 0])
+            translation = np.array([-cx, -cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
+            #translation = np.array([0, 0, -origin.alt])  # TODO: cy, cx? reverse order? see below
 
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
-            #print(gimbal_mock_fixed_camera)
             self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line
             center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
             fov_center = LatLon(*center)
@@ -1657,31 +1661,11 @@ g
         # Scaling factor of image pixels := terrain_altitude
         scaling = terrain_altitude / fx
 
-        # Guess FOV WGS84 boundary in meters from center
-        # TODO: need to do corner at zero, not center at zero?
-        gimbal_fov_pix = scaling*np.float32([[-c_max, c_max], [-c_max, -c_max], [c_max, -c_max], [c_max, c_max]]).reshape(-1, 1, 2)
-
-        gimbal_fov_pix = gimbal_fov_pix.squeeze()
-
-        # TODO: redundant logic with _projected_field_of_view_center
-        azmths = list(map(lambda x: get_azimuth(x[0], x[1]), gimbal_fov_pix))
-        dists = list(map(lambda x: math.sqrt(x[0] ** 2 + x[1] ** 2), gimbal_fov_pix))
-        zipped = list(zip(azmths, dists))
-        to_wgs84 = partial(lambda azmth_dist, latlon: LatLon(*self._proj.move_distance(azmth_dist, latlon)), origin)
-        gimbal_fov_wgs84 = np.array(list(map(to_wgs84, zipped)))
-
-        left, bottom, right, top = 180, 90, -180, -90
-        for pt in gimbal_fov_wgs84:
-            right = pt[1] if pt[1] >= right else right
-            left = pt[1] if pt[1] <= left else left
-            top = pt[0] if pt[0] >= top else top
-            bottom = pt[0] if pt[0] <= bottom else bottom
-        #map_center_latlon = LatLon((top + bottom) / 2, (left + right) / 2)
-        bbox = BBox(left, bottom, right, top)
-
+        #bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=scaling * c_max))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
+        bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=self._get_dynamic_map_radius(terrain_altitude)))  # use same altitude method as in real map updates?
         map_data = MapData(center=origin, radius=scaling*c_max, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
-
         return map_data
+
 
     #region Match
     def _compute_output(self, match: Match, input_data: InputData) -> Optional[OutputData]:
@@ -1964,7 +1948,7 @@ g
         pass
 
     @abstractmethod
-    def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
+    def publish_projected_fov(self, fov: np.ndarray, c: Union[LatLon, LatLonAlt]) -> None:    # TODO Change signature back to np.ndarray for c?
         """Publishes projected field of view (FOV) and principal point
 
         This method should be implemented by an extending class to adapt for any given use case.

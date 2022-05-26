@@ -49,7 +49,8 @@ class MockGPSNode(MapNavNode):
         if export_geojson is not None:
             self._export_position(output_data.fixed_camera.position, output_data.fixed_camera.fov.fov, export_geojson)
 
-    def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
+    #def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
+    def publish_projected_fov(self, fov: np.ndarray, c: Union[LatLon, LatLonAlt]) -> None:  # TODO Change signature back to np.ndarray for c?
         """Writes field of view (FOV) and map center into GeoJSON file"""
         # Export to file in GIS readable format
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
@@ -120,7 +121,7 @@ class MockGPSNode(MapNavNode):
 
         The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
 
-        :param position: Computed camera position
+        :param position: Computed camera position or e.g. principal point for gimbal projection
         :param: fov: Field of view of camera
         :param filename: Name of file to write into
         :return:

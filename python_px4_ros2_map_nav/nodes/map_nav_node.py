@@ -852,7 +852,10 @@ class MapNavNode(Node, ABC):
         r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
 
         # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
-        assert self._camera_info is not None
+        if self._camera_info is not None:
+            self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
+            return None
+
         assert hasattr(self._camera_info, 'k')
         cx, cy = self._camera_info.k.reshape((3, 3))[0][2], self._camera_info.k.reshape((3, 3))[1][2]
         fx = self._camera_info.k.reshape((3, 3))[0][0]
@@ -877,19 +880,15 @@ class MapNavNode(Node, ABC):
         :param origin: Camera position  # TODO: why is this an argument but all else is not?
         :return: Center of the FOV or None if not available
         """
-        if self._camera_info is not None:
-            assert origin.alt is not None
-            assert hasattr(origin, 'alt')
-            gimbal_mock_fixed_camera = self._project_gimbal_fov(origin)
-            if gimbal_mock_fixed_camera is not None:
-                center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
-                fov_center = LatLon(*center)
-                return fov_center
-            else:
-                self.get_logger().warn('Could not create a mock pose to generate a FOG guess.')
-                return None
+        assert origin.alt is not None
+        assert hasattr(origin, 'alt')
+        gimbal_mock_fixed_camera = self._project_gimbal_fov(origin)
+        if gimbal_mock_fixed_camera is not None:
+            center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
+            fov_center = LatLon(*center)
+            return fov_center
         else:
-            self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
+            self.get_logger().warn('Could not create a mock pose to generate a FOG guess.')
             return None
 
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:

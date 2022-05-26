@@ -896,7 +896,8 @@ class MapNavNode(Node, ABC):
             hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
-            translation = np.array([-cx, -cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
+            #translation = np.array([-cx, -cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
+            translation = np.array([-cx, -cy, -205])  # TODO: use fx, not hard coded
             #translation = np.array([0, 0, -origin.alt])  # TODO: cy, cx? reverse order? see below
 
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
@@ -1655,15 +1656,18 @@ g
         k = self._camera_info.k.reshape([3, 3])  # TODO: None?
         # TODO: assumes fx == fy
         fx = k[0][0]
-        cx, cy = k[0][2], k[1][2]
-        c_max = max(cx, cy)  # Use larger value since map is padded
+        #cx, cy = k[0][2], k[1][2]
+        #c_max = max(cx, cy)  # Use larger value since map is padded
+
+        dim_padding = self._map_size_with_padding()
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = terrain_altitude / fx
+        #scaling = c_max / fx
+        scaling = (dim_padding[0]/2) / fx
+        radius = scaling * terrain_altitude
 
-        #bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=scaling * c_max))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
-        bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=self._get_dynamic_map_radius(terrain_altitude)))  # use same altitude method as in real map updates?
-        map_data = MapData(center=origin, radius=scaling*c_max, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
+        bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=radius))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
+        map_data = MapData(center=origin, radius=radius, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
         return map_data
 
 

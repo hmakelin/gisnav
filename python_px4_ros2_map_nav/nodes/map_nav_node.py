@@ -858,8 +858,11 @@ class MapNavNode(Node, ABC):
         assert self._camera_info is not None
         assert hasattr(self._camera_info, 'k')
         cx, cy = self._camera_info.k.reshape((3, 3))[0][2], self._camera_info.k.reshape((3, 3))[1][2]
+        fx = self._camera_info.k.reshape((3, 3))[0][0]
 
-        translation = translation - r @ np.array([cx, cy, 0])  # Adjust for origin (principal point), move from top left corner of image to center
+        # TODO: redundant translation argument - needs refactoring
+        #translation = translation - r @ np.array([cx, cy, 0])  # Adjust for origin (principal point), move from top left corner of image to center
+        translation = -r @ np.array([cx, cy, -fx])  # Adjust for origin (principal point), move from top left corner of image to center
 
         pose = Pose(r, translation.reshape((3, 1)))
 
@@ -897,8 +900,9 @@ class MapNavNode(Node, ABC):
             cx = hypotenuse*math.sin(pitch_rad)
             cy = hypotenuse*math.cos(pitch_rad)
             #translation = np.array([-cx, -cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
-            translation = np.array([-cx, -cy, -205])  # TODO: use fx, not hard coded
+            translation = np.array([cx, cy, -205])  # TODO: use fx, not hard coded
             #translation = np.array([0, 0, -origin.alt])  # TODO: cy, cx? reverse order? see below
+            #translation = np.array([0, 0, -205])  # TODO: use fx, not hard coded
 
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
             #self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line

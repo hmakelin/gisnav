@@ -852,7 +852,7 @@ class MapNavNode(Node, ABC):
         r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
 
         # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
-        if self._camera_info is not None:
+        if self._camera_info is None:
             self.get_logger().debug('Camera info not available, could not create a mock pose to generate a FOV guess.')
             return None
 

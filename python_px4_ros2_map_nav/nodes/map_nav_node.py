@@ -892,8 +892,6 @@ class MapNavNode(Node, ABC):
             self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None
 
-        return map_center_latlon  # TODO: using principal point for updating map no good, too close to bottom fov. Principal point still needed but not for updating map.
-
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
         """Instructs the WMS client to get a new map from the WMS server.
 

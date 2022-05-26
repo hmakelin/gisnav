@@ -901,7 +901,7 @@ class MapNavNode(Node, ABC):
             #translation = np.array([0, 0, -origin.alt])  # TODO: cy, cx? reverse order? see below
 
             gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
-            self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line
+            #self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line
             center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
             fov_center = LatLon(*center)
             return fov_center
@@ -1304,7 +1304,7 @@ class MapNavNode(Node, ABC):
         if __debug__ and output_data is not None:
             # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
             vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-            #self._visualization.update(output_data, vo_enabled)
+            self._visualization.update(output_data, vo_enabled)
 
         return output_data
 

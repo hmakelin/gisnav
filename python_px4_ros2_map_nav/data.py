@@ -168,9 +168,9 @@ class ContextualMapData(_ImageHolder):
         map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
         map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
         #if visualize:
-        if True:
-            cv2.imshow('padded', self.map_data.image.arr)
-            cv2.waitKey(1)
+        #if True:
+            #cv2.imshow('padded', self.map_data.image.arr)
+            #cv2.waitKey(1)
             #cv2.imshow('rotated', map_rotated)
             #cv2.waitKey(1)
             #cv2.imshow('cropped', map_cropped)

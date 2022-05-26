@@ -833,16 +833,15 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _project_gimbal_fov(self, translation: np.ndarray, latlonalt: LatLonAlt) -> FixedCamera:
+    def _project_gimbal_fov(self, latlonalt: LatLonAlt) -> Optional[FixedCamera]:
         """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
 
         The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
         by :meth:`~_projected_field_of_view_center` when new coordinates for an outgoing WMS GetMap request are needed.
 
-        :param translation: Translation vector (cx, cy, altitude) in meter coordinates
+        :param latlonalt: Location of camera in WGS84
         :return: Projected FOV bounding box in pixel coordinates or None if not available
         """
-        assert_shape(translation, (3,))
         rpy = self._get_camera_set_rpy()
         if rpy is None:
             self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
@@ -850,8 +849,6 @@ class MapNavNode(Node, ABC):
 
         # Need coordinates in image frame
         rpy = rpy.axes_ned_to_image()
-        # TODO: in thic case need to do "-yaw"? or -altitude? "-alt" feels more correct (z-axis nadir facing).
-        #r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, rpy.yaw], degrees=True).as_matrix()
         r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
 
         # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
@@ -859,17 +856,12 @@ class MapNavNode(Node, ABC):
         assert hasattr(self._camera_info, 'k')
         cx, cy = self._camera_info.k.reshape((3, 3))[0][2], self._camera_info.k.reshape((3, 3))[1][2]
         fx = self._camera_info.k.reshape((3, 3))[0][0]
-
-        # TODO: redundant translation argument - needs refactoring
-        #translation = translation - r @ np.array([cx, cy, 0])  # Adjust for origin (principal point), move from top left corner of image to center
-        translation = -r @ np.array([cx, cy, -fx])  # Adjust for origin (principal point), move from top left corner of image to center
+        translation = -r @ np.array([cx, cy, -fx])
 
         pose = Pose(r, translation.reshape((3, 1)))
 
         mock_image_pair = self._mock_image_pair(latlonalt, self._alt_from_vehicle_local_position())  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
-
         mock_match = Match(mock_image_pair, pose)
-
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c.squeeze()))  # TODO: change the c also to np.ndarray?
@@ -886,29 +878,16 @@ class MapNavNode(Node, ABC):
         :return: Center of the FOV or None if not available
         """
         if self._camera_info is not None:
-            pitch = self._camera_set_pitch()  # TODO: _project_gimbal_fov uses _get_camera_rpy - redundant calls  # TODO: this logic uses old pitch origin (nadir=0)
-            if pitch is None:
-                self.get_logger().warn('Camera pitch not available, cannot project gimbal field of view.')
-                return None
-            pitch_from_nadir = 90 + pitch
-
-            #assert 0 <= abs(pitch) <= 90, f'Pitch {pitch} was outside of expected bounds [0, 90].' # TODO: need to handle outside of bounds, cannot assert
-            pitch_rad = math.radians(pitch_from_nadir)
             assert origin.alt is not None
             assert hasattr(origin, 'alt')
-            hypotenuse = origin.alt * math.tan(pitch_rad)  # Distance from camera origin to projected principal point
-            cx = hypotenuse*math.sin(pitch_rad)
-            cy = hypotenuse*math.cos(pitch_rad)
-            #translation = np.array([-cx, -cy, -origin.alt])  # TODO: cy, cx? reverse order? see below
-            translation = np.array([cx, cy, -205])  # TODO: use fx, not hard coded
-            #translation = np.array([0, 0, -origin.alt])  # TODO: cy, cx? reverse order? see below
-            #translation = np.array([0, 0, -205])  # TODO: use fx, not hard coded
-
-            gimbal_mock_fixed_camera = self._project_gimbal_fov(translation, origin)
-            #self._visualization.update(OutputData(input=None, attitude=Rotation.from_matrix(gimbal_mock_fixed_camera.map_match.pose.r), sd=None, fixed_camera=gimbal_mock_fixed_camera), True)  # TODO remove this debug line
-            center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
-            fov_center = LatLon(*center)
-            return fov_center
+            gimbal_mock_fixed_camera = self._project_gimbal_fov(origin)
+            if gimbal_mock_fixed_camera is not None:
+                center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
+                fov_center = LatLon(*center)
+                return fov_center
+            else:
+                self.get_logger().warn('Could not create a mock pose to generate a FOG guess.')
+                return None
         else:
             self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
             return None

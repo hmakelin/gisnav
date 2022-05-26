@@ -833,14 +833,14 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _project_gimbal_fov(self, latlonalt: LatLonAlt) -> Optional[FixedCamera]:
-        """Returns field of view (FOV) meter coordinates projected using gimbal attitude and camera intrinsics.
+    def _projected_field_of_view_center(self, latlonalt: LatLonAlt) -> Optional[LatLon]:
+        """Returns WGS84 coordinates of projected camera field of view (FOV).
 
-        The returned fov coordinates are meters from the origin of projection of the FOV on ground. This method is used
-        by :meth:`~_projected_field_of_view_center` when new coordinates for an outgoing WMS GetMap request are needed.
+        Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
+        for next WMS GetMap request.
 
-        :param latlonalt: Location of camera in WGS84
-        :return: Projected FOV bounding box in pixel coordinates or None if not available
+        :param origin: Camera position  # TODO: why is this an argument but all else is not?
+        :return: Center of the FOV or None if not available
         """
         rpy = self._get_camera_set_rpy()
         if rpy is None:
@@ -853,7 +853,7 @@ class MapNavNode(Node, ABC):
 
         # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
         if self._camera_info is not None:
-            self.get_logger().debug('Camera info not available, cannot project FoV, defaulting to global position.')
+            self.get_logger().debug('Camera info not available, could not create a mock pose to generate a FOV guess.')
             return None
 
         assert hasattr(self._camera_info, 'k')
@@ -869,27 +869,9 @@ class MapNavNode(Node, ABC):
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c.squeeze()))  # TODO: change the c also to np.ndarray?
 
-        return mock_fixed_camera
-
-    def _projected_field_of_view_center(self, origin: LatLonAlt) -> Optional[LatLon]:
-        """Returns WGS84 coordinates of projected camera field of view (FOV).
-
-        Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
-        for next WMS GetMap request.
-
-        :param origin: Camera position  # TODO: why is this an argument but all else is not?
-        :return: Center of the FOV or None if not available
-        """
-        assert origin.alt is not None
-        assert hasattr(origin, 'alt')
-        gimbal_mock_fixed_camera = self._project_gimbal_fov(origin)
-        if gimbal_mock_fixed_camera is not None:
-            center = np.mean(gimbal_mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
-            fov_center = LatLon(*center)
-            return fov_center
-        else:
-            self.get_logger().warn('Could not create a mock pose to generate a FOG guess.')
-            return None
+        center = np.mean(mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
+        fov_center = LatLon(*center)
+        return fov_center
 
     def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
         """Instructs the WMS client to get a new map from the WMS server.

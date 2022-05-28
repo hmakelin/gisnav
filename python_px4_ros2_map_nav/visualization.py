@@ -54,7 +54,9 @@ class Visualization:
 
         out = np.vstack((self._map_visualization, self._vo_visualization, output_data.fixed_camera._match.image_pair.qry.image.arr))
         if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
-            if output_data.fixed_camera._match.image_pair.mapful():
+            # For some reason visualization freezes here if imshow/waitKey is done on both VO and map matches
+            # Do on VO matches only since they are more frequent
+            if not output_data.fixed_camera._match.image_pair.mapful():
                 cv2.imshow(self.name, out)
                 cv2.waitKey(1)
         else:

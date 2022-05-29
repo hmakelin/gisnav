@@ -1028,7 +1028,9 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        assert self._camera_info is not None
+        if self._camera_info is None:
+            self.get_logger().warn('Camera info not yet available, skipping frame.')
+            return None
         assert hasattr(self._camera_info, 'k')
         img_dim = self._img_dim()
         assert isinstance(img_dim, Dim)

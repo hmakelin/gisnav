@@ -277,6 +277,7 @@ class Match:
         Returns a new Match by combining two matches by chaining the poses and image pairs: a new 'synthetic' image
         pair is created by combining the two others.
         """
+        assert match.image_pair.mapful()  # Not ideal assumption, map match must always be rhs of operation
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),

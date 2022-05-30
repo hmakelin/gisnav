@@ -1331,7 +1331,8 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
             self._vo_reset()
         else:
-            if self._should_fix_vo(output_data):
+            #if self._should_fix_vo(output_data):
+            if False:
                 self._vo_output_data_fix = output_data
 
             self._push_estimates(np.array(output_data.fixed_camera.position), True)

@@ -280,12 +280,26 @@ class Match:
         assert match.image_pair.mapful()  # Not ideal assumption, map match must always be rhs of operation
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         scaling = match.pose.t[2] / match.image_pair.qry.fx  # TODO: assume fx == fy
+        #H = match.inv_h @ self.inv_h
+        #H = match.h @ self.h
+        #H = self.inv_h @ match.inv_h
+        H = match.inv_h @ self.inv_h
+        H_inv = np.linalg.inv(H)
+        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H_inv, self.image_pair.qry.k)
+        print(Ts)
+        index = 0  # Need to pick translation with positive z coordinate, negative x and y
+        r, t = Rs[index], Ts[index]
+        #t = self.image_pair.qry.fx*t  # scaling with depth
+        #t = np.multiply(t, match.camera_center)  # Scaling with world coordinates
+        t = np.multiply(t, match.camera_position)  # Scaling with world coordinates
+        t[2] = -t[2]
+        print(f'scaled t {t}')
+        print(f'camera center {match.camera_center} position {match.camera_position}')
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),
                 pose=Pose(
-                    self.pose.r @ match.pose.r,
-                    #self.pose.t + self.pose.r @ (match.pose.t + match.camera_center)
-                    match.pose.t + scaling * match.pose.r @ (self.pose.t + self.camera_center)
+                    r,
+                    -(self.pose.r @ match.camera_center + t)
                 )  # TODO: need to fix sign somehow? Would think minus sign is needed here?
         )
 

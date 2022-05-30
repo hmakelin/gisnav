@@ -279,11 +279,13 @@ class Match:
         """
         assert match.image_pair.mapful()  # Not ideal assumption, map match must always be rhs of operation
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
+        scaling = match.pose.t[2] / match.image_pair.qry.fx  # TODO: assume fx == fy
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),
                 pose=Pose(
                     self.pose.r @ match.pose.r,
-                    self.pose.t + self.pose.r @ (match.pose.t + match.camera_center)
+                    #self.pose.t + self.pose.r @ (match.pose.t + match.camera_center)
+                    match.pose.t + scaling * match.pose.r @ (self.pose.t + self.camera_center)
                 )  # TODO: need to fix sign somehow? Would think minus sign is needed here?
         )
 

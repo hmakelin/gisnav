@@ -238,7 +238,10 @@ class AsyncQuery:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Pose:
-    """Represents camera match (rotation and translation)"""
+    """Represents camera match (rotation and translation)
+
+    :raise: ValueError if r or t is invalid (np.isnan)
+    """
     r: np.ndarray
     t: np.ndarray
     e: np.ndarray = field(init=False)
@@ -248,11 +251,18 @@ class Pose:
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
 
+        # Validity check
+        if np.isnan(self.r).any() or np.isnan(self.t).any():
+            raise ValueError(f'Rotation matrix or translation vector contained NaNs:\n{self.r}, {self.t}')
+
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Match:
-    """Represents a matched image pair with estimated match and camera position"""
+    """Represents a matched image pair with estimated match and camera position
+
+    :raise: np.linalg.LinAlgError if homography matrix is not invertible
+    """
     image_pair: ImagePair
     pose: Pose
     h: np.ndarray = field(init=False)

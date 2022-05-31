@@ -94,6 +94,10 @@ class KeypointMatcher(Matcher):
             pose = Pose(r, t)
         except np.linalg.LinAlgError as _:  # e:
             # TODO: handle error
+            # TODO: h matrix inversion happens at Match, not at Pose?
+            return None
+        except ValueError as __:
+            # TODO: handle error
             return None
 
         return pose

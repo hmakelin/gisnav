@@ -1536,7 +1536,9 @@ g
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
         # Convert estimated rotation to attitude quaternion for publishing
-        gimbal_estimated_attitude = Rotation.from_matrix(map_match.pose.r.T)  # in rotated map pixel frame
+        rT = map_match.pose.r.T
+        assert not np.isnan(rT).any()
+        gimbal_estimated_attitude = Rotation.from_matrix(rT)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _match
         assert (map_match.image_pair.mapful())
         assert (map_match.image_pair.ref, ContextualMapData)  # Alternative way to assert mapful()

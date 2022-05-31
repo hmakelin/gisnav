@@ -290,7 +290,7 @@ class Match:
                 pose=Pose(
                     r,
                     -(r @ match.camera_center + t)
-                )  # TODO: need to fix sign somehow? Would think minus sign is needed here?
+                )
         )
 
 

@@ -1475,7 +1475,6 @@ class MapNavNode(Node, ABC):
         else:
             return self._pose_map_guess
 
-    # TODO: pass _match, not OutputData?
     def _should_fix_vo(self, match: Match) -> bool:
         """Returns True if previous visual odometry fixed reference frame should be updated
 

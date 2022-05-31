@@ -346,7 +346,7 @@ class FOV:
         :return: Altitude scaling factor
         """
         proj = Proj.instance()  # Get cached geod instance
-        distance_in_pixels = np.linalg.norm(self.fov_pix[1]-self.fov_pix[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
+        distance_in_pixels = np.linalg.norm(self.fov_pix_map[1]-self.fov_pix_map[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
         distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
                                            LatLon(*self.fov[2].squeeze().tolist()))
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)

@@ -11,3 +11,4 @@ shapely
 einops
 kornia
 yacs
+pykalman

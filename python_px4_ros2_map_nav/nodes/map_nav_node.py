@@ -48,6 +48,7 @@ from python_px4_ros2_map_nav.matchers.orb import ORBMatcher
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.visualization import Visualization
 from python_px4_ros2_map_nav.proj import Proj
+from python_px4_ros2_map_nav.filter import SimpleFilter
 
 
 class MapNavNode(Node, ABC):
@@ -127,6 +128,10 @@ class MapNavNode(Node, ABC):
         # WGS84 projections
         self._proj = Proj.instance()
 
+        # Kalman filter (initialized once enough measurements available)
+        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
+        self._kf = SimpleFilter(window_length)
+
         self._visualization = Visualization('Keypoint matches and homography') if __debug__ else None
 
         # Must check for None when using these
@@ -168,6 +173,16 @@ class MapNavNode(Node, ABC):
     def name(self, value: str) -> None:
         assert_type(value, str)
         self._name = value
+
+    @property
+    def _kf(self) -> SimpleFilter:
+        """Kalman filter for improved position and variance estimation"""
+        return self.__kf
+
+    @_kf.setter
+    def _kf(self, value: SimpleFilter) -> None:
+        assert_type(value, SimpleFilter)
+        self.__kf = value
 
     @property
     def _visualization(self) -> str:
@@ -624,7 +639,7 @@ class MapNavNode(Node, ABC):
         namespace = 'misc'
         self.declare_parameters(namespace, [
             ('max_pitch', Defaults.MISC_MAX_PITCH),
-            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH),
+            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),

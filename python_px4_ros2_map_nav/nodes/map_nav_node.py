@@ -1645,8 +1645,6 @@ g
         :return: Computed output_data if a valid estimate was obtained
         """
         map_match = self._estimate_map_match(match, input_data)
-        #fov = self._estimate_fov(match.image_pair.qry.image.dim, match.inv_h, map_match)
-        #position, terrain_altitude = self._estimate_position(map_match, fov, input_data.ground_elevation)  # TODO: make a dataclass out of position too
         attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
 
         # Init output
@@ -1657,8 +1655,6 @@ g
                                      _match=match,
                                      ground_elevation=input_data.ground_elevation
                                  ),
-                                 #position=position,
-                                 #terrain_altitude=terrain_altitude,
                                  attitude=attitude,
                                  sd=None)
 

@@ -279,23 +279,12 @@ class Match:
         """
         assert match.image_pair.mapful()  # Not ideal assumption, map match must always be rhs of operation
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
-        scaling = match.pose.t[2] / match.image_pair.qry.fx  # TODO: assume fx == fy
-        #H = match.inv_h @ self.inv_h
-        #H = match.h @ self.h
-        #H = self.inv_h @ match.inv_h
         H = match.inv_h @ self.inv_h
-        H_inv = np.linalg.inv(H)
+        H_inv = np.linalg.inv(H)  # TODO: do not invert, do self.h @ match.h instead
         num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H_inv, self.image_pair.qry.k)
-        print(Ts)
-        index = 0  # Need to pick translation with positive z coordinate, negative x and y
+        index = 0  # TODO: how to pick index? Need to compare camera normals?
         r, t = Rs[index], Ts[index]
-        #t = self.image_pair.qry.fx*t  # scaling with depth
-        #t = np.multiply(t, match.camera_center)  # Scaling with world coordinates
-        #t = np.multiply(t, np.vstack((match.camera_position[0:2], match.camera_center[2])))  # Scaling with world coordinates
-        t = 205*t
-        #t[2] = -t[2]
-        print(f'scaled t {t}')
-        print(f'camera center {match.camera_center} position {match.camera_position}')
+        t = match.image_pair.qry.fx * t  # scale by focal length  # TODO: assume fx == fy
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),
                 pose=Pose(

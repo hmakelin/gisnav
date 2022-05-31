@@ -24,7 +24,7 @@ class SimpleFilter:
             0,                   # x_vel
             measurements[0, 1],  # y
             0,                   # y_vel
-            measurements[0, 1],  # z
+            measurements[0, 2],  # z
             0                    # z_vel
         ])
         self._transition_matrix = np.array([

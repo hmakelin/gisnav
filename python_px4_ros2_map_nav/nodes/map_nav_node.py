@@ -1635,7 +1635,6 @@ g
         map_data = MapData(center=origin, radius=radius, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
         return map_data
 
-
     #region Match
     def _compute_output(self, match: Match, input_data: InputData) -> Optional[OutputData]:
         """Process the estimated camera _match into OutputData

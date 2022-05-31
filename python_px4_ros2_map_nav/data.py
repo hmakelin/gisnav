@@ -281,7 +281,7 @@ class Match:
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         H = match.inv_h @ self.inv_h
         H_inv = np.linalg.inv(H)  # TODO: do not invert, do self.h @ match.h instead
-        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H_inv, self.image_pair.qry.k)
+        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H_inv, self.image_pair.qry.k)  # TODO: try to do this without decomposing H
         index = 0  # TODO: how to pick index? Need to compare camera normals?
         r, t = Rs[index], Ts[index]
         t = match.image_pair.qry.fx * t  # scale by focal length  # TODO: assume fx == fy

@@ -1331,8 +1331,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
             self._vo_reset()
         else:
-            #if self._should_fix_vo(output_data):
-            if False:
+            if self._should_fix_vo(output_data.fixed_camera._match):
                 self._vo_output_data_fix = output_data
 
             self._push_estimates(np.array(output_data.fixed_camera.position), True)
@@ -1477,12 +1476,12 @@ class MapNavNode(Node, ABC):
             return self._pose_map_guess
 
     # TODO: pass _match, not OutputData?
-    def _should_fix_vo(self, output_data: OutputData) -> bool:
+    def _should_fix_vo(self, match: Match) -> bool:
         """Returns True if previous visual odometry fixed reference frame should be updated
 
         Assumes fx == fy (focal lengths in x and y dimensions are the approximately same).
 g
-        :param output_data: Output data from the visual odometry matching
+        :param output_data: The visual odometry match
         """
         # TODO: turn the info messages to debugging messages
         # If has not been fixed yet
@@ -1492,8 +1491,8 @@ g
 
         # Check whether camera translation is over threshold
         t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
-        camera_translation = np.linalg.norm(output_data.fixed_camera._match.camera_position_difference.squeeze())
-        threshold = t_threshold * output_data.fixed_camera._match.image_pair.qry.fx
+        camera_translation = np.linalg.norm(match.camera_position_difference.squeeze())
+        threshold = t_threshold * match.image_pair.qry.fx
         if camera_translation > threshold:
             self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
                                    f'frame.')
@@ -1501,7 +1500,7 @@ g
 
         # Check whether camera rotation is over threshold
         r_threshold = self.get_parameter('misc.visual_odometry_update_r_threshold').get_parameter_value().double_value
-        rotvec = Rotation.from_matrix(output_data.fixed_camera._match.pose.r).as_rotvec()
+        rotvec = Rotation.from_matrix(match.pose.r).as_rotvec()
         camera_rotation = np.linalg.norm(rotvec)
         threshold = r_threshold
         if camera_rotation > threshold:

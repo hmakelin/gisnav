@@ -1662,6 +1662,7 @@ g
                                  attitude=attitude,
                                  sd=None)
 
+        print(output_data.fixed_camera.position)
         if self._good_match(output_data):
             return output_data
         else:

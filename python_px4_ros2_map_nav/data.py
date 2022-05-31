@@ -290,10 +290,10 @@ class Match:
         index = 0  # Need to pick translation with positive z coordinate, negative x and y
         r, t = Rs[index], Ts[index]
         #t = self.image_pair.qry.fx*t  # scaling with depth
-        t = np.multiply(t, match.camera_center)  # Scaling with world coordinates
+        #t = np.multiply(t, match.camera_center)  # Scaling with world coordinates
         #t = np.multiply(t, np.vstack((match.camera_position[0:2], match.camera_center[2])))  # Scaling with world coordinates
-        #t = 205*t
-        t[2] = -t[2]
+        t = 205*t
+        #t[2] = -t[2]
         print(f'scaled t {t}')
         print(f'camera center {match.camera_center} position {match.camera_position}')
         return Match(

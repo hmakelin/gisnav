@@ -47,10 +47,6 @@ class SimpleFilter:
         :param measurements: First available measurements in numpy array (oldest first)
         """
         self._measurements = measurement
-        #print(self._measurements)
-        #print(self._measurements[0][0])
-        #print(self._measurements[0][1])
-        #print(self._measurements[0][2])
         self._initial_state_mean = np.array([
             self._measurements[0][0],  # x
             0,  # x_vel

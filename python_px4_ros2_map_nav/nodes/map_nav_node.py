@@ -1267,7 +1267,7 @@ class MapNavNode(Node, ABC):
 
         :param results: Results from the matching worker
         :param visual_odometry: True if results are from visual odometry worker
-        :return: Parsed output data
+        :return: Parsed output data, or None if not available
         """
         pose = results[0]
         if pose is not None:
@@ -1279,11 +1279,27 @@ class MapNavNode(Node, ABC):
         match = Match(image_pair=query.image_pair, pose=pose)
         output_data = self._compute_output(match, query.input_data)
 
-        # noinspection PyUnreachableCode
-        if __debug__ and output_data is not None:
-            # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
-            vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-            self._visualization.update(output_data, vo_enabled)
+        if output_data is not None:
+            # noinspection PyUnreachableCode
+            if __debug__:
+                # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
+                vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
+                self._visualization.update(output_data, vo_enabled)
+
+            # Get output from Kalman filter
+            filter_output = self._kf.filter(output_data.fixed_camera.position)
+            if filter_output is None:
+                self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
+                return None
+            else:
+                means, covariances = filter_output
+                mean = means[0::2]  # x, y, z - skip velocities
+                sd = np.sqrt(np.diagonal(covariances)[0::2])  # x, y ,z
+
+                output_data.filtered_position = LatLonAlt(*mean)
+                output_data.sd = sd  #  TODO: need to do filtering on meters, not latlon, the SD values currently are not eph and epv!
+
+                self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
         return output_data
 
@@ -1308,13 +1324,6 @@ class MapNavNode(Node, ABC):
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
-            self._push_estimates(np.array(output_data.fixed_camera.position), False)
-            if self._variance_window_full(False):
-                output_data.sd = np.std(self._map_estimation_history, axis=0)
-                self.publish(output_data)
-            else:
-                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
-
             self._vo_reset()
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
@@ -1348,13 +1357,6 @@ class MapNavNode(Node, ABC):
         else:
             if self._should_fix_vo(output_data.fixed_camera._match):
                 self._vo_output_data_fix = output_data
-
-            self._push_estimates(np.array(output_data.fixed_camera.position), True)
-            if self._variance_window_full(True):
-                output_data.sd = np.std(self._vo_estimation_history, axis=0)
-                self.publish(output_data)
-            else:
-                self.get_logger().debug('Waiting to get more data to estimate position error, not publishing yet.')
 
             self._vo_input_data_prev = self._vo_input_data
             self._vo_output_data_prev = output_data
@@ -1669,6 +1671,7 @@ g
                                      _match=match,
                                      ground_elevation=input_data.ground_elevation
                                  ),
+                                 filtered_position=None,
                                  attitude=attitude,
                                  sd=None)
 
@@ -1840,81 +1843,6 @@ g
                 image_pair=image_pair,
                 input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
             )
-    #endregion
-
-    #region Variance
-    @staticmethod
-    def _window_full(stack: np.ndarray, window_length: int) -> bool:
-        """Return True if stack is full
-
-        :param stack: Map or vo estimation history stack
-        :param window_length: Configured max length for the estimation history (stack max height)
-        :return: True if stack is full
-        """
-        if stack is not None:
-            obs_count = len(stack)
-            if obs_count >= window_length:
-                assert obs_count == window_length
-                return True
-            else:
-                assert 0 <= obs_count < window_length
-                return False
-        else:
-            return False
-
-    def _variance_window_full(self, visual_odometry: bool) -> bool:
-        """Returns true if the variance estimation window is full.
-
-        :param visual_odometry: True if need to check vo variance windo
-        :return: True if :py:attr:`~_map_estimation_history` or :py:attr:`~_vo_estimation_history` is full
-        """
-        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-        if visual_odometry:
-            return self._window_full(self._vo_estimation_history, window_length)
-        else:
-            return self._window_full(self._map_estimation_history, window_length)
-
-    def _update_estimation_history(self, stack: np.ndarray, position: np.ndarray) -> np.ndarray:
-        """Pushes a position estimate to the stack and pops an older one if needed
-
-        :param stack: Map or visual odometry estimation history stack
-        :param: position: Position estimate
-        :return: Returns the new stack
-        """
-        if stack is None:
-            # Compute rotations in radians around x, y, z axes (get RPY and convert to radians?)
-            assert_len(position, 3)
-            stack = position.reshape(-1, len(position))
-        else:
-            window_length = self.get_parameter(
-                'misc.variance_estimation_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for estimating variances should be >0 ({window_length} ' \
-                                      f'provided).'
-            obs_count = len(stack)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest values
-                stack = np.delete(stack, 0, 0)
-
-            # Add newest values
-            stack = np.vstack((stack, position))
-
-        return stack
-
-    # Refactor redundant logic!
-    def _push_estimates(self, position: np.ndarray, visual_odometry: bool) -> None:
-        """Pushes position estimates to :py:attr:`~_map_estimation_history`
-
-        Pops the oldest estimate from the window if needed.
-
-        :param position: Match translation (x, y, z) in WGS84
-        :param visual_odometry: True input is from visual odometry, map is assumed otherwise
-        :return:
-        """
-        if visual_odometry:
-            self._vo_estimation_history = self._update_estimation_history(self._vo_estimation_history, position)
-        else:
-            self._map_estimation_history = self._update_estimation_history(self._map_estimation_history, position)
     #endregion
 
     #region PublicAPI

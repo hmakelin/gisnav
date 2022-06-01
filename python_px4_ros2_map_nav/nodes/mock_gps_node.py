@@ -34,7 +34,7 @@ class MockGPSNode(MapNavNode):
 
     def publish(self, output_data: OutputData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        if not all(output_data.fixed_camera.position) or any(map(np.isnan, output_data.fixed_camera.position)) or \
+        if not all(output_data.filtered_position) or any(map(np.isnan, output_data.filtered_position)) or \
                 not all(output_data.sd) or any(map(np.isnan, output_data.sd)):
             self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
                                    'skipping publishing.')
@@ -42,12 +42,12 @@ class MockGPSNode(MapNavNode):
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
         try:
-            self._publish_mock_gps_msg(output_data.fixed_camera.position, output_data.sd, mock_gps_selection)
+            self._publish_mock_gps_msg(output_data.filtered_position, output_data.sd, mock_gps_selection)
         except AssertionError as ae:
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
-            self._export_position(output_data.fixed_camera.position, output_data.fixed_camera.fov.fov, export_geojson)
+            self._export_position(output_data.filtered_position, output_data.fixed_camera.fov.fov, export_geojson)
 
     #def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
     def publish_projected_fov(self, fov: np.ndarray, c: Union[LatLon, LatLonAlt]) -> None:  # TODO Change signature back to np.ndarray for c?

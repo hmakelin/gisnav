@@ -445,18 +445,18 @@ class OutputData:
     :param input: The input data used for the match
     :param _match: Estimated _match for the image frame vs. the map frame
     :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_match and field of view)
-    :param position: Vehicle position in WGS84 (elevation or z coordinate in meters above mean sea level)
-    :param terrain_altitude: Vehicle altitude in meters from ground (assumed starting altitude)
+    :param filtered_position: Filtered position from the Kalman filter
     :param attitude: Camera attitude quaternion
     :param sd: Standard deviation of position estimate
     :return:
     """
     input: InputData
     fixed_camera: FixedCamera
+    filtered_position: Optional[np.ndarray]  # TODO: currently added post init, thence Optional
     #position: LatLonAlt
     #terrain_altitude: float
     attitude: np.ndarray
-    sd: np.ndarray  # TODO This should be part of Position? Keep future position dataclass mutable so this can be assigned while outputdata itself is immutable
+    sd: Optional[np.ndarray]  # TODO: currently added post init, thence Optional # TODO This should be part of Position? Keep future position dataclass mutable so this can be assigned while outputdata itself is immutable
 
     # Target structure:
     # input

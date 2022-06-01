@@ -41,13 +41,17 @@ class SimpleFilter:
         self._previous_mean = None
         self._previous_covariance = None
 
-    def _init_initial_state(self, measurement: np.ndarray):
+    def _init_initial_state(self, measurement: np.ndarray) -> None:
         """Initializes initial state once measurements are available
 
         :param measurements: First available measurements in numpy array (oldest first)
         """
         self._measurements = measurement
-        np.array([
+        #print(self._measurements)
+        #print(self._measurements[0][0])
+        #print(self._measurements[0][1])
+        #print(self._measurements[0][2])
+        self._initial_state_mean = np.array([
             self._measurements[0][0],  # x
             0,  # x_vel
             self._measurements[0][1],  # y
@@ -86,7 +90,7 @@ class SimpleFilter:
                     observation_matrices=self._observation_matrix,
                     initial_state_mean=self._initial_state_mean
                 )
-                self._kf = self._kf.em(self._measurements, n_iter=5)
+                self._kf = self._kf.em(self._measurements, n_iter=20)
 
                 # First pass
                 means, covariances = self._kf.filter(self._measurements)

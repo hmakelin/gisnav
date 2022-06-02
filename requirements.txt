@@ -5,10 +5,15 @@ torch
 scipy>=1.4.0
 OWSLib
 pyyaml
-pyproj
 geojson
+pykalman
+
+# Geospatial objects handling
+geopandas
 shapely
+pyproj
+
+# Used by LoFTR
 einops
 kornia
 yacs
-pykalman

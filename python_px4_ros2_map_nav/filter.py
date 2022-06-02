@@ -12,10 +12,6 @@ class SimpleFilter:
 
     3-dimensional location model with velocity taken into account with total of 6 (3x2) state variables
     """
-
-    OBS_DIM = 6
-    """Observation dimensions := 6 (x, x_vel, y, y_vel, z, z_vel)"""
-
     # TODO: min number of measurements before KF will output an estimate, current name is confusing, rename it?
     QUEUE_MAX_HEIGHT = 50
     """Default max height for measurement queue"""

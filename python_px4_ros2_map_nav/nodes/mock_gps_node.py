@@ -89,14 +89,15 @@ class MockGPSNode(MapNavNode):
         :return:
         """
         assert all([position.eph, position.epv, position.z_amsl])
+        crs = 'epsg:4326'
         # TODO: check inputs?
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time()
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan
-        msg.lat = int(position.lat * 1e7)
-        msg.lon = int(position.lon * 1e7)
+        msg.lat = int(position.xy.lat(crs) * 1e7)
+        msg.lon = int(position.xy.lon(crs) * 1e7)
         msg.alt = int(position.z_amsl * 1e3)
         msg.alt_ellipsoid = msg.alt
         msg.eph = position.eph
@@ -127,10 +128,15 @@ class MockGPSNode(MapNavNode):
         :return:
         """
         # TODO: utilize GeoPandas more here?
+        crs = 'epsg:4326'
         assert_type(position, get_args(Union[LatLon, LatLonAlt, Position]))  # TODO: publish_projected_fov still returns LatLon, get rid of it
         assert_type(fov, np.ndarray)
         assert_type(filename, str)
-        point = Feature(geometry=Point((position.lon, position.lat)))
+        # TODO: try to get rid of LatLon, or have Position.lat and .lon properties
+        if isinstance(position, Position):
+            point = Feature(geometry=Point((position.xy.lon(crs), position.xy.lat(crs))))
+        else:
+            point = Feature(geometry=Point((position.lon, position.lat)))
         corners = np.flip(fov.squeeze()).tolist()
         corners = [tuple(x) for x in corners]
         corners = Feature(geometry=Polygon([corners]))

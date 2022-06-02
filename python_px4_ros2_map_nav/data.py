@@ -26,6 +26,62 @@ Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
 
 
+# noinspection PyClassHasNoInit
+class GeoPoint:
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (geographical coordinate pair)
+
+    The GeoSeries class is very flexible, so this wrapper is provided to only expose specific functionality that is
+    needed in the application. It is also more convenient to handle a 'Point' conceptually than a series of length 1
+    with a single Point in it.
+
+    Pay attention to the axis order, i.e. (x, y) is (lon, lat) for EPSG:4326.
+    """
+
+    DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
+    """CRS used for GeoPoints by default unless something else is specified"""
+
+    def __init__(self, x: float, y: float, crs: str = DEFAULT_CRS):
+        """Initializes the wrapped GeoSeries
+
+        :param x: X axis coordinate (longitude)
+        :param y: Y axis coordinate (latitude)
+        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
+        """
+        self._geoseries = GeoSeries([Point(x, y)], crs=crs)
+
+        # TODO: Enforce validity checks instead of asserting
+        assert_len(self._geoseries, 1)
+        assert_type(self._geoseries[0], Point)
+        assert self._geoseries.crs is not None
+
+    @property
+    def crs(self) -> str:
+        """Returns current CRS string"""
+        return str(self._geoseries.crs)
+
+    def latlon(self, crs: str = DEFAULT_CRS) -> Tuple[float, float]:
+        """Latitude/longitude tuple in given CRS system
+
+        :return: (lat, lon) tuple
+        """
+        return self._geoseries.to_crs(crs)[0].coords[0][::-1]  # Need to reverse GeoPandas/Shapely axis order
+
+    def lat(self, crs: str = DEFAULT_CRS) -> float:
+        """Latitude coordinate"""
+        return self.latlon(crs)[0]
+
+    def lon(self, crs: str = DEFAULT_CRS) -> float:
+        """Longitude coordinate"""
+        return self.latlon(crs)[1]
+
+    def to_crs(self, crs: str) -> GeoPoint:
+        """Converts to provided CRS
+
+        :return: The same GeoPoint instance transformed to new CRS"""
+        self._geoseries = self._geoseries.to_crs(crs)
+        return self
+
+
 class GeoBox(GeoSeries):
     """Represents a geographic bounding rectangle or bounding box (bbox)
 
@@ -49,9 +105,9 @@ class Position:
     Ground altitude is required while altitude above mean sea level (AMSL) is optional. If position is e.g. output from
     a Kalman filter, epx, epy and epz properties can also be provided.
 
-    Note: In GeoPandas (x,y) is (lon,lat) despite that in WGS84 the coordinate order should be (lat,lon).
+    Note: In GeoPandas (x,y) is (lon, lat), while WGS84 coordinates are (lat, lon) by convention
     """
-    xy: GeoSeries  # GeoPoint    # XY coordinates (e.g. latitude & longitude in WGS84)
+    xy: GeoPoint                 # XY coordinates (e.g. longitude & latitude in WGS84)
     z_ground: float              # altitude above ground plane in meters (positive)
     z_amsl: Optional[float]      # altitude above mean sea level (AMSL) in meters if known (positive)
     x_sd: Optional[float]        # Standard deviation of error in x (latitude) dimension
@@ -65,10 +121,6 @@ class Position:
         assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
                or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
 
-        assert_len(self.xy, 1)
-        assert_type(self.xy[0], Point)
-        assert self.xy.crs is not None
-
     @property
     def eph(self) -> Optional[float]:
         """Standard deviation of horizontal error in meters (for GNSS/GPS)"""
@@ -78,26 +130,6 @@ class Position:
     def epv(self) -> Optional[float]:
         """Standard deviation of vertical error in meters (for GNSS/GPS)"""
         return self.z_sd if self.z_sd is not None else None
-
-    @property
-    def latlon(self) -> Tuple[float, float]:
-        """Convenience method for extracting WGS84 latlon coordinates
-
-        The order of (x, y) is reversed here so that the order of the returned tuple is (lat, lon)
-
-        :return: (lat, lon) WGS84 tuple
-        """
-        return self.xy.to_crs('epsg:4326')[0].coords[0][::-1]
-
-    @property
-    def lat(self) -> float:
-        """Convenience for WGS84 latitude"""
-        return self.latlon[0]
-
-    @property
-    def lon(self) -> float:
-        """Convenience for WGS84 longitude"""
-        return self.latlon[1]
 
 
 # noinspection PyClassHasNoInit
@@ -496,7 +528,7 @@ class FixedCamera:
             return None
 
         position = Position(
-            xy=GeoSeries([Point(*position[1::-1])], crs=crs),  # GeoPandas needs lon-lat order so slicing is reversed
+            xy=GeoPoint(*position[1::-1], crs),  # lon-lat order
             z_ground=position.alt,
             z_amsl=position.alt + ground_elevation if ground_elevation is not None else None,
             x_sd=None,

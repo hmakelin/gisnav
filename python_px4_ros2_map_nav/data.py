@@ -11,8 +11,10 @@ from typing import Optional, Union, get_args
 from collections import namedtuple
 from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
+from geopandas import GeoSeries
+from shapely.geometry import Point, Polygon
 
-from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape
+from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
 from python_px4_ros2_map_nav.proj import Proj
 
@@ -22,6 +24,80 @@ LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Dim = namedtuple('Dim', 'height width')
 #RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
+
+
+class GeoBox(GeoSeries):
+    """Represents a geographic bounding rectangle or bounding box (bbox)
+
+    This wrapper is used to do post initialization validity checks to constrain the GeoSeries, which itself is a very
+    flexible class.
+    """
+    def __post_init__(self):
+        """Post-initialization validity checks"""
+        # TODO: enforce these checks instead of just asserting?
+        assert_len(self, 1)
+        assert_type(self[0], Polygon)
+        assert_len(self[0].exterior.coords, 4)
+        assert self.crs is not None
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class Position:
+    """Represents a 3D position with geographical xy-coordinates and an altitude expressed in meters
+
+    Ground altitude is required while altitude above mean sea level (AMSL) is optional. If position is e.g. output from
+    a Kalman filter, epx, epy and epz properties can also be provided.
+
+    Note: In GeoPandas (x,y) is (lon,lat) despite that in WGS84 the coordinate order should be (lat,lon).
+    """
+    xy: GeoSeries  # GeoPoint    # XY coordinates (e.g. latitude & longitude in WGS84)
+    z_ground: float              # altitude above ground plane in meters (positive)
+    z_amsl: Optional[float]      # altitude above mean sea level (AMSL) in meters if known (positive)
+    x_sd: Optional[float]        # Standard deviation of error in x (latitude) dimension
+    y_sd: Optional[float]        # Standard deviation of error in y (longitude) dimension
+    z_sd: Optional[float]        # Standard deviation of error in z (altitude) dimension
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        # TODO: enforce these checks instead of just asserting?
+        assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
+               or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
+
+        assert_len(self.xy, 1)
+        assert_type(self.xy[0], Point)
+        assert self.xy.crs is not None
+
+    @property
+    def eph(self) -> Optional[float]:
+        """Standard deviation of horizontal error in meters (for GNSS/GPS)"""
+        return max(self.x_sd, self.y_sd) if all([self.x_sd, self.y_sd]) else None
+
+    @property
+    def epv(self) -> Optional[float]:
+        """Standard deviation of vertical error in meters (for GNSS/GPS)"""
+        return self.z_sd if self.z_sd is not None else None
+
+    @property
+    def latlon(self) -> Tuple[float, float]:
+        """Convenience method for extracting WGS84 latlon coordinates
+
+        The order of (x, y) is reversed here so that the order of the returned tuple is (lat, lon)
+
+        :return: (lat, lon) WGS84 tuple
+        """
+        return self.xy.to_crs('epsg:4326')[0].coords[0][::-1]
+
+    @property
+    def lat(self) -> float:
+        """Convenience for WGS84 latitude"""
+        return self.latlon[0]
+
+    @property
+    def lon(self) -> float:
+        """Convenience for WGS84 longitude"""
+        return self.latlon[1]
 
 
 # noinspection PyClassHasNoInit
@@ -96,8 +172,10 @@ class ImageData(_ImageHolder):
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
     #image: Img
+    #center: GeoPoint
     center: Union[LatLon, LatLonAlt]
     radius: Union[int, float]
+    #bbox: GeoBox
     bbox: BBox
 
 
@@ -137,6 +215,7 @@ class ContextualMapData(_ImageHolder):
 
         src_corners = create_src_corners(*self.map_data.image.dim)
         dst_corners = self._bbox_to_polygon(self.map_data.bbox)
+        #dst_corners = np.array(self.map_data.bbox.exterior.coords).reshape(src_corners.shape)
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
@@ -151,9 +230,9 @@ class ContextualMapData(_ImageHolder):
         :param bbox: BBox to convert
         :return: bbox corners in np.ndarray"""
         return np.array([[bbox.top, bbox.left],
-                         [bbox.bottom, bbox.left],
-                         [bbox.bottom, bbox.right],
-                         [bbox.top, bbox.right]]).reshape(-1, 1, 2)
+                        [bbox.bottom, bbox.left],
+                        [bbox.bottom, bbox.right],
+                            [bbox.top, bbox.right]]).reshape(-1, 1, 2)
 
     def _rotate_and_crop_map(self) -> np.ndarray:
         """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
@@ -178,6 +257,7 @@ class ContextualMapData(_ImageHolder):
         # TODO: below assertion should not be!
         assert map_cropped.shape[0:2] == self.crop, f'Cropped shape {map_cropped.shape} did not match dims {self.crop}.'
         return map_cropped
+
 
     @staticmethod
     def _crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
@@ -367,8 +447,7 @@ class FixedCamera:
     """
     fov: FOV = field(init=False)  # TODO: move down to Match and get rid of FixedCamera? Use 'Match' for storing the vo fix instead
     ground_elevation: Optional[float]
-    position: np.ndarray = field(init=False)
-    terrain_altitude: np.ndarray = field(init=False)
+    position: Position = field(init=False)
     map_match: Match
     _match: Match  # should not be accessed directly except e.g. for debug visualization (fov_pix), use fixed_camera.map_match instead
 
@@ -394,12 +473,13 @@ class FixedCamera:
 
         return fov
 
-    def _estimate_position(self, ground_elevation: Optional[float]) -> Tuple[LatLonAlt, float]:
+    def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Position:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
         :param ground_elevation: Optional ground elevation (needed to estimate altitude from sea level)
-        :return: Camera position LatLonAlt, and altitude from ground in meters
+        :param crs: CRS to use for the Position
+        :return: Camera position
         """
         assert self.fov is not None  # Call _estimate_fov before _estimate_position!
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
@@ -415,24 +495,22 @@ class FixedCamera:
             self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
             return None
 
-        # Get altitude above mean sea level (AMSL)
-        terrain_altitude = position.alt
-        if ground_elevation is None:
-            # TODO: need to give warning of lack of altitude above amsl estimate?
-            #self.get_logger().debug('Ground plane elevation (AMSL) unavailable. Setting position.alt as None.')  # TODO: or return LatLon instead?
-            position = LatLonAlt(*position[0:2], None)
-        else:
-            position = LatLonAlt(*position[0:2], position.alt + ground_elevation)
+        position = Position(
+            xy=GeoSeries([Point(*position[1::-1])], crs=crs),  # GeoPandas needs lon-lat order so slicing is reversed
+            z_ground=position.alt,
+            z_amsl=position.alt + ground_elevation if ground_elevation is not None else None,
+            x_sd=None,
+            y_sd=None,
+            z_sd=None
+        )
 
-        return position, terrain_altitude
+        return position
 
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'fov', self._estimate_fov())  # Need to do before calling self._estimate_position
-        position, terrain_altitude = self._estimate_position(self.ground_elevation)
-        object.__setattr__(self, 'position', position)
-        object.__setattr__(self, 'terrain_altitude', terrain_altitude)
+        object.__setattr__(self, 'position', self._estimate_position(self.ground_elevation))
 
 
 # noinspection PyClassHasNoInit
@@ -452,11 +530,8 @@ class OutputData:
     """
     input: InputData
     fixed_camera: FixedCamera
-    filtered_position: Optional[np.ndarray]  # TODO: currently added post init, thence Optional
-    #position: LatLonAlt
-    #terrain_altitude: float
+    filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional
     attitude: np.ndarray
-    sd: Optional[np.ndarray]  # TODO: currently added post init, thence Optional # TODO This should be part of Position? Keep future position dataclass mutable so this can be assigned while outputdata itself is immutable
 
     # Target structure:
     # input

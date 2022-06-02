@@ -37,7 +37,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.transform import get_fov_and_c, \
     inv_homography_from_k_and_e, get_azimuth, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -1292,13 +1292,8 @@ class MapNavNode(Node, ABC):
                 self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
                 return None
             else:
-                means, covariances = filter_output
-                mean = means[0::2]  # x, y, z - skip velocities
-                sd = np.sqrt(np.diagonal(covariances)[0::2])  # x, y ,z
-
-                output_data.filtered_position = LatLonAlt(*mean)
-                output_data.sd = sd  #  TODO: need to do filtering on meters, not latlon, the SD values currently are not eph and epv!
-
+                assert_type(filter_output, Position)
+                output_data.filtered_position = filter_output
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
         return output_data
@@ -1672,8 +1667,7 @@ g
                                      ground_elevation=input_data.ground_elevation
                                  ),
                                  filtered_position=None,
-                                 attitude=attitude,
-                                 sd=None)
+                                 attitude=attitude)
 
         if self._good_match(output_data):
             return output_data
@@ -1712,8 +1706,8 @@ g
         :return: True if match is good
         """
         # Altitude below startin altitude?
-        if output_data.fixed_camera.terrain_altitude < 0:  # TODO: or is nan
-            self.get_logger().warn(f'Match terrain altitude {output_data.fixed_camera.terrain_altitude} was negative, assume bad '
+        if output_data.fixed_camera.position.z_ground < 0:  # TODO: or is nan
+            self.get_logger().warn(f'Match terrain altitude {output_data.fixed_camera.position.z_ground} was negative, assume bad '
                                    f'match.')
             return False
 

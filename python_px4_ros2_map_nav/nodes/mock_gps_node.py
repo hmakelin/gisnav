@@ -10,7 +10,7 @@ from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
-from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt
+from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 
 
@@ -34,15 +34,15 @@ class MockGPSNode(MapNavNode):
 
     def publish(self, output_data: OutputData) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        if not all(output_data.filtered_position) or any(map(np.isnan, output_data.filtered_position)) or \
-                not all(output_data.sd) or any(map(np.isnan, output_data.sd)):
+        if not isinstance(output_data.filtered_position, Position) \
+                or not all([output_data.filtered_position.epv, output_data.filtered_position.eph]):
             self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
                                    'skipping publishing.')
             return None
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
         try:
-            self._publish_mock_gps_msg(output_data.filtered_position, output_data.sd, mock_gps_selection)
+            self._publish_mock_gps_msg(output_data.filtered_position, mock_gps_selection)
         except AssertionError as ae:
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
@@ -81,26 +81,26 @@ class MockGPSNode(MapNavNode):
         return self.create_publisher(class_, topic_name, self.PUBLISH_QOS_PROFILE)
 
     # TODO: get camera_yaw/course estimate?
-    def _publish_mock_gps_msg(self, latlonalt: np.ndarray, sd: np.ndarray, selection: int) -> None:
+    def _publish_mock_gps_msg(self, position: Position, selection: int) -> None:
         """Publishes a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position, velocities and errors.
 
-        :param latlonalt: Estimated vehicle position
-        :param sd: Estimated x, y, z position standard deviations
+        :param position: Estimated vehicle position
         :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
+        assert all([position.eph, position.epv, position.z_amsl])
         # TODO: check inputs?
         msg = VehicleGpsPosition()
         msg.timestamp = self._get_ekf2_time()
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan
-        msg.lat = int(latlonalt[0] * 1e7)
-        msg.lon = int(latlonalt[1] * 1e7)
-        msg.alt = int(latlonalt[2] * 1e3)
+        msg.lat = int(position.lat * 1e7)
+        msg.lon = int(position.lon * 1e7)
+        msg.alt = int(position.z_amsl * 1e3)
         msg.alt_ellipsoid = msg.alt
-        msg.eph = max(sd[0:2])
-        msg.epv = sd[2]
+        msg.eph = position.eph
+        msg.epv = position.epv
         msg.hdop = 0.0
         msg.vdop = 0.0
         msg.vel_m_s = np.nan
@@ -116,7 +116,7 @@ class MockGPSNode(MapNavNode):
         msg.selected = selection
         #self._vehicle_gps_position_publisher.publish(msg)
 
-    def _export_position(self, position: Union[LatLon, LatLonAlt], fov: np.ndarray, filename: str) -> None:
+    def _export_position(self, position: Position, fov: np.ndarray, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.
 
         The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
@@ -126,7 +126,8 @@ class MockGPSNode(MapNavNode):
         :param filename: Name of file to write into
         :return:
         """
-        assert_type(position, get_args(Union[LatLon, LatLonAlt]))
+        # TODO: utilize GeoPandas more here?
+        assert_type(position, get_args(Union[LatLon, LatLonAlt, Position]))  # TODO: publish_projected_fov still returns LatLon, get rid of it
         assert_type(fov, np.ndarray)
         assert_type(filename, str)
         point = Feature(geometry=Point((position.lon, position.lat)))

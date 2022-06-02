@@ -2,7 +2,9 @@
 import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
-from python_px4_ros2_map_nav.data import LatLonAlt
+from geopandas import GeoSeries
+from shapely.geometry import Point
+from python_px4_ros2_map_nav.data import Position  # LatLonAlt
 from python_px4_ros2_map_nav.assertions import assert_type
 
 
@@ -56,19 +58,24 @@ class SimpleFilter:
             0  # z_vel
         ])
 
-    def filter(self, measurement: LatLonAlt) -> Optional[Tuple[2*(np.ndarray,)]]:
-        """Returns the filtered state means and covariances if enough measurements provided
+    def filter(self, position: Position) -> Optional[Position]:
+        """Returns a filtered position with estimated standard deviations
 
         Pushes the measurement into the queue and removes the oldest one if queue is full.
 
-        :param measurement: A new measurement
-        :return: Tuple of filtered state means and covariances, or None if not yet available
+        :param position: A new position observation (measurement)
+        :return: Filtered position, AMSL altitude also gets filtered if provided, epx, epy and epz values provided of None if output not yet available
         """
-        # TODO: assert measurements dimensions is 6
-        assert_type(measurement, LatLonAlt)
-        measurement = np.array(measurement).reshape(1, 3)
+        assert_type(position, Position)
+        orig_crs = position.xy.crs
+        temp_crs_str = 'epsg:3857'  # Need to do filtering in meters (for eph and epv estimation) so use EPSG:3857
+        measurement = np.array(
+            tuple(*position.xy.to_crs(temp_crs_str)[0].coords) + (position.z_ground,)
+        ).reshape(1, 3)
+
         if self._measurements is None:
             self._init_initial_state(measurement)
+            return None
         elif len(self._measurements) < self._window_length:
             # Store new measurement, not enough measurements yet
             self._measurements = np.vstack((self._measurements, measurement))
@@ -99,9 +106,28 @@ class SimpleFilter:
                                                           measurement.squeeze())
 
             # Store latest mean & covariance for online filtering in the future
+            assert mean is not None
+            assert covariance is not None
             self._previous_mean = mean
             self._previous_covariance = covariance
-            return self._previous_mean, self._previous_covariance
+
+            # TODO: fix unintuitive reverse order!
+            # Create a new position instance with filtered values converted back to the original CRS
+            xyz_mean = mean[0::2]  # x, y, z - skip velocities
+            xyz_sd = np.sqrt(np.diagonal(covariance)[0::2])  # x, y, z
+            filtered_position = Position(
+                #xy=GeoSeries(Point(xyz_mean[1::-1]), crs=temp_crs_str).set_crs(orig_crs_str,  # GeoPandas needs reverse order (lon-lat)
+                #                                                               allow_override=True),
+                xy=GeoSeries(Point(xyz_mean[0:2]), crs=temp_crs_str).to_crs(str(orig_crs)),  # no need to reverse order here since it was converted from geopandas in the first place
+                z_ground=xyz_mean[2],
+                z_amsl=position.z_amsl + (xyz_mean[2] - position.z_ground) if position.z_amsl is not None else None,
+                x_sd=xyz_sd[0],
+                y_sd=xyz_sd[1],
+                z_sd=xyz_sd[2]
+            )
+
+            assert str(filtered_position.xy.crs).lower() == str(orig_crs).lower()
+            return filtered_position
 
 
 

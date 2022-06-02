@@ -43,8 +43,8 @@ class GeoPoint:
     def __init__(self, x: float, y: float, crs: str = DEFAULT_CRS):
         """Initializes the wrapped GeoSeries
 
-        :param x: X axis coordinate (longitude)
-        :param y: Y axis coordinate (latitude)
+        :param x: X axis coordinate (longitude/east)
+        :param y: Y axis coordinate (latitude/north)
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
         self._geoseries = GeoSeries([Point(x, y)], crs=crs)

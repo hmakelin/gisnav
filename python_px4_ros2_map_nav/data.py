@@ -25,7 +25,7 @@ Dim = namedtuple('Dim', 'height width')
 #RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
 
-
+#region GeoSeries wrappers
 # noinspection PyClassHasNoInit
 class GeoPoint:
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (geographical coordinate pair)
@@ -95,7 +95,7 @@ class GeoBox(GeoSeries):
         assert_type(self[0], Polygon)
         assert_len(self[0].exterior.coords, 4)
         assert self.crs is not None
-
+#endregion
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

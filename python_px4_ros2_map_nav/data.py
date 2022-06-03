@@ -134,8 +134,8 @@ class GeoBBox(_GeoObject):
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        self._geoseries = GeoSeries([Point(center.get_coordinates())], crs=center.crs).to_crs('epsg:3857') \
-            .buffer(radius).to_crs(crs).envelope
+        # TODO: not accurate, need something else
+        self._geoseries = center._geoseries.to_crs('epsg:3857').buffer(radius).to_crs(crs).envelope
 
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries[0].exterior.coords, 4 + 1)

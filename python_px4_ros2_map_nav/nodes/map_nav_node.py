@@ -916,7 +916,6 @@ class MapNavNode(Node, ABC):
         assert_type(bbox, GeoBBox)
 
         #bbox = BBox(*self._proj.get_bbox(center, radius))  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
-        #bbox = GeoBBox(center, radius)
         #assert_type(bbox, BBox)
         assert_type(bbox, GeoBBox)
 

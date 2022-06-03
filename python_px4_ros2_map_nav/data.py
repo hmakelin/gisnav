@@ -148,10 +148,12 @@ class GeoBBox(_GeoObject):
         """Returns center or centroid point of the bounding box"""
         return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
-    @property
-    def bounds(self) -> Tuple[4*(float,)]:
-        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests"""
-        return self._geoseries[0].bounds
+    def bounds(self, crs: str = DEFAULT_CRS) -> Tuple[4*(float,)]:
+        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests
+
+        :param crs: CRS string for WMS request (e.g. 'epsg:4326')
+        """
+        return self._geoseries.to_crs(crs)[0].bounds
 
     @property
     def area(self) -> float:
@@ -322,7 +324,7 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self._bbox_to_polygon(BBox(*self.map_data.bbox.bounds))  # TODO: refactor this call out, should not be needed with new GeoBBox class
+        dst_corners = self._bbox_to_polygon(BBox(*self.map_data.bbox.bounds('epsg:4326'))) # TODO: refactor this call out, should not be needed with new GeoBBox class
         #dst_corners = np.array(self.map_data.bbox.exterior.coords).reshape(src_corners.shape)
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())

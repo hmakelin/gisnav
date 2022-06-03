@@ -136,8 +136,12 @@ class GeoBBox(_GeoObject):
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        # TODO: not accurate, need something else, epsg:3857-meters are only approximate meteres, especially away from equator
-        self._geoseries = center._geoseries.to_crs('epsg:3857').buffer(radius).to_crs(crs).envelope
+        # TODO: use a precise conversion?
+        # Adjust epsg:3857 pseudo-meters with a simple spherical model, it is accurate enough, no ellipsoid needed
+        wgs_84_geoseries = center._geoseries.to_crs('epsg:4326')
+        latitude = wgs_84_geoseries.y
+        spherical_adjustment = 1/np.cos(np.radians(latitude))
+        self._geoseries = wgs_84_geoseries.to_crs('epsg:3857').buffer(spherical_adjustment * radius).to_crs(crs).envelope
 
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries[0].exterior.coords, 4 + 1)

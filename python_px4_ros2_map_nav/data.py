@@ -134,7 +134,7 @@ class GeoBBox(_GeoObject):
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        # TODO: not accurate, need something else
+        # TODO: not accurate, need something else, epsg:3857-meters are only approximate meteres, especially away from equator
         self._geoseries = center._geoseries.to_crs('epsg:3857').buffer(radius).to_crs(crs).envelope
 
         # TODO: Enforce validity checks instead of asserting

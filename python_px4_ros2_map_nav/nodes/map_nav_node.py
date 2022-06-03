@@ -566,10 +566,12 @@ class MapNavNode(Node, ABC):
 
         # Project principal point if required
         if self._use_gimbal_projection():
-            position = self._projected_field_of_view_center(position)
-            if position is None:
+            projected_position = self._projected_field_of_view_center(position)
+            if projected_position is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
+            else:
+                position = projected_position
 
         # Get map size based on altitude and update map if needed
         assert position.z_ground is not None

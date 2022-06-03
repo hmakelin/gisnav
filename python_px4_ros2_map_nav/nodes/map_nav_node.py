@@ -548,7 +548,6 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        # TODO: implementation is wrong - need to get z_ground from local position, not z_amsl from global position
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
         position = self._position_for_update_map_request()
         assert_type(position, get_args(Optional[Position]))

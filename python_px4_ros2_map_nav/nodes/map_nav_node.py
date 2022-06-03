@@ -565,21 +565,16 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
             return
 
-        # TODO: need to use z_ground! Cannot use z_amsl for updating map! Also convert the downstream emthods here to use GeoSeries
-        latlonalt = LatLonAlt(position.xy.lat, position.xy.lon, position.z_amsl)
         # Project principal point if required
         if self._use_gimbal_projection():
-            #fov_center_ = self._projected_field_of_view_center(latlonalt)
-            fov_center_ = self._projected_field_of_view_center(position)
-            if fov_center_ is None:
+            position = self._projected_field_of_view_center(position)
+            if position is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
-            else:
-                # Position at camera altitude but above the projected field of view center
-                latlonalt = LatLonAlt(fov_center_.lat, fov_center_.lon, latlonalt.alt)
 
         # Get map size based on altitude and update map if needed
-        map_radius = self._get_dynamic_map_radius(latlonalt.alt)
+        assert position.z_ground is not None
+        map_radius = self._get_dynamic_map_radius(position.z_ground)
         max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
         assert 0 < map_radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
         map_candidate = GeoBBox(position.xy, map_radius)
@@ -760,8 +755,8 @@ class MapNavNode(Node, ABC):
             alt = self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
             position = Position(
                 xy=GeoPoint(lon, lat, crs),  # lon-lat order
-                z_ground=None,
-                z_amsl=alt,
+                z_ground=alt,
+                z_amsl=None,
                 x_sd=None,
                 y_sd=None,
                 z_sd=None
@@ -864,14 +859,14 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _projected_field_of_view_center(self, origin: Position) -> Optional[GeoPoint]:
+    def _projected_field_of_view_center(self, origin: Position) -> Optional[Position]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
         Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
         for next WMS GetMap request.
 
         :param origin: Camera position  # TODO: why is this an argument but all else is not?
-        :return: Center of the FOV or None if not available
+        :return: Center of the FOV with same altitude as given origin, or None if not available
         """
         rpy = self._get_camera_set_rpy()
         if rpy is None:
@@ -901,8 +896,14 @@ class MapNavNode(Node, ABC):
         self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c.squeeze()))  # TODO: change the c also to np.ndarray?
 
         center = np.mean(mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
-        fov_center = LatLon(*center)
-        fov_center = GeoPoint(fov_center.lon, fov_center.lat, 'epsg:4326')  # TODO: refactor the redundant LatLon assignment above
+        fov_center = Position(
+            xy=GeoPoint(*center[1::-1], crs='epsg:4326'),
+            z_ground=origin.z_ground,
+            z_amsl=None,
+            x_sd=None,
+            y_sd=None,
+            z_sd=None
+        )
         return fov_center
 
     def _update_map(self, bbox: GeoBBox) -> None:

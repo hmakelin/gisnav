@@ -13,7 +13,7 @@ from collections import namedtuple
 from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 from geopandas import GeoSeries
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, box
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
@@ -60,6 +60,7 @@ class GeoPoint(_GeoObject):
     DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
     """CRS used for GeoPoints by default unless something else is specified"""
 
+    # TODO call these x and y instead of easting and northing (more generic)
     def __init__(self, easting: float, northing: float, crs: str = DEFAULT_CRS):
         """Initializes the wrapped GeoSeries
 
@@ -74,6 +75,7 @@ class GeoPoint(_GeoObject):
         assert_type(self._geoseries[0], Point)
         assert self._geoseries.crs is not None
 
+    # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
     @lru_cache(4)
     def get_coordinates(self, crs: str = DEFAULT_CRS) -> Tuple[float, float]:
         """Easting/northing tuple in given CRS system units
@@ -143,11 +145,41 @@ class GeoBBox(_GeoObject):
         assert_type(self._geoseries[0], Polygon)
         assert self._geoseries.crs is not None
 
+    @lru_cache(4)
+    def get_coordinates(self, crs: str = DEFAULT_CRS) -> np.ndarray:
+        """Returns a numpy array of the corners coordinates of the bbox
+
+        Order should be top-left, bottom-left, bottom-right, top-right (same as
+        :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
+        """
+        # Counter clockwise order starting from top left ([::-1]), and leave duplicated top left origin out ([:-1])
+        #corners = np.array(self._geoseries[0].exterior.coords[::-1][:-1])
+        #corners = self._geoseries[0].exterior.coords[:-1]
+        #corners = np.array([
+        #    corners[3],  # tl
+        #    corners[0],  # bl
+        #    corners[1],  # br
+        #    corners[2]   # tr
+        #])
+        # TODO: fix this, hard coded order is prone to breaking even when using box function
+        corners = box(*self.bounds(crs)).exterior.coords[:-1]
+        corners = np.array([
+            corners[2],  # tl
+            corners[3],  # bl
+            corners[0],  # br
+            corners[1]   # tr
+        ])
+        # (lon, lat) to (lat, lon)
+        corners = np.flip(corners, axis=1).reshape(-1, 1, 2)
+
+        return corners
+
     @property
     def center(self) -> GeoPoint:
         """Returns center or centroid point of the bounding box"""
         return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
+    @lru_cache(4)
     def bounds(self, crs: str = DEFAULT_CRS) -> Tuple[4*(float,)]:
         """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests
 
@@ -163,6 +195,7 @@ class GeoBBox(_GeoObject):
     def intersection_area(self, box: GeoBBox):
         """Returns area of the intersection between the two boxes"""
         return self._geoseries.intersection(box._geoseries).area[0]  # TODO: access private attr
+
 
 #endregion
 
@@ -324,25 +357,12 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self._bbox_to_polygon(BBox(*self.map_data.bbox.bounds('epsg:4326'))) # TODO: refactor this call out, should not be needed with new GeoBBox class
-        #dst_corners = np.array(self.map_data.bbox.exterior.coords).reshape(src_corners.shape)
+        dst_corners = self.map_data.bbox.get_coordinates('epsg:4326')
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
         pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
-
-    # TODO: make bbox dataclass, make this public method for that class
-    @staticmethod
-    def _bbox_to_polygon(bbox: BBox) -> np.ndarray:
-        """Converts BBox to a np.ndarray polygon format
-
-        :param bbox: BBox to convert
-        :return: bbox corners in np.ndarray"""
-        return np.array([[bbox.top, bbox.left],
-                        [bbox.bottom, bbox.left],
-                        [bbox.bottom, bbox.right],
-                            [bbox.top, bbox.right]]).reshape(-1, 1, 2)
 
     def _rotate_and_crop_map(self) -> np.ndarray:
         """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.

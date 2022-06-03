@@ -37,7 +37,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position, GeoBBox, GeoPoint
 from python_px4_ros2_map_nav.transform import get_fov_and_c, \
     inv_homography_from_k_and_e, get_azimuth, make_keypoint, is_convex_isosceles_trapezoid, \
     relative_area_of_intersection
@@ -548,35 +548,29 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
+        # TODO: implementation is wrong - need to get z_ground from local position, not z_amsl from global position
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
-        latlonalt = self._latlonalt_from_vehicle_global_position()
-        assert_type(latlonalt, LatLonAlt)
+        position = self._position_for_update_map_request()
+        assert_type(position, get_args(Optional[Position]))
 
-        # If altitude was not available in VehicleGlobalPosition, try to get it from VehicleLocalPosition
-        if latlonalt.alt is None:
-            self.get_logger().debug('Could not get altitude from VehicleGlobalPosition - trying VehicleLocalPosition '
-                                    'instead.')
-            latlonalt = LatLonAlt(latlonalt.lat, latlonalt.lon, self._alt_from_vehicle_local_position())
-
-        # If some of latlonalt are still None, try to get from provided initial guess and default alt
-        if not all(latlonalt):
+        # Try to get position from provided initial guess is global position not available
+        if position is None:
             # Warn, not debug, since this is a static guess
-            self.get_logger().warn('Could not get (lat, lon, alt) tuple from VehicleGlobalPosition nor '
-                                   'VehicleLocalPosition, checking if initial guess has been provided.')
-            latlonalt_guess = self._latlonalt_from_initial_guess()
-            latlonalt = tuple(latlonalt[i] if latlonalt[i] is not None else latlonalt_guess[i] for i in
-                              range(len(latlonalt)))
-            latlonalt = LatLonAlt(*latlonalt)
+            self.get_logger().warn('Could not get (lat, lon, alt) tuple from VehicleGlobalPosition, checking if initial '
+                                   'guess has been provided.')
+            position = self._position_from_initial_guess()
 
         # Cannot determine vehicle global position
-        if not all(latlonalt):
-            self.get_logger().warn(f'Could not determine vehicle global position (latlonalt: {latlonalt}) and therefore'
-                                   f' cannot update map.')
+        if position is None:
+            self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
             return
 
+        # TODO: need to use z_ground! Cannot use z_amsl for updating map! Also convert the downstream emthods here to use GeoSeries
+        latlonalt = LatLonAlt(position.xy.lat, position.xy.lon, position.z_amsl)
         # Project principal point if required
         if self._use_gimbal_projection():
-            fov_center_ = self._projected_field_of_view_center(latlonalt)
+            #fov_center_ = self._projected_field_of_view_center(latlonalt)
+            fov_center_ = self._projected_field_of_view_center(position)
             if fov_center_ is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
@@ -586,8 +580,11 @@ class MapNavNode(Node, ABC):
 
         # Get map size based on altitude and update map if needed
         map_radius = self._get_dynamic_map_radius(latlonalt.alt)
-        if self._should_update_map(latlonalt, map_radius):
-            self._update_map(latlonalt, map_radius)
+        max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
+        assert 0 < map_radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
+        map_candidate = GeoBBox(position.xy, map_radius)
+        if self._should_update_map(map_candidate):  # _should_request_new_map
+            self._update_map(map_candidate)  # _request_new_map
         else:
             self.get_logger().debug('Map center and radius not changed enough to update map yet, '
                                     'or previous results are not ready.')
@@ -655,8 +652,7 @@ class MapNavNode(Node, ABC):
             ('default_altitude', Defaults.MAP_UPDATE_DEFAULT_ALTITUDE),
             ('gimbal_projection', Defaults.MAP_UPDATE_GIMBAL_PROJECTION),
             ('max_map_radius', Defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT),
-            ('update_map_center_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_CENTER_THRESHOLD),
-            ('update_map_radius_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_RADIUS_THRESHOLD),
+            ('update_map_area_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
             ('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH)
         ])
 
@@ -701,23 +697,34 @@ class MapNavNode(Node, ABC):
         return module_name, class_name
     #endregion
 
-    def _latlonalt_from_vehicle_global_position(self) -> LatLonAlt:
-        """Returns lat, lon in WGS84 coordinates and alt in meters from VehicleGlobalPosition.
+    def _position_for_update_map_request(self) -> Optional[Position]:
+        """Returns Vehicle position in WGS84 coordinates and altitude in meters above ground
 
-        The individual values of the LatLonAlt tuple may be None if vehicle global position is not available but a
-        LatLonAlt tuple is returned nevertheless.
+        To be used for update map requests.
 
-        :return: LatLonAlt tuple"""
-        lat, lon, alt = None, None, None
+        :return: Position or None if not available"""
         if self._vehicle_global_position is not None:
+            # TODO: do not assert global position alt - not necessarily needed?
             assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
                    hasattr(self._vehicle_global_position, 'alt')
-            lat, lon, alt = self._vehicle_global_position.lat, self._vehicle_global_position.lon, \
-                            self._vehicle_global_position.alt
-            assert_type(lat, get_args(Union[int, float]))
-            assert_type(lon, get_args(Union[int, float]))
-            assert_type(alt, get_args(Union[int, float]))
-        return LatLonAlt(lat, lon, alt)
+            alt = self._alt_from_vehicle_local_position()
+            if alt is None:
+                # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
+                self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
+                return None
+
+            crs = 'epsg:4326'
+            position = Position(
+                xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
+                z_ground=alt,
+                z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
+                x_sd=None,
+                y_sd=None,
+                z_sd=None
+            )
+            return position
+        else:
+            return None
 
     def _alt_from_vehicle_local_position(self) -> Optional[float]:
         """Returns altitude from vehicle local position or None if not available.
@@ -738,19 +745,28 @@ class MapNavNode(Node, ABC):
         else:
             return None
 
-    def _latlonalt_from_initial_guess(self) ->  Tuple[Optional[float], Optional[float], Optional[float]]:
-        """Returns lat, lon (WGS84) and altitude (meters) from provided values, or None if not available.
+    def _position_from_initial_guess(self) -> Optional[Position]:
+        """Returns Position in WGS84 and altitude (meters) from provided values, or None if not available.
 
-        If some of the initial guess values are not provided, a None is returned in their place within the tuple.
+        If some of the initial guess values are not provided, a None is returned in their place.
 
-        :return: A lat, lon, alt tuple"""
+        :return: Initial default map update position of vehicle"""
         initial_guess = self.get_parameter('map_update.initial_guess').get_parameter_value().double_array_value
         if not (len(initial_guess) == 2 and all(isinstance(x, float) for x in initial_guess)):
-            lat, lon = None, None
+            return None
         else:
+            crs = 'epsg:4326'
             lat, lon = initial_guess[0], initial_guess[1]
-
-        return lat, lon, self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
+            alt = self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
+            position = Position(
+                xy=GeoPoint(lon, lat, crs),  # lon-lat order
+                z_ground=None,
+                z_amsl=alt,
+                x_sd=None,
+                y_sd=None,
+                z_sd=None
+            )
+            return position
 
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
@@ -848,7 +864,7 @@ class MapNavNode(Node, ABC):
         assert_len(declared_size, 2)
         return Dim(*declared_size)
 
-    def _projected_field_of_view_center(self, latlonalt: LatLonAlt) -> Optional[LatLon]:
+    def _projected_field_of_view_center(self, origin: Position) -> Optional[GeoPoint]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
         Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
@@ -878,7 +894,7 @@ class MapNavNode(Node, ABC):
 
         pose = Pose(r, translation.reshape((3, 1)))
 
-        mock_image_pair = self._mock_image_pair(latlonalt, self._alt_from_vehicle_local_position())  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
+        mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
         mock_match = Match(mock_image_pair, pose)
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
@@ -886,24 +902,23 @@ class MapNavNode(Node, ABC):
 
         center = np.mean(mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
         fov_center = LatLon(*center)
+        fov_center = GeoPoint(fov_center.lon, fov_center.lat, 'epsg:4326')  # TODO: refactor the redundant LatLon assignment above
         return fov_center
 
-    def _update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> None:
+    def _update_map(self, bbox: GeoBBox) -> None:
         """Instructs the WMS client to get a new map from the WMS server.
 
-        :param center: WGS84 coordinates of map to be retrieved
-        :param radius: Radius in meters of circle to be enclosed by the map raster
+        :param bbox: Bounding box of map to update
         :return:
         """
-        self.get_logger().info(f'Updating map at {center}, radius {radius} meters.')
-        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
-        assert_type(radius, get_args(Union[int, float]))
-        max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
-        # TODO: need to recover from this, e.g. if its more than max_radius, warn and use max instead. Users could crash this by setting radius to above max radius
-        assert 0 < radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
+        #self.get_logger().info(f'Updating map at {bbox}, radius {radius} meters.')
+        self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
+        assert_type(bbox, GeoBBox)
 
-        bbox = BBox(*self._proj.get_bbox(center, radius))  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
-        assert_type(bbox, BBox)
+        #bbox = BBox(*self._proj.get_bbox(center, radius))  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
+        #bbox = GeoBBox(center, radius)
+        #assert_type(bbox, BBox)
+        assert_type(bbox, GeoBBox)
 
         map_size = self._map_size_with_padding()
         if map_size is None:
@@ -916,11 +931,11 @@ class MapNavNode(Node, ABC):
         assert_type(layer_str, str)
         assert_type(srs_str, str)
         try:
-            self.get_logger().info(f'Getting map for bbox: {bbox}, layer: {layer_str}, srs: {srs_str}.')
+            self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layer: {layer_str}, srs: {srs_str}.')
             if self._wms_results is not None:
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
             self._wms_results = self._wms_pool.starmap_async(
-                WMSClient.worker, [(center, radius, bbox, map_size, layer_str, srs_str)],
+                WMSClient.worker, [(bbox, map_size, layer_str, srs_str)],
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
@@ -1164,7 +1179,7 @@ class MapNavNode(Node, ABC):
         """
         return not self._wms_results.ready() if self._wms_results is not None else False
 
-    def _previous_map_too_close(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
+    def _previous_map_too_close(self, bbox: GeoBBox) -> bool:
         """Checks if previous map is too close to new requested one.
 
         This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
@@ -1172,38 +1187,33 @@ class MapNavNode(Node, ABC):
         view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
         or is too small compared to the size of the map (vehicle altitude has significantly decreased).
 
-        :param center: WGS84 coordinates of new map candidate center
-        :param radius: Radius in meters of new map candidate
+        :param bbox: Bounding box of new map candidate
         :return: True if previous map is too close.
         """
-        assert_type(radius, get_args(Union[int, float]))
-        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(bbox, GeoBBox)
         if self._map_output_data_prev is not None:
             previous_map_data = self._map_output_data_prev.fixed_camera._match.image_pair.ref.map_data  # TODO: use map_match not _match?
-            center_threshold = self.get_parameter('map_update.update_map_center_threshold').get_parameter_value().integer_value
-            radius_threshold = self.get_parameter('map_update.update_map_radius_threshold').get_parameter_value().integer_value
-            if abs(self._proj.distance(center, previous_map_data.center)) <= center_threshold and \
-                    abs(radius - previous_map_data.radius) <= radius_threshold:
+            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().integer_value
+            if min(bbox.intersection_area(previous_map_data.bbox) / bbox.area,
+                   bbox.intersection_area(previous_map_data.bbox) / previous_map_data.bbox.area) < area_threshold:
                 return True
 
         return False
 
-    def _should_update_map(self, center: Union[LatLon, LatLonAlt], radius: Union[int, float]) -> bool:
+    def _should_update_map(self, bbox: GeoBBox) -> bool:
         """Checks if a new WMS map request should be made to update old map.
 
         Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
         that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
         large and gimbal projection is used so that map center would be too far or even beyond the horizon.
 
-        :param center: WGS84 coordinates of new map candidate center
-        :param radius: Radius in meters of new map candidate
+        :param bbox: Bounding box of new map candidate
         :return: True if map should be updated
         """
-        assert_type(radius, get_args(Union[int, float]))
-        assert_type(center, get_args(Union[LatLon, LatLonAlt]))
+        assert_type(bbox, GeoBBox)
 
         # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
-        if self._wms_results_pending() or self._previous_map_too_close(center, radius):
+        if self._wms_results_pending() or self._previous_map_too_close(bbox):
             return False
 
         # Check condition (3) - whether camera pitch is too large if using gimbal projection
@@ -1581,20 +1591,20 @@ g
 
         return map_match
 
-    def _mock_image_pair(self, latlonalt: LatLonAlt, terrain_altitude: float) -> Optional[ImagePair]:
+    def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
         """Creates a mock image pair to be used for guessing the projected FOV needed for map updates
 
         The mock image pair which will be paired with a pose guess to compute the expected field of view. The expected
         field of view (or its principal point) is used to more accurately retrieve a new map from WMS that matches with
         where the camera is looking.
 
-        :param latlonalt: Vehicle position (altitude AMSL not required)
+        :param origin: Vehicle position (altitude AMSL not required)
         :param terrain_altitude: Vehicle altitude from ground (assumed ground plane), required
         :return: Mock image pair that can be paired with a pose guess to generate a FOV guess, or None if required info not yet available
         """
         # TODO: handle none return values
         image_data = self._mock_image_data()
-        map_data = self._mock_map_data(latlonalt, terrain_altitude)
+        map_data = self._mock_map_data(origin)
         # Get cropped and rotated map
         #camera_yaw_deg = self._camera_yaw()  # TODO: handle None?
         #camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None  # TODO: handle None!
@@ -1614,7 +1624,7 @@ g
                                k=self._camera_info.k.reshape([3, 3]))  # TODO: if none?
         return image_data
 
-    def _mock_map_data(self, origin: LatLonAlt, terrain_altitude: float) -> Optional[MapData]:
+    def _mock_map_data(self, origin: Position) -> Optional[MapData]:
         """Creates a mock MapData to be used for guessing the projected FOV needed for map updates
 
         The mock map data is used as part of mock image pair which will be paired with a pose guess to compute the
@@ -1622,7 +1632,6 @@ g
         a new map from WMS that matches with where the camera is looking.
 
         :param origin: Vehicle position (altitude AMSL not required)
-        :param terrain_altitude: Vehicle altitude from ground (assumed ground plane), required
         :return: MapData with mock images but expected bbox based on the image pixel size or None if required info not yet available
         """
         # TODO: none checks
@@ -1641,10 +1650,11 @@ g
         # Scaling factor of image pixels := terrain_altitude
         #scaling = c_max / fx
         scaling = (dim_padding[0]/2) / fx
-        radius = scaling * terrain_altitude
+        radius = scaling * origin.z_ground
 
-        bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=radius))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
-        map_data = MapData(center=origin, radius=radius, bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
+        #bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=radius))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
+        bbox = GeoBBox(origin.xy, radius)
+        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
         return map_data
 
     #region Match

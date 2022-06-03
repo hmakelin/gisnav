@@ -120,16 +120,9 @@ class Defaults:
     MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT = 400
     """Default radius for WMS GetMap request bounding boxes if nothing is provided"""
 
-    MAP_UPDATE_UPDATE_MAP_CENTER_THRESHOLD = 50
-    """A map translation threshold that, if exceeded, a new map is retrieved.
+    MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD = 0.7
+    """A map intersection area threshold that, if exceeded, causes a new map to be retrieved.
     
-    This prevents unnecessary WMS GetMap requests to replace an old map with a new map that is almost from the same
-    location. This parameter is used during :meth:`map_nav_node.MapNavNode._should_update_map` calls.
-    """
-
-    MAP_UPDATE_UPDATE_MAP_RADIUS_THRESHOLD = 50
-    """A map radius threshold that, if exceeded, causes a new map to be retrieved.
-
     This prevents unnecessary WMS GetMap requests to replace an old map with a new map that is from the same location
     and almost the same size. This parameter is used during :meth:`map_nav_node.MapNavNode._should_update_map` calls.
     """

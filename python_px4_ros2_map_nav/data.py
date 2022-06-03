@@ -6,6 +6,7 @@ import numpy as np
 import os
 import math
 
+from functools import lru_cache
 from xml.etree import ElementTree
 from typing import Optional, Union, get_args
 from collections import namedtuple
@@ -25,9 +26,28 @@ Dim = namedtuple('Dim', 'height width')
 #RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
 
+
 #region GeoSeries wrappers
 # noinspection PyClassHasNoInit
-class GeoPoint:
+class _GeoObject:
+    """Base class for other GeoSeries wrappers
+
+    Should not be instantiated directly
+    """
+    @property
+    def crs(self) -> str:
+        """Returns current CRS string"""
+        return str(self._geoseries.crs)
+
+    def to_crs(self, crs: str) -> GeoPoint:
+        """Converts to provided CRS
+
+        :return: The same GeoPoint instance transformed to new CRS"""
+        self._geoseries = self._geoseries.to_crs(crs)
+        return self
+
+
+class GeoPoint(_GeoObject):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (geographical coordinate pair)
 
     The GeoSeries class is very flexible, so this wrapper is provided to only expose specific functionality that is
@@ -40,61 +60,108 @@ class GeoPoint:
     DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
     """CRS used for GeoPoints by default unless something else is specified"""
 
-    def __init__(self, x: float, y: float, crs: str = DEFAULT_CRS):
+    def __init__(self, easting: float, northing: float, crs: str = DEFAULT_CRS):
         """Initializes the wrapped GeoSeries
 
-        :param x: X axis coordinate (longitude/east)
-        :param y: Y axis coordinate (latitude/north)
-        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
+        :param easting: X axis coordinate (longitude)
+        :param northing: Y axis coordinate (latitude)
+        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326') the (x, y) pair is provided in
         """
-        self._geoseries = GeoSeries([Point(x, y)], crs=crs)
+        self._geoseries = GeoSeries([Point(easting, northing)], crs=crs)
 
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries, 1)
         assert_type(self._geoseries[0], Point)
         assert self._geoseries.crs is not None
 
-    @property
-    def crs(self) -> str:
-        """Returns current CRS string"""
-        return str(self._geoseries.crs)
+    @lru_cache(4)
+    def get_coordinates(self, crs: str = DEFAULT_CRS) -> Tuple[float, float]:
+        """Easting/northing tuple in given CRS system units
 
-    def latlon(self, crs: str = DEFAULT_CRS) -> Tuple[float, float]:
-        """Latitude/longitude tuple in given CRS system
+        Note that this only returns coordinates in the provided CRS units but always in the (easting, northing) axis
+        order, so e.g. WGS84 (lat, lon) pair would be returned as (lon, lat). Use :meth:`~latlon` to get WGS84
+        coordinates in the correct order.
 
-        :return: (lat, lon) tuple
+        :param crs: CRS string (e.g. 'epsg:4326' or 'epsg:3857')
+        :return: Easting/northing (e.g. lon/lat) tuple
         """
-        return self._geoseries.to_crs(crs)[0].coords[0][::-1]  # Need to reverse GeoPandas/Shapely axis order
+        return self._geoseries.to_crs(crs)[0].coords[0]
 
-    def lat(self, crs: str = DEFAULT_CRS) -> float:
-        """Latitude coordinate"""
-        return self.latlon(crs)[0]
+    def get_easting(self, crs: str = DEFAULT_CRS) -> float:
+        """Easting coordinate
 
-    def lon(self, crs: str = DEFAULT_CRS) -> float:
-        """Longitude coordinate"""
-        return self.latlon(crs)[1]
+        :param crs: CRS string (e.g. 'epsg:3857')
+        """
+        return self.get_coordinates(crs)[0]
 
-    def to_crs(self, crs: str) -> GeoPoint:
-        """Converts to provided CRS
+    def get_northing(self, crs: str = DEFAULT_CRS) -> float:
+        """Northing coordinate
 
-        :return: The same GeoPoint instance transformed to new CRS"""
-        self._geoseries = self._geoseries.to_crs(crs)
-        return self
+        :param crs: CRS string (e.g. 'epsg:3857')
+        """
+        return self.get_coordinates(crs)[1]
+
+    @property
+    def latlon(self) -> Tuple[float, float]:
+        """Convenience property to get lat/lon tuple in WGS 84
+
+        Note that this returns latitude and longitude in different order then :meth:`~get_coordinates`
+        """
+        return self.get_coordinates('epsg:4326')[1::-1]  # Provide explicit CRS argument, someone might change default
+
+    @property
+    def lat(self) -> float:
+        """Convenience property to get latitude in WGS 84"""
+        return self.get_northing('epsg:4326')  # Provide explicit CRS argument, someone might change default
+
+    @property
+    def lon(self) -> float:
+        """Convenience property to get longitude in WGS 84"""
+        return self.get_easting('epsg:4326')  # Provide explicit CRS argument, someone might change default
 
 
-class GeoBox(GeoSeries):
-    """Represents a geographic bounding rectangle or bounding box (bbox)
+class GeoBBox(_GeoObject):
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a bounding box"""
 
-    This wrapper is used to do post initialization validity checks to constrain the GeoSeries, which itself is a very
-    flexible class.
-    """
-    def __post_init__(self):
-        """Post-initialization validity checks"""
-        # TODO: enforce these checks instead of just asserting?
-        assert_len(self, 1)
-        assert_type(self[0], Polygon)
-        assert_len(self[0].exterior.coords, 4)
-        assert self.crs is not None
+    DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
+    """CRS used by GeoBBox by default unless something else is specified"""
+
+    # TODO: have constructor make generic rectangle, and a static method to make square from circle
+    def __init__(self, center: GeoPoint, radius: float, crs: str = DEFAULT_CRS):
+        """Creates a square bounding box with a circle of given radius inside
+
+        :param center: Center of the bounding box
+        :param radius: Radius of enclosed circle in meters
+        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
+        """
+        self._geoseries = GeoSeries([Point(center.get_coordinates())], crs=center.crs).to_crs('epsg:3857') \
+            .buffer(radius).to_crs(crs).envelope
+
+        # TODO: Enforce validity checks instead of asserting
+        assert_len(self._geoseries[0].exterior.coords, 4 + 1)
+        assert_len(self._geoseries, 1)
+        assert_type(self._geoseries[0], Polygon)
+        assert self._geoseries.crs is not None
+
+    @property
+    def center(self) -> GeoPoint:
+        """Returns center or centroid point of the bounding box"""
+        return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
+
+    @property
+    def bounds(self) -> Tuple[4*(float,)]:
+        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests"""
+        return self._geoseries[0].bounds
+
+    @property
+    def area(self) -> float:
+        """Returns area of the box"""
+        return self._geoseries.area[0]
+
+    def intersection_area(self, box: GeoBBox):
+        """Returns area of the intersection between the two boxes"""
+        return self._geoseries.intersection(box._geoseries).area[0]  # TODO: access private attr
+
 #endregion
 
 # noinspection PyClassHasNoInit
@@ -121,6 +188,10 @@ class Position:
         assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
                or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
 
+        # Need at least one kind of altitude info (should use GeoPoint otherwise)
+        assert self.z_ground is not None or self.z_amsl is not None
+        # assert self.z_ground is not None  # TODO: enable this once _position_from_vehicle_global_position usage is fixed (*NEED* ground altitude! only in the simulator scenario the amsl and ground altitude are the same)
+
     @property
     def eph(self) -> Optional[float]:
         """Standard deviation of horizontal error in meters (for GNSS/GPS)"""
@@ -131,6 +202,15 @@ class Position:
         """Standard deviation of vertical error in meters (for GNSS/GPS)"""
         return self.z_sd if self.z_sd is not None else None
 
+    @property
+    def lat(self) -> float:
+        """Convenience property to get latitude in WGS 84"""
+        return self.xy.lat
+
+    @property
+    def lon(self) -> float:
+        """Convenience property to get longitude in WGS 84"""
+        return self.xy.lon
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -204,11 +284,7 @@ class ImageData(_ImageHolder):
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
     #image: Img
-    #center: GeoPoint
-    center: Union[LatLon, LatLonAlt]
-    radius: Union[int, float]
-    #bbox: GeoBox
-    bbox: BBox
+    bbox: GeoBox
 
 
 # noinspection PyClassHasNoInit
@@ -246,7 +322,7 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self._bbox_to_polygon(self.map_data.bbox)
+        dst_corners = self._bbox_to_polygon(BBox(*self.map_data.bbox.bounds))  # TODO: refactor this call out, should not be needed with new GeoBBox class
         #dst_corners = np.array(self.map_data.bbox.exterior.coords).reshape(src_corners.shape)
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
@@ -528,7 +604,7 @@ class FixedCamera:
             return None
 
         position = Position(
-            xy=GeoPoint(*position[1::-1], crs),  # lon-lat order
+            xy=GeoPoint(position.lon, position.lat, crs),  # lon-lat order
             z_ground=position.alt,
             z_amsl=position.alt + ground_elevation if ground_elevation is not None else None,
             x_sd=None,

@@ -63,7 +63,7 @@ class SimpleFilter:
         assert_type(position, Position)
         orig_crs_str = position.xy.crs
         temp_crs_str = 'epsg:3857'  # Need to do filtering in meters (for eph and epv estimation) so use EPSG:3857
-        measurement = np.array(position.xy.latlon(temp_crs_str) + (position.z_ground,)).reshape(1, 3)
+        measurement = np.array(position.xy.get_coordinates(temp_crs_str) + (position.z_ground,)).reshape(1, 3)
 
         if self._measurements is None:
             self._init_initial_state(measurement)
@@ -108,7 +108,7 @@ class SimpleFilter:
             xyz_mean = mean[0::2]  # x, y, z - skip velocities
             xyz_sd = np.sqrt(np.diagonal(covariance)[0::2])  # x, y, z
             filtered_position = Position(
-                xy=GeoPoint(*xyz_mean[1::-1], temp_crs_str).to_crs(orig_crs_str),  # lon-lat order
+                xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
                 z_ground=xyz_mean[2],
                 z_amsl=position.z_amsl + (xyz_mean[2] - position.z_ground) if position.z_amsl is not None else None,
                 x_sd=xyz_sd[0],

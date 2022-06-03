@@ -6,7 +6,7 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, Dim, Img, get_args
+from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, Dim, Img, get_args, GeoBBox
 
 
 class WMSClient:
@@ -73,12 +73,9 @@ class WMSClient:
         wms_client = WMSClient(url, version_, timeout_)
 
     @staticmethod
-    def worker(center: Union[LatLon, LatLonAlt], radius: Union[int, float], bbox: BBox, map_size: Tuple[int, int],
-               layer_str: str, srs_str: str) -> MapData:
+    def worker(bbox: GeoBBox, map_size: Tuple[int, int], layer_str: str, srs_str: str) -> MapData:
         """Gets latest map from WMS server for given location
 
-        :param center: Center of the map to be retrieved
-        :param radius: Radius in meters of the circle to be enclosed by the map
         :param bbox: Bounding box of the map
         :param map_size: Map size tuple (height, width)
         :param layer_str: WMS server layer
@@ -86,18 +83,18 @@ class WMSClient:
         :return: ~data.MapData containing the map raster and supporting metadata
         """
         assert wms_client is not None
-        assert_type(bbox, BBox)
+        assert_type(bbox, GeoBBox)
         assert (all(isinstance(x, int) for x in map_size))
         assert_type(layer_str, str)
         assert_type(srs_str, str)
-        assert_type(center, get_args(Union[LatLonAlt, LatLon]))
-        assert_type(radius, get_args(Union[int, float]))
+        #assert_type(center, get_args(Union[LatLonAlt, LatLon]))
+        #assert_type(radius, get_args(Union[int, float]))
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
-        map_data = MapData(center=center, radius=radius, bbox=bbox, image=Img(map_))
+        map_data = MapData(bbox=bbox, image=Img(map_))
         return map_data
 
-    def _get_map(self, layer_str: str, srs_str: str, bbox_: BBox, size_: Tuple[int, int], format_: str,
+    def _get_map(self, layer_str: str, srs_str: str, bbox_: GeoBBox, size_: Tuple[int, int], format_: str,
                  transparent_: bool) -> np.ndarray:
         """Performs a WMS GetMap request with the supplied keyword arguments
 
@@ -110,7 +107,7 @@ class WMSClient:
         :return: Map raster
         """
         try:
-            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_, size=size_, format=format_,
+            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_.bounds, size=size_, format=format_,
                                     transparent=transparent_)
         except Exception as e:
             # TODO: handle exception

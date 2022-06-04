@@ -55,7 +55,7 @@ class Defaults:
     MISC_BLUR_WINDOW_LENGTH = 20
     """Window length for rolling blur filtering"""
 
-    MISC_VISUAL_ODOMETRY = True
+    MISC_VISUAL_ODOMETRY = False
     """Flag that enables use of self referential visual odometry in addition to map matching."""
 
     MISC_VISUAL_ODOMETRY_UPDATE_T_THRESHOLD = 0.3

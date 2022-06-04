@@ -8,6 +8,7 @@ import numpy as np
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_shape, assert_len, assert_ndim
 
+
 def get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculates field of view (FOV) corners from homography and image shape.
 
@@ -36,21 +37,6 @@ def get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np
     return dst_fov, principal_point_dst
 
 
-def relative_area_of_intersection(fov1: np.ndarray, fov2: np.ndarray) -> float:
-    """Returns relative area of intersection of two polygons (fields of view)"""
-    polygon_shape_1 = Polygon(fov1.squeeze())
-    polygon_shape_2 = Polygon(fov2.squeeze())
-    intersection_area_1 = polygon_shape_1.intersection(polygon_shape_2).area
-    intersection_area_2 = polygon_shape_2.intersection(polygon_shape_1).area
-    intersection_area = min(intersection_area_1, intersection_area_2)  # If other fov is fully contained by the other
-    try:
-        ratio = intersection_area/polygon_shape_2.area
-    except Exception as e:
-        print(f'{e} {fov1} {fov2}')
-    #print(f'intersection area ratio {ratio} {polygon_shape_1} {polygon_shape_2}')
-    return ratio
-
-
 def create_src_corners(h: int, w: int) -> np.ndarray:
     """Returns image corner pixel coordinates in a numpy array.
 
@@ -62,39 +48,6 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     assert_type(w, int)
     assert h > 0 and w > 0, f'Height {h} and width {w} are both expected to be positive.'
     return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-
-
-def inv_homography_from_k_and_e(k: np.ndarray, e: np.ndarray) -> Optional[np.ndarray]:
-    """Returns inverted homography based on the intrinsic and extrinsic matrices of the camera
-
-    Used to project image pixels to world plane (ground)
-
-    :param k: Camera intrinsics
-    :param e: Camera extrinsics
-    :return: Homography matrix (assumes world Z coordinate as zero), or None if inversion cannot be done
-    """
-    e = np.delete(e, 2, 1)  # Remove z-column, making the matrix square
-    h = k @ e
-    try:
-        h_inv = np.linalg.inv(h)
-    except np.linalg.LinAlgError as _:
-        return None
-    return h_inv
-
-
-def get_azimuth(x: float, y: float) -> float:
-    """Get azimuth of position x and y coordinates.
-
-    Note: in NED coordinates x is north, so here it would be y.
-
-    :param x: Meters towards east
-    :param y: Meters towards north
-    :return: Azimuth in degrees
-    """
-    rads = math.atan2(y, x)
-    rads = rads if rads > 0 else rads + 2*math.pi  # Counter-clockwise from east
-    rads = -rads + math.pi/2  # Clockwise from north
-    return math.degrees(rads)
 
 
 def make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:

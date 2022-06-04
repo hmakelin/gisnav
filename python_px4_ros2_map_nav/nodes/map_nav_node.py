@@ -38,16 +38,13 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position, GeoBBox, GeoPoint
-from python_px4_ros2_map_nav.transform import get_fov_and_c, \
-    inv_homography_from_k_and_e, get_azimuth, make_keypoint, is_convex_isosceles_trapezoid, \
-    relative_area_of_intersection
+from python_px4_ros2_map_nav.transform import is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.matchers.orb import ORBMatcher
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.visualization import Visualization
-from python_px4_ros2_map_nav.proj import Proj
 from python_px4_ros2_map_nav.filter import SimpleFilter
 
 
@@ -124,9 +121,6 @@ class MapNavNode(Node, ABC):
 
         # Stored blur values for blur detection
         self._blurs = None
-
-        # WGS84 projections
-        self._proj = Proj.instance()
 
         # Kalman filter (initialized once enough measurements available)
         window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
@@ -394,16 +388,6 @@ class MapNavNode(Node, ABC):
     def _topics(self, value: dict) -> None:
         assert_type(value, dict)
         self.__topics = value
-
-    @property
-    def _proj(self) -> Proj:
-        """Stored pyproj Proj instance for performing geodetic computations."""
-        return self.__proj
-
-    @_proj.setter
-    def _proj(self, value: Proj) -> None:
-        assert_type(value, Proj)
-        self.__proj = value
 
     @property
     def _cv_bridge(self) -> CvBridge:
@@ -894,9 +878,9 @@ class MapNavNode(Node, ABC):
         mock_match = Match(mock_image_pair, pose)
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
-        self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c.squeeze()))  # TODO: change the c also to np.ndarray?
+        self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c))  # TODO: change the c also to np.ndarray?
 
-        center = np.mean(mock_fixed_camera.fov.fov, axis=0).squeeze().tolist()
+        center = np.mean(mock_fixed_camera.fov.fov.get_coordinates(crs='epsg:4326'), axis=0).squeeze().tolist()
         fov_center = Position(
             xy=GeoPoint(*center[1::-1], crs='epsg:4326'),
             z_ground=origin.z_ground,
@@ -915,10 +899,6 @@ class MapNavNode(Node, ABC):
         """
         #self.get_logger().info(f'Updating map at {bbox}, radius {radius} meters.')
         self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
-        assert_type(bbox, GeoBBox)
-
-        #bbox = BBox(*self._proj.get_bbox(center, radius))  # TODO: should these things be moved to args? Move state related stuff up the call stack all in the same place. And isnt this a static function anyway?
-        #assert_type(bbox, BBox)
         assert_type(bbox, GeoBBox)
 
         map_size = self._map_size_with_padding()
@@ -1653,7 +1633,6 @@ g
         scaling = (dim_padding[0]/2) / fx
         radius = scaling * origin.z_ground
 
-        #bbox = BBox(*self._proj.get_bbox(latlon=origin, radius_meters=radius))  # TODO: try to return BBox from get_bbox, need to move BBox def to proj.py
         bbox = GeoBBox(origin.xy, radius)
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
         return map_data
@@ -1723,8 +1702,8 @@ g
             return False
 
         # Estimated field of view has unexpected shape?
-        if not is_convex_isosceles_trapezoid(output_data.fixed_camera.fov.fov_pix):
-            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.squeeze().tolist()} was not a convex isosceles '
+        if not is_convex_isosceles_trapezoid(output_data.fixed_camera.fov.fov_pix.get_coordinates()):
+            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.get_coordinates().squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
             return False
 

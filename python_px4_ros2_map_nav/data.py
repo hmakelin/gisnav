@@ -17,7 +17,6 @@ from shapely.geometry import Point, Polygon, box
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
-from python_px4_ros2_map_nav.proj import Proj
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
 LatLon = namedtuple('LatLon', 'lat lon')
@@ -73,7 +72,7 @@ class GeoPoint(_GeoObject):
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries, 1)
         assert_type(self._geoseries[0], Point)
-        assert self._geoseries.crs is not None
+        #assert self._geoseries.crs is not None  # TODO: disabled because fov_pix is handled as GeoTrapezoid, fix it
 
     # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
     @lru_cache(4)
@@ -123,7 +122,10 @@ class GeoPoint(_GeoObject):
 
 
 class GeoBBox(_GeoObject):
-    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a bounding box"""
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a bounding box
+
+    Used for (square) map bounding boxes.
+    """
 
     DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
     """CRS used by GeoBBox by default unless something else is specified"""
@@ -200,6 +202,59 @@ class GeoBBox(_GeoObject):
         """Returns area of the intersection between the two boxes"""
         return self._geoseries.intersection(box._geoseries).area[0]  # TODO: access private attr
 
+
+class GeoTrapezoid(_GeoObject):
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex) trapezoid
+
+    Used to represents camera field of view projected to ground plane.
+    """
+
+    DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
+    """CRS used by default unless something else is specified"""
+
+    def __init__(self, corners: np.ndarray, crs: str = DEFAULT_CRS):
+        """Creates a square bounding box with a circle of given radius inside
+
+        :param corners: Trapezoid corner coordinates
+        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
+        """
+        self._geoseries = GeoSeries([Polygon(corners.squeeze())], crs=crs)
+
+        # TODO: Enforce validity checks instead of asserting
+        assert_len(self._geoseries[0].exterior.coords, 4 + 1)
+        assert_len(self._geoseries, 1)
+        assert_type(self._geoseries[0], Polygon)
+        assert self._geoseries[0].is_valid
+
+    # TODO: how to know which corners are "bottom" corners and which ones are "top" corners?
+    #  Order should again be same as in create_src_corners, as in GeoBBox. Need to have some shared trapezoid corner order constant used by these three?
+    # Need to force constructor to distinguish between tl, bl, br, and tr?
+    @lru_cache(4)
+    def get_coordinates(self, crs: str = DEFAULT_CRS) -> np.ndarray:
+        """Returns a numpy array of the corners coordinates of the trapezoid
+
+        Order should be top-left, bottom-left, bottom-right, top-right (same as
+        :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
+        """
+        # Corners should be provided in tl, bl, br, tr order to constructor
+        # TODO: make this less prone to breaking
+        corners = np.array(self._geoseries[0].exterior.coords[:-1])
+
+        # (lon, lat) to (lat, lon)
+        corners = np.flip(corners, axis=1).reshape(-1, 1, 2)
+
+        return corners
+
+    @property
+    def center(self) -> GeoPoint:
+        """Returns center or centroid point of the bounding box"""
+        return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
+
+    @property
+    def length(self) -> float:
+        # TODO: does not use crs, just returns raw lenght because fov_pix does not have crs
+        """Returns length of polygon"""
+        return self._geoseries[0].length
 
 #endregion
 
@@ -538,11 +593,11 @@ class InputData:
 @dataclass
 class FOV:
     """Camera field of view related attributes"""
-    fov_pix: np.ndarray
-    fov: Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
+    fov_pix: GeoTrapezoid  # np.ndarray  # TODO: not real GEOtrapezoid, just trapezoid but need shapely functions!
+    fov: Optional[GeoTrapezoid]  #Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     c: np.ndarray
     c_pix: np.ndarray
-    fov_pix_map: np.ndarray  # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
+    fov_pix_map: GeoTrapezoid  # np.ndarray  # TODO: not real GEOtrapezoid, just trapezoid but need shapely functions! # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
     c_pix_map: np.ndarray  # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
     scaling: float = field(init=False)
 
@@ -557,10 +612,13 @@ class FOV:
 
         :return: Altitude scaling factor
         """
-        proj = Proj.instance()  # Get cached geod instance
-        distance_in_pixels = np.linalg.norm(self.fov_pix_map[1]-self.fov_pix_map[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
-                                           LatLon(*self.fov[2].squeeze().tolist()))
+        #proj = Proj.instance()  # Get cached geod instance
+        #distance_in_pixels = np.linalg.norm(self.fov_pix_map[1]-self.fov_pix_map[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
+        #distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
+        #                                   LatLon(*self.fov[2].squeeze().tolist()))
+        distance_in_pixels = self.fov_pix_map.length
+        distance_in_meters = self.fov.length
+        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
         return altitude_scaling
@@ -597,11 +655,11 @@ class FixedCamera:
         fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self._match.inv_h)
         fov_wgs84, c_wgs84 = get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
 
-        fov = FOV(fov_pix=fov_pix,
-                  fov=fov_wgs84,  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
+        fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
+                  fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
                   c_pix=c_pix,
-                  c=c_wgs84,
-                  fov_pix_map=fov_pix_map,
+                  c=c_wgs84.squeeze(),
+                  fov_pix_map=GeoTrapezoid(np.flip(fov_pix_map, axis=2), crs=''),  # GIve it a proper crs?
                   c_pix_map=c_pix_map
                   )
 

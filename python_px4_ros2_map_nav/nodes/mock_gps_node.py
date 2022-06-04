@@ -10,7 +10,7 @@ from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
-from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position
+from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position, GeoTrapezoid
 from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 
 
@@ -116,7 +116,7 @@ class MockGPSNode(MapNavNode):
         msg.selected = selection
         #self._vehicle_gps_position_publisher.publish(msg)
 
-    def _export_position(self, position: Position, fov: np.ndarray, filename: str) -> None:
+    def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.
 
         The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
@@ -128,10 +128,10 @@ class MockGPSNode(MapNavNode):
         """
         # TODO: utilize GeoPandas more here?
         assert_type(position, get_args(Union[LatLon, LatLonAlt, Position]))  # TODO: publish_projected_fov still returns LatLon, get rid of it
-        assert_type(fov, np.ndarray)
+        assert_type(fov, GeoTrapezoid)
         assert_type(filename, str)
         point = Feature(geometry=Point((position.lon, position.lat)))
-        corners = np.flip(fov.squeeze()).tolist()
+        corners = np.flip(fov.get_coordinates(crs='epsg:4326').squeeze()).tolist()
         corners = [tuple(x) for x in corners]
         corners = Feature(geometry=Polygon([corners]))
         features = [point, corners]

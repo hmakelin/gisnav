@@ -143,6 +143,8 @@ class GeoBBox(_GeoObject):
         wgs_84_geoseries = center._geoseries.to_crs('epsg:4326')
         latitude = wgs_84_geoseries[0].y
         spherical_adjustment = 1/np.cos(np.radians(latitude))
+        assert_type(wgs_84_geoseries, GeoSeries)
+        assert_len(wgs_84_geoseries, 1)
         self._geoseries = wgs_84_geoseries.to_crs('epsg:3857').buffer(spherical_adjustment * radius).to_crs(crs).envelope
 
         # TODO: Enforce validity checks instead of asserting

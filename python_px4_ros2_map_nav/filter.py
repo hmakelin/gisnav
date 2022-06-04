@@ -74,8 +74,8 @@ class SimpleFilter:
             return None
         else:
             # No need to maintain self._measurements, use online filtering (filter_update) instead
-            # self._measurements = self._measurements[len(self._measurements) - QUEUE_MAX_HEIGHT:]
-            # self._measurements = np.vstack((self._measurements, measurement))
+            #self._measurements = self._measurements[len(self._measurements) - self.QUEUE_MAX_HEIGHT:]
+            #self._measurements = np.vstack((self._measurements, measurement))
 
             assert len(self._measurements) > 0  # If window length for some reason not sensible
             if self._kf is None:
@@ -94,6 +94,7 @@ class SimpleFilter:
                 # Online update
                 assert self._previous_mean is not None
                 assert self._previous_covariance is not None
+                #self._kf = self._kf.em(self._measurements, n_iter=5)  # TODO: this needed?
                 mean, covariance = self._kf.filter_update(self._previous_mean, self._previous_covariance,
                                                           measurement.squeeze())
 

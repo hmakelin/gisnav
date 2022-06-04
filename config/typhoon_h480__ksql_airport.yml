@@ -16,8 +16,8 @@ map_nav_node:
       blur_threshold: 1.5  # standard deviations
       blur_window_length: 100
       visual_odometry: True
-      visual_odometry_update_t_threshold: 0.5  # multiple of focal length, translation threshold
-      visual_odometry_update_r_threshold: 0.5  # radians, rotation threshold
+      visual_odometry_update_t_threshold: 0.3  # multiple of focal length, translation threshold
+      visual_odometry_update_r_threshold: 0.3  # radians, rotation threshold
     map_update:
       initial_guess: # Values from ksql_airport.world file
         - 37.523640

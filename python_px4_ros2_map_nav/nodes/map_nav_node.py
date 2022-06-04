@@ -1626,6 +1626,7 @@ g
         :return: MapData with mock images but expected bbox based on the image pixel size or None if required info not yet available
         """
         # TODO: none checks
+        assert_type(origin, Position)
         #if self._camera_info is None:
         #    self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
         #    return None
@@ -1643,6 +1644,7 @@ g
         scaling = (dim_padding[0]/2) / fx
         radius = scaling * origin.z_ground
 
+        assert_type(origin.xy, GeoPoint)
         bbox = GeoBBox(origin.xy, radius)
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
         return map_data

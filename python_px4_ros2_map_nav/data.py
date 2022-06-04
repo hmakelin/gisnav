@@ -146,7 +146,7 @@ class GeoBBox(_GeoObject):
         self._geoseries = wgs_84_geoseries.to_crs('epsg:3857').buffer(spherical_adjustment * radius).to_crs(crs).envelope
 
         # TODO: Enforce validity checks instead of asserting
-        assert_len(self._geoseries[0].exterior.coords, 4 + 1)
+        #assert_len(self._geoseries[0].exterior.coords, 4 + 1)  TODO 4 or 5?
         assert_len(self._geoseries, 1)
         assert_type(self._geoseries[0], Polygon)
         assert self._geoseries.crs is not None
@@ -168,7 +168,12 @@ class GeoBBox(_GeoObject):
         #    corners[2]   # tr
         #])
         # TODO: fix this, hard coded order is prone to breaking even when using box function
-        corners = box(*self.bounds(crs)).exterior.coords[:-1]
+        # TODO: why sometimes 5, sometimes 4?
+        if len(self._geoseries[0].exterior.coords) == 5:
+            corners = box(*self.bounds(crs)).exterior.coords[:-1]
+        else:
+            len(self._geoseries[0].exterior.coords) == 4
+            corners = box(*self.bounds(crs)).exterior.coords
         corners = np.array([
             corners[2],  # tl
             corners[3],  # bl
@@ -221,10 +226,10 @@ class GeoTrapezoid(_GeoObject):
         self._geoseries = GeoSeries([Polygon(corners.squeeze())], crs=crs)
 
         # TODO: Enforce validity checks instead of asserting
-        assert_len(self._geoseries[0].exterior.coords, 4 + 1)
+        #assert_len(self._geoseries[0].exterior.coords, 4 + 1)  # TODO 4 or 5?
         assert_len(self._geoseries, 1)
         assert_type(self._geoseries[0], Polygon)
-        assert self._geoseries[0].is_valid
+        #assert self._geoseries[0].is_valid  # TODO: handle this like is_isosceles_trapezoid (this is pre-init check, the other one is post init check)
 
     # TODO: how to know which corners are "bottom" corners and which ones are "top" corners?
     #  Order should again be same as in create_src_corners, as in GeoBBox. Need to have some shared trapezoid corner order constant used by these three?
@@ -238,7 +243,12 @@ class GeoTrapezoid(_GeoObject):
         """
         # Corners should be provided in tl, bl, br, tr order to constructor
         # TODO: make this less prone to breaking
-        corners = np.array(self._geoseries[0].exterior.coords[:-1])
+        # TODO: why sometimes 5, sometimes 4?
+        if len(self._geoseries[0].exterior.coords) == 5:
+            corners = np.array(self._geoseries[0].exterior.coords[:-1])
+        else:
+            assert len(self._geoseries[0].exterior.coords) == 4
+            corners = np.array(self._geoseries[0].exterior.coords)
 
         # (lon, lat) to (lat, lon)
         corners = np.flip(corners, axis=1).reshape(-1, 1, 2)
@@ -564,6 +574,7 @@ class Match:
         index = 0  # TODO: how to pick index? Need to compare camera normals?
         r, t = Rs[index], Ts[index]
         t = match.image_pair.qry.fx * t  # scale by focal length  # TODO: assume fx == fy
+        # TODO: handle pose ValueError
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),
                 pose=Pose(

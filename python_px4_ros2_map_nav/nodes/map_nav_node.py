@@ -873,10 +873,15 @@ class MapNavNode(Node, ABC):
         fx = self._camera_info.k.reshape((3, 3))[0][0]
         translation = -r @ np.array([cx, cy, -fx])
 
-        pose = Pose(r, translation.reshape((3, 1)))
-
         mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
-        mock_match = Match(mock_image_pair, pose)
+
+        try:
+            pose = Pose(r, translation.reshape((3, 1)))
+            mock_match = Match(mock_image_pair, pose)
+        except ValueError as e:
+            self.get_logger().error(f'Pose inputs had problems {r}, {translation}: {e}.')
+            return None
+
         mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c))  # TODO: change the c also to np.ndarray?
@@ -1553,7 +1558,7 @@ g
         return gimbal_estimated_attitude
 
     @staticmethod
-    def _estimate_map_match(match: Match, input_data: InputData) -> Match:
+    def _estimate_map_match(match: Match, input_data: InputData) -> Optional[Match]:
         """Estimates _match against the latest map frame
 
         :param match: Match for the match
@@ -1563,13 +1568,18 @@ g
         if not match.image_pair.mapful():
             # Combine with latest map match
             assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
-            map_match = match @ input_data.vo_fix.map_match
+            try:
+                map_match = match @ input_data.vo_fix.map_match
+            except ValueError as e:
+                self.get_logger().debug(f'Error creating map match: {e}.')
+                return None
         else:
             # TODO: just return Match or need a copy()
-            map_match = Match(
-                image_pair=match.image_pair,
-                pose=Pose(match.pose.r, match.pose.t)
-            )
+            #map_match = Match(
+            #    image_pair=match.image_pair,
+            #    pose=Pose(match.pose.r, match.pose.t)
+            #)
+            map_match = match
 
         return map_match
 
@@ -1647,6 +1657,10 @@ g
         :return: Computed output_data if a valid estimate was obtained
         """
         map_match = self._estimate_map_match(match, input_data)
+        if map_match is None:
+            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {match.image_pair.mapful()}.')
+            return None
+
         attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
 
         # Init output

@@ -556,6 +556,7 @@ class MapNavNode(Node, ABC):
                                        'instead.')
             else:
                 position = projected_position
+                #print(f'proj pos {projected_position.xy._geoseries} {projected_position.z_ground}')
 
         # Get map size based on altitude and update map if needed
         assert position.z_ground is not None

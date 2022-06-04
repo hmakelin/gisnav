@@ -141,7 +141,7 @@ class GeoBBox(_GeoObject):
         # TODO: use a precise conversion?
         # Adjust epsg:3857 pseudo-meters with a simple spherical model, it is accurate enough, no ellipsoid needed
         wgs_84_geoseries = center._geoseries.to_crs('epsg:4326')
-        latitude = wgs_84_geoseries.y
+        latitude = wgs_84_geoseries[0].y
         spherical_adjustment = 1/np.cos(np.radians(latitude))
         self._geoseries = wgs_84_geoseries.to_crs('epsg:3857').buffer(spherical_adjustment * radius).to_crs(crs).envelope
 
@@ -254,7 +254,8 @@ class GeoTrapezoid(_GeoObject):
     def length(self) -> float:
         # TODO: does not use crs, just returns raw lenght because fov_pix does not have crs
         """Returns length of polygon"""
-        return self._geoseries[0].length
+        #return self._geoseries[0].length
+        return self._geoseries.length
 
 #endregion
 
@@ -617,7 +618,15 @@ class FOV:
         #distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
         #                                   LatLon(*self.fov[2].squeeze().tolist()))
         distance_in_pixels = self.fov_pix_map.length
-        distance_in_meters = self.fov.length
+        # TODO: try to do without private attr access
+        distance_in_meters = self.fov._geoseries.to_crs('epsg:3857').length
+
+        # TODO: same logic in GeoBBox, combine (here the adjustment is inverse!)
+        wgs_84_geoseries = self.fov.center._geoseries.to_crs('epsg:4326')
+        latitude = wgs_84_geoseries[0].y
+        spherical_adjustment = np.cos(np.radians(latitude))
+        distance_in_meters = spherical_adjustment * distance_in_meters
+
         # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
@@ -696,6 +705,7 @@ class FixedCamera:
             z_sd=None
         )
 
+        #print(f'estimated position {position.xy} {position.z_ground}')
         return position
 
     def __post_init__(self):

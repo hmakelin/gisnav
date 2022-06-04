@@ -114,7 +114,7 @@ class MockGPSNode(MapNavNode):
         msg.heading = np.nan
         msg.heading_offset = np.nan
         msg.selected = selection
-        #self._vehicle_gps_position_publisher.publish(msg)
+        self._vehicle_gps_position_publisher.publish(msg)
 
     def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.

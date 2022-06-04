@@ -1557,8 +1557,7 @@ g
 
         return gimbal_estimated_attitude
 
-    @staticmethod
-    def _estimate_map_match(match: Match, input_data: InputData) -> Optional[Match]:
+    def _estimate_map_match(self, match: Match, input_data: InputData) -> Optional[Match]:
         """Estimates _match against the latest map frame
 
         :param match: Match for the match

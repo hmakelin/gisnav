@@ -941,27 +941,6 @@ class MapNavNode(Node, ABC):
 
         inputs = None  # TODO: the odom flag should be disabled when called for map!
 
-        # Do visual odometry if enabled
-        if self._should_vo_match(image_data.image.arr):
-            assert self._vo_matching_query is None or self._vo_matching_query.result.ready()
-            assert self._vo_matching_pool is not None
-            assert self._map_input_data_prev is not None
-            try:
-                inputs, contextual_map_data = self._match_inputs()
-            except TypeError as e:
-                # TODO: handle invalid/unavailable inputs with a warning, not error
-                self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
-                                        f'Skipping visual odometry matching.')
-                return
-            self._vo_input_data = inputs
-            vo_reference = self._vo_reference().fixed_camera._match.image_pair.qry  # Access _match intentional, need the raw vo pose, not map pose
-            if vo_reference is not None and inputs.vo_fix is not None:  # Need both previous frame and a map fix  # TODO: move this check to should_vo_match!
-                image_pair = ImagePair(image_data, vo_reference)
-                self._match(image_pair, inputs)
-            else:
-                self.get_logger().error(f'No visual odometry reference data, returning None.')
-                return
-
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
@@ -1145,29 +1124,26 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region MatchingWorkerCallbacks
-    def _matching_worker_callback_common(self, results: list, visual_odometry: bool) -> Optional[OutputData]:
+    def _matching_worker_callback_common(self, results: list) -> Optional[OutputData]:
         """Common logic for both vo and map matching worker callbacks
 
         :param results: Results from the matching worker
-        :param visual_odometry: True if results are from visual odometry worker
         :return: Parsed output data, or None if not available
         """
         pose = results[0]
         if pose is not None:
-            self._store_extrinsic_guess(pose, odom=visual_odometry)
+            self._store_extrinsic_guess(pose)
         else:
             self.get_logger().warn(f'Could not compute _match, returning None.')
             return None
-        query = self._vo_matching_query if visual_odometry else self._map_matching_query
-        match = Match(image_pair=query.image_pair, pose=pose)
+
+        match = Match(image_pair=self._map_matching_query.image_pair, pose=pose)
         output_data = self._compute_output(match, query.input_data)
 
         if output_data is not None:
             # noinspection PyUnreachableCode
             if __debug__:
-                # TODO: vo_enabled argument should not be needed (see Visualization.update() method)
-                vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-                self._visualization.update(output_data, vo_enabled)
+                self._visualization.update(output_data)
 
             # Get output from Kalman filter
             filter_output = self._kf.filter(output_data.fixed_camera.position)
@@ -1202,42 +1178,8 @@ class MapNavNode(Node, ABC):
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:
-            self._vo_reset()
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
-
-    def vo_matching_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for visual odometry matching worker.
-
-        :return:
-        """
-        self.get_logger().error(f'Visual odometry matching process returned an error:\n{e}\n{traceback.print_exc()}')
-
-    def vo_matching_worker_callback(self, results: list) -> None:
-        """Callback for visual odometry matching worker.
-
-        Retrieves latest :py:attr:`~_odom_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored
-        inputs are needed so that the post-processing is done using the same state information that was used for
-        initiating the match. For example, camera pitch may have changed since then (e.g. if match takes 100ms) and
-        current camera pitch should therefore not be used for processing the matches.
-
-        :return:
-        """
-        if self._vo_input_data is None:
-            # VO reset happened while matching
-            self.get_logger().warn('VO match received but VO reset happend in the meantime.')
-            return
-
-        output_data = self._matching_worker_callback_common(results, True)
-        if output_data is None:
-            self.get_logger().warn('Bad visual odometry match. Resetting visual odometry and map match.')
-            self._vo_reset()
-        else:
-            if self._should_fix_vo(output_data.fixed_camera._match):
-                self._vo_output_data_fix = output_data
-
-            self._vo_input_data_prev = self._vo_input_data
-            self._vo_output_data_prev = output_data
     #endregion
 
     def _camera_set_pitch(self) -> Optional[Union[int, float]]:
@@ -1256,21 +1198,6 @@ class MapNavNode(Node, ABC):
             return None
         assert_type(rpy, RPY)
         return rpy.pitch
-
-    def _vo_reference(self) -> Optional[OutputData]:
-        """Returns previous image data that should be used for visual odometry matching.
-
-        First priority is the vo fixed frame reference. If no fixed frame exists, try latest map frame.
-        
-        :return: Previous OutputData from either map or vo matching, or None if not available
-        """
-        if self._vo_output_data_fix is not None:
-            return self._vo_output_data_fix
-        elif self._map_output_data_prev is not None:
-            return self._map_output_data_prev
-        else:
-            self.get_logger().debug('No previous frame available, returning None.')
-            return None
 
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera pitch exceeds given limit.
@@ -1338,22 +1265,18 @@ class MapNavNode(Node, ABC):
             # Add newest values
             self._blurs = np.append(self._blurs, blur)
 
-    def _store_extrinsic_guess(self, pose: Pose, odom: bool = False) -> None:
+    def _store_extrinsic_guess(self, pose: Pose) -> None:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
 
         Assumes previous solution to the PnP problem will be close to the new solution. See also
         :meth:`~_retrieve_extrinsic_guess`.
 
         :param pose: Pose to store
-        :param odom: Set to True to store for visual odometry, otherwise map matching is assumed
         :return:
         """
-        if odom:
-            self._pose_vo_guess = pose
-        else:
-            self._pose_map_guess = pose
+        self._pose_map_guess = pose
 
-    def _retrieve_extrinsic_guess(self, odom: bool = False) -> Optional[Pose]:
+    def _retrieve_extrinsic_guess(self) -> Optional[Pose]:
         """Retrieves stored rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in
          :meth:`~_process_matches`.
 
@@ -1362,60 +1285,9 @@ class MapNavNode(Node, ABC):
 
         # TODO: require that timestamp of previous solution is not too old
 
-        :param odom: Set to true to retrieve extrinsic guess for visual odometry, otherwise map matching is assumed
         :return: Requested _pose, or None if not available
         """
-        if odom:
-            return self._pose_vo_guess
-        else:
-            return self._pose_map_guess
-
-    def _should_fix_vo(self, match: Match) -> bool:
-        """Returns True if previous visual odometry fixed reference frame should be updated
-
-        Assumes fx == fy (focal lengths in x and y dimensions are the approximately same).
-g
-        :param output_data: The visual odometry match
-        """
-        # TODO: turn the info messages to debugging messages
-        # If has not been fixed yet
-        if self._vo_output_data_fix is None:
-            self.get_logger().info(f'Visual odometry fixed frame missing. Fixing it now.')
-            return True
-
-        # Check whether camera translation is over threshold
-        t_threshold = self.get_parameter('misc.visual_odometry_update_t_threshold').get_parameter_value().double_value
-        camera_translation = np.linalg.norm(match.camera_position_difference.squeeze())
-        threshold = t_threshold * match.image_pair.qry.fx
-        if camera_translation > threshold:
-            self.get_logger().info(f'Camera translation {camera_translation} over threshold {threshold}, fixing vo '
-                                   f'frame.')
-            return True
-
-        # Check whether camera rotation is over threshold
-        r_threshold = self.get_parameter('misc.visual_odometry_update_r_threshold').get_parameter_value().double_value
-        rotvec = Rotation.from_matrix(match.pose.r).as_rotvec()
-        camera_rotation = np.linalg.norm(rotvec)
-        threshold = r_threshold
-        if camera_rotation > threshold:
-            self.get_logger().info(f'Camera rotation {camera_rotation} over threshold {threshold}, fixing vo '
-                                   f'frame.')
-            return True
-
-        return False
-
-    def _vo_reset(self) -> None:
-        """Resets accumulated _match
-
-        Used when a new map match is found or visual odometry has lost track (bad match with visual odometry).
-
-        :param k: Camera intrinsics matrix
-        """
-        # Reset accumulated position differential
-        self._vo_input_data = None
-        self._vo_input_data_prev = None
-        self._vo_output_data_prev = None
-        self._vo_output_data_fix = None
+        return self._pose_map_guess
 
     @staticmethod
     def _estimate_attitude(map_match: Match) -> np.ndarray:
@@ -1442,31 +1314,6 @@ g
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
         return gimbal_estimated_attitude
-
-    def _estimate_map_match(self, match: Match, input_data: InputData) -> Optional[Match]:
-        """Estimates _match against the latest map frame
-
-        :param match: Match for the match
-        :param input_data: Input data context
-        :return: Estimated _match against map
-        """
-        if not match.image_pair.mapful():
-            # Combine with latest map match
-            assert input_data.vo_fix is not None  # Should be checked in image_raw_callback and/or _should_vo_match
-            try:
-                map_match = match @ input_data.vo_fix.map_match
-            except ValueError as e:
-                self.get_logger().debug(f'Error creating map match: {e}.')
-                return None
-        else:
-            # TODO: just return Match or need a copy()
-            #map_match = Match(
-            #    image_pair=match.image_pair,
-            #    pose=Pose(match.pose.r, match.pose.t)
-            #)
-            map_match = match
-
-        return map_match
 
     def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
         """Creates a mock image pair to be used for guessing the projected FOV needed for map updates
@@ -1543,18 +1390,13 @@ g
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained
         """
-        map_match = self._estimate_map_match(match, input_data)
-        if map_match is None:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {match.image_pair.mapful()}.')
-            return None
-
-        attitude = self._estimate_attitude(map_match)  # TODO Make a dataclass out of attitude?
+        attitude = self._estimate_attitude(match)  # TODO Make a dataclass out of attitude?
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
         output_data = OutputData(input=input_data,
                                  fixed_camera=FixedCamera(
-                                     map_match=map_match,
+                                     map_match=match,
                                      _match=match,
                                      ground_elevation=input_data.ground_elevation
                                  ),
@@ -1576,7 +1418,6 @@ g
         :return: The input data
         """
         input_data = InputData(
-            vo_fix=self._vo_reference().fixed_camera if self._vo_reference() is not None else None,
             ground_elevation=self._local_position_ref_alt()
         )
 
@@ -1627,40 +1468,6 @@ g
         #assert self._map_input_data_prev is not None  # TODO: why was this here?
         return self._map_output_data_prev is not None
 
-    def _should_vo_match(self, img: np.ndarray) -> bool:
-        """Determines whether _odom_match should be called based on whether previous match is still being processed.
-
-        Match should be attempted if (1) visual odometry is enabled, (2) previous image frame is available, (3) there
-        are no pending visual odometry match results and (4) image is not too blurry. Unlike :meth:`~should_match`, the
-        visual odometry ignores the drone altitude and camera pitch checks since they are not assumed to be relevant
-        for comparing successive frames against each other.
-
-        :param img: Image to match
-        :return: True if matching should be attempted
-        """
-        # Check whether visual odometry matching is enabled
-        visual_odometry = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        if not visual_odometry:
-            return False
-
-        # Check whether previous image frame data is available
-        if not self._have_map_match():  # or self._vo_input_data_prev is None:
-            #assert self._map_input_data_prev is None  # TODO: why was this originally here? Need to check for output, not input
-            assert self._map_output_data_prev is None
-            assert self._vo_input_data_prev is None  # If no map match, reset odom should have been called
-            return False
-
-        # Check that a request is not already running
-        if not (self._vo_matching_query is None or self._vo_matching_query.result.ready()):
-            return False
-
-        # Check if is image too blurry
-        # if self._image_too_blurry(qry):
-        #    self.get_logger().warn('ODOM TOO BLURRY.')
-        #    return False
-
-        return True
-
     def _should_map_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 
@@ -1705,26 +1512,15 @@ g
         :param input_data: Input data context
         :return:
         """
+        # TODO: always mapful, vo was removed
         if image_pair.mapful():
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
             self._map_matching_query = AsyncQuery(
                 result=self._map_matching_pool.starmap_async(
                     self._map_matcher.worker,
-                    [(image_pair, self._retrieve_extrinsic_guess(False))],  # TODO: have k in input data after all? or somehow inside image_pair?
+                    [(image_pair, self._retrieve_extrinsic_guess())],  # TODO: have k in input data after all? or somehow inside image_pair?
                     callback=self.map_matching_worker_callback,
                     error_callback=self.map_matching_worker_error_callback
-                ),
-                image_pair=image_pair,
-                input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
-            )
-        else:
-            assert self._vo_matching_query is None or self._vo_matching_query.result.ready()
-            self._vo_matching_query = AsyncQuery(
-                result=self._vo_matching_pool.starmap_async(
-                    self._vo_matcher.worker,
-                    [(image_pair, self._retrieve_extrinsic_guess(True))],
-                    callback=self.vo_matching_worker_callback,
-                    error_callback=self.vo_matching_worker_callback
                 ),
                 image_pair=image_pair,
                 input_data=input_data  # TODO: no longer passed to matching, this is "context", not input

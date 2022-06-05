@@ -591,10 +591,8 @@ class Match:
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
-    :param vo_fix: - The WGS84-fixed FixedCamera for the VO reference frame, or None if not available
     :return:
     """
-    vo_fix: Optional[FixedCamera]  # None if successful map match has not yet happened
     ground_elevation: Optional[float]  # Assumed elevation of ground plane above mean sea level (AMSL)
 
     def __post_init__(self):

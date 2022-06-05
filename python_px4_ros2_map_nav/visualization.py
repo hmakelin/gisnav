@@ -9,12 +9,6 @@ from python_px4_ros2_map_nav.transform import make_keypoint
 class Visualization:
     """Class for managing and displaying a visualization of keypoint matches
 
-    Creates a visualization with 4 images indicating the map keypoint matches in the top two images and optional visual
-    odometry keypoint matches in the bottom two images:
-
-    [current frame][latest map frame]
-    [current frame][ previous frame ]
-
     Intended to be used as debugging aid.
     """
 
@@ -25,9 +19,8 @@ class Visualization:
         """
         self.name = name_
         self._map_visualization = None
-        self._vo_visualization = None
 
-    def update(self, output_data: OutputData, vo_enabled: bool) -> None:
+    def update(self, output_data: OutputData) -> None:
         """Updates the visualization
 
         TODO: Remove vo_enabled parameter. This parameter is used to get around problem of cv2.imshow hanging when
@@ -35,33 +28,17 @@ class Visualization:
         when visual_odometry==True
 
         :param output_data: Data to update the visualization with
-        ####:param visual_odometry: True to update visual odometry visualization, False for map visualization
-        :param vo_enabled: Flag indicating whether visual odometry is enabled
         :return:
         """
         img = self._create_visualization(output_data, self._attitude_text(output_data.attitude))
         img = img.astype(np.uint8)
 
-        # TODO: check that image shapes do not change?
-        if not output_data.fixed_camera._match.image_pair.mapful():
-            self._vo_visualization = img
-            if self._map_visualization is None:
-                self._map_visualization = np.zeros(img.shape, dtype=np.uint8)
-        else:
-            self._map_visualization = img
-            if self._vo_visualization is None:
-                self._vo_visualization = np.zeros(img.shape, dtype=np.uint8)
+        self._map_visualization = img
 
-        out = np.vstack((self._map_visualization, self._vo_visualization, output_data.fixed_camera._match.image_pair.qry.image.arr))
-        if vo_enabled:  # TODO: hack to make visualization work - try to get rid of this conditional
-            # For some reason visualization freezes here if imshow/waitKey is done on both VO and map matches
-            # Do on VO matches only since they are more frequent
-            if not output_data.fixed_camera._match.image_pair.mapful():
-                cv2.imshow(self.name, out)
-                cv2.waitKey(1)
-        else:
-            cv2.imshow(self.name, out)
-            cv2.waitKey(1)
+        out = np.vstack((self._map_visualization, output_data.fixed_camera._match.image_pair.qry.image.arr))
+
+        cv2.imshow(self.name, out)
+        cv2.waitKey(1)
 
     # TODO: optionally return mkp's from worker and pass them onto this function?
     @staticmethod

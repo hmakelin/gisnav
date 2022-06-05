@@ -1174,7 +1174,7 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        output_data = self._matching_worker_callback_common(results, False)
+        output_data = self._matching_worker_callback_common(results)
         if output_data is None:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
         else:

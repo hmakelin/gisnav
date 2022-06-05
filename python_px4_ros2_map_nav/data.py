@@ -387,6 +387,7 @@ class FOV:
 
         return altitude_scaling
 
+    # TODO: make this private, and use a new "is_valid()" to combine this condition with the shapely built in is_valid flag
     def is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
         """Returns True if provided quadrilateral is a convex isosceles trapezoid
 

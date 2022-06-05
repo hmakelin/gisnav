@@ -29,5 +29,3 @@ map_nav_node:
     map_matcher:
       #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
       params_file: 'config/loftr_params.yml'
-    vo_matcher:
-      params_file: 'config/orb_params.yml'

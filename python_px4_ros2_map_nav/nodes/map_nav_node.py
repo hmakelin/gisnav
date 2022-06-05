@@ -640,12 +640,6 @@ class MapNavNode(Node, ABC):
             ('params_file', Defaults.MAP_MATCHER_PARAMS_FILE, read_only)
         ])
 
-        namespace = 'vo_matcher'
-        self.declare_parameters(namespace, [
-            ('class', Defaults.VO_MATCHER_CLASS, read_only),
-            ('params_file', Defaults.VO_MATCHER_PARAMS_FILE, read_only)
-        ])
-
     def _import_class(self, class_name: str, module_name: str) -> object:
         """Dynamically imports class from given module if not yet imported
 

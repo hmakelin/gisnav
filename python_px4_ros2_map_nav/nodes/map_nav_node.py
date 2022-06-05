@@ -39,7 +39,6 @@ from sensor_msgs.msg import CameraInfo, Image
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox
-from python_px4_ros2_map_nav.transform import is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.wms import WMSClient
@@ -1341,7 +1340,7 @@ class MapNavNode(Node, ABC):
             return False
 
         # Estimated field of view has unexpected shape?
-        if not is_convex_isosceles_trapezoid(output_data.fixed_camera.fov.fov_pix.get_coordinates()):
+        if not output_data.fixed_camera.fov.is_convex_isosceles_trapezoid():
             self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.get_coordinates().squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
             return False

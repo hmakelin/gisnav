@@ -1329,9 +1329,6 @@ class MapNavNode(Node, ABC):
         # TODO: handle none return values
         image_data = self._mock_image_data()
         map_data = self._mock_map_data(origin)
-        # Get cropped and rotated map
-        #camera_yaw_deg = self._camera_yaw()  # TODO: handle None?
-        #camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None  # TODO: handle None!
         contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim(), map_data=map_data)  # TODO: redudnant img dim, check none
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair
@@ -1339,9 +1336,6 @@ class MapNavNode(Node, ABC):
     def _mock_image_data(self) -> Optional[ImageData]:
         """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
         # TODO: none checks
-        #if self._camera_info is None:
-        #    self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
-        #    return None
         image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
                                frame_id='mock_image_data',
                                timestamp=self._get_ekf2_time(),
@@ -1360,20 +1354,13 @@ class MapNavNode(Node, ABC):
         """
         # TODO: none checks
         assert_type(origin, Position)
-        #if self._camera_info is None:
-        #    self.get_logger().warn('Could not get camera info - cannot project gimbal FOV.')
-        #    return None
         # TODO: make a new CameraIntrinsics structure; k, cx, cy currently together with ImageData in flat structure
         k = self._camera_info.k.reshape([3, 3])  # TODO: None?
         # TODO: assumes fx == fy
         fx = k[0][0]
-        #cx, cy = k[0][2], k[1][2]
-        #c_max = max(cx, cy)  # Use larger value since map is padded
-
         dim_padding = self._map_size_with_padding()
 
         # Scaling factor of image pixels := terrain_altitude
-        #scaling = c_max / fx
         scaling = (dim_padding[0]/2) / fx
         radius = scaling * origin.z_ground
 

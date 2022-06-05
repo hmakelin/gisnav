@@ -688,7 +688,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().error(f'Pose inputs had problems {r}, {translation}: {e}.')
             return None
 
-        mock_fixed_camera = FixedCamera(map_match=mock_match, _match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
+        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c))  # TODO: change the c also to np.ndarray?
 
@@ -960,7 +960,7 @@ class MapNavNode(Node, ABC):
         """
         assert_type(bbox, GeoBBox)
         if self._map_output_data_prev is not None:
-            previous_map_data = self._map_output_data_prev.fixed_camera._match.image_pair.ref.map_data  # TODO: use map_match not _match?
+            previous_map_data = self._map_output_data_prev.fixed_camera.map_match.image_pair.ref.map_data  # TODO: use map_match not _match?
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().integer_value
             if min(bbox.intersection_area(previous_map_data.bbox) / bbox.area,
                    bbox.intersection_area(previous_map_data.bbox) / previous_map_data.bbox.area) < area_threshold:
@@ -1299,7 +1299,6 @@ class MapNavNode(Node, ABC):
         output_data = OutputData(input=input_data,
                                  fixed_camera=FixedCamera(
                                      map_match=match,
-                                     _match=match,
                                      ground_elevation=input_data.ground_elevation
                                  ),
                                  filtered_position=None,
@@ -1354,9 +1353,9 @@ class MapNavNode(Node, ABC):
 
         # Estimated translation vector blows up?
         reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.k[0][0]])  # TODO: refactor this line
-        if (np.abs(output_data.fixed_camera._match.pose.t).squeeze() >= 3 * reference).any() or \
+        if (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'Match.pose.t {output_data.fixed_camera._match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
+            self.get_logger().error(f'Match.pose.t {output_data.fixed_camera.map_match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
                                     f'too large compared to (cx, cy, fx): {reference}.')
             return False
 

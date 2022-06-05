@@ -35,7 +35,7 @@ class Visualization:
 
         self._map_visualization = img
 
-        out = np.vstack((self._map_visualization, output_data.fixed_camera._match.image_pair.qry.image.arr))
+        out = np.vstack((self._map_visualization, output_data.fixed_camera.map_match.image_pair.qry.image.arr))
 
         cv2.imshow(self.name, out)
         cv2.waitKey(1)
@@ -58,7 +58,7 @@ class Visualization:
         #mkp_img = np.apply_along_axis(make_keypoint, 1, output_data.mkp_img)
         #mkp_map = np.apply_along_axis(make_keypoint, 1, output_data.mkp_map)
 
-        ref_img = output_data.fixed_camera._match.image_pair.ref.image.arr
+        ref_img = output_data.fixed_camera.map_match.image_pair.ref.image.arr
         map_with_fov = cv2.polylines(ref_img.copy(), [np.int32(output_data.fixed_camera.fov.fov_pix.get_coordinates())], True, 255, 3, cv2.LINE_AA)
         #draw_params = dict(matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2)
         #out = cv2.drawMatches(output_data.input.image_data.image, mkp_img, map_with_fov, mkp_map, matches, None,

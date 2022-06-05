@@ -359,8 +359,6 @@ class FOV:
     fov: Optional[GeoTrapezoid]  #Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
     c: np.ndarray
     c_pix: np.ndarray
-    fov_pix_map: GeoTrapezoid  # np.ndarray  # TODO: not real GEOtrapezoid, just trapezoid but need shapely functions! # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
-    c_pix_map: np.ndarray  # Fov in pixels against the map image if the original image_pair was a VO match (not mapful)
     scaling: float = field(init=False)
 
     # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
@@ -374,7 +372,7 @@ class FOV:
 
         :return: Altitude scaling factor
         """
-        distance_in_pixels = self.fov_pix_map.length
+        distance_in_pixels = self.fov_pix.length
         # TODO: try to do without private attr access
         distance_in_meters = self.fov._geoseries.to_crs('epsg:3857').length
 
@@ -407,7 +405,6 @@ class FixedCamera:
     ground_elevation: Optional[float]
     position: Position = field(init=False)
     map_match: Match
-    _match: Match  # should not be accessed directly except e.g. for debug visualization (fov_pix), use fixed_camera.map_match instead
 
     def _estimate_fov(self) -> FOV:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
@@ -417,16 +414,13 @@ class FixedCamera:
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
         h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
-        fov_pix_map, c_pix_map = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
-        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self._match.inv_h)
+        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
         fov_wgs84, c_wgs84 = get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
 
         fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
                   fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
                   c_pix=c_pix,
-                  c=c_wgs84.squeeze(),
-                  fov_pix_map=GeoTrapezoid(np.flip(fov_pix_map, axis=2), crs=''),  # GIve it a proper crs?
-                  c_pix_map=c_pix_map
+                  c=c_wgs84.squeeze()
                   )
 
         return fov
@@ -478,11 +472,9 @@ class OutputData:
     """Algorithm output passed onto publish method.
 
     :param input: The input data used for the match
-    :param _match: Estimated _match for the image frame vs. the map frame
     :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_match and field of view)
     :param filtered_position: Filtered position from the Kalman filter
     :param attitude: Camera attitude quaternion
-    :param sd: Standard deviation of position estimate
     :return:
     """
     input: InputData

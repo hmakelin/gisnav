@@ -1,3 +1,0 @@
-class_name: 'python_px4_ros2_map_nav.matchers.orb.ORBMatcher'
-args:
-  - 15  # min_matches

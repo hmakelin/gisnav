@@ -50,18 +50,6 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
 
 
-def make_keypoint(pt: np.ndarray, sz: float = 1.0) -> cv2.KeyPoint:
-    """Converts input numpy array to a cv2.KeyPoint.
-
-    :param pt: Keypoint x and y coordinates
-    :param sz: Keypoint size
-    :return:
-    """
-    assert_type(pt, np.ndarray)
-    assert_shape(pt, (2,))
-    return cv2.KeyPoint(pt[0], pt[1], sz)
-
-
 def is_convex_isosceles_trapezoid(fov_pix: np.ndarray, diagonal_length_tolerance: float = 0.1) -> bool:
     """Returns True if provided quadrilateral is a convex isosceles trapezoid
 

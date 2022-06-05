@@ -859,20 +859,16 @@ class MapNavNode(Node, ABC):
         assert isinstance(img_dim, Dim)
         image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp, k=self._camera_info.k.reshape([3, 3]))
 
-        inputs = None  # TODO: the odom flag should be disabled when called for map!
-
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
             assert self._map_matching_query is None or self._map_matching_query.result.ready()
-            if inputs is None:
-                # Get inputs if did not yet get them earlier for viz odom
-                try:
-                    inputs, contextual_map_data = self._match_inputs()
-                except TypeError as e:
-                    # TODO: handle invalid/unavailable inputs with a warning, not error
-                    self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
-                                            f'Skipping map matching.')
-                    return
+            try:
+                inputs, contextual_map_data = self._match_inputs()
+            except TypeError as e:
+                # TODO: handle invalid/unavailable inputs with a warning, not error
+                self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
+                                        f'Skipping map matching.')
+                return
 
             self._map_input_data = inputs
             assert self._map_data is not None  # TODO: check in should_map_match
@@ -1225,8 +1221,7 @@ class MapNavNode(Node, ABC):
         assert not np.isnan(rT).any()
         gimbal_estimated_attitude = Rotation.from_matrix(rT)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _match
-        assert (map_match.image_pair.mapful())
-        assert (map_match.image_pair.ref, ContextualMapData)  # Alternative way to assert mapful()
+        assert (map_match.image_pair.ref, ContextualMapData)
         gimbal_estimated_attitude *= Rotation.from_rotvec(map_match.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
@@ -1313,7 +1308,7 @@ class MapNavNode(Node, ABC):
         if self._good_match(output_data):
             return output_data
         else:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame (mapful: {match.image_pair.mapful()}.')
+            self.get_logger().debug(f'Bad match computed, returning None for this frame.')
             return None
 
     def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
@@ -1419,19 +1414,17 @@ class MapNavNode(Node, ABC):
         :param input_data: Input data context
         :return:
         """
-        # TODO: always mapful, vo was removed
-        if image_pair.mapful():
-            assert self._map_matching_query is None or self._map_matching_query.result.ready()
-            self._map_matching_query = AsyncQuery(
-                result=self._map_matching_pool.starmap_async(
-                    self._map_matcher.worker,
-                    [(image_pair, self._retrieve_extrinsic_guess())],  # TODO: have k in input data after all? or somehow inside image_pair?
-                    callback=self.map_matching_worker_callback,
-                    error_callback=self.map_matching_worker_error_callback
-                ),
-                image_pair=image_pair,
-                input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
-            )
+        assert self._map_matching_query is None or self._map_matching_query.result.ready()
+        self._map_matching_query = AsyncQuery(
+            result=self._map_matching_pool.starmap_async(
+                self._map_matcher.worker,
+                [(image_pair, self._retrieve_extrinsic_guess())],  # TODO: have k in input data after all? or somehow inside image_pair?
+                callback=self.map_matching_worker_callback,
+                error_callback=self.map_matching_worker_error_callback
+            ),
+            image_pair=image_pair,
+            input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
+        )
     #endregion
 
     #region PublicAPI

@@ -250,15 +250,7 @@ class ContextualMapData(_ImageHolder):
 class ImagePair:
     """Atomic image pair to represent a matched pair of images"""
     qry: ImageData
-    ref: Union[ImageData, ContextualMapData]  # TODO: _Image? Or exclude MapData?
-
-    def mapful(self) -> bool:
-        """Returns True if this image pair is for a map match
-
-        :return: True for map match, False for visual odometry match
-        """
-        return isinstance(self.ref, ContextualMapData)  # TODO: get_args(Union[ContextualMapData, MapData]) ?
-
+    ref: ContextualMapData
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -328,7 +320,6 @@ class Match:
         Returns a new Match by combining two matches by chaining the poses and image pairs: a new 'synthetic' image
         pair is created by combining the two others.
         """
-        assert match.image_pair.mapful()  # Not ideal assumption, map match must always be rhs of operation
         assert (self.image_pair.qry.k == match.image_pair.qry.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         H = self.h @ match.h
         num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H, self.image_pair.qry.k)  # TODO: try to do this without decomposing H

@@ -1138,7 +1138,7 @@ class MapNavNode(Node, ABC):
             return None
 
         match = Match(image_pair=self._map_matching_query.image_pair, pose=pose)
-        output_data = self._compute_output(match, query.input_data)
+        output_data = self._compute_output(match, self._map_matching_query.input_data)
 
         if output_data is not None:
             # noinspection PyUnreachableCode

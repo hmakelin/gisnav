@@ -43,7 +43,6 @@ from python_px4_ros2_map_nav.transform import is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.wms import WMSClient
-from python_px4_ros2_map_nav.visualization import Visualization
 from python_px4_ros2_map_nav.filter import SimpleFilter
 
 
@@ -111,8 +110,6 @@ class MapNavNode(Node, ABC):
         window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
         self._kf = SimpleFilter(window_length)
 
-        self._visualization = Visualization('Keypoint matches and homography') if __debug__ else None
-
         # Must check for None when using these
         self._map_input_data = None
         self._map_input_data_prev = None
@@ -153,16 +150,6 @@ class MapNavNode(Node, ABC):
     def _kf(self, value: SimpleFilter) -> None:
         assert_type(value, SimpleFilter)
         self.__kf = value
-
-    @property
-    def _visualization(self) -> str:
-        """Visualization of keypoint matches for debugging"""
-        return self.__visualization
-
-    @_visualization.setter
-    def _visualization(self, value: Visualization) -> None:
-        assert_type(value, Visualization)
-        self.__visualization = value
 
     @property
     def _blurs(self) -> Optional[np.ndarray]:
@@ -1059,7 +1046,15 @@ class MapNavNode(Node, ABC):
         if output_data is not None:
             # noinspection PyUnreachableCode
             if __debug__:
-                self._visualization.update(output_data)
+                # Visualize projected FOV estimate
+                ref_img = output_data.fixed_camera.map_match.image_pair.ref.image.arr
+                map_with_fov = cv2.polylines(ref_img.copy(),
+                                             [np.int32(output_data.fixed_camera.fov.fov_pix.get_coordinates())], True,
+                                             255, 3, cv2.LINE_AA)
+
+                img = np.vstack((map_with_fov, output_data.fixed_camera.map_match.image_pair.qry.image.arr))
+                cv2.imshow("Projected FOV estimate", img)
+                cv2.waitKey(1)
 
             # Get output from Kalman filter
             filter_output = self._kf.filter(output_data.fixed_camera.position)

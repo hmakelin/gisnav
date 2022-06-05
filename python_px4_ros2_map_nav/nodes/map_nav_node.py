@@ -621,9 +621,6 @@ class MapNavNode(Node, ABC):
             ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
             ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
             ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
-            ('visual_odometry', Defaults.MISC_VISUAL_ODOMETRY),
-            ('visual_odometry_update_t_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_T_THRESHOLD),
-            ('visual_odometry_update_r_threshold', Defaults.MISC_VISUAL_ODOMETRY_UPDATE_R_THRESHOLD)
         ])
 
         namespace = 'map_update'

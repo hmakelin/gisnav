@@ -64,7 +64,6 @@ class MapNavNode(Node, ABC):
         :param node_name: Name of the node
         """
         assert_type(node_name, str)
-        super().__init__(node_name)
         super().__init__(node_name, allow_undeclared_parameters=True,
                          automatically_declare_parameters_from_overrides=True)
         self.name = node_name

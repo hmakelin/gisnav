@@ -109,16 +109,6 @@ class MapNavNode(Node, ABC):
         self._map_matcher, self._map_matching_pool = self._setup_matching_pool(map_matcher_params_file)
         self._map_matching_query = None  # Must check for None when using this
 
-        # Setup visual odometry matching pool
-        vo_enabled = self.get_parameter('misc.visual_odometry').get_parameter_value().bool_value
-        self._vo_matching_query = None
-        if vo_enabled:
-            vo_matcher_params_file = self.get_parameter('vo_matcher.params_file').get_parameter_value().string_value
-            self._vo_matcher, self._vo_matching_pool = self._setup_matching_pool(vo_matcher_params_file)
-        else:
-            self._vo_matcher = None
-            self._vo_matching_pool = None
-
         # Stored blur values for blur detection
         self._blurs = None
 
@@ -129,10 +119,6 @@ class MapNavNode(Node, ABC):
         self._visualization = Visualization('Keypoint matches and homography') if __debug__ else None
 
         # Must check for None when using these
-        self._vo_input_data = None
-        self._vo_input_data_prev = None
-        self._vo_output_data_prev = None
-        self._vo_output_data_fix = None
         self._map_input_data = None
         self._map_input_data_prev = None
         self._map_output_data_prev = None
@@ -140,13 +126,8 @@ class MapNavNode(Node, ABC):
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
 
-        # Windowed estimates for computing estimate SD and variance
-        self._map_estimation_history = None
-        self._vo_estimation_history = None
-
         # Stored solution for the PnP problem (map matching and visual odometry separately)
         self._pose_map_guess = None
-        self._pose_vo_guess = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
@@ -209,16 +190,6 @@ class MapNavNode(Node, ABC):
         self.__pose_map_guess = value
 
     @property
-    def _pose_vo_guess(self) -> Optional[Pose]:
-        """Solution to the PnP problem in :meth:`~_process_matches` for visual odometry."""
-        return self.__pose_vo_guess
-
-    @_pose_vo_guess.setter
-    def _pose_vo_guess(self, value: Optional[Pose]) -> None:
-        assert_type(value, get_args(Optional[Pose]))
-        self.__pose_vo_guess = value
-
-    @property
     def _map_matcher(self) -> Matcher:
         """Dynamically loaded map matcher"""
         return self.__map_matcher
@@ -227,16 +198,6 @@ class MapNavNode(Node, ABC):
     def _map_matcher(self, value: Matcher) -> None:
         #assert_type(value, Matcher)  # TODO: fix this
         self.__map_matcher = value
-
-    @property
-    def _vo_matcher(self) -> Matcher:
-        """Dynamically loaded visual odometry matcher"""
-        return self.__vo_matcher
-
-    @_vo_matcher.setter
-    def _vo_matcher(self, value: Matcher) -> None:
-        #assert_type(value, Matcher)  # TODO: fix this
-        self.__vo_matcher = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -293,19 +254,6 @@ class MapNavNode(Node, ABC):
         #assert_type(torch.multiprocessing.Pool, value)
         self.__map_matching_pool = value
 
-    @property
-    def _vo_matching_pool(self) -> Optional[Pool]:
-        """Pool for running a :class:`~keypoint_matcher.ORBMatcher` in dedicated process
-
-        None if visual odometry is not enabled.
-        """
-        return self.__vo_matching_pool
-
-    @_vo_matching_pool.setter
-    def _vo_matching_pool(self, value: Optional[Pool]) -> None:
-        assert_type(value, get_args(Optional[Pool]))
-        self.__vo_matching_pool = value
-
     @ property
     def _map_data(self) -> Optional[MapData]:
         """The map raster from the WMS server response along with supporting metadata."""
@@ -327,19 +275,6 @@ class MapNavNode(Node, ABC):
         self.__map_input_data = value
 
     @property
-    def _vo_input_data(self) -> InputData:
-        """Inputs stored at time of launching a new asynchronous match that are needed for processing its results.
-
-        This is used for visual odometry matches as opposed to :py:attr:`~stored_inputs` which is used for map matches.
-        """
-        return self.__vo_input_data
-
-    @_vo_input_data.setter
-    def _vo_input_data(self, value: Optional[InputData]) -> None:
-        assert_type(value, get_args(Optional[InputData]))
-        self.__vo_input_data = value
-
-    @property
     def _map_matching_query(self) -> Optional[AsyncQuery]:
         """Asynchronous results and input from a matching process."""
         return self.__map_matching_query
@@ -348,36 +283,6 @@ class MapNavNode(Node, ABC):
     def _map_matching_query(self, value: Optional[AsyncQuery]) -> None:
         assert_type(value, get_args(Optional[AsyncQuery]))
         self.__map_matching_query = value
-
-    @property
-    def _vo_matching_query(self) -> Optional[AsyncQuery]:
-        """Asynchronous results and input from a visual odometry matching process."""
-        return self.__vo_matching_query
-
-    @_vo_matching_query.setter
-    def _vo_matching_query(self, value: Optional[AsyncQuery]) -> None:
-        assert_type(value, get_args(Optional[AsyncQuery]))
-        self.__vo_matching_query = value
-
-    @property
-    def _map_estimation_history(self) -> Optional[np.ndarray]:
-        """Rolling window of past map position estimates for computing estimate variance"""
-        return self.__map_estimation_history
-
-    @_map_estimation_history.setter
-    def _map_estimation_history(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__map_estimation_history = value
-
-    @property
-    def _vo_estimation_history(self) -> Optional[np.ndarray]:
-        """Rolling window of past vo position estimates for computing estimate variance"""
-        return self.__vo_estimation_history
-
-    @_vo_estimation_history.setter
-    def _vo_estimation_history(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__vo_estimation_history = value
 
     @property
     def _topics(self) -> dict:
@@ -408,16 +313,6 @@ class MapNavNode(Node, ABC):
     def _map_input_data_prev(self, value: Optional[InputData]) -> None:
         assert_type(value, get_args(Optional[InputData]))
         self.__map_input_data_prev = value
-
-    @property
-    def _vo_input_data_prev(self) -> Optional[InputData]:
-        """Previous visual odometry input data"""
-        return self.__vo_input_data_prev
-
-    @_vo_input_data_prev.setter
-    def _vo_input_data_prev(self, value: Optional[InputData]) -> None:
-        assert_type(value, get_args(Optional[InputData]))
-        self.__vo_input_data_prev = value
 
     @property
     def _camera_info(self) -> Optional[CameraInfo]:

@@ -22,7 +22,6 @@ BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.o
 LatLon = namedtuple('LatLon', 'lat lon')
 LatLonAlt = namedtuple('LatLonAlt', 'lat lon alt')
 Dim = namedtuple('Dim', 'height width')
-#RPY = namedtuple('RPY', 'roll pitch yaw')
 TimePair = namedtuple('TimePair', 'local foreign')
 
 
@@ -624,10 +623,6 @@ class FOV:
 
         :return: Altitude scaling factor
         """
-        #proj = Proj.instance()  # Get cached geod instance
-        #distance_in_pixels = np.linalg.norm(self.fov_pix_map[1]-self.fov_pix_map[2])  # fov_pix[1]: lower left, fov_pix[2]: lower right
-        #distance_in_meters = proj.distance(LatLon(*self.fov[1].squeeze().tolist()),
-        #                                   LatLon(*self.fov[2].squeeze().tolist()))
         distance_in_pixels = self.fov_pix_map.length
         # TODO: try to do without private attr access
         distance_in_meters = self.fov._geoseries.to_crs('epsg:3857').length
@@ -702,7 +697,6 @@ class FixedCamera:
         position = LatLonAlt(*position)
 
         # Check that we have all the values needed for a global position
-        # if not all(position) or any(map(np.isnan, position)):
         if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
             self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
             return None
@@ -716,7 +710,6 @@ class FixedCamera:
             z_sd=None
         )
 
-        #print(f'estimated position {position.xy} {position.z_ground}')
         return position
 
     def __post_init__(self):
@@ -745,11 +738,6 @@ class OutputData:
     fixed_camera: FixedCamera
     filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional
     attitude: np.ndarray
-
-    # Target structure:
-    # input
-    # vehicle (position, attitude, terrain_altitude, sd)
-    # camera (map_match, fov)  +  camera attitude which is actually what we have now
 
     def __post_init__(self):
         """Validate the data structure"""

@@ -426,13 +426,6 @@ class MapNavNode(Node, ABC):
         position = self._position_for_update_map_request()
         assert_type(position, get_args(Optional[Position]))
 
-        # Try to get position from provided initial guess is global position not available
-        if position is None:
-            # Warn, not debug, since this is a static guess
-            self.get_logger().warn('Could not get (lat, lon, alt) tuple from VehicleGlobalPosition, checking if initial '
-                                   'guess has been provided.')
-            position = self._position_from_initial_guess()
-
         # Cannot determine vehicle global position
         if position is None:
             self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
@@ -446,7 +439,6 @@ class MapNavNode(Node, ABC):
                                        'instead.')
             else:
                 position = projected_position
-                #print(f'proj pos {projected_position.xy._geoseries} {projected_position.z_ground}')
 
         # Get map size based on altitude and update map if needed
         assert position.z_ground is not None
@@ -562,29 +554,6 @@ class MapNavNode(Node, ABC):
                 return None
         else:
             return None
-
-    def _position_from_initial_guess(self) -> Optional[Position]:
-        """Returns Position in WGS84 and altitude (meters) from provided values, or None if not available.
-
-        If some of the initial guess values are not provided, a None is returned in their place.
-
-        :return: Initial default map update position of vehicle"""
-        initial_guess = self.get_parameter('map_update.initial_guess').get_parameter_value().double_array_value
-        if not (len(initial_guess) == 2 and all(isinstance(x, float) for x in initial_guess)):
-            return None
-        else:
-            crs = 'epsg:4326'
-            lat, lon = initial_guess[0], initial_guess[1]
-            alt = self.get_parameter('map_update.default_altitude').get_parameter_value().double_value
-            position = Position(
-                xy=GeoPoint(lon, lat, crs),  # lon-lat order
-                z_ground=alt,
-                z_amsl=None,
-                x_sd=None,
-                y_sd=None,
-                z_sd=None
-            )
-            return position
 
     def _use_gimbal_projection(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.

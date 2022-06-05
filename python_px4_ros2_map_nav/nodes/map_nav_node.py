@@ -37,12 +37,11 @@ from sensor_msgs.msg import CameraInfo, Image
 
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position, GeoBBox, GeoPoint
+    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
+from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox
 from python_px4_ros2_map_nav.transform import is_convex_isosceles_trapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
-from python_px4_ros2_map_nav.ros_param_defaults import Defaults
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
-from python_px4_ros2_map_nav.matchers.orb import ORBMatcher
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.visualization import Visualization
 from python_px4_ros2_map_nav.filter import SimpleFilter
@@ -68,13 +67,9 @@ class MapNavNode(Node, ABC):
         """
         assert_type(node_name, str)
         super().__init__(node_name)
-        # TODO: try this if loading param values from YAML file does not work
-        #super().__init__(node_name, allow_undeclared_parameters=True,
-        #                 automatically_declare_parameters_from_overrides=True)
+        super().__init__(node_name, allow_undeclared_parameters=True,
+                         automatically_declare_parameters_from_overrides=True)
         self.name = node_name
-
-        # Setup config and declare ROS parameters
-        self.__declare_ros_params()
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -490,50 +485,6 @@ class MapNavNode(Node, ABC):
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
-
-    def __declare_ros_params(self) -> None:
-        """Declares ROS parameters
-
-        Uses defaults from :py:mod:`python_px4_ros2_map_nav.ros_param_defaults`. Note that some parameters are declared
-        as read_only and cannot be changed at runtime.
-
-        :return:
-        """
-        read_only = ParameterDescriptor(read_only=True)
-        namespace = 'wms'
-        self.declare_parameters(namespace, [
-            ('url', Defaults.WMS_URL, read_only),
-            ('version', Defaults.WMS_VERSION, read_only),
-            ('layer', Defaults.WMS_LAYER),
-            ('srs', Defaults.WMS_SRS),
-            ('request_timeout', Defaults.WMS_REQUEST_TIMEOUT)
-        ])
-
-        namespace = 'misc'
-        self.declare_parameters(namespace, [
-            ('max_pitch', Defaults.MISC_MAX_PITCH),
-            ('variance_estimation_length', Defaults.MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
-            ('min_match_altitude', Defaults.MISC_MIN_MATCH_ALTITUDE),
-            ('blur_threshold', Defaults.MISC_BLUR_THRESHOLD),
-            ('blur_window_length', Defaults.MISC_BLUR_WINDOW_LENGTH),
-        ])
-
-        namespace = 'map_update'
-        self.declare_parameters(namespace, [
-            ('initial_guess', None),
-            ('update_delay', Defaults.MAP_UPDATE_UPDATE_DELAY, read_only),
-            ('default_altitude', Defaults.MAP_UPDATE_DEFAULT_ALTITUDE),
-            ('gimbal_projection', Defaults.MAP_UPDATE_GIMBAL_PROJECTION),
-            ('max_map_radius', Defaults.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT),
-            ('update_map_area_threshold', Defaults.MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
-            ('max_pitch', Defaults.MAP_UPDATE_MAX_PITCH)
-        ])
-
-        namespace = 'map_matcher'
-        self.declare_parameters(namespace, [
-            ('class', Defaults.MAP_MATCHER_CLASS, read_only),
-            ('params_file', Defaults.MAP_MATCHER_PARAMS_FILE, read_only)
-        ])
 
     def _import_class(self, class_name: str, module_name: str) -> object:
         """Dynamically imports class from given module if not yet imported

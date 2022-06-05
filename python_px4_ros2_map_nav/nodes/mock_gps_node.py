@@ -10,8 +10,8 @@ from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
-from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position, GeoTrapezoid
-from python_px4_ros2_map_nav.ros_param_defaults import Defaults
+from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position
+from python_px4_ros2_map_nav.geo import GeoTrapezoid
 
 
 class MockGPSNode(MapNavNode):
@@ -28,7 +28,6 @@ class MockGPSNode(MapNavNode):
 
     def __init__(self, node_name: str):
         super().__init__(node_name)
-        self._declare_ros_params()
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
@@ -56,20 +55,6 @@ class MockGPSNode(MapNavNode):
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
         if export_projection is not None:
             self._export_position(c, fov, export_projection)
-
-    def _declare_ros_params(self) -> None:
-        """Declares any additional ROS parameters that are not declared by the base class
-
-        Note: does not override parent method which uses name mangling (double underscore).
-
-        :return:
-        """
-        namespace = 'misc'
-        self.declare_parameters(namespace, [
-            ('mock_gps_selection', Defaults.MISC_MOCK_GPS_SELECTION),
-            ('export_position', Defaults.MISC_EXPORT_POSITION),
-            ('export_projection', Defaults.MISC_EXPORT_PROJECTION)
-        ])
 
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher.

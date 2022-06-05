@@ -2,7 +2,8 @@
 import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
-from python_px4_ros2_map_nav.data import Position, GeoPoint  # LatLonAlt
+from python_px4_ros2_map_nav.data import Position  # LatLonAlt
+from python_px4_ros2_map_nav.geo import GeoPoint
 from python_px4_ros2_map_nav.assertions import assert_type
 
 

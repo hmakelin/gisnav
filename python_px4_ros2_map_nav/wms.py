@@ -6,7 +6,7 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.data import BBox, LatLon, LatLonAlt, MapData, Dim, Img, get_args
+from python_px4_ros2_map_nav.data import MapData, Dim, Img
 from python_px4_ros2_map_nav.geo import GeoBBox
 
 
@@ -88,8 +88,6 @@ class WMSClient:
         assert (all(isinstance(x, int) for x in map_size))
         assert_type(layer_str, str)
         assert_type(srs_str, str)
-        #assert_type(center, get_args(Union[LatLonAlt, LatLon]))
-        #assert_type(radius, get_args(Union[int, float]))
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
         map_data = MapData(bbox=bbox, image=Img(map_))

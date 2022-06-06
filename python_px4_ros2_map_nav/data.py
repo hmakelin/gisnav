@@ -357,8 +357,8 @@ class FOV:
     """Camera field of view related attributes"""
     fov_pix: GeoTrapezoid  # np.ndarray  # TODO: not real GEOtrapezoid, just trapezoid but need shapely functions!
     fov: Optional[GeoTrapezoid]  #Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
-    c: np.ndarray
-    c_pix: np.ndarray
+    c: GeoPoint
+    c_pix: np.ndarray  # TODO: try to get proj string for fov_pix, then can also make this a GeoPoint
     scaling: float = field(init=False)
 
     # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
@@ -451,7 +451,7 @@ class FixedCamera:
         fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
                   fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
                   c_pix=c_pix,
-                  c=c_wgs84.squeeze()
+                  c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                   )
 
         return fov

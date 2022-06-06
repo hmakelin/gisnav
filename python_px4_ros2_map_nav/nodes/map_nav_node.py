@@ -38,7 +38,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from python_px4_ros2_map_nav.data import BBox, Dim, LatLon, TimePair, RPY, LatLonAlt, ImageData, MapData, Match,\
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
-from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox
+from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.matchers.matcher import Matcher
 from python_px4_ros2_map_nav.wms import WMSClient
@@ -675,7 +675,7 @@ class MapNavNode(Node, ABC):
 
         mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
 
-        self.publish_projected_fov(mock_fixed_camera.fov.fov, LatLon(*mock_fixed_camera.fov.c))  # TODO: change the c also to np.ndarray?
+        self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
         center = np.mean(mock_fixed_camera.fov.fov.get_coordinates(crs='epsg:4326'), axis=0).squeeze().tolist()
         fov_center = Position(
@@ -1429,7 +1429,7 @@ class MapNavNode(Node, ABC):
         pass
 
     @abstractmethod
-    def publish_projected_fov(self, fov: np.ndarray, c: Union[LatLon, LatLonAlt]) -> None:    # TODO Change signature back to np.ndarray for c?
+    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:    # TODO Change signature back to np.ndarray for c?
         """Publishes projected field of view (FOV) and principal point
 
         This method should be implemented by an extending class to adapt for any given use case.

@@ -11,7 +11,7 @@ from px4_msgs.msg import VehicleGpsPosition
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
 from python_px4_ros2_map_nav.data import ImageData, OutputData, LatLon, LatLonAlt, Position
-from python_px4_ros2_map_nav.geo import GeoTrapezoid
+from python_px4_ros2_map_nav.geo import GeoTrapezoid, GeoPoint
 
 
 class MockGPSNode(MapNavNode):
@@ -46,10 +46,10 @@ class MockGPSNode(MapNavNode):
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
         export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
         if export_geojson is not None:
-            self._export_position(output_data.filtered_position, output_data.fixed_camera.fov.fov, export_geojson)
+            self._export_position(output_data.filtered_position.xy, output_data.fixed_camera.fov.fov, export_geojson)
 
     #def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
-    def publish_projected_fov(self, fov: GeoTrapezoid, c: Union[LatLon, LatLonAlt]) -> None:  # TODO Change signature back to np.ndarray for c?
+    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:  # TODO Change signature back to np.ndarray for c?
         """Writes field of view (FOV) and map center into GeoJSON file"""
         # Export to file in GIS readable format
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
@@ -112,7 +112,7 @@ class MockGPSNode(MapNavNode):
         :return:
         """
         # TODO: utilize GeoPandas more here?
-        assert_type(position, get_args(Union[LatLon, LatLonAlt, Position]))  # TODO: publish_projected_fov still returns LatLon, get rid of it
+        assert_type(position, GeoPoint)
         assert_type(fov, GeoTrapezoid)
         assert_type(filename, str)
         point = Feature(geometry=Point((position.lon, position.lat)))

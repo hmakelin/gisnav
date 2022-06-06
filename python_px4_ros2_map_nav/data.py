@@ -469,18 +469,18 @@ class FixedCamera:
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
         t_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ np.append(self.map_match.camera_position[0:2], 1)
         t_wgs84[2] = -self.fov.scaling * self.map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
-        position = t_wgs84.squeeze().tolist()
-        position = LatLonAlt(*position)
 
         # Check that we have all the values needed for a global position
-        if not all([(isinstance(x, float) or np.isnan(x)) for x in position]):
-            self.get_logger().warn(f'Could not determine global position, some fields were empty: {position}.')
+        if not all([(isinstance(x, float) or np.isnan(x)) for x in t_wgs84.squeeze()]):
+            self.get_logger().warn(f'Could not determine global position, some fields were empty: {t_wgs84}.')
             return None
 
+        lon, lat = t_wgs84.squeeze()[1::-1]
+        alt = t_wgs84[2]
         position = Position(
-            xy=GeoPoint(position.lon, position.lat, crs),  # lon-lat order
-            z_ground=position.alt,
-            z_amsl=position.alt + ground_elevation if ground_elevation is not None else None,
+            xy=GeoPoint(lon, lat, crs),  # lon-lat order
+            z_ground=alt,
+            z_amsl=alt + ground_elevation if ground_elevation is not None else None,
             x_sd=None,
             y_sd=None,
             z_sd=None

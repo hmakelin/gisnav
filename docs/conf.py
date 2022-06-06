@@ -59,7 +59,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -71,27 +71,11 @@ html_css_files = [
     'css/style.css',
 ]
 
-# Add html sidebars as per Alabaster docs:
-# https://alabaster.readthedocs.io/en/latest/installation.html
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        #'relations.html',
-        'searchbox.html',
-        #'donate.html',
-    ]
-}
-
-# Configure Alabaster theming options here
+# Configure RTD theming options here
 html_theme_options = {
-    #'logo': 'logo.png',
-    #'github_user': 'bitprophet',
-    #'github_repo': 'alabaster',
-    'description': package_data.description,
-    'show_relbar_bottom': True,
-    'fixed_sidebar': True
+    'logo_only': True
 }
+html_logo = '_static/logo.svg'
 
 # Make version number accessible in .rst files
 rst_epilog = f'.. |version| replace:: **v{package_data.version}**'

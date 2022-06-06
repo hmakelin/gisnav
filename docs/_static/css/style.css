@@ -2,7 +2,16 @@ body, h1, h2, h3, h4, h5, h6 {
     font-family: Sans-Serif !important;
 }
 
-.function, .class, .method, .property, .attribute {
-    padding-bottom: 24px;
-    padding-top: 24px;
+/*
+body {
+    --themecolor: #fbcd08
 }
+
+.wy-side-nav-search {
+  background-color: var(--themecolor);
+}
+
+.wy-nav-top {
+  background-color: var(--themecolor);
+}
+*/

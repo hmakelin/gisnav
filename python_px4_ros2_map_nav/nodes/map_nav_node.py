@@ -36,7 +36,7 @@ from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDevi
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import BBox, Dim, TimePair, RPY, ImageData, MapData, Match,\
+from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match,\
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape

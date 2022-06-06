@@ -370,14 +370,7 @@ class FOV:
         :return: Altitude scaling factor
         """
         distance_in_pixels = self.fov_pix.length
-        # TODO: try to do without private attr access
-        distance_in_meters = self.fov._geoseries.to_crs('epsg:3857').length
-
-        # TODO: same logic in GeoBBox, combine (here the adjustment is inverse!)
-        wgs_84_geoseries = self.fov.center._geoseries.to_crs('epsg:4326')
-        latitude = wgs_84_geoseries[0].y
-        spherical_adjustment = np.cos(np.radians(latitude))
-        distance_in_meters = spherical_adjustment * distance_in_meters
+        distance_in_meters = self.fov.meter_length
 
         # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)

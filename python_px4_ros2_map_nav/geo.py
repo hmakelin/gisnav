@@ -55,7 +55,6 @@ class _GeoPolygon(_GeoObject):
         assert self._geoseries.crs is not None
         #assert self._geoseries[0].is_valid  # TODO: handle this like is_isosceles_trapezoid (this is pre-init check, the other one is post init check)
 
-
 class GeoPoint(_GeoObject):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (geographical coordinate pair)
 
@@ -126,6 +125,14 @@ class GeoPoint(_GeoObject):
         """Convenience property to get longitude in WGS 84"""
         return self.get_easting('epsg:4326')  # Provide explicit CRS argument, someone might change default
 
+    def _spherical_adjustment(self):
+        """Helper method to adjust distance measured in EPSG:3857 pseudo-meters into approximate real meters
+
+        Uses a simple spherical model which is accurate enough for planned use scenarios
+        """
+        # TODO: use a precise conversion?
+        return np.cos(np.radians(self.lat))
+
 
 class GeoBBox(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a bounding box
@@ -140,14 +147,8 @@ class GeoBBox(_GeoPolygon):
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        # TODO: use a precise conversion?
-        # Adjust epsg:3857 pseudo-meters with a simple spherical model, it is accurate enough, no ellipsoid needed
-        wgs_84_geoseries = center._geoseries.to_crs('epsg:4326')
-        latitude = wgs_84_geoseries[0].y
-        spherical_adjustment = 1/np.cos(np.radians(latitude))
-        assert_type(wgs_84_geoseries, GeoSeries)
-        assert_len(wgs_84_geoseries, 1)
-        self._geoseries = wgs_84_geoseries.to_crs('epsg:3857').buffer(spherical_adjustment * radius).to_crs(crs).envelope
+        # TODO: spherical adjustment uses self.center property, which needs _geoseries defined! so what to do here?
+        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius).to_crs(crs).envelope
 
     @lru_cache(4)
     def get_coordinates(self, crs: str = _GeoObject.DEFAULT_CRS) -> np.ndarray:
@@ -234,5 +235,10 @@ class GeoTrapezoid(_GeoPolygon):
     def length(self) -> float:
         # TODO: does not use crs, just returns raw lenght because fov_pix does not have crs
         """Returns length of polygon"""
-        #return self._geoseries[0].length
-        return self._geoseries.length
+        return self._geoseries[0].length
+
+    @property
+    def meter_length(self) -> float:
+        """Returns length of polygon in meters"""
+        return self.center._spherical_adjustment() * self._geoseries.to_crs('epsg:3857')[0].length
+

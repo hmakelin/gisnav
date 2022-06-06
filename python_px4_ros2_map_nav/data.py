@@ -18,7 +18,6 @@ from python_px4_ros2_map_nav.geo import GeoPoint, GeoTrapezoid
 from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
 
 BBox = namedtuple('BBox', 'left bottom right top')  # Convention: https://wiki.openstreetmap.org/wiki/Bounding_Box
-LatLon = namedtuple('LatLon', 'lat lon')
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
 

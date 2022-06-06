@@ -36,7 +36,7 @@ from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDevi
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match,\
+from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match, CameraIntrinsics, \
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
@@ -842,7 +842,9 @@ class MapNavNode(Node, ABC):
         assert hasattr(self._camera_info, 'k')
         img_dim = self._img_dim()
         assert isinstance(img_dim, Dim)
-        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp, k=self._camera_info.k.reshape([3, 3]))
+        camera_intrinsics = CameraIntrinsics(k=self._camera_info.k.reshape([3, 3]))
+        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp,
+                               camera_intrinsics=camera_intrinsics)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
@@ -1244,10 +1246,11 @@ class MapNavNode(Node, ABC):
     def _mock_image_data(self) -> Optional[ImageData]:
         """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
         # TODO: none checks
+        camera_intrinsics = CameraIntrinsics(k=self._camera_info.k.reshape([3, 3]))
         image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
                                frame_id='mock_image_data',
                                timestamp=self._get_ekf2_time(),
-                               k=self._camera_info.k.reshape([3, 3]))  # TODO: if none?
+                               camera_intrinsics=camera_intrinsics)  # TODO: if none?
         return image_data
 
     def _mock_map_data(self, origin: Position) -> Optional[MapData]:
@@ -1345,7 +1348,7 @@ class MapNavNode(Node, ABC):
             return False
 
         # Estimated translation vector blows up?
-        reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.k[0][0]])  # TODO: refactor this line
+        reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[0][0]])  # TODO: refactor this line
         if (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
             self.get_logger().error(f'Match.pose.t {output_data.fixed_camera.map_match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '

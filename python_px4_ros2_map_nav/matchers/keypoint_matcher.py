@@ -87,7 +87,7 @@ class KeypointMatcher(Matcher):
         dist_coeffs = np.zeros((4, 1))
         use_guess = guess is not None
         r, t = (guess.r, guess.t) if use_guess else (None, None)
-        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, image_pair.qry.k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
+        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, image_pair.qry.camera_intrinsics.k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
                                          iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
         try:

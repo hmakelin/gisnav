@@ -49,7 +49,7 @@ class MockGPSNode(MapNavNode):
             self._export_position(output_data.filtered_position, output_data.fixed_camera.fov.fov, export_geojson)
 
     #def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
-    def publish_projected_fov(self, fov: np.ndarray, c: Union[LatLon, LatLonAlt]) -> None:  # TODO Change signature back to np.ndarray for c?
+    def publish_projected_fov(self, fov: GeoTrapezoid, c: Union[LatLon, LatLonAlt]) -> None:  # TODO Change signature back to np.ndarray for c?
         """Writes field of view (FOV) and map center into GeoJSON file"""
         # Export to file in GIS readable format
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value

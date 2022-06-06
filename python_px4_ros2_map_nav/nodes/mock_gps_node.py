@@ -5,7 +5,6 @@ import traceback
 import numpy as np
 
 from typing import Union, get_args
-from geojson import Feature, FeatureCollection, Polygon, Point, dump
 from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
@@ -111,19 +110,12 @@ class MockGPSNode(MapNavNode):
         :param filename: Name of file to write into
         :return:
         """
-        # TODO: utilize GeoPandas more here?
         assert_type(position, GeoPoint)
         assert_type(fov, GeoTrapezoid)
         assert_type(filename, str)
-        point = Feature(geometry=Point((position.lon, position.lat)))
-        corners = np.flip(fov.get_coordinates(crs='epsg:4326').squeeze()).tolist()
-        corners = [tuple(x) for x in corners]
-        corners = Feature(geometry=Polygon([corners]))
-        features = [point, corners]
-        feature_collection = FeatureCollection(features)
         try:
-            with open(filename, 'w') as f:
-                dump(feature_collection, f)
+            # TODO: get rid of private property access
+            position._geoseries.append(fov._geoseries).to_file(filename)
         except Exception as e:
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')

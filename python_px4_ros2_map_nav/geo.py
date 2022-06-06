@@ -29,6 +29,13 @@ class _GeoObject(ABC):
         self._geoseries = self._geoseries.to_crs(crs)
         return self
 
+    def to_file(self, filename: str, driver: str = 'GeoJSON'):
+        """Converts the wrapped GeoSeries to GeoJSON
+
+        :param filename: File name
+        :param driver: OGR format driver
+        """
+        return self._geoseries.to_file(filename, driver=driver)
 
 class _GeoPolygon(_GeoObject):
     """Abstract base class for other wrappers that contain GeoSeries with Shapely Polygons"""

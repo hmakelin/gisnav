@@ -5,7 +5,6 @@ torch
 scipy>=1.4.0
 OWSLib
 pyyaml
-geojson
 pykalman
 
 # Geospatial objects handling

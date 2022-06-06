@@ -125,7 +125,7 @@ class MapNavNode(Node, ABC):
 
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
         self._vehicle_local_position = None
-        self._vehicle_global_position = None
+        self._vehicle_global_position = None  # TODO: save directly as 'Position' class? Grab z_ground from local position?
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 

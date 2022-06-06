@@ -36,7 +36,7 @@ from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDevi
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match, CameraIntrinsics, \
+from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match, CameraData, \
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
@@ -121,8 +121,9 @@ class MapNavNode(Node, ABC):
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
+        self._camera_data = None
+
         # Properties that are mapped to microRTPS bridge topics, must check for None when using them
-        self._camera_info = None
         self._vehicle_local_position = None
         self._vehicle_global_position = None
         self._gimbal_device_attitude_status = None
@@ -295,14 +296,14 @@ class MapNavNode(Node, ABC):
         self.__map_input_data_prev = value
 
     @property
-    def _camera_info(self) -> Optional[CameraInfo]:
+    def _camera_data(self) -> Optional[CameraData]:
         """CameraInfo received via the PX4-ROS 2 bridge."""
-        return self.__camera_info
+        return self.__camera_data
 
-    @_camera_info.setter
-    def _camera_info(self, value: Optional[CameraInfo]) -> None:
-        assert_type(value, get_args(Optional[CameraInfo]))
-        self.__camera_info = value
+    @_camera_data.setter
+    def _camera_data(self, value: Optional[CameraData]) -> None:
+        assert_type(value, get_args(Optional[CameraData]))
+        self.__camera_data = value
 
     @property
     def _vehicle_local_position(self) -> Optional[VehicleLocalPosition]:
@@ -614,11 +615,10 @@ class MapNavNode(Node, ABC):
 
         :return: Image resolution tuple (height, width) or None if not available
         """
-        if self._camera_info is not None:
-            # TODO: assert or check hasattr?
-            return self._camera_info.height, self._camera_info.width  # numpy order: h, w, c --> height first
+        if self._camera_data is not None:
+            return self._camera_data.height, self._camera_data.width  # numpy order: h, w, c --> height first
         else:
-            self.get_logger().warn('Camera info was not available - returning None as declared image size.')
+            self.get_logger().warn('Camera data was not available, returning None as declared image size.')
             return None
 
     def _img_dim(self) -> Optional[Dim]:
@@ -654,16 +654,12 @@ class MapNavNode(Node, ABC):
         rpy = rpy.axes_ned_to_image()
         r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
 
-        # TODO: use CameraIntrinsics class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
-        if self._camera_info is None:
-            self.get_logger().debug('Camera info not available, could not create a mock pose to generate a FOV guess.')
+        # TODO: use CameraData class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
+        if self._camera_data is None:
+            self.get_logger().debug('Camera data not available, could not create a mock pose to generate a FOV guess.')
             return None
 
-        assert hasattr(self._camera_info, 'k')
-        cx, cy = self._camera_info.k.reshape((3, 3))[0][2], self._camera_info.k.reshape((3, 3))[1][2]
-        fx = self._camera_info.k.reshape((3, 3))[0][0]
-        translation = -r @ np.array([cx, cy, -fx])
-
+        translation = -r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
         mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
 
         try:
@@ -836,15 +832,13 @@ class MapNavNode(Node, ABC):
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
-        if self._camera_info is None:
-            self.get_logger().warn('Camera info not yet available, skipping frame.')
+        if self._camera_data is None:
+            self.get_logger().warn('Camera data not yet available, skipping frame.')
             return None
-        assert hasattr(self._camera_info, 'k')
         img_dim = self._img_dim()
         assert isinstance(img_dim, Dim)
-        camera_intrinsics = CameraIntrinsics(k=self._camera_info.k.reshape([3, 3]))
         image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp,
-                               camera_intrinsics=camera_intrinsics)
+                               camera_data=self._camera_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
@@ -870,12 +864,16 @@ class MapNavNode(Node, ABC):
         :param msg: CameraInfo message from the PX4-ROS 2 bridge
         :return:
         """
-        self.get_logger().debug(f'Camera info received:\n{msg}.')
-        self._camera_info = msg
-        camera_info_topic = self._topics.get('camera_info', {}).get(self.TOPICS_SUBSCRIBER_KEY, None)
-        if camera_info_topic is not None:
-            self.get_logger().warn('Assuming camera_info is static - destroying the subscription.')
-            camera_info_topic.destroy()
+        if not all(hasattr(msg, attr) for attr in ['k', 'height', 'width']):
+            self.get_logger().warn(f'CameraInfo did not contain intrinsics or resolution information: {msg}.')
+            return None
+        else:
+            self._camera_data = CameraData(k=msg.k.reshape((3, 3)), height=msg.height, width=msg.width)
+            camera_info_topic = self._topics.get('camera_info', {}).get(self.TOPICS_SUBSCRIBER_KEY, None)
+            if camera_info_topic is not None:
+                self.get_logger().warn('CameraInfo received. Assuming CameraInfo is static, destroying the '
+                                       'subscription.')
+                camera_info_topic.destroy()
 
     def vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest VehicleLocalPosition message.
@@ -898,18 +896,13 @@ class MapNavNode(Node, ABC):
         assert_type(altitude, get_args(Union[int, float]))
         max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
 
-        camera_info = self._camera_info
-        if camera_info is not None:
-            assert hasattr(camera_info, 'k')
-            assert hasattr(camera_info, 'width')
-            w = camera_info.width
-            f = camera_info.k[0]
-            assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy
-            hfov = 2 * math.atan(w / (2 * f))
+        if self._camera_data is not None:
+            #assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy  # TODO: with calibrated values this may not be exact, try something else with tolerance and warn if not within tolerance
+            hfov = 2 * math.atan(self._camera_data.width / (2 * self._camera_data.fx))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
             # TODO: does this happen? Trying to update map before camera info has been received?
-            self.get_logger().warn(f'Could not get camera info, using best guess for map width.')
+            self.get_logger().warn(f'Could not get camera data, using best guess for map width.')
             map_radius = 3*altitude  # Arbitrary guess
 
         if map_radius > max_map_radius:
@@ -1246,11 +1239,11 @@ class MapNavNode(Node, ABC):
     def _mock_image_data(self) -> Optional[ImageData]:
         """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
         # TODO: none checks
-        camera_intrinsics = CameraIntrinsics(k=self._camera_info.k.reshape([3, 3]))
+        assert_type(self._camera_data, CameraData)
         image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
                                frame_id='mock_image_data',
                                timestamp=self._get_ekf2_time(),
-                               camera_intrinsics=camera_intrinsics)  # TODO: if none?
+                               camera_data=self._camera_data)  # TODO: if none?
         return image_data
 
     def _mock_map_data(self, origin: Position) -> Optional[MapData]:
@@ -1265,14 +1258,13 @@ class MapNavNode(Node, ABC):
         """
         # TODO: none checks
         assert_type(origin, Position)
-        # TODO: make a new CameraIntrinsics structure; k, cx, cy currently together with ImageData in flat structure
-        k = self._camera_info.k.reshape([3, 3])  # TODO: None?
+        assert_type(self._camera_data, CameraData)
+        # TODO: make a new CameraData structure; k, cx, cy currently together with ImageData in flat structure
         # TODO: assumes fx == fy
-        fx = k[0][0]
         dim_padding = self._map_size_with_padding()
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = (dim_padding[0]/2) / fx
+        scaling = (dim_padding[0]/2) / self._camera_data.fx
         radius = scaling * origin.z_ground
 
         assert_type(origin.xy, GeoPoint)
@@ -1348,7 +1340,8 @@ class MapNavNode(Node, ABC):
             return False
 
         # Estimated translation vector blows up?
-        reference = np.array([output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[0][2], output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[1][2], output_data.fixed_camera.map_match.image_pair.qry.camera_intrinsics.k[0][0]])  # TODO: refactor this line
+        camera_data = output_data.fixed_camera.map_match.image_pair.qry.camera_data
+        reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])
         if (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 3 * reference).any() or \
                 (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
             self.get_logger().error(f'Match.pose.t {output_data.fixed_camera.map_match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '

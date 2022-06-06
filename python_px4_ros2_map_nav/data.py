@@ -127,18 +127,20 @@ class ImageData(_ImageHolder):
     #image: Img
     frame_id: str
     timestamp: int
-    camera_intrinsics: CameraIntrinsics
+    camera_data: CameraData
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        assert_type(self.camera_intrinsics, CameraIntrinsics)
+        assert_type(self.camera_data, CameraData)
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class CameraIntrinsics:
+class CameraData:
     """Camera intrinsics matrix"""
     k: np.ndarray
+    height: float
+    width: float
     fx: float = field(init=False)
     fy: float = field(init=False)
     cx: float = field(init=False)
@@ -317,10 +319,10 @@ class Match:
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
         img = self.image_pair.qry
-        object.__setattr__(self, 'h', img.camera_intrinsics.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
+        object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
         object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
-        object.__setattr__(self, 'camera_center', np.array((img.camera_intrinsics.cx, img.camera_intrinsics.cy, -img.camera_intrinsics.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
+        object.__setattr__(self, 'camera_center', np.array((img.camera_data.cx, img.camera_data.cy, -img.camera_data.fx)).reshape((3, 1)))  # TODO: assumes fx == fy
         object.__setattr__(self, 'camera_position_difference', self.camera_position - self.camera_center)
 
     def __matmul__(self, match: Match) -> Match:  # Python version 3.5+
@@ -329,12 +331,12 @@ class Match:
         Returns a new Match by combining two matches by chaining the poses and image pairs: a new 'synthetic' image
         pair is created by combining the two others.
         """
-        assert (self.image_pair.qry.camera_intrinsics.k == match.image_pair.qry.camera_intrinsics.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
+        assert (self.image_pair.qry.camera_data.k == match.image_pair.qry.camera_data.k).all(), 'Camera intrinsic matrices are not equal'  # TODO: validation, not assertion
         H = self.h @ match.h
-        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H, self.image_pair.qry.camera_intrinsics.k)  # TODO: try to do this without decomposing H
+        num, Rs, Ts, Ns = cv2.decomposeHomographyMat(H, self.image_pair.qry.camera_data.k)  # TODO: try to do this without decomposing H
         index = 0  # TODO: how to pick index? Need to compare camera normals?
         r, t = Rs[index], Ts[index]
-        t = match.image_pair.qry.camera_intrinsics.fx * t  # scale by focal length  # TODO: assume fx == fy
+        t = match.image_pair.qry.camera_data.fx * t  # scale by focal length  # TODO: assume fx == fy
         # TODO: handle pose ValueError
         return Match(
                 image_pair=ImagePair(qry=self.image_pair.qry, ref=match.image_pair.ref),

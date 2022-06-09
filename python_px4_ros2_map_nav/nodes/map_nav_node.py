@@ -1275,7 +1275,7 @@ class MapNavNode(Node, ABC):
         :return: The input data
         """
         input_data = InputData(
-            ground_elevation=self._ground_elevation_amsl()
+            ground_elevation=self._ground_elevation_amsl
         )
 
         img_dim = self._img_dim()

@@ -66,7 +66,6 @@ class MapNavNode(Node, ABC):
         assert_type(node_name, str)
         super().__init__(node_name, allow_undeclared_parameters=True,
                          automatically_declare_parameters_from_overrides=True)
-        self.name = node_name
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -131,16 +130,6 @@ class MapNavNode(Node, ABC):
         self._gimbal_device_set_attitude = None
 
     #region Properties
-    @property
-    def name(self) -> str:
-        """Node name."""
-        return self._name
-
-    @name.setter
-    def name(self, value: str) -> None:
-        assert_type(value, str)
-        self._name = value
-
     @property
     def _kf(self) -> SimpleFilter:
         """Kalman filter for improved position and variance estimation"""

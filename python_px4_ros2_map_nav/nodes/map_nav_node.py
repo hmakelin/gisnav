@@ -658,7 +658,7 @@ class MapNavNode(Node, ABC):
             return None
         assert_type(dim, Dim)
         diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
-        assert_type(diagonal, int)  # TODO: What if this is float?
+        assert_type(diagonal, int)
         return diagonal, diagonal
 
     def _declared_img_size(self) -> Optional[Tuple[int, int]]:

@@ -75,7 +75,7 @@ class MockGPSNode(MapNavNode):
         assert all([position.eph, position.epv, position.z_amsl])
         # TODO: check inputs?
         msg = VehicleGpsPosition()
-        msg.timestamp = self._get_ekf2_time()  # TODO: use timestamp from position, should not createa new timestamp here
+        msg.timestamp = self._synchronized_time  # TODO: use timestamp from position, should not createa new timestamp here # TODO: also check None
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan

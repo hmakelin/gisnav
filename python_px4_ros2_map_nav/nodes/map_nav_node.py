@@ -348,6 +348,24 @@ class MapNavNode(Node, ABC):
 
     #region Computed Properties
     @property
+    def _synchronized_time(self) -> Optional[int]:
+        """Returns current (estimated) EKF2 timestamp in microseconds
+
+        See :py:attr:`~_time_sync` for more information.
+
+        :return: Estimated EKF2 system time in microseconds or None if not available"""
+        if self._time_sync is None:
+            self.get_logger().warn('Could not estimate EKF2 timestamp.')
+            return None
+        else:
+            now_usec = time.time() * 1e6
+            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than ' \
+                                                     f'timestamp stored earlier for synchronization ' \
+                                                     f'{self._time_sync.local}.'
+            ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
+            return ekf2_timestamp_usec
+
+    @property
     def _is_gimbal_projection_enabled(self) -> bool:
         """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
 
@@ -624,23 +642,6 @@ class MapNavNode(Node, ABC):
         now_usec = time.time() * 1e6
         self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
-    def _get_ekf2_time(self) -> Optional[int]:
-        """Returns current (estimated) EKF2 timestamp in microseconds
-
-        See :py:attr:`~_time_sync` for more information.
-
-        :return: Estimated EKF2 system time in microseconds or None if not available"""
-        if self._time_sync is None:
-            self.get_logger().warn('Could not estimate EKF2 timestamp.')
-            return None
-        else:
-            now_usec = time.time() * 1e6
-            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than ' \
-                                                     f'timestamp stored earlier for synchronization ' \
-                                                     f'{self._time_sync.local}.'
-            ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
-            return ekf2_timestamp_usec
-
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         """Returns map size with padding for rotation without clipping corners.
 
@@ -782,8 +783,7 @@ class MapNavNode(Node, ABC):
         :return:
         """
         # Estimate EKF2 timestamp first to get best estimate
-        timestamp = self._get_ekf2_time()
-        if timestamp is None:
+        if self._synchronized_time is None:
             self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
             return None
 
@@ -806,7 +806,7 @@ class MapNavNode(Node, ABC):
             return None
         img_dim = self._img_dim()
         assert isinstance(img_dim, Dim)
-        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=timestamp,
+        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=self._synchronized_time,
                                camera_data=self._camera_data)
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
@@ -1204,7 +1204,7 @@ class MapNavNode(Node, ABC):
         assert_type(self._camera_data, CameraData)
         image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
                                frame_id='mock_image_data',
-                               timestamp=self._get_ekf2_time(),
+                               timestamp=self._synchronized_time,  # TODO: none?
                                camera_data=self._camera_data)  # TODO: if none?
         return image_data
 

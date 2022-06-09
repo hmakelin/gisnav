@@ -582,8 +582,7 @@ class MapNavNode(Node, ABC):
             # TODO: do not assert global position alt - not necessarily needed?
             assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
                    hasattr(self._vehicle_global_position, 'alt')
-            alt = self._altitude_agl()
-            if alt is None:
+            if self._altitude_agl is None:
                 # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
                 self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
                 return None
@@ -591,7 +590,7 @@ class MapNavNode(Node, ABC):
             crs = 'epsg:4326'
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
-                z_ground=alt,
+                z_ground=self._altitude_agl,
                 z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
                 x_sd=None,
                 y_sd=None,
@@ -728,7 +727,8 @@ class MapNavNode(Node, ABC):
             self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
 
-        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl())  # Redundant altitude call
+        # TODO handle none altitude
+        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl)  # Redundant altitude call
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
@@ -1275,7 +1275,7 @@ class MapNavNode(Node, ABC):
         :return: The input data
         """
         input_data = InputData(
-            ground_elevation=self._ground_elevation_amsl
+            ground_elevation=self._ground_elevation_amsl  # TODO: handle None
         )
 
         img_dim = self._img_dim()
@@ -1355,9 +1355,9 @@ class MapNavNode(Node, ABC):
 
         # Check condition (3) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        altitude = self._altitude_agl()  # assume this is distance to ground
-        if not isinstance(min_alt, int) or altitude < min_alt:
-            self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
+        # TODO: handle none altitude_agl
+        if not isinstance(min_alt, int) or self._altitude_agl < min_alt:
+            self.get_logger().warn(f'Altitude {self._altitude_agl} was lower than minimum threshold for matching ({min_alt}) or '
                                    f'could not be determined. Skipping matching.')
             return False
 

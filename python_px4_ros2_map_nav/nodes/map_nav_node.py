@@ -587,6 +587,7 @@ class MapNavNode(Node, ABC):
                 self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
                 return None
 
+            # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order

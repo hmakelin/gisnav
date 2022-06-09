@@ -106,7 +106,7 @@ class WMSClient:
         :return: Map raster
         """
         try:
-            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_.bounds(srs_str), size=size_, format=format_,
+            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_.bounds, size=size_, format=format_,
                                     transparent=transparent_)
         except Exception as e:
             # TODO: handle exception

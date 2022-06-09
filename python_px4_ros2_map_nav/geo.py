@@ -51,6 +51,8 @@ class _GeoPolygon(_GeoObject):
         """Returns center or centroid point of the polygon"""
         return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
+    # TODO: make return numpy array
+    @property
     @lru_cache(4)
     def bounds(self) -> Tuple[4*(float,)]:
         """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests"""
@@ -160,10 +162,10 @@ class GeoBBox(_GeoPolygon):
         # TODO: fix this, hard coded order is prone to breaking even when using box function
         # TODO: why sometimes 5, sometimes 4?
         if len(self._geoseries[0].exterior.coords) == 5:
-            corners = box(*self.bounds()).exterior.coords[:-1]
+            corners = box(*self.bounds).exterior.coords[:-1]
         else:
             len(self._geoseries[0].exterior.coords) == 4
-            corners = box(*self.bounds()).exterior.coords
+            corners = box(*self.bounds).exterior.coords
         corners = np.array([
             corners[2],  # tl
             corners[3],  # bl

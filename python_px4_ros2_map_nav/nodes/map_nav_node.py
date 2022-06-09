@@ -357,7 +357,7 @@ class MapNavNode(Node, ABC):
         self.__gimbal_device_set_attitude = value
 
     @property
-    def _gimbal_set_attitude(self,) -> Optional[Attitude]:
+    def _gimbal_set_attitude(self) -> Optional[Attitude]:
         """Gimbal set attitude in NED frame or None if not available
 
         Gimbal set attitude is given in FRD frame. Need to get yaw from VehicleAttitude to constrtuct gimbal set

@@ -25,8 +25,8 @@ class MockGPSNode(MapNavNode):
                                                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
                                                depth=1)
 
-    def __init__(self, node_name: str):
-        super().__init__(node_name)
+    def __init__(self, name: str):
+        super().__init__(name)
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 

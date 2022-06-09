@@ -58,14 +58,13 @@ class MapNavNode(Node, ABC):
     WMS_PROCESS_COUNT = 1  # should be 1
     MATCHER_PROCESS_COUNT = 1  # should be 1, same for both map and vo matching pools
 
-    def __init__(self, node_name: str) -> None:
+    def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node.
 
-        :param node_name: Name of the node
+        :param name: Name of the node
         """
-        assert_type(node_name, str)
-        super().__init__(node_name, allow_undeclared_parameters=True,
-                         automatically_declare_parameters_from_overrides=True)
+        assert_type(name, str)
+        super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this

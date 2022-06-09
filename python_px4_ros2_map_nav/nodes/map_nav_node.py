@@ -117,7 +117,7 @@ class MapNavNode(Node, ABC):
         self._map_data = None
 
         # Stored solution for the PnP problem (map matching and visual odometry separately)
-        self._pose_map_guess = None
+        self._pose_guess = None
 
         self._time_sync = None  # For storing local and foreign (EKF2) timestamps
 
@@ -151,14 +151,17 @@ class MapNavNode(Node, ABC):
         self.__blurs = value
 
     @property
-    def _pose_map_guess(self) -> Optional[Pose]:
-        """Solution to the PnP problem in :meth:`~_process_matches` for map matching."""
-        return self.__pose_map_guess
+    def _pose_guess(self) -> Optional[Pose]:
+        """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac`.
 
-    @_pose_map_guess.setter
-    def _pose_map_guess(self, value: Optional[Pose]) -> None:
+        Assumes previous solution to the PnP problem will be close to the new solution.
+        """
+        return self.__pose_guess
+
+    @_pose_guess.setter
+    def _pose_guess(self, value: Optional[Pose]) -> None:
         assert_type(value, get_args(Optional[Pose]))
-        self.__pose_map_guess = value
+        self.__pose_guess = value
 
     @property
     def _map_matcher(self) -> Matcher:
@@ -1000,7 +1003,7 @@ class MapNavNode(Node, ABC):
         """
         pose = results[0]
         if pose is not None:
-            self._store_extrinsic_guess(pose)
+            self._pose_guess = pose
         else:
             self.get_logger().warn(f'Could not compute _match, returning None.')
             return None
@@ -1125,30 +1128,6 @@ class MapNavNode(Node, ABC):
 
             # Add newest values
             self._blurs = np.append(self._blurs, blur)
-
-    def _store_extrinsic_guess(self, pose: Pose) -> None:
-        """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in :meth:`~_process_matches`.
-
-        Assumes previous solution to the PnP problem will be close to the new solution. See also
-        :meth:`~_retrieve_extrinsic_guess`.
-
-        :param pose: Pose to store
-        :return:
-        """
-        self._pose_map_guess = pose
-
-    def _retrieve_extrinsic_guess(self) -> Optional[Pose]:
-        """Retrieves stored rotation and translation vectors for use by :func:`cv2.solvePnPRansac` in
-         :meth:`~_process_matches`.
-
-        Assumes previous solution to the PnP problem will be close to the new solution. See also
-        :meth:`~_store_extrinsic_guess`.
-
-        # TODO: require that timestamp of previous solution is not too old
-
-        :return: Requested _pose, or None if not available
-        """
-        return self._pose_map_guess
 
     @staticmethod
     def _estimate_attitude(map_match: Match) -> np.ndarray:
@@ -1363,7 +1342,7 @@ class MapNavNode(Node, ABC):
         self._map_matching_query = AsyncQuery(
             result=self._map_matching_pool.starmap_async(
                 self._map_matcher.worker,
-                [(image_pair, self._retrieve_extrinsic_guess())],
+                [(image_pair, self.__pose_map_guess)],
                 callback=self.map_matching_worker_callback,
                 error_callback=self.map_matching_worker_error_callback
             ),

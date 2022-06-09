@@ -1177,7 +1177,7 @@ class MapNavNode(Node, ABC):
         # TODO: none checks
         assert_type(self._camera_data, CameraData)
         image_data = ImageData(image=Img(np.zeros(self._img_dim)),  # TODO: if none?
-                               frame_id='mock_image_data',
+                               frame_id='mock_image_data',  # TODO: have a proper frame_id
                                timestamp=self._synchronized_time,  # TODO: none?
                                camera_data=self._camera_data)  # TODO: if none?
         return image_data

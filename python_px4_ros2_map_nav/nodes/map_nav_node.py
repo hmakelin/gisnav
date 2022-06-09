@@ -11,9 +11,6 @@ import os
 import yaml
 import copy
 
-from ament_index_python.packages import get_package_share_directory
-PACKAGE_NAME = 'python_px4_ros2_map_nav'  # TODO: try to read from somewhere (e.g. package.xml)
-
 # Import and configure torch for multiprocessing
 import torch
 try:
@@ -58,13 +55,16 @@ class MapNavNode(Node, ABC):
     WMS_PROCESS_COUNT = 1  # should be 1
     MATCHER_PROCESS_COUNT = 1  # should be 1, same for both map and vo matching pools
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, package_share_dir: str) -> None:
         """Initializes the ROS 2 node.
 
         :param name: Name of the node
+        :param package_share_dir: Package share directory file path
         """
         assert_type(name, str)
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
+
+        self._package_share_dir = package_share_dir
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -130,6 +130,16 @@ class MapNavNode(Node, ABC):
         self._gimbal_device_set_attitude = None
 
     #region Properties
+    @property
+    def _package_share_dir(self) -> str:
+        """ROS 2 package share directory"""
+        return self.__package_share_dir
+
+    @_package_share_dir.setter
+    def _package_share_dir(self, value: str) -> None:
+        assert_type(value, str)
+        self.__package_share_dir = value
+
     @property
     def _kf(self) -> SimpleFilter:
         """Kalman filter for improved position and variance estimation"""
@@ -557,7 +567,7 @@ class MapNavNode(Node, ABC):
         :return: The loaded yaml file as dictionary
         """
         assert_type(yaml_file, str)
-        with open(os.path.join(get_package_share_directory(PACKAGE_NAME), yaml_file), 'r') as f:
+        with open(os.path.join(self._package_share_dir, yaml_file), 'r') as f:
             try:
                 config = yaml.safe_load(f)
                 self.get_logger().info(f'Loaded config:\n{config}.')

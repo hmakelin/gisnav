@@ -3,6 +3,8 @@ import cProfile
 import pstats
 import rclpy
 
+from ament_index_python.packages import get_package_share_directory
+
 from python_px4_ros2_map_nav.nodes.mock_gps_node import MockGPSNode
 
 
@@ -14,6 +16,7 @@ def main(args=None):
     :param args: Any args for initializing the rclpy node
     :return:
     """
+    package_name = __name__.rsplit('.')[-2]  # should match package.xml declared package_name
     #if __debug__:
     #    pr = cProfile.Profile()  # TODO: re-enable
     #    pr.enable()
@@ -21,7 +24,7 @@ def main(args=None):
     pr = None
     try:
         rclpy.init(args=args)
-        matcher = MockGPSNode('map_nav_node')
+        matcher = MockGPSNode('map_nav_node', get_package_share_directory(package_name))
         rclpy.spin(matcher)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')

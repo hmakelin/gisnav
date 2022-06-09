@@ -518,6 +518,7 @@ class MapNavNode(Node, ABC):
                 self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
                 return None
 
+            # TODO: give position a timestamp - what timestamp to use here? Or this should never get published so not that imporant? Latest timestamp?
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
             position = Position(

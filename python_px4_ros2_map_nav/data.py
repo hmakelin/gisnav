@@ -21,13 +21,6 @@ from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
 
-
-#region GeoSeries wrappers
-# noinspection PyClassHasNoInit
-
-
-#endregion
-
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Position:

@@ -204,7 +204,7 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self.map_data.bbox.to_crs('epsg:4326').get_coordinates()
+        dst_corners = self.map_data.bbox.to_crs('epsg:4326').coordinates
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
@@ -410,7 +410,7 @@ class FOV:
         :param diagonal_length_tolerance: Tolerance for relative length difference between trapezoid diagonals
         :return: True if the quadrilateral is a convex isosceles trapezoid
         """
-        fov_pix = self.fov_pix.get_coordinates()
+        fov_pix = self.fov_pix.coordinates
         assert_len(fov_pix, 4)
         ul, ll, lr, ur = tuple(map(lambda pt: pt.squeeze().tolist(), fov_pix))
 

@@ -732,7 +732,7 @@ class MapNavNode(Node, ABC):
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
-        center = np.mean(mock_fixed_camera.fov.fov.to_crs('epsg:4326').get_coordinates(), axis=0).squeeze().tolist()
+        center = np.mean(mock_fixed_camera.fov.fov.to_crs('epsg:4326').coordinates, axis=0).squeeze().tolist()
         fov_center = Position(
             xy=GeoPoint(*center[1::-1], crs='epsg:4326'),
             z_ground=origin.z_ground,
@@ -1025,7 +1025,7 @@ class MapNavNode(Node, ABC):
                 # Visualize projected FOV estimate
                 ref_img = output_data.fixed_camera.map_match.image_pair.ref.image.arr
                 map_with_fov = cv2.polylines(ref_img.copy(),
-                                             [np.int32(output_data.fixed_camera.fov.fov_pix.get_coordinates())], True,
+                                             [np.int32(output_data.fixed_camera.fov.fov_pix.coordinates)], True,
                                              255, 3, cv2.LINE_AA)
 
                 img = np.vstack((map_with_fov, output_data.fixed_camera.map_match.image_pair.qry.image.arr))
@@ -1307,7 +1307,7 @@ class MapNavNode(Node, ABC):
 
         # Estimated field of view has unexpected shape?
         if not output_data.fixed_camera.fov.is_convex_isosceles_trapezoid():
-            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.get_coordinates().squeeze().tolist()} was not a convex isosceles '
+            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.coordinates.squeeze().tolist()} was not a convex isosceles '
                                    f'trapezoid, assume bad match.')
             return False
 

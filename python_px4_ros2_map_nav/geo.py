@@ -87,8 +87,9 @@ class GeoPoint(_GeoObject):
         #assert self._geoseries.crs is not None  # TODO: disabled because fov_pix is handled as GeoTrapezoid, fix it
 
     # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
+    @property
     @lru_cache(4)
-    def get_coordinates(self) -> Tuple[float, float]:
+    def coordinates(self) -> Tuple[float, float]:
         """X/Y (ENU frame) tuple in given CRS system units
 
         Note that this only returns coordinates in the provided CRS units but always in the (x, y) axis
@@ -105,7 +106,7 @@ class GeoPoint(_GeoObject):
 
         Note that this returns latitude and longitude in different order then :meth:`~get_coordinates`
         """
-        return self.to_crs('epsg:4326').get_coordinates()[1::-1]
+        return self.to_crs('epsg:4326').coordinates()[1::-1]
 
     @property
     def lat(self) -> float:
@@ -142,8 +143,9 @@ class GeoBBox(_GeoPolygon):
         # TODO: spherical adjustment uses self.center property, which needs _geoseries defined! so what to do here?
         self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius).to_crs(crs).envelope
 
+    @property
     @lru_cache(4)
-    def get_coordinates(self) -> np.ndarray:
+    def coordinates(self) -> np.ndarray:
         """Returns a numpy array of the corners coordinates of the bbox
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as
@@ -193,8 +195,9 @@ class GeoTrapezoid(_GeoPolygon):
     # TODO: how to know which corners are "bottom" corners and which ones are "top" corners?
     #  Order should again be same as in create_src_corners, as in GeoBBox. Need to have some shared trapezoid corner order constant used by these three?
     # Need to force constructor to distinguish between tl, bl, br, and tr?
+    @property
     @lru_cache(4)
-    def get_coordinates(self) -> np.ndarray:
+    def coordinates(self) -> np.ndarray:
         """Returns a numpy array of the corners coordinates of the trapezoid
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as

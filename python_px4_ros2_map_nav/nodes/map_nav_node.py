@@ -500,7 +500,7 @@ class MapNavNode(Node, ABC):
         return Dim(*self._declared_img_size)
     #endregion
 
-    #region Setup
+    #region Initialization
     def _setup_matching_pool(self, params_file: str) -> Tuple[str, torch.multiprocessing.Pool]:
         """Imports a matcher from given params file and returns a matching pool
 

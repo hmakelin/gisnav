@@ -371,17 +371,14 @@ class MapNavNode(Node, ABC):
 
         yaw_mask = np.array([1, 0, 0, 1])  # Gimbal roll & pitch is stabilized so we only need vehicle yaw (heading)
         vehicle_yaw = self._vehicle_attitude.q * yaw_mask
-        print(f'wxyz vehicle yaw {vehicle_yaw}')
 
         gimbal_set_attitude_frd = self._gimbal_device_set_attitude.q
-        print(f'wxyz gimbal frd {gimbal_set_attitude_frd}')
 
         # SciPy expects (x, y, z, w) while PX4 messages are (w, x, y, z)
         vehicle_yaw = Rotation.from_quat(np.append(vehicle_yaw[1:], vehicle_yaw[0]))
         gimbal_set_attitude_frd = Rotation.from_quat(np.append(gimbal_set_attitude_frd[1:], gimbal_set_attitude_frd[0]))
 
         gimbal_set_attitude_ned = vehicle_yaw * gimbal_set_attitude_frd
-        print(f'xyzw gimbal ned {gimbal_set_attitude_ned.as_quat()}')
 
         return Attitude(gimbal_set_attitude_ned.as_quat())
     #endregion
@@ -691,7 +688,6 @@ class MapNavNode(Node, ABC):
         # Need coordinates in image frame
         assert_type(self._gimbal_set_attitude, Attitude)
         gimbal_set_attitude = self._gimbal_set_attitude.to_esd()
-        #gimbal_set_attitude = self._gimbal_set_attitude
 
         # TODO: use CameraData class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
         if self._camera_data is None:
@@ -699,7 +695,6 @@ class MapNavNode(Node, ABC):
             return None
 
         translation = -gimbal_set_attitude.r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
-        #translation = np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
         mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
 
         try:

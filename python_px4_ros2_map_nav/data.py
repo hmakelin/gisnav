@@ -101,16 +101,9 @@ class Attitude:
 
         :return: Attitude in SED frame
         """
-        print(self.roll)
-        print(self.pitch)
-        print(self.yaw)
         nadir_pitch = np.array([0, np.sin(np.pi/4), 0, np.sin(np.pi/4)])  # Adjust origin to nadir facing camera
         r = Rotation.from_quat(self.q) * Rotation.from_quat(nadir_pitch)
         att = Attitude(r.as_quat())
-        print(att.roll)
-        print(att.pitch)
-        print(att.yaw)
-
         q = r.as_quat()
         q = np.array([q[1], -q[0], q[2], -q[3]])  # NED to ESD
         att = Attitude(q)

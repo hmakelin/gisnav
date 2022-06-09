@@ -384,10 +384,10 @@ class MapNavNode(Node, ABC):
 
     @property
     def _altitude_agl(self) -> Optional[float]:
-        """Returns altitude above ground level (from VehicleLocalPosition), or None it not available
+        """Returns altitude above ground level, or None it not available
 
-        This method tries to return the 'dist_bottom' value first, and 'z' second from the VehicleLocalPosition
-        message. If neither are valid, a None is returned.
+        This method tries to return the 'dist_bottom' value from class:`px4_msgs.VehicleLocalPosition` first, and 'z'
+        second. If neither are valid, a None is returned.
 
         :return: Altitude AGL in meters or None if information is not available
         """
@@ -404,6 +404,26 @@ class MapNavNode(Node, ABC):
         else:
             self.get_logger().warn('Altitude AGL not yet available.')
             return None
+
+    @property
+    def _ground_elevation_amsl(self) -> Optional[float]:
+        """Returns ground elevation in meters above mean sea level (AMSL)
+
+        It is assumed to be same as :class:`px4_msgs.VehicleLocalPosition` reference altitude. See also
+        :meth:`~_altitude_agl`.
+
+        :return: Altitude of ground surface in meters above mean sea level or None if information is not available
+        """
+        if self._vehicle_local_position is not None:
+            if hasattr(self._vehicle_local_position, 'ref_alt') and \
+                    isinstance(self._vehicle_local_position.ref_alt, float):
+                return self._vehicle_local_position.ref_alt
+            else:
+                self.get_logger().error('Vehicle local position did not contain a valid ref_alt value.')
+        else:
+            self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
+
+        return None
     #endregion
 
     #region Setup
@@ -752,22 +772,6 @@ class MapNavNode(Node, ABC):
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
-
-    def _local_position_ref_alt(self) -> Optional[float]:
-        """Returns local position reference altitude (AMSL)
-
-        :return: Assumed altitude of ground surface in meters above mean sea level
-        """
-        if self._vehicle_local_position is not None:
-            if hasattr(self._vehicle_local_position, 'ref_alt') and \
-                    isinstance(self._vehicle_local_position.ref_alt, float):
-                return self._vehicle_local_position.ref_alt
-            else:
-                self.get_logger().error('Vehicle local position did not contain a valid ref_alt value.')
-        else:
-            self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
-
-        return None
 
     #region microRTPSBridgeCallbacks
     def image_raw_callback(self, msg: Image) -> None:
@@ -1271,7 +1275,7 @@ class MapNavNode(Node, ABC):
         :return: The input data
         """
         input_data = InputData(
-            ground_elevation=self._local_position_ref_alt()
+            ground_elevation=self._ground_elevation_amsl()
         )
 
         img_dim = self._img_dim()

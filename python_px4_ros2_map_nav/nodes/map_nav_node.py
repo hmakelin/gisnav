@@ -501,6 +501,36 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Declared size not available - returning None as image dimensions.')
             return None
         return Dim(*self._declared_img_size)
+
+    @property
+    def _vehicle_position(self) -> Optional[Position]:
+        """Returns Vehicle position guess in WGS84 coordinates and altitude in meters above ground
+
+        To be used for update map requests.
+
+        :return: Position or None if not available"""
+        if self._vehicle_global_position is not None:
+            # TODO: do not assert global position alt - not necessarily needed?
+            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
+                   hasattr(self._vehicle_global_position, 'alt')
+            if self._altitude_agl is None:
+                # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
+                self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
+                return None
+
+            # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
+            crs = 'epsg:4326'
+            position = Position(
+                xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
+                z_ground=self._altitude_agl,
+                z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
+                x_sd=None,
+                y_sd=None,
+                z_sd=None
+            )
+            return position
+        else:
+            return None
     #endregion
 
     #region Initialization
@@ -566,8 +596,7 @@ class MapNavNode(Node, ABC):
         :return:
         """
         # Try to get lat, lon, alt from VehicleGlobalPosition if available
-        position = self._position_for_update_map_request()
-        assert_type(position, get_args(Optional[Position]))
+        position = self._vehicle_position  # TODO: remove redundant position assignment
 
         # Cannot determine vehicle global position
         if position is None:
@@ -649,35 +678,6 @@ class MapNavNode(Node, ABC):
 
         return module_name, class_name
     #endregion
-    def _position_for_update_map_request(self) -> Optional[Position]:
-        """Returns Vehicle position in WGS84 coordinates and altitude in meters above ground
-
-        To be used for update map requests.
-
-        :return: Position or None if not available"""
-        if self._vehicle_global_position is not None:
-            # TODO: do not assert global position alt - not necessarily needed?
-            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
-                   hasattr(self._vehicle_global_position, 'alt')
-            if self._altitude_agl is None:
-                # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
-                self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
-                return None
-
-            # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
-            crs = 'epsg:4326'
-            position = Position(
-                xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
-                z_ground=self._altitude_agl,
-                z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
-                x_sd=None,
-                y_sd=None,
-                z_sd=None
-            )
-            return position
-        else:
-            return None
-
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.
 

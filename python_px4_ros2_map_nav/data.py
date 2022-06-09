@@ -80,7 +80,7 @@ class Position:
 @dataclass(frozen=True)
 class Attitude:
     """Attitude (orientation) in 3D space, typically in FRD or NED frame depending on context"""
-    q: np.ndarray  # (x, y, z, w) format, same as SciPy
+    q: np.ndarray  # (x, y, z, w) SciPy format! :class:`px4_msgs.VehicleAttitude` q has different (w, x, y, z) format
     roll: float = field(init=False)
     pitch: float = field(init=False)
     yaw: float = field(init=False)
@@ -104,12 +104,16 @@ class Attitude:
         print(self.roll)
         print(self.pitch)
         print(self.yaw)
-        #q = np.array([self.q[0], self.q[1], self.q[2], self.q[3]])  # This almost works but looks like height and width dimensions are swapped?
-        #q = np.array([self.q[1], -self.q[0], self.q[2], self.q[3]])
         nadir_pitch = np.array([0, np.sin(np.pi/4), 0, np.sin(np.pi/4)])  # Adjust origin to nadir facing camera
-        #r = Rotation.from_quat(nadir_pitch) * Rotation.from_quat(q)
-        r = Rotation.from_quat(nadir_pitch) * Rotation.from_quat(self.q)
+        r = Rotation.from_quat(self.q) * Rotation.from_quat(nadir_pitch)
         att = Attitude(r.as_quat())
+        print(att.roll)
+        print(att.pitch)
+        print(att.yaw)
+
+        q = r.as_quat()
+        #q = np.array([q[1], q[0], q[2], q[3]])
+        att = Attitude(q)
         return att
 
 # noinspection PyClassHasNoInit

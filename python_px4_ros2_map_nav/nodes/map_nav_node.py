@@ -348,6 +348,25 @@ class MapNavNode(Node, ABC):
 
     #region Computed Properties
     @property
+    def _is_gimbal_projection_enabled(self) -> bool:
+        """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
+
+        If this is set to false, map rasters are retrieved for the vehicle's global position instead. This is typically
+        fine as long as the camera is not aimed too far in to the horizon and has a relatively wide field of view. For
+        best results, this should be on to ensure the field of view is fully contained within the area of the retrieved
+        map raster.
+
+        :return: True if field of view projection should be used for updating map rasters
+        """
+        gimbal_projection_flag = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
+        if type(gimbal_projection_flag) is bool:
+            return gimbal_projection_flag
+        else:
+            # Default behavior (safer)
+            self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
+            return False
+
+    @property
     def _gimbal_set_attitude(self) -> Optional[Attitude]:
         """Gimbal set attitude in NED frame or None if not available
 
@@ -489,7 +508,7 @@ class MapNavNode(Node, ABC):
             return
 
         # Project principal point if required
-        if self._use_gimbal_projection():
+        if self._is_gimbal_projection_enabled:
             projected_position = self._projected_field_of_view_center(position)
             if projected_position is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
@@ -591,23 +610,6 @@ class MapNavNode(Node, ABC):
             return position
         else:
             return None
-
-    def _use_gimbal_projection(self) -> bool:
-        """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
-
-        If this is set to false, map rasters are retrieved for the vehicle's global position instead. This is typically
-        fine as long as the camera is not aimed too far in to the horizon and has a relatively wide field of view. For
-        best results, this should be on to ensure the field of view is fully contained within the area of the retrieved
-        map raster.
-
-        :return: True if field of view projection should be used for updating map rasters
-        """
-        gimbal_projection_flag = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
-        if type(gimbal_projection_flag) is bool:
-            return gimbal_projection_flag
-        else:
-            self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
-            return False
 
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.

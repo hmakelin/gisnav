@@ -381,6 +381,29 @@ class MapNavNode(Node, ABC):
         gimbal_set_attitude_ned = vehicle_yaw * gimbal_set_attitude_frd
 
         return Attitude(gimbal_set_attitude_ned.as_quat())
+
+    @property
+    def _altitude_agl(self) -> Optional[float]:
+        """Returns altitude above ground level (from VehicleLocalPosition), or None it not available
+
+        This method tries to return the 'dist_bottom' value first, and 'z' second from the VehicleLocalPosition
+        message. If neither are valid, a None is returned.
+
+        :return: Altitude AGL in meters or None if information is not available
+        """
+        if self._vehicle_local_position is not None:
+            if self._vehicle_local_position.dist_bottom_valid:
+                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude AGL.')
+                return abs(self._vehicle_local_position.dist_bottom)
+            elif self._vehicle_local_position.z_valid:
+                self.get_logger().warn('VehicleLocalPosition.dist_bottom was not valid, assuming '
+                                       'VehicleLocalPosition.z for altitude AGL.')
+                return abs(self._vehicle_local_position.z)
+            else:
+                return None
+        else:
+            self.get_logger().warn('Altitude AGL not yet available.')
+            return None
     #endregion
 
     #region Setup
@@ -539,7 +562,7 @@ class MapNavNode(Node, ABC):
             # TODO: do not assert global position alt - not necessarily needed?
             assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
                    hasattr(self._vehicle_global_position, 'alt')
-            alt = self._alt_from_vehicle_local_position()
+            alt = self._altitude_agl()
             if alt is None:
                 # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
                 self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
@@ -555,25 +578,6 @@ class MapNavNode(Node, ABC):
                 z_sd=None
             )
             return position
-        else:
-            return None
-
-    def _alt_from_vehicle_local_position(self) -> Optional[float]:
-        """Returns altitude from vehicle local position or None if not available.
-
-        This method tries to return the 'z' value first, and 'dist_bottom' second from the VehicleLocalPosition
-        message. If neither are valid, a None is returned.
-
-        :return: Altitude in meters or None if information is not available"""
-        if self._vehicle_local_position is not None:
-            if self._vehicle_local_position.z_valid:
-                self.get_logger().debug('Using VehicleLocalPosition.z for altitude.')
-                return abs(self._vehicle_local_position.z)
-            elif self._vehicle_local_position.dist_bottom_valid:
-                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude.')
-                return abs(self._vehicle_local_position.dist_bottom)
-            else:
-                return None
         else:
             return None
 
@@ -704,7 +708,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
 
-        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
+        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl())  # Redundant altitude call
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
@@ -1347,7 +1351,7 @@ class MapNavNode(Node, ABC):
 
         # Check condition (3) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        altitude = self._alt_from_vehicle_local_position()  # assume this is distance to ground
+        altitude = self._altitude_agl()  # assume this is distance to ground
         if not isinstance(min_alt, int) or altitude < min_alt:
             self.get_logger().warn(f'Altitude {altitude} was lower than minimum threshold for matching ({min_alt}) or '
                                    f'could not be determined. Skipping matching.')

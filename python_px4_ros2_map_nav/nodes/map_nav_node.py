@@ -698,8 +698,8 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Camera data not available, could not create a mock pose to generate a FOV guess.')
             return None
 
-        #translation = -gimbal_set_attitude.r.T @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
-        translation = np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
+        translation = -gimbal_set_attitude.r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
+        #translation = np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
         mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
 
         try:

@@ -112,7 +112,7 @@ class Attitude:
         print(att.yaw)
 
         q = r.as_quat()
-        #q = np.array([q[1], q[0], q[2], q[3]])
+        q = np.array([q[1], q[0], q[2], q[3]])  # NED to ESD
         att = Attitude(q)
         return att
 

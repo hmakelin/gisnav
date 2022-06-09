@@ -463,8 +463,6 @@ class FixedCamera:
                   c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                   )
 
-        print(fov.fov._geoseries)
-
         return fov
 
     def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Position:

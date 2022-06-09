@@ -725,7 +725,6 @@ class MapNavNode(Node, ABC):
         :param bbox: Bounding box of map to update
         :return:
         """
-        #self.get_logger().info(f'Updating map at {bbox}, radius {radius} meters.')
         self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
         assert_type(bbox, GeoBBox)
 
@@ -1371,7 +1370,7 @@ class MapNavNode(Node, ABC):
         self._map_matching_query = AsyncQuery(
             result=self._map_matching_pool.starmap_async(
                 self._map_matcher.worker,
-                [(image_pair, self._retrieve_extrinsic_guess())],  # TODO: have k in input data after all? or somehow inside image_pair?
+                [(image_pair, self._retrieve_extrinsic_guess())],
                 callback=self.map_matching_worker_callback,
                 error_callback=self.map_matching_worker_error_callback
             ),
@@ -1390,7 +1389,7 @@ class MapNavNode(Node, ABC):
         pass
 
     @abstractmethod
-    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:    # TODO Change signature back to np.ndarray for c?
+    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:
         """Publishes projected field of view (FOV) and principal point
 
         This method should be implemented by an extending class to adapt for any given use case.

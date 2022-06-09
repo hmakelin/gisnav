@@ -452,6 +452,52 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
 
         return None
+
+    @property
+    def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
+        """Returns map size with padding for rotation without clipping corners.
+
+        Because the deep learning models used for predicting matching keypoints between camera image frames and
+        retrieved map rasters are not assumed to be rotation invariant, the map rasters are rotated based on camera yaw
+        so that they align with the camera images. To keep the scale of the map after rotation the same, black corners
+        would appear unless padding is used. Retrieved maps therefore have to squares with the side lengths matching the
+        diagonal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
+        rotation.
+
+        :return: Padded map size tuple (height, width) or None if the info is not available. The height and width will
+        both be equal to the diagonal of the declared (:py:attr:`~_camera_info`) camera frame dimensions.
+        """
+        if self._img_dim is None:
+            self.get_logger().warn(f'Dimensions not available - returning None as map size.')
+            return None
+        diagonal = math.ceil(math.sqrt(self._img_dim.width ** 2 + self._img_dim.height ** 2))
+        assert_type(diagonal, int)
+        return diagonal, diagonal
+
+    @property
+    def _declared_img_size(self) -> Optional[Tuple[int, int]]:
+        """Returns image resolution size as it is declared in the latest CameraInfo message.
+
+        :return: Image resolution tuple (height, width) or None if not available
+        """
+        if self._camera_data is not None:
+            return self._camera_data.height, self._camera_data.width  # numpy order: h, w, c --> height first
+        else:
+            self.get_logger().warn('Camera data was not available, returning None as declared image size.')
+            return None
+
+    @property
+    def _img_dim(self) -> Optional[Dim]:
+        """Returns image dimensions as it is declared in the latest CameraInfo message.
+
+        This method is a wrapper for :meth:`~declared_img_size`.
+
+        :return: Image dimensions or None if not available
+        """
+        if self._declared_img_size is None:
+            self.get_logger().warn('Declared size not available - returning None as image dimensions.')
+            return None
+        return Dim(*self._declared_img_size)
     #endregion
 
     #region Setup
@@ -642,54 +688,6 @@ class MapNavNode(Node, ABC):
         now_usec = time.time() * 1e6
         self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
-    def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
-        """Returns map size with padding for rotation without clipping corners.
-
-        Because the deep learning models used for predicting matching keypoints between camera image frames and
-        retrieved map rasters are not assumed to be rotation invariant, the map rasters are rotated based on camera yaw
-        so that they align with the camera images. To keep the scale of the map after rotation the same, black corners
-        would appear unless padding is used. Retrieved maps therefore have to squares with the side lengths matching the
-        diagonal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
-        rotation.
-
-        :return: Padded map size tuple (height, width) or None if the info is not available. The height and width will
-        both be equal to the diagonal of the declared (:py:attr:`~_camera_info`) camera frame dimensions.
-        """
-        dim = self._img_dim()
-        if dim is None:
-            self.get_logger().warn(f'Dimensions not available - returning None as map size.')
-            return None
-        assert_type(dim, Dim)
-        diagonal = math.ceil(math.sqrt(dim.width ** 2 + dim.height ** 2))
-        assert_type(diagonal, int)
-        return diagonal, diagonal
-
-    def _declared_img_size(self) -> Optional[Tuple[int, int]]:
-        """Returns image resolution size as it is declared in the latest CameraInfo message.
-
-        :return: Image resolution tuple (height, width) or None if not available
-        """
-        if self._camera_data is not None:
-            return self._camera_data.height, self._camera_data.width  # numpy order: h, w, c --> height first
-        else:
-            self.get_logger().warn('Camera data was not available, returning None as declared image size.')
-            return None
-
-    def _img_dim(self) -> Optional[Dim]:
-        """Returns image dimensions as it is declared in the latest CameraInfo message.
-
-        This method is a wrapper for :meth:`~declared_img_size`.
-
-        :return: Image dimensions or None if not available
-        """
-        declared_size = self._declared_img_size()
-        if declared_size is None:
-            self.get_logger().warn('CDeclared size not available - returning None as image dimensions.')
-            return None
-        assert_type(declared_size, tuple)
-        assert_len(declared_size, 2)
-        return Dim(*declared_size)
-
     def _projected_field_of_view_center(self, origin: Position) -> Optional[Position]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
@@ -747,8 +745,7 @@ class MapNavNode(Node, ABC):
         self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
         assert_type(bbox, GeoBBox)
 
-        map_size = self._map_size_with_padding()
-        if map_size is None:
+        if self._map_size_with_padding is None:
             self.get_logger().warn('Map size not yet available - skipping WMS request.')
             return None
 
@@ -762,7 +759,7 @@ class MapNavNode(Node, ABC):
             if self._wms_results is not None:
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
             self._wms_results = self._wms_pool.starmap_async(
-                WMSClient.worker, [(bbox, map_size, layer_str, srs_str)],
+                WMSClient.worker, [(bbox, self._map_size_with_padding, layer_str, srs_str)],
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
@@ -793,19 +790,17 @@ class MapNavNode(Node, ABC):
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
 
         # Check that image dimensions match declared dimensions
-        img_size = self._declared_img_size()
-        if img_size is not None:
+        if self._declared_img_size is not None:
             cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == img_size, f'Converted cv_image shape {cv_img_shape} did not match declared image ' \
-                                             f'shape {img_size}.'
+            assert cv_img_shape == self._declared_img_size, f'Converted cv_image shape {cv_img_shape} did not match ' \
+                                                            f'declared image shape {self._declared_img_size}.'
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
         if self._camera_data is None:
             self.get_logger().warn('Camera data not yet available, skipping frame.')
             return None
-        img_dim = self._img_dim()
-        assert isinstance(img_dim, Dim)
+
         image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=self._synchronized_time,
                                camera_data=self._camera_data)
 
@@ -983,7 +978,7 @@ class MapNavNode(Node, ABC):
         assert_len(result, 1)
         result = result[0]
         assert_type(result, MapData)
-        assert result.image.arr.shape[0:2] == self._map_size_with_padding(), 'Decoded map is not of specified size.'
+        assert result.image.arr.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
         self.get_logger().info(f'Map received for bbox: {result.bbox}.')
         self._map_data = result
 
@@ -1194,7 +1189,7 @@ class MapNavNode(Node, ABC):
         # TODO: handle none return values
         image_data = self._mock_image_data()
         map_data = self._mock_map_data(origin)
-        contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim(), map_data=map_data)  # TODO: redudnant img dim, check none
+        contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim, map_data=map_data)  # TODO: redudnant img dim, check none
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair
 
@@ -1202,7 +1197,7 @@ class MapNavNode(Node, ABC):
         """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
         # TODO: none checks
         assert_type(self._camera_data, CameraData)
-        image_data = ImageData(image=Img(np.zeros(self._img_dim())),  # TODO: if none?
+        image_data = ImageData(image=Img(np.zeros(self._img_dim)),  # TODO: if none?
                                frame_id='mock_image_data',
                                timestamp=self._synchronized_time,  # TODO: none?
                                camera_data=self._camera_data)  # TODO: if none?
@@ -1223,15 +1218,14 @@ class MapNavNode(Node, ABC):
         assert_type(self._camera_data, CameraData)
         # TODO: make a new CameraData structure; k, cx, cy currently together with ImageData in flat structure
         # TODO: assumes fx == fy
-        dim_padding = self._map_size_with_padding()
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = (dim_padding[0]/2) / self._camera_data.fx
+        scaling = (self._map_size_with_padding[0]/2) / self._camera_data.fx  # TODO: handle None/No dim yet
         radius = scaling * origin.z_ground
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoBBox(origin.xy, radius)
-        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding())))  # TODO: handle no dim yet
+        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
         return map_data
 
     #region Match
@@ -1272,9 +1266,6 @@ class MapNavNode(Node, ABC):
             ground_elevation=self._ground_elevation_amsl  # TODO: handle None
         )
 
-        img_dim = self._img_dim()
-        assert_type(img_dim, Dim)  # TODO: handle None?
-
         # Get cropped and rotated map
         if self._gimbal_set_attitude is not None:
             camera_yaw = self._gimbal_set_attitude.yaw
@@ -1284,7 +1275,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Camera yaw unknown, cannot match.')
             return False
 
-        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=img_dim)
+        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
         return copy.deepcopy(input_data), contextual_map_data
 
     def _good_match(self, output_data: OutputData) -> bool:

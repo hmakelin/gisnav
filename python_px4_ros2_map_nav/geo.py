@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from functools import lru_cache
 from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
@@ -36,6 +36,12 @@ class _GeoObject(ABC):
         :param driver: OGR format driver
         """
         return self._geoseries.to_file(filename, driver=driver)
+
+    @property
+    @abstractmethod
+    def coordinates(self) -> np.ndarray:
+        """Returns the contained geoseries shape as numpy array."""
+        pass
 
 class _GeoPolygon(_GeoObject):
     """Abstract base class for other wrappers that contain GeoSeries with Shapely Polygons"""
@@ -89,7 +95,7 @@ class GeoPoint(_GeoObject):
     # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
     @property
     @lru_cache(4)
-    def coordinates(self) -> Tuple[float, float]:
+    def coordinates(self) -> Tuple[float, float]:  # TODO: return as numpy array
         """X/Y (ENU frame) tuple in given CRS system units
 
         Note that this only returns coordinates in the provided CRS units but always in the (x, y) axis

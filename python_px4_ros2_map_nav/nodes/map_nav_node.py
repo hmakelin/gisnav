@@ -355,7 +355,9 @@ class MapNavNode(Node, ABC):
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
+    #endregion
 
+    #region Computed Properties
     @property
     def _gimbal_set_attitude(self) -> Optional[Attitude]:
         """Gimbal set attitude in NED frame or None if not available

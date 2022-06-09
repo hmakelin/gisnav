@@ -204,7 +204,7 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self.map_data.bbox.get_coordinates('epsg:4326')
+        dst_corners = self.map_data.bbox.to_crs('epsg:4326').get_coordinates()
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 

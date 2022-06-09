@@ -64,7 +64,7 @@ class SimpleFilter:
         assert_type(position, Position)
         orig_crs_str = position.xy.crs
         temp_crs_str = 'epsg:3857'  # Need to do filtering in (approximate) meters (for eph and epv estimation) so use EPSG:3857
-        measurement = np.array(position.xy.get_coordinates(temp_crs_str) + (position.z_ground,)).reshape(1, 3)
+        measurement = np.array(position.xy.to_crs(temp_crs_str).get_coordinates() + (position.z_ground,)).reshape(1, 3)
 
         if self._measurements is None:
             self._init_initial_state(measurement)

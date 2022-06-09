@@ -732,7 +732,7 @@ class MapNavNode(Node, ABC):
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
-        center = np.mean(mock_fixed_camera.fov.fov.get_coordinates(crs='epsg:4326'), axis=0).squeeze().tolist()
+        center = np.mean(mock_fixed_camera.fov.fov.to_crs('epsg:4326').get_coordinates(), axis=0).squeeze().tolist()
         fov_center = Position(
             xy=GeoPoint(*center[1::-1], crs='epsg:4326'),
             z_ground=origin.z_ground,

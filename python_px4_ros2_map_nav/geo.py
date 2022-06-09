@@ -46,12 +46,9 @@ class _GeoPolygon(_GeoObject):
         return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
     @lru_cache(4)
-    def bounds(self, crs: str = _GeoObject.DEFAULT_CRS) -> Tuple[4*(float,)]:
-        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests
-
-        :param crs: CRS string for WMS request (e.g. 'epsg:4326')
-        """
-        return self._geoseries.to_crs(crs)[0].bounds
+    def bounds(self) -> Tuple[4*(float,)]:
+        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests"""
+        return self._geoseries[0].bounds
 
     def __post_init__(self):
         """Post-initialization validity checks"""
@@ -71,15 +68,18 @@ class GeoPoint(_GeoObject):
 
     Pay attention to the axis order, i.e. (x, y) is (lon, lat) for EPSG:4326.
     """
-    # TODO call these x and y instead of easting and northing (more generic)
-    def __init__(self, easting: float, northing: float, crs: str = _GeoObject.DEFAULT_CRS):
+    # TODO call these x and y instead of x and y (more generic)
+    def __init__(self, x: float, y: float, crs: str = _GeoObject.DEFAULT_CRS):
         """Initializes the wrapped GeoSeries
 
-        :param easting: X axis coordinate (longitude)
-        :param northing: Y axis coordinate (latitude)
+        Not that (x and y) are in ENU frame so easting comes before northing (e.g. lon before lat, even though WGS 84
+        is defined as lat before lon).
+
+        :param x: X axis coordinate (longitude)
+        :param y: Y axis coordinate (latitude)
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326') the (x, y) pair is provided in
         """
-        self._geoseries = GeoSeries([Point(easting, northing)], crs=crs)
+        self._geoseries = GeoSeries([Point(x, y)], crs=crs)
 
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries, 1)
@@ -88,31 +88,16 @@ class GeoPoint(_GeoObject):
 
     # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
     @lru_cache(4)
-    def get_coordinates(self, crs: str = _GeoObject.DEFAULT_CRS) -> Tuple[float, float]:
-        """Easting/northing tuple in given CRS system units
+    def get_coordinates(self) -> Tuple[float, float]:
+        """X/Y (ENU frame) tuple in given CRS system units
 
-        Note that this only returns coordinates in the provided CRS units but always in the (easting, northing) axis
+        Note that this only returns coordinates in the provided CRS units but always in the (x, y) axis
         order, so e.g. WGS84 (lat, lon) pair would be returned as (lon, lat). Use :meth:`~latlon` to get WGS84
         coordinates in the correct order.
 
-        :param crs: CRS string (e.g. 'epsg:4326' or 'epsg:3857')
-        :return: Easting/northing (e.g. lon/lat) tuple
+        :return: X/Y (e.g. lon/lat because of ENU frame) tuple
         """
-        return self._geoseries.to_crs(crs)[0].coords[0]
-
-    def get_easting(self, crs: str = _GeoObject.DEFAULT_CRS) -> float:
-        """Easting coordinate
-
-        :param crs: CRS string (e.g. 'epsg:3857')
-        """
-        return self.get_coordinates(crs)[0]
-
-    def get_northing(self, crs: str = _GeoObject.DEFAULT_CRS) -> float:
-        """Northing coordinate
-
-        :param crs: CRS string (e.g. 'epsg:3857')
-        """
-        return self.get_coordinates(crs)[1]
+        return self._geoseries[0].coords[0]
 
     @property
     def latlon(self) -> Tuple[float, float]:
@@ -120,17 +105,17 @@ class GeoPoint(_GeoObject):
 
         Note that this returns latitude and longitude in different order then :meth:`~get_coordinates`
         """
-        return self.get_coordinates('epsg:4326')[1::-1]  # Provide explicit CRS argument, someone might change default
+        return self.to_crs('epsg:4326').get_coordinates()[1::-1]
 
     @property
     def lat(self) -> float:
         """Convenience property to get latitude in WGS 84"""
-        return self.get_northing('epsg:4326')  # Provide explicit CRS argument, someone might change default
+        return self.latlon[1]
 
     @property
     def lon(self) -> float:
         """Convenience property to get longitude in WGS 84"""
-        return self.get_easting('epsg:4326')  # Provide explicit CRS argument, someone might change default
+        return self.latlon[0]
 
     def _spherical_adjustment(self):
         """Helper method to adjust distance measured in EPSG:3857 pseudo-meters into approximate real meters
@@ -158,28 +143,19 @@ class GeoBBox(_GeoPolygon):
         self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius).to_crs(crs).envelope
 
     @lru_cache(4)
-    def get_coordinates(self, crs: str = _GeoObject.DEFAULT_CRS) -> np.ndarray:
+    def get_coordinates(self) -> np.ndarray:
         """Returns a numpy array of the corners coordinates of the bbox
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as
         :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
         """
-        # Counter clockwise order starting from top left ([::-1]), and leave duplicated top left origin out ([:-1])
-        #corners = np.array(self._geoseries[0].exterior.coords[::-1][:-1])
-        #corners = self._geoseries[0].exterior.coords[:-1]
-        #corners = np.array([
-        #    corners[3],  # tl
-        #    corners[0],  # bl
-        #    corners[1],  # br
-        #    corners[2]   # tr
-        #])
         # TODO: fix this, hard coded order is prone to breaking even when using box function
         # TODO: why sometimes 5, sometimes 4?
         if len(self._geoseries[0].exterior.coords) == 5:
-            corners = box(*self.bounds(crs)).exterior.coords[:-1]
+            corners = box(*self.bounds()).exterior.coords[:-1]
         else:
             len(self._geoseries[0].exterior.coords) == 4
-            corners = box(*self.bounds(crs)).exterior.coords
+            corners = box(*self.bounds()).exterior.coords
         corners = np.array([
             corners[2],  # tl
             corners[3],  # bl
@@ -218,7 +194,7 @@ class GeoTrapezoid(_GeoPolygon):
     #  Order should again be same as in create_src_corners, as in GeoBBox. Need to have some shared trapezoid corner order constant used by these three?
     # Need to force constructor to distinguish between tl, bl, br, and tr?
     @lru_cache(4)
-    def get_coordinates(self, crs: str = _GeoObject.DEFAULT_CRS) -> np.ndarray:
+    def get_coordinates(self) -> np.ndarray:
         """Returns a numpy array of the corners coordinates of the trapezoid
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as

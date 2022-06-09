@@ -16,7 +16,7 @@ from scipy.spatial.transform import Rotation
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoTrapezoid
-from python_px4_ros2_map_nav.transform import create_src_corners, get_fov_and_c
+from python_px4_ros2_map_nav.transform import create_src_corners
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
@@ -454,8 +454,8 @@ class FixedCamera:
         # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
         h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
-        fov_pix, c_pix = get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
-        fov_wgs84, c_wgs84 = get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
+        fov_pix, c_pix = self._get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
+        fov_wgs84, c_wgs84 = self._get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
 
         fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
                   fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
@@ -464,6 +464,34 @@ class FixedCamera:
                   )
 
         return fov
+
+    @staticmethod
+    def _get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculates field of view (FOV) corners from homography and image shape.
+
+        :param img_arr_shape: Image array shape tuple (height, width)
+        :param h_mat: Homography matrix
+        :return: Tuple of FOV corner coordinates and prinicpal point np.ndarrays
+        """
+        assert_type(img_arr_shape, tuple)
+        assert_len(img_arr_shape, 2)
+        assert_type(h_mat, np.ndarray)
+        h, w = img_arr_shape  # height before width in np.array shape
+        src_fov = create_src_corners(h, w)
+
+        principal_point_src = np.array([[[w / 2, h / 2]]])
+        src_fov_and_c = np.vstack((src_fov, principal_point_src))
+
+        assert_shape(h_mat, (3, 3))
+        assert_ndim(src_fov, 3)  # TODO: this is currently not assumed to be squeezed
+        dst_fov_and_c = cv2.perspectiveTransform(src_fov_and_c, h_mat)
+
+        dst_fov, principal_point_dst = np.vsplit(dst_fov_and_c, [-1])
+
+        assert_shape(dst_fov, src_fov.shape)
+        assert_shape(principal_point_dst, principal_point_src.shape)
+
+        return dst_fov, principal_point_dst
 
     def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Position:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as

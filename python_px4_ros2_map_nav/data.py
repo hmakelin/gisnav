@@ -12,6 +12,7 @@ from typing import Optional, Union, get_args
 from collections import namedtuple
 from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
+from scipy.spatial.transform import Rotation
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoTrapezoid
@@ -77,25 +78,39 @@ class Position:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class RPY:
-    """Roll-pitch-yaw"""
-    roll: float
-    pitch: float
-    yaw: float
+class Attitude:
+    """Attitude (orientation) in 3D space, typically in FRD or NED frame depending on context"""
+    q: np.ndarray  # (x, y, z, w) format, same as SciPy
+    roll: float = field(init=False)
+    pitch: float = field(init=False)
+    yaw: float = field(init=False)
+    r: float = field(init=False)
 
-    def axes_ned_to_image(self, degrees: bool = True) -> RPY:
-        """Converts roll-pitch-yaw euler angles from NED to image frame"""
-        straight_angle = 180 if degrees else np.pi
-        right_angle = 90 if degrees else np.pi / 2
-        pitch = -self.pitch - right_angle
-        if pitch < 0:
-            # Gimbal pitch and yaw flip over when abs(gimbal_yaw) should go over 90, adjust accordingly
-            pitch += straight_angle
-        roll = pitch
-        pitch = self.roll
-        yaw = self.yaw
-        rpy = RPY(roll, pitch, yaw)
-        return rpy
+    def __post_init__(self):
+        """Post-initialization validity checks"""
+        assert_len(self.q, 4)
+        rotation = Rotation.from_quat(self.q)
+        roll, pitch, yaw = tuple(rotation.as_euler('xyz'))
+        object.__setattr__(self, 'roll', roll)
+        object.__setattr__(self, 'pitch', pitch)
+        object.__setattr__(self, 'yaw', yaw)
+        object.__setattr__(self, 'r', rotation.as_matrix())
+
+    def to_esd(self) -> Attitude:
+        """Converts attitude from NED to solvePnP ESD world frame
+
+        :return: Attitude in SED frame
+        """
+        print(self.roll)
+        print(self.pitch)
+        print(self.yaw)
+        #q = np.array([self.q[0], self.q[1], self.q[2], self.q[3]])  # This almost works but looks like height and width dimensions are swapped?
+        #q = np.array([self.q[1], -self.q[0], self.q[2], self.q[3]])
+        nadir_pitch = np.array([0, np.sin(np.pi/4), 0, np.sin(np.pi/4)])  # Adjust origin to nadir facing camera
+        #r = Rotation.from_quat(nadir_pitch) * Rotation.from_quat(q)
+        r = Rotation.from_quat(nadir_pitch) * Rotation.from_quat(self.q)
+        att = Attitude(r.as_quat())
+        return att
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -169,7 +184,7 @@ class MapData(_ImageHolder):
 class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the map_cropped image which is same size as the camera frames, init in __post_init__
-    rotation: Union[float, int]
+    rotation: float
     crop: Dim  # TODO: Redundant with .image.dim but need this to generate .image
     map_data: MapData   # This is the original larger (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
@@ -457,6 +472,8 @@ class FixedCamera:
                   c_pix=c_pix,
                   c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                   )
+
+        print(fov.fov._geoseries)
 
         return fov
 

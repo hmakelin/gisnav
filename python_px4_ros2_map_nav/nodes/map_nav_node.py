@@ -31,12 +31,12 @@ from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from functools import partial
-from px4_msgs.msg import VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
+from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import Dim, TimePair, RPY, ImageData, MapData, Match, CameraData, \
+from python_px4_ros2_map_nav.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, \
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
@@ -84,6 +84,7 @@ class MapNavNode(Node, ABC):
 
         # Dict for storing all microRTPS bridge subscribers
         self._topics = {
+            'VehicleAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleAttitude},
             'VehicleLocalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleLocalPosition},
             'VehicleGlobalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleGlobalPosition},
             'GimbalDeviceAttitudeStatus_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
@@ -316,6 +317,16 @@ class MapNavNode(Node, ABC):
         self.__vehicle_local_position = value
 
     @property
+    def _vehicle_attitude(self) -> Optional[VehicleAttitude]:
+        """VehicleAttitude received via the PX4-ROS 2 bridge."""
+        return self.__vehicle_attitude
+
+    @_vehicle_attitude.setter
+    def _vehicle_attitude(self, value: Optional[VehicleAttitude]) -> None:
+        assert_type(value, get_args(Optional[VehicleAttitude]))
+        self.__vehicle_attitude = value
+
+    @property
     def _vehicle_global_position(self) -> Optional[VehicleGlobalPosition]:
         """VehicleGlobalPosition received via the PX4-ROS 2 bridge."""
         return self.__vehicle_global_position
@@ -344,6 +355,35 @@ class MapNavNode(Node, ABC):
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
+
+    @property
+    def _gimbal_set_attitude(self,) -> Optional[Attitude]:
+        """Gimbal set attitude in NED frame or None if not available
+
+        Gimbal set attitude is given in FRD frame. Need to get yaw from VehicleAttitude to constrtuct gimbal set
+        attitude in NED frame.
+
+        Note that this is only the set attitude, actual gimbal attitude may differ if gimbal has not yet stabilized.
+        """
+        if self._vehicle_attitude is None or self._gimbal_device_set_attitude is None:
+            self.get_logger().debug('Vehicle or gimbal set attitude not yet available.')
+            return None
+
+        yaw_mask = np.array([1, 0, 0, 1])  # Gimbal roll & pitch is stabilized so we only need vehicle yaw (heading)
+        vehicle_yaw = self._vehicle_attitude.q * yaw_mask
+        print(f'wxyz vehicle yaw {vehicle_yaw}')
+
+        gimbal_set_attitude_frd = self._gimbal_device_set_attitude.q
+        print(f'wxyz gimbal frd {gimbal_set_attitude_frd}')
+
+        # SciPy expects (x, y, z, w) while PX4 messages are (w, x, y, z)
+        vehicle_yaw = Rotation.from_quat(np.append(vehicle_yaw[1:], vehicle_yaw[0]))
+        gimbal_set_attitude_frd = Rotation.from_quat(np.append(gimbal_set_attitude_frd[1:], gimbal_set_attitude_frd[0]))
+
+        gimbal_set_attitude_ned = vehicle_yaw * gimbal_set_attitude_frd
+        print(f'xyzw gimbal ned {gimbal_set_attitude_ned.as_quat()}')
+
+        return Attitude(gimbal_set_attitude_ned.as_quat())
     #endregion
 
     #region Setup
@@ -492,7 +532,6 @@ class MapNavNode(Node, ABC):
 
         return module_name, class_name
     #endregion
-
     def _position_for_update_map_request(self) -> Optional[Position]:
         """Returns Vehicle position in WGS84 coordinates and altitude in meters above ground
 
@@ -645,28 +684,29 @@ class MapNavNode(Node, ABC):
         :param origin: Camera position  # TODO: why is this an argument but all else is not?
         :return: Center of the FOV with same altitude as given origin, or None if not available
         """
-        rpy = self._get_camera_set_rpy()
-        if rpy is None:
-            self.get_logger().warn('Could not get RPY - cannot project gimbal FOV.')
+        if self._gimbal_set_attitude is None:
+            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
             return None
 
         # Need coordinates in image frame
-        rpy = rpy.axes_ned_to_image()
-        r = Rotation.from_euler('XYZ', [rpy.roll, rpy.pitch, -rpy.yaw], degrees=True).as_matrix()
+        assert_type(self._gimbal_set_attitude, Attitude)
+        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()
+        #gimbal_set_attitude = self._gimbal_set_attitude
 
         # TODO: use CameraData class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
         if self._camera_data is None:
-            self.get_logger().debug('Camera data not available, could not create a mock pose to generate a FOV guess.')
+            self.get_logger().warn('Camera data not available, could not create a mock pose to generate a FOV guess.')
             return None
 
-        translation = -r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
+        #translation = -gimbal_set_attitude.r.T @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
+        translation = np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
         mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
 
         try:
-            pose = Pose(r, translation.reshape((3, 1)))
+            pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
             mock_match = Match(mock_image_pair, pose)
         except ValueError as e:
-            self.get_logger().error(f'Pose inputs had problems {r}, {translation}: {e}.')
+            self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
 
         mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._alt_from_vehicle_local_position())  # Redundant altitude call
@@ -730,73 +770,6 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
 
         return None
-
-    def _camera_yaw(self) -> Optional[Union[int, float]]:
-        """Returns camera yaw in degrees.
-
-        :return: Camera yaw in degrees, or None if not available
-        """
-        rpy = self._get_camera_set_rpy()
-        if rpy is None:
-            self.get_logger().warn(f'Could not get camera RPY - cannot return yaw.')
-            return None
-        assert_type(rpy, RPY)
-        camera_yaw = rpy.yaw
-        return camera_yaw
-
-    def _get_gimbal_set_attitude(self) -> Optional[Rotation]:
-        """Returns gimbal set attitude from :class:`px4_msgs.msg.GimbalDeviceSetAttitude` or None if not available
-
-        :return: Vehicle attitude or None if not available
-        """
-        if self._gimbal_device_set_attitude is None:
-            self.get_logger().warn('No VehicleAttitude message has been received yet.')
-            return None
-        else:
-            gimbal_set_attitude = Rotation.from_quat(self._gimbal_device_set_attitude.q)
-            return gimbal_set_attitude
-
-    def _get_camera_set_rpy(self) -> Optional[RPY]:
-        """Returns roll-pitch-yaw tuple in NED frame of camera attitude setting.
-
-        True camera attitude may be different if gimbal has not yet stabilized.
-
-        :return: An :class:`util.RPY` tuple
-        """
-        gimbal_set_attitude = self._get_gimbal_set_attitude()
-        if gimbal_set_attitude is None:
-            self.get_logger().warn('Gimbal attitude not available, cannot return RPY.')
-            return None
-        assert_type(gimbal_set_attitude, Rotation)
-        gimbal_euler = gimbal_set_attitude.as_euler('xyz', degrees=True)
-
-        if self._vehicle_local_position is None:
-            self.get_logger().warn('VehicleLocalPosition is unknown, cannot get heading. Cannot return RPY.')
-            return None
-        elif not hasattr(self._vehicle_local_position, 'heading'):
-            self.get_logger().error('VehicleLocalPosition unexpectedly did contain a heading field.')
-            return None
-        else:
-            heading = self._vehicle_local_position.heading
-            if abs(heading) > 180:
-                self.get_logger().error(f'VehicleLocalPosition did not have a valid heading value: {heading}, '
-                                        f'([-180, 180] expected).')
-                return None
-            heading = math.degrees(heading)
-
-        self.get_logger().debug('Assuming stabilized gimbal - ignoring vehicle intrinsic pitch and roll for camera RPY.')
-        self.get_logger().debug('Assuming zero roll for camera RPY.')  # TODO remove zero roll assumption
-
-        gimbal_yaw = gimbal_euler[0] - 180
-        yaw = heading - gimbal_yaw
-        yaw = yaw % 360
-        if abs(yaw) > 180:  # Important: >, not >= (because we are using mod 180 operation below)
-            yaw = yaw % 180 if yaw < 0 else yaw % -180  # Make the compound yaw between -180 and 180 degrees
-        roll = 0  # TODO remove zero roll assumption
-        pitch = -gimbal_euler[1]
-        rpy = RPY(roll, pitch, yaw)
-
-        return rpy
 
     #region microRTPSBridgeCallbacks
     def image_raw_callback(self, msg: Image) -> None:
@@ -886,6 +859,14 @@ class MapNavNode(Node, ABC):
         assert_type(msg.timestamp, int)
         self._vehicle_local_position = msg
         self._sync_timestamps(self._vehicle_local_position.timestamp)
+
+    def vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
+        """Handles latest VehicleAttitude message.
+
+        :param msg: VehicleAttitude from the PX4-ROS 2 bridge
+        :return:
+        """
+        self._vehicle_attitude = msg
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude.
@@ -1086,25 +1067,9 @@ class MapNavNode(Node, ABC):
             self._map_output_data_prev = output_data
     #endregion
 
-    def _camera_set_pitch(self) -> Optional[Union[int, float]]:
-        """Returns camera pitch setting in degrees relative to nadir.
-
-        Pitch of 0 degrees is a nadir facing camera, while a positive pitch of 90 degrees means the camera is facing
-        the direction the vehicle is heading (facing horizon).
-
-        Note: this is the pitch setting, true pitch may be different if gimbal has not yet stabilized.
-
-        :return: Camera pitch in degrees, or None if not available
-        """
-        rpy = self._get_camera_set_rpy()
-        if rpy is None:
-            self.get_logger().warn('Gimbal RPY not available, cannot compute camera pitch.')
-            return None
-        assert_type(rpy, RPY)
-        return rpy.pitch
-
+    # TODO: no need to give max pitch arg, can be checked inside method
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
-        """Returns True if (set) camera pitch exceeds given limit.
+        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown.
 
         Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
         worthwhile.
@@ -1113,13 +1078,14 @@ class MapNavNode(Node, ABC):
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        camera_pitch = self._camera_set_pitch()
-        if camera_pitch is not None:
-            if camera_pitch + 90 > max_pitch:
-                self.get_logger().debug(f'Camera pitch {camera_pitch} is above limit {max_pitch}.')
+        if self._gimbal_set_attitude is not None:
+            # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
+            pitch = np.degrees(self._gimbal_set_attitude.pitch) + 90
+            if pitch > max_pitch:
+                self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
                 return True
         else:
-            self.get_logger().warn(f'Could not determine camera pitch.')
+            self.get_logger().warn(f'Gimbal attitude was not available, assuming camera pitch too high.')
             return True
 
         return False
@@ -1314,9 +1280,13 @@ class MapNavNode(Node, ABC):
         assert_type(img_dim, Dim)  # TODO: handle None?
 
         # Get cropped and rotated map
-        camera_yaw_deg = self._camera_yaw()  # TODO: handle None?
-        camera_yaw = math.radians(camera_yaw_deg) if camera_yaw_deg is not None else None
-        assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+        if self._gimbal_set_attitude is not None:
+            camera_yaw = self._gimbal_set_attitude.yaw
+            assert_type(camera_yaw, float)
+            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+        else:
+            self.get_logger().warn(f'Camera yaw unknown, cannot match.')
+            return False
 
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=img_dim)
         return copy.deepcopy(input_data), contextual_map_data

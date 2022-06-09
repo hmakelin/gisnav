@@ -79,6 +79,7 @@ class KeypointMatcher(Matcher):
         match_count = len(mkp1)
         if match_count < self.min_matches:
             # TODO: return explanation why
+            print('not enoug matches')
             return None
         assert len(mkp1) >= 4  # HOMOGRAPHY_MINIMUM_MATCHES == 4
         assert len(mkp2) == len(mkp1)
@@ -95,9 +96,11 @@ class KeypointMatcher(Matcher):
         except np.linalg.LinAlgError as _:  # e:
             # TODO: handle error
             # TODO: h matrix inversion happens at Match, not at Pose?
+            print(_)
             return None
         except ValueError as __:
             # TODO: handle error
+            print(__)
             return None
 
         return pose

@@ -75,7 +75,7 @@ html_css_files = [
 html_theme_options = {
     'logo_only': True
 }
-html_logo = '_static/logo.svg'
+html_logo = '_static/img/logo_inverted.png'
 
 # Make version number accessible in .rst files
 rst_epilog = f'.. |version| replace:: **v{package_data.version}**'

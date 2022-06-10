@@ -2,9 +2,8 @@ body, h1, h2, h3, h4, h5, h6 {
     font-family: Sans-Serif !important;
 }
 
-/*
 body {
-    --themecolor: #fbcd08
+    --themecolor: #0291DA
 }
 
 .wy-side-nav-search {
@@ -14,4 +13,3 @@ body {
 .wy-nav-top {
   background-color: var(--themecolor);
 }
-*/

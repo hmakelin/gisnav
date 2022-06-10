@@ -16,7 +16,7 @@
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contributing
+   :caption: Contribute
    :hidden:
 
    pages/devops

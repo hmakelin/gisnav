@@ -15,8 +15,16 @@ docstrings contain useful technical information.
 .. _python_px4_ros2_map_nav: https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav
 
 
-map_nav_node module
+Indices and Tables
 --------------------------------------------
+* :ref:`genindex`
+* :ref:`modindex`
+
+
+Nodes package
+--------------------------------------------
+map_nav_node module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
    :autosummary:
    :members:
@@ -24,24 +32,42 @@ map_nav_node module
    :show-inheritance:
 
 mock_gps_node module
---------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
    :autosummary:
    :members:
    :undoc-members:
    :show-inheritance:
 
-loftr module
+Matchers package
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.keypoint_matchers.loftr
+matcher module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.matchers.matcher
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+keypoint_matcher module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.matchers.keypoint_matcher
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+loftr module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.matchers.loftr
    :autosummary:
    :members:
    :undoc-members:
    :show-inheritance:
 
 superglue module
---------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.keypoint_matchers.superglue
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.matchers.superglue
    :autosummary:
    :members:
    :undoc-members:

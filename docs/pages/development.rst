@@ -1,7 +1,7 @@
 .. toctree::
    :maxdepth: 2
 
-Advanced Configuration
+Development
 --------------------------------------------
 The MapNavNode Base Class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -10,14 +10,7 @@ import importlib
 import os
 import yaml
 import copy
-
-# Import and configure torch for multiprocessing
 import torch
-try:
-    torch.multiprocessing.set_start_method('spawn', force=True)
-except RuntimeError:
-    pass
-torch.set_num_threads(1)
 
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool, AsyncResult  # Used for WMS client process, not for torch
@@ -65,6 +58,9 @@ class MapNavNode(Node, ABC):
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
 
         self._package_share_dir = package_share_dir
+
+        # Setup torch multiprocessing pool  # TODO: do not assume pose estimator is torch based
+        self._init_torch()
 
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
@@ -545,6 +541,15 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Initialization
+    def _init_torch(self):
+        """Configures the torch multiprocessing pool"""
+        try:
+            torch.multiprocessing.set_start_method('spawn', force=True)
+        except RuntimeError:
+            # TODO: handle error
+            pass
+        torch.set_num_threads(1)
+
     def _setup_matching_pool(self, params_file: str) -> Tuple[str, torch.multiprocessing.Pool]:
         """Imports a matcher from given params file and returns a matching pool
 

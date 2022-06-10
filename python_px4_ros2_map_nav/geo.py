@@ -164,7 +164,6 @@ class GeoBBox(_GeoPolygon):
         """
         # TODO: fix this, hard coded order is prone to breaking even when using box function
         # TODO: why sometimes 5, sometimes 4?
-        print(self._geoseries)
         if len(self._geoseries[0].exterior.coords) == 5:
             corners = box(*self.bounds).exterior.coords[:-1]
         else:

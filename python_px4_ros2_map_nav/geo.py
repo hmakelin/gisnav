@@ -88,6 +88,7 @@ class GeoPoint(_GeoObject):
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326') the (x, y) pair is provided in
         """
         self._geoseries = GeoSeries([Point(x, y)], crs=crs)
+        assert_type(self._geoseries[0], Point)
 
         # TODO: Enforce validity checks instead of asserting
         assert_len(self._geoseries, 1)
@@ -119,12 +120,12 @@ class GeoPoint(_GeoObject):
     @property
     def lat(self) -> float:
         """Convenience property to get latitude in WGS 84"""
-        return self.latlon[1]
+        return self.latlon[0]
 
     @property
     def lon(self) -> float:
         """Convenience property to get longitude in WGS 84"""
-        return self.latlon[0]
+        return self.latlon[1]
 
     def _spherical_adjustment(self):
         """Helper method to adjust distance measured in EPSG:3857 pseudo-meters into approximate real meters
@@ -132,7 +133,7 @@ class GeoPoint(_GeoObject):
         Uses a simple spherical model which is accurate enough for planned use scenarios
         """
         # TODO: use a precise conversion?
-        return np.cos(np.radians(self.lat))
+        return abs(np.cos(np.radians(self.lat)))
 
 
 class GeoBBox(_GeoPolygon):
@@ -149,7 +150,9 @@ class GeoBBox(_GeoPolygon):
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
         # TODO: spherical adjustment uses self.center property, which needs _geoseries defined! so what to do here?
-        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius).to_crs(crs).envelope
+        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius)\
+            .to_crs(crs).envelope
+        assert_type(self._geoseries[0], Polygon)
 
     @property
     @lru_cache(4)
@@ -161,6 +164,7 @@ class GeoBBox(_GeoPolygon):
         """
         # TODO: fix this, hard coded order is prone to breaking even when using box function
         # TODO: why sometimes 5, sometimes 4?
+        print(self._geoseries)
         if len(self._geoseries[0].exterior.coords) == 5:
             corners = box(*self.bounds).exterior.coords[:-1]
         else:

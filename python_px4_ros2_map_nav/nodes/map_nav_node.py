@@ -1352,7 +1352,7 @@ class MapNavNode(Node, ABC):
         self._map_matching_query = AsyncQuery(
             result=self._map_matching_pool.starmap_async(
                 self._map_matcher.worker,
-                [(image_pair, self.__pose_map_guess)],
+                [(image_pair, self._pose_guess)],  # TODO: Can be NOne, ok?
                 callback=self.map_matching_worker_callback,
                 error_callback=self.map_matching_worker_error_callback
             ),

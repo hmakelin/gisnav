@@ -114,7 +114,7 @@ class GeoPoint(_GeoObject):
 
         Note that this returns latitude and longitude in different order then :meth:`~get_coordinates`
         """
-        return self.to_crs('epsg:4326').coordinates()[1::-1]
+        return self.to_crs('epsg:4326').coordinates[1::-1]
 
     @property
     def lat(self) -> float:

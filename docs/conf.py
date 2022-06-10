@@ -73,9 +73,11 @@ html_css_files = [
 
 # Configure RTD theming options here
 html_theme_options = {
-    'logo_only': True
+    'logo_only': True,
+    'display_version': True,
 }
 html_logo = '_static/img/logo_inverted.png'
 
 # Make version number accessible in .rst files
-rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
+#rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
+version = package_data.version

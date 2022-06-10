@@ -1,4 +1,3 @@
-![GISNav logo](_static/img/logo.png)
 # Introduction
 > **WARNING:** Do not use this software for a real use case. This software is untested and has only been demonstrated
 > with PX4 in a software-in-the-loop (SITL) environment.

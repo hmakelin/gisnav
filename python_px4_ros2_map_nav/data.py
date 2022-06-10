@@ -16,7 +16,6 @@ from scipy.spatial.transform import Rotation
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoTrapezoid
-from python_px4_ros2_map_nav.transform import create_src_corners
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
@@ -593,3 +592,17 @@ class PackageData:
             return package_data
         else:
             raise FileNotFoundError(f'Could not find package file at {package_file}.')
+
+
+def create_src_corners(h: int, w: int) -> np.ndarray:
+    """Helper function that returns image corner pixel coordinates in a numpy array.
+
+    :param h: Source image height
+    :param w: Source image width
+    :return: Source image corner pixel coordinates
+    """
+    assert_type(h, int)
+    assert_type(w, int)
+    assert h > 0 and w > 0, f'Height {h} and width {w} are both expected to be positive.'
+    return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+

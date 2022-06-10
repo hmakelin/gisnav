@@ -74,7 +74,7 @@ html_css_files = [
 # Configure RTD theming options here
 html_theme_options = {
     'logo_only': True,
-    'display_version': True,
+    'display_version': True
 }
 html_logo = '_static/img/logo_inverted.png'
 

@@ -1,6 +1,3 @@
-.. toctree::
-   :maxdepth: 2
-
 API Documentation
 ===================================================
 This is an automatically generated API documentation for the `python_px4_ros2_map_nav`_ ROS 2 package.

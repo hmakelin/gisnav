@@ -3,8 +3,6 @@
 
 API Documentation
 ===================================================
-|version|
-
 This is an automatically generated API documentation for the `python_px4_ros2_map_nav`_ ROS 2 package.
 
 The public API of :class:`python_px4_ros2_map_nav.MapNavNode` consists mainly of callback methods. Since most of the

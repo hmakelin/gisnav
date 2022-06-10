@@ -20,7 +20,6 @@ map_nav_node module
 .. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -29,7 +28,6 @@ mock_gps_node module
 .. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -38,7 +36,6 @@ loftr module
 .. automodule:: python_px4_ros2_map_nav.keypoint_matchers.loftr
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -47,7 +44,6 @@ superglue module
 .. automodule:: python_px4_ros2_map_nav.keypoint_matchers.superglue
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -56,7 +52,6 @@ assertions module
 .. automodule:: python_px4_ros2_map_nav.assertions
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -65,25 +60,22 @@ data module
 .. automodule:: python_px4_ros2_map_nav.data
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
-ros_param_defaults module
+geo module
 ---------------------------------------
-.. automodule:: python_px4_ros2_map_nav.ros_param_defaults
+.. automodule:: python_px4_ros2_map_nav.geo
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
-transform module
+filter module
 ---------------------------------------
-.. automodule:: python_px4_ros2_map_nav.transform
+.. automodule:: python_px4_ros2_map_nav.filter
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 
@@ -92,7 +84,6 @@ wms module
 .. automodule:: python_px4_ros2_map_nav.wms
    :autosummary:
    :members:
-   :private-members:
    :undoc-members:
    :show-inheritance:
 

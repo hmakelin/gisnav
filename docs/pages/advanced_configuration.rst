@@ -16,10 +16,10 @@ TODO
 #. topic 3
 
 The base class does not publish anything. How the node is integrates and publishes its output is up to you to decide.
-See `Implementing Your Own Node`_ for instructions on integrating GISNav.
+See `Custom Node`_ for instructions on integrating GISNav.
 
-.. _Implementing Your Own Node:
-Implementing Your Own Node
+.. _Custom Node:
+Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To integrate GISNav with your solution, you will need to implement the :class:`python_px4_ros2_map_nav.nodes.map_nav_node.MapNavNode` class by writing a :meth:`python_px4_ros2_map_nav.nodes.map_nav_node.MapNavNode.publish` method::
@@ -44,8 +44,8 @@ class, which creates a :class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) mess
 it to the flight control software via the appropriate PX4/ROS 2 bridge topic.
 
 
-.. _Implementing Your Own Pose Estimator:
-Implementing Your Own Pose Estimator
+.. _Custom Pose Estimator:
+Custom Pose Estimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Two pose estimators, SuperGlue and SuperGlue derivative LoFTR are provided with LoFTR as the default pose estimator.
 These were seen as state-of-the-art image matching algorithms at the time the software was written but newer algorithms

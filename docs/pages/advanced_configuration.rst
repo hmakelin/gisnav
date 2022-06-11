@@ -37,7 +37,7 @@ to decide what to do with the computed output. The data provided to the method i
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To integrate GISNav with your solution, you will need to implement the :class:`python_px4_ros2_map_nav.nodes.map_nav_node.MapNavNode` class by writing a :meth:`python_px4_ros2_map_nav.nodes.map_nav_node.MapNavNode.publish` method::
+To integrate GISNav with your solution, you will need to implement the :class:`.MapNavNode` class by writing a :meth:`.publish` method::
 
     from python_px4_ros2_map_nav.nodes import MapNavNode
     from python_px4_ros2_map_nav.data import OutputData

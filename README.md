@@ -10,7 +10,7 @@ location as determined by existing sensors such as GPS, and then matches it to a
 graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
 
 ## Getting Started
-### 1. Clone, build, and run the simulation environment at $HOME
+### 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.
 ```
@@ -40,7 +40,7 @@ cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
 ./build_ros2_workspace.bash
 ```
 
-### 4. Run the node
+### 4. Run the example node
 ```
 cd $HOME/px4_ros_com_ros2
 ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \

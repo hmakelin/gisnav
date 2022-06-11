@@ -59,9 +59,6 @@ class MapNavNode(Node, ABC):
 
         self._package_share_dir = package_share_dir
 
-        # Setup torch multiprocessing pool  # TODO: do not assume pose estimator is torch based
-        self._init_torch()
-
         # WMS client and requests in a separate process
         self._wms_results = None  # Must check for None when using this
         url = self.get_parameter('wms.url').get_parameter_value().string_value
@@ -541,15 +538,6 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Initialization
-    def _init_torch(self):
-        """Configures the torch multiprocessing pool"""
-        try:
-            torch.multiprocessing.set_start_method('spawn', force=True)
-        except RuntimeError:
-            # TODO: handle error
-            pass
-        torch.set_num_threads(1)
-
     def _setup_matching_pool(self, params_file: str) -> Tuple[str, torch.multiprocessing.Pool]:
         """Imports a matcher from given params file and returns a matching pool
 
@@ -559,9 +547,8 @@ class MapNavNode(Node, ABC):
         matcher_params = self._load_config(params_file)
         module_name, class_name = matcher_params.get('class_name', '').rsplit('.', 1)
         matcher = self._import_class(class_name, module_name)
-        matching_pool = torch.multiprocessing.Pool(self.MATCHER_PROCESS_COUNT,
-                                                   initializer=matcher.initializer,
-                                                   initargs=(matcher, *matcher_params.get('args', []),))  # TODO: handle missing args, do not use default value
+        matching_pool = Pool(self.MATCHER_PROCESS_COUNT, initializer=matcher.initializer,
+                             initargs=(matcher, *matcher_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
         return matcher, matching_pool
 

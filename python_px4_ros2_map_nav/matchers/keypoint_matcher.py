@@ -44,8 +44,9 @@ class KeypointMatcher(Matcher):
         :return:
         """
         # noinspection PyGlobalUndefined
-        global matcher
-        matcher = class_name(*args)
+        if not 'matcher' in globals():
+            global matcher
+            matcher = class_name(*args)
 
     @staticmethod
     def worker(image_pair: ImagePair, guess: Optional[Pose]) -> Optional[Pose]:
@@ -58,6 +59,7 @@ class KeypointMatcher(Matcher):
         :return: Tuple of two lists containing matching keypoints in qry and map respectively
         """
         try:
+            assert 'matcher' in globals()
             assert_type(matcher, KeypointMatcher)  # see matcher.py for initialization of 'matcher'
             # noinspection PyProtectedMember
             mkp_img, mkp_map = matcher._match(image_pair)

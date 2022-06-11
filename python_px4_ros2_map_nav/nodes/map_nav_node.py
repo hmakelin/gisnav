@@ -12,7 +12,7 @@ import yaml
 import copy
 
 from abc import ABC, abstractmethod
-from multiprocessing.pool import Pool, AsyncResult
+from multiprocessing.pool import Pool, AsyncResult, ThreadPool
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -66,7 +66,7 @@ class MapNavNode(Node, ABC):
         assert_type(url, str)
         assert_type(version, str)
         assert_type(timeout, int)
-        self._wms_pool = Pool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
+        self._wms_pool = ThreadPool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
                               initargs=(url, version, timeout))
 
         # Setup map update timer

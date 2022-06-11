@@ -1,38 +1,41 @@
-## Introduction
-> **WARNING:** Do not use this software for a real use case. This software is untested and has only been demonstrated
-> with PX4 in a software-in-the-loop (SITL) simulation environment.
+# Introduction
+> **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated
+> with [PX4](https://px4.io/) in a software-in-the-loop (SITL) simulation environment.
 
-`gisnav` contains a ROS 2 node which matches a nadir-facing video stream from an airborne drone's
-camera to a map from the same location.
+`gisnav` is a [ROS 2](https://docs.ros.org/) package that enables map-based visual navigation for airborne drones.
 
-The node works by retrieving a map raster from a Web Map Service (WMS) endpoint for the vehicle's approximate
-location as determined by existing sensors such as GPS, and then matches it to a frame from the video stream using a
-graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
+A GISNav node provides an *accurate* **global** position for an airborne drone by visually comparing frames from the 
+drone's nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying 
+[GIS](https://en.wikipedia.org/wiki/Geographic_information_system) system.
 
-## Development Goals
-The `gisnav` project aims to discover a reliable map-based navigation system for airborne drones that can be used 
-to complement and possibly improve GPS accuracy of drones when navigating in urban or semi-urban environments. While 
-map-based matching can be used to operate a drone in completely GNSS-denied environments, it is not seen as the primary
-purpoes of the software, and map matching is seen as a complementary and improvmenet, but not a replacement for GNSS as
-navigation solution.
+# Development Objectives
+`gisnav` demonstrates a map-based visual global positioning for airborne drones that complements and improves on 
+existing sensor fusion systems. It improves both local and global position and attitude estimate accuracy, and provides 
+backup global positioning for [GNSS](https://en.wikipedia.org/wiki/Satellite_navigation)-denied flight.
 
-Guiding Principles
+## Guiding Principles
+The following principles are used as design guidance in `gisnav` development:
+* Complement and improve - but do not replace - existing local and global position and attitude estimation systems
+* The natural or primary application is complementing GNSS in global positioning, while local position and attitude estimation or replacing GNSS (GNSS-denied flight) are secondary applications
+* Prioritize maintainability and well-defined interfaces over premature optimization
+* Support proven commercial off-the-shelf hardware platforms
 
-* Complement and improve existing systems and GNSS (GPS) specifically, do not aim to replace them
-* Prioritize maintainability, scalability and future-proofing over premature optimization
-* Visual inputs should be sufficient after initial setup, although other inputs can be used
-* *Autonomous landing at unprepared sites* and *Easy Access Rules for Unmanned Aircraft Systems* (backup navigation) type commercial use cases in mind
-
-Following constraints:
-* ROS is baked in, but PX4 could possibly be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
+## Constraints 
+The [Guiding Principles](#guiding-principles) impose constraints on `gisnav`, namely:
+* Currently `gisnav` is intended for simulation only
 * Favorable operating terrain is strongly featured urban and semi-urban areas and traffic corridors (roads), not featureless natural terrain
-* Monocular stabilized camera (gimbal required)
-* Drone or UAV size, flight altitude or velocity constrained only to such degree that allows *commercial* GNSS receivers to work, national defense may be pioneering but the solutions people will want to use will be funded commercially first
+* Monocular stabilized camera required
+* Drone or UAV size, flight altitude or velocity constrained only to such degree that allows commercial GNSS receivers to work 
+* Focus on good flight conditions - reasonable assumption for most commercial use cases which is where most develoment effort should be, niche applications will follow
 
-As of now, `gisnav` is intended for simulation only, and tries to make it easy to swap in newer algorithms.
+## Development Focus
+Taking the [Constraints](#constraints) into account, development focus should for example be in:
+* ROS is baked in, but PX4 could be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
+* Newer algorithms to improve accuracy, reliability or performance
+* Making adoption easier for different kinds of hardware platforms or configurations
 
-## Quick Start
-### 1. Run the simulation environment
+# Quick Start
+## 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.
 ```
@@ -47,7 +50,7 @@ docker-compose build \
     .
 docker-compose up -d
 ```
-### 2. Clone this repository and dependencies
+## 2. Clone this repository and dependencies
 ```
 mkdir -p $HOME/px4_ros_com_ros2/src && cd "$_"
 git clone https://github.com/PX4/px4_ros_com.git
@@ -55,23 +58,20 @@ git clone https://github.com/PX4/px4_msgs.git
 git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 ```
 
-### 3. Build your ROS 2 workspace
+## 3. Build your ROS 2 workspace
 ```
 cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
 ./build_ros2_workspace.bash
 ```
 
-### 4. Run the example node
+## 4. Run the example node
 ```
 cd $HOME/px4_ros_com_ros2
 ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
     src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
 ```
 
-## Advanced Configuration
-TODO
-
-## Generating API Documentation
+# Generating Documentation
 You can use Sphinx to generate the API documentation which will appear in the `docs/_build` folder:
 ```
 # Load the workspace in your shell if you have not yet done so
@@ -84,7 +84,7 @@ pip3 install -r requirements-dev.txt
 make html
 ```
 
-## License
+# License
 This software is released under the MIT license. See the `LICENSE.md` in this repository for more information. Also see
 the [SuperGlue license file](https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/LICENSE) for SuperGlue
 licensing information.

@@ -546,7 +546,7 @@ class MapNavNode(Node, ABC):
         matcher_params = self._load_config(params_file)
         module_name, class_name = matcher_params.get('class_name', '').rsplit('.', 1)
         matcher = self._import_class(class_name, module_name)
-        matching_pool = Pool(self.MATCHER_PROCESS_COUNT, initializer=matcher.initializer,
+        matching_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=matcher.initializer,
                              initargs=(matcher, *matcher_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
         return matcher, matching_pool

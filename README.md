@@ -27,8 +27,7 @@ docker-compose up -d
 ```
 ### 2. Clone this repository and dependencies
 ```
-mkdir -p $HOME/px4_ros_com_ros2/src
-cd $HOME/px4_ros_com_ros2/src
+mkdir -p $HOME/px4_ros_com_ros2/src && cd "$_"
 git clone https://github.com/PX4/px4_ros_com.git
 git clone https://github.com/PX4/px4_msgs.git
 git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git

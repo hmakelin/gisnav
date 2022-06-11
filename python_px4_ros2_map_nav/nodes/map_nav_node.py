@@ -918,9 +918,10 @@ class MapNavNode(Node, ABC):
         assert_type(bbox, GeoBBox)
         if self._map_output_data_prev is not None:
             previous_map_data = self._map_output_data_prev.fixed_camera.map_match.image_pair.ref.map_data  # TODO: use map_match not _match?
-            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().integer_value
-            if min(bbox.intersection_area(previous_map_data.bbox) / bbox.area,
-                   bbox.intersection_area(previous_map_data.bbox) / previous_map_data.bbox.area) < area_threshold:
+            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
+            ratio = min(bbox.intersection_area(previous_map_data.bbox) / bbox.area,
+                   bbox.intersection_area(previous_map_data.bbox) / previous_map_data.bbox.area)
+            if ratio > area_threshold:
                 return True
 
         return False

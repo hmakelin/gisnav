@@ -4,8 +4,8 @@
   <name>python_px4_ros2_map_nav</name>
   <version>0.44.4</version>
   <description>Estimates airborne drone position by matching video to map retrieved from OGC WMS endpoint.</description>
-  <author email="hmakelin@protonmail.com">Harri Mäkelin</author>
-  <maintainer email="hmakelin@protonmail.com">Harri Mäkelin</maintainer>
+  <author email="hmakelin@protonmail.com">Harri Makelin</author>
+  <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
   <license>MIT</license>
 
   <test_depend>ament_copyright</test_depend>

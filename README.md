@@ -30,7 +30,7 @@ Following constraints:
 
 As of now, `gisnav` is intended for simulation only, and tries to make it easy to swap in newer algorithms.
 
-## Getting Started
+## Quick Start
 ### 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.

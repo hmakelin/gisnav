@@ -32,3 +32,5 @@ Taking the `Constraints`_ into account, development focus should for example be 
 * ROS is baked in, but PX4 could be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
 * Newer algorithms to improve accuracy, reliability or performance
 * Making adoption easier for different kinds of hardware platforms or configurations
+* SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse
+the flight logs and compare against some thresholds to determine if the software passes the test.

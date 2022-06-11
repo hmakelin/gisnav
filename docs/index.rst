@@ -14,6 +14,7 @@
    :caption: Develop
    :hidden:
 
+   pages/development_objectives
    pages/advanced_configuration
    pages/api_documentation
 

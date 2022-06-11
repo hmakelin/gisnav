@@ -10,10 +10,9 @@ import importlib
 import os
 import yaml
 import copy
-import torch
 
 from abc import ABC, abstractmethod
-from multiprocessing.pool import Pool, AsyncResult  # Used for WMS client process, not for torch
+from multiprocessing.pool import Pool, AsyncResult
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -221,14 +220,14 @@ class MapNavNode(Node, ABC):
         self.__map_update_timer = value
 
     @property
-    def _map_matching_pool(self) -> torch.multiprocessing.Pool:
-        """Pool for running a :class:`~keypoint_matcher.KeypointMatcher` in dedicated process"""
+    def _map_matching_pool(self) -> Pool:
+        """Pool for running a :class:`.Matcher` in dedicated process"""
         return self.__map_matching_pool
 
     @_map_matching_pool.setter
-    def _map_matching_pool(self, value: torch.multiprocessing.Pool) -> None:
+    def _map_matching_pool(self, value: Pool) -> None:
         # TODO assert type
-        #assert_type(torch.multiprocessing.Pool, value)
+        #assert_type(Pool, value)
         self.__map_matching_pool = value
 
     @ property
@@ -538,7 +537,7 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Initialization
-    def _setup_matching_pool(self, params_file: str) -> Tuple[str, torch.multiprocessing.Pool]:
+    def _setup_matching_pool(self, params_file: str) -> Tuple[str, Pool]:
         """Imports a matcher from given params file and returns a matching pool
 
         :param params_file: Parameter file with matcher class name and initializer arguments

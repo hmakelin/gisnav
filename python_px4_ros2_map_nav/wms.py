@@ -70,8 +70,9 @@ class WMSClient:
         assert_type(version_, str)
         assert_type(timeout_, int)
         # noinspection PyGlobalUndefined
-        global wms_client
-        wms_client = WMSClient(url, version_, timeout_)
+        if not 'wms_client' in globals():
+            global wms_client
+            wms_client = WMSClient(url, version_, timeout_)
 
     @staticmethod
     def worker(bbox: GeoBBox, map_size: Tuple[int, int], layer_str: str, srs_str: str) -> MapData:
@@ -84,6 +85,7 @@ class WMSClient:
         :return: ~data.MapData containing the map raster and supporting metadata
         """
         assert wms_client is not None
+        assert 'wms_client' in globals()
         assert_type(bbox, GeoBBox)
         assert (all(isinstance(x, int) for x in map_size))
         assert_type(layer_str, str)

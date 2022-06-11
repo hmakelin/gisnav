@@ -16,6 +16,13 @@ map-based matching can be used to operate a drone in completely GNSS-denied envi
 purpoes of the software, and map matching is seen as a complementary and improvmenet, but not a replacement for GNSS as
 navigation solution.
 
+* Complement and improve existing systems and GNSS (GPS) specifically, do not aim to replace them
+* Favorable operating terrain is strongly featured urban and semi-urban areas and traffic corridors (roads), not featureless natural terrain
+* Prioritize maintainability, scalability and future-proofing over premature optimization
+* Discover a future-proof architecture that can later be optimized
+* Monocular stabilized camera (gimbal required)
+* Drone or UAV size, flight altitude is not constrained, assume velocity low enough for commercial GNSS receivers to work
+
 As of now, `gisnav` is intended for simulation only, and tries to make it easy to swap in newer algorithms.
 
 ## Getting Started

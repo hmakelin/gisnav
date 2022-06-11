@@ -1,13 +1,22 @@
-# Introduction
+## Introduction
 > **WARNING:** Do not use this software for a real use case. This software is untested and has only been demonstrated
-> with PX4 in a software-in-the-loop (SITL) environment.
+> with PX4 in a software-in-the-loop (SITL) simulation environment.
 
-`python_px4_ros2_map_nav` contains a ROS 2 node which matches a nadir-facing video stream from an airborne drone's
+`gisnav` contains a ROS 2 node which matches a nadir-facing video stream from an airborne drone's
 camera to a map from the same location.
 
 The node works by retrieving a map raster from a Web Map Service (WMS) endpoint for the vehicle's approximate
 location as determined by existing sensors such as GPS, and then matches it to a frame from the video stream using a
 graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
+
+## Project Goals
+The `gisnav` project aims to discover a reliable map-based navigation system for airborne drones that can be used 
+to complement and possibly improve GPS accuracy of drones when navigating in urban or semi-urban environments. While 
+map-based matching can be used to operate a drone in completely GNSS-denied environments, it is not seen as the primary
+purpoes of the software, and map matching is seen as a complementary and improvmenet, but not a replacement for GNSS as
+navigation solution.
+
+As of now, `gisnav` is intended for simulation only, and tries to make it easy to swap in newer algorithms.
 
 ## Getting Started
 ### 1. Run the simulation environment

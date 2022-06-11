@@ -1,6 +1,5 @@
-.. image:: _static/img/logo.png
+.. figure:: _static/img/logo.png
   :width: 400
-  :alt: GISNav - Map-Based Visual Navigation
 
 .. toctree::
    :maxdepth: 2

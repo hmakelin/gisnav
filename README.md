@@ -9,7 +9,7 @@ The node works by retrieving a map raster from a Web Map Service (WMS) endpoint 
 location as determined by existing sensors such as GPS, and then matches it to a frame from the video stream using a
 graph neural network (GNN) based estimator ([SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork)).
 
-## Project Goals
+## Development Goals
 The `gisnav` project aims to discover a reliable map-based navigation system for airborne drones that can be used 
 to complement and possibly improve GPS accuracy of drones when navigating in urban or semi-urban environments. While 
 map-based matching can be used to operate a drone in completely GNSS-denied environments, it is not seen as the primary

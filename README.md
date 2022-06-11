@@ -24,6 +24,7 @@ Guiding Principles
 * *Autonomous landing at unprepared sites* and *Easy Access Rules for Unmanned Aircraft Systems* (backup navigation) type commercial use cases in mind
 
 Following constraints:
+* ROS is baked in, but PX4 could possibly be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
 * Favorable operating terrain is strongly featured urban and semi-urban areas and traffic corridors (roads), not featureless natural terrain
 * Monocular stabilized camera (gimbal required)
 * Drone or UAV size, flight altitude or velocity constrained only to such degree that allows *commercial* GNSS receivers to work, national defense may be pioneering but the solutions people will want to use will be funded commercially first

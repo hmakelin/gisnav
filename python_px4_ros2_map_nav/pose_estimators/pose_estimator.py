@@ -21,17 +21,17 @@ class PoseEstimator(ABC):
     """A global pose estimator instance is stored under this name"""
 
     @staticmethod
-    def initializer(class_name: type, *args) -> None:
+    def initializer(class_: type, *args) -> None:
         """Initializes a global pose estimator with the provided constructor
 
         The args are passed onto the class __init__ method.
 
-        :param class_name: The implementing class to initialize
+        :param class_: The implementing class to initialize
         :return:
         """
-        assert_type(class_name, type)
+        assert_type(class_, type)
         if not PoseEstimator._POSE_ESTIMATOR_GLOBAL_VAR in globals():
-            pose_estimator = class_name(*args)
+            pose_estimator = class_(*args)
             assert issubclass(type(pose_estimator), PoseEstimator)
             globals()[PoseEstimator._POSE_ESTIMATOR_GLOBAL_VAR] = pose_estimator
 

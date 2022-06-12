@@ -538,18 +538,18 @@ class MapNavNode(Node, ABC):
 
     #region Initialization
     def _setup_matching_pool(self, params_file: str) -> Tuple[str, Pool]:
-        """Imports a matcher from given params file and returns a matching pool
+        """Imports a :class:`.PoseEstimator` configured in a params file and returns a pool
 
         :param params_file: Parameter file with matcher class name and initializer arguments
         :return: Tuple containing the class_name and matching pool
         """
-        matcher_params = self._load_config(params_file)
-        module_name, class_name = matcher_params.get('class_name', '').rsplit('.', 1)
-        matcher = self._import_class(class_name, module_name)
-        matching_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=matcher.initializer,
-                             initargs=(matcher, *matcher_params.get('args', []),))  # TODO: handle missing args, do not use default value
+        pose_estimator_params = self._load_config(params_file)
+        module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
+        pose_estimator = self._import_class(class_name, module_name)
+        post_estimator_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
+                                         initargs=(pose_estimator, *pose_estimator_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
-        return matcher, matching_pool
+        return pose_estimator, post_estimator_pool
 
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.

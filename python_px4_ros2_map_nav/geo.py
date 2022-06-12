@@ -1,3 +1,4 @@
+"""Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
 
 import numpy as np

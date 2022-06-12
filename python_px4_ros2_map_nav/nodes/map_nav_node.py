@@ -12,7 +12,8 @@ import yaml
 import copy
 
 from abc import ABC, abstractmethod
-from multiprocessing.pool import Pool, AsyncResult, ThreadPool
+from multiprocessing.pool import Pool, AsyncResult
+from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
@@ -66,7 +67,7 @@ class MapNavNode(Node, ABC):
         assert_type(url, str)
         assert_type(version, str)
         assert_type(timeout, int)
-        self._wms_pool = ThreadPool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
+        self._wms_pool = Pool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
                               initargs=(url, version, timeout))
 
         # Setup map update timer
@@ -88,9 +89,9 @@ class MapNavNode(Node, ABC):
         self._cv_bridge = CvBridge()
 
         # Setup map matching pool
-        map_matcher_params_file = self.get_parameter('map_matcher.params_file').get_parameter_value().string_value
-        self._map_matcher, self._map_matching_pool = self._setup_matching_pool(map_matcher_params_file)
-        self._map_matching_query = None  # Must check for None when using this
+        pose_estimator_params_file = self.get_parameter('pose_estimator.params_file').get_parameter_value().string_value
+        self._pose_estimator, self._pose_estimator_pool = self._setup_pose_estimation_pool(pose_estimator_params_file)
+        self._pose_estimation_query = None  # Must check for None when using this
 
         # Stored blur values for blur detection
         self._blurs = None
@@ -166,14 +167,14 @@ class MapNavNode(Node, ABC):
         self.__pose_guess = value
 
     @property
-    def _map_matcher(self) -> PoseEstimator:
-        """Dynamically loaded map matcher"""
-        return self.__map_matcher
+    def _pose_estimator(self) -> PoseEstimator:
+        """Dynamically loaded :class:`.PoseEstimator`"""
+        return self.__pose_estimator
 
-    @_map_matcher.setter
-    def _map_matcher(self, value: PoseEstimator) -> None:
-        #assert_type(value, PoseEstimator)  # TODO: fix this
-        self.__map_matcher = value
+    @_pose_estimator.setter
+    def _pose_estimator(self, value: Optional[PoseEstimator]) -> None:
+        assert issubclass(value, get_args(Optional[PoseEstimator]))
+        self.__pose_estimator = value
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
@@ -220,15 +221,14 @@ class MapNavNode(Node, ABC):
         self.__map_update_timer = value
 
     @property
-    def _map_matching_pool(self) -> Pool:
-        """Pool for running a :class:`.PoseEstimator` in dedicated process"""
-        return self.__map_matching_pool
+    def _pose_estimator_pool(self) -> Pool:
+        """Pool for running a :class:`.PoseEstimator` in dedicated thread (or process)"""
+        return self.__pose_estimator_pool
 
-    @_map_matching_pool.setter
-    def _map_matching_pool(self, value: Pool) -> None:
-        # TODO assert type
-        #assert_type(Pool, value)
-        self.__map_matching_pool = value
+    @_pose_estimator_pool.setter
+    def _pose_estimator_pool(self, value: Pool) -> None:
+        assert_type(value, Pool)
+        self.__pose_estimator_pool = value
 
     @ property
     def _map_data(self) -> Optional[MapData]:
@@ -251,14 +251,14 @@ class MapNavNode(Node, ABC):
         self.__map_input_data = value
 
     @property
-    def _map_matching_query(self) -> Optional[AsyncQuery]:
-        """Asynchronous results and input from a matching process."""
-        return self.__map_matching_query
+    def _pose_estimation_query(self) -> Optional[AsyncQuery]:
+        """Asynchronous results and input from a pose estimation thread or process."""
+        return self.__pose_estimation_query
 
-    @_map_matching_query.setter
-    def _map_matching_query(self, value: Optional[AsyncQuery]) -> None:
+    @_pose_estimation_query.setter
+    def _pose_estimation_query(self, value: Optional[AsyncQuery]) -> None:
         assert_type(value, get_args(Optional[AsyncQuery]))
-        self.__map_matching_query = value
+        self.__pose_estimation_query = value
 
     @property
     def _topics(self) -> dict:
@@ -537,17 +537,17 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region Initialization
-    def _setup_matching_pool(self, params_file: str) -> Tuple[str, Pool]:
+    def _setup_pose_estimation_pool(self, params_file: str) -> Tuple[type, Pool]:
         """Imports a :class:`.PoseEstimator` configured in a params file and returns a pool
 
-        :param params_file: Parameter file with matcher class name and initializer arguments
-        :return: Tuple containing the class_name and matching pool
+        :param params_file: Parameter file with pose estimator full class path and initialization arguments
+        :return: Tuple containing the class and pose estimation pool
         """
         pose_estimator_params = self._load_config(params_file)
         module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
         pose_estimator = self._import_class(class_name, module_name)
-        pose_estimator_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
-                                         initargs=(pose_estimator, *pose_estimator_params.get('args', []),))  # TODO: handle missing args, do not use default value
+        pose_estimator_pool = Pool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
+                                   initargs=(pose_estimator, *pose_estimator_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
         return pose_estimator, pose_estimator_pool
 
@@ -652,7 +652,7 @@ class MapNavNode(Node, ABC):
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
 
-    def _import_class(self, class_name: str, module_name: str) -> object:
+    def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported
 
         :param class_name: Name of the class to import
@@ -798,7 +798,7 @@ class MapNavNode(Node, ABC):
 
         # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
         if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
-            assert self._map_matching_query is None or self._map_matching_query.result.ready()
+            assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
             try:
                 inputs, contextual_map_data = self._match_inputs()
             except TypeError as e:
@@ -812,7 +812,7 @@ class MapNavNode(Node, ABC):
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
             image_pair = ImagePair(image_data, contextual_map_data)
-            self._match(image_pair, inputs)
+            self._estimate(image_pair, inputs)
 
     def camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
@@ -985,11 +985,20 @@ class MapNavNode(Node, ABC):
     #endregion
 
     #region MatchingWorkerCallbacks
-    def _matching_worker_callback_common(self, results: list) -> Optional[OutputData]:
-        """Common logic for both vo and map matching worker callbacks
+    def _pose_estimation_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for matching worker.
 
-        :param results: Results from the matching worker
-        :return: Parsed output data, or None if not available
+        :return:
+        """
+        self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
+
+    def _pose_estimation_worker_callback(self, results: list) -> None:
+        """Callback for :meth:`.PoseEstimator.worker`
+
+        Retrieves latest :py:attr:`._pose_estimation_query.input_data` and uses it to call :meth:`._compute_output`.
+        The input data is needed so that the post-processing is done using the same state information that was used for
+        initiating the pose estimation in the first place. For example, camera pitch may have changed since then,
+        and current camera pitch should therefore not be used for processing the matches.
         """
         pose = results[0]
         if pose is not None:
@@ -999,8 +1008,8 @@ class MapNavNode(Node, ABC):
             return None
 
         # TODO: handle linalg error for h inversion
-        match = Match(image_pair=self._map_matching_query.image_pair, pose=pose)
-        output_data = self._compute_output(match, self._map_matching_query.input_data)
+        match = Match(image_pair=self._pose_estimation_query.image_pair, pose=pose)
+        output_data = self._compute_output(match, self._pose_estimation_query.input_data)
 
         if output_data is not None:
             # noinspection PyUnreachableCode
@@ -1025,31 +1034,10 @@ class MapNavNode(Node, ABC):
                 output_data.filtered_position = filter_output
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
-        return output_data
-
-    def map_matching_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for matching worker.
-
-        :return:
-        """
-        self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
-
-    def map_matching_worker_callback(self, results: list) -> None:
-        """Callback for matching worker.
-
-        Retrieves latest :py:attr:`~_stored_inputs` and uses them to call :meth:`~_process_matches`. The stored inputs
-        are needed so that the post-processing is done using the same state information that was used for initiating
-        the match in the first place. For example, camera pitch may have changed since then (e.g. if match takes 100ms)
-        and current camera pitch should therefore not be used for processing the matches.
-
-        :return:
-        """
-        output_data = self._matching_worker_callback_common(results)
-        if output_data is None:
-            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
-        else:
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
+        else:
+            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
     #endregion
 
     # TODO: no need to give max pitch arg, can be checked inside method
@@ -1298,7 +1286,7 @@ class MapNavNode(Node, ABC):
             return False
 
         # Check condition (1) - that a request is not already running
-        if not (self._map_matching_query is None or self._map_matching_query.result.ready()):  # TODO: confirm that hasattr result
+        if not (self._pose_estimation_query is None or self._pose_estimation_query.result.ready()):  # TODO: confirm that hasattr result
             return False
 
         # Check condition (2) - whether camera pitch is too large
@@ -1321,20 +1309,20 @@ class MapNavNode(Node, ABC):
 
         return True
 
-    def _match(self, image_pair: ImagePair, input_data: InputData) -> None:
-        """Instructs the _match estimator to estimate the camera _match for the image pair
+    def _estimate(self, image_pair: ImagePair, input_data: InputData) -> None:
+        """Instructs the pose estimator to estimate the pose between the image pair
 
-        :param image_pair: The image pair to match
+        :param image_pair: The image pair to estimate the pose from
         :param input_data: Input data context
         :return:
         """
-        assert self._map_matching_query is None or self._map_matching_query.result.ready()
-        self._map_matching_query = AsyncQuery(
-            result=self._map_matching_pool.starmap_async(
-                self._map_matcher.worker,
+        assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
+        self._pose_estimation_query = AsyncQuery(
+            result=self._pose_estimator_pool.starmap_async(
+                self._pose_estimator.worker,
                 [(image_pair, self._pose_guess)],  # TODO: Can be NOne, ok?
-                callback=self.map_matching_worker_callback,
-                error_callback=self.map_matching_worker_error_callback
+                callback=self._pose_estimation_worker_callback,
+                error_callback=self._pose_estimation_worker_error_callback
             ),
             image_pair=image_pair,
             input_data=input_data  # TODO: no longer passed to matching, this is "context", not input

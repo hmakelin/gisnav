@@ -29,7 +29,7 @@ from python_px4_ros2_map_nav.data import Dim, TimePair, ImageData, MapData, Matc
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
-from python_px4_ros2_map_nav.matchers.matcher import Matcher
+from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
 from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.filter import SimpleFilter
 
@@ -166,13 +166,13 @@ class MapNavNode(Node, ABC):
         self.__pose_guess = value
 
     @property
-    def _map_matcher(self) -> Matcher:
+    def _map_matcher(self) -> PoseEstimator:
         """Dynamically loaded map matcher"""
         return self.__map_matcher
 
     @_map_matcher.setter
-    def _map_matcher(self, value: Matcher) -> None:
-        #assert_type(value, Matcher)  # TODO: fix this
+    def _map_matcher(self, value: PoseEstimator) -> None:
+        #assert_type(value, PoseEstimator)  # TODO: fix this
         self.__map_matcher = value
 
     @property
@@ -221,7 +221,7 @@ class MapNavNode(Node, ABC):
 
     @property
     def _map_matching_pool(self) -> Pool:
-        """Pool for running a :class:`.Matcher` in dedicated process"""
+        """Pool for running a :class:`.PoseEstimator` in dedicated process"""
         return self.__map_matching_pool
 
     @_map_matching_pool.setter
@@ -669,7 +669,7 @@ class MapNavNode(Node, ABC):
     def _import_matcher(self, matcher_params_file: str) -> Tuple[str, str]:
         """Imports the matcher class based on configuration
 
-        :param matcher_params_file: Matcher parameter file name
+        :param matcher_params_file: PoseEstimator parameter file name
         """
         class_path = self.get_parameter('matcher.class').get_parameter_value().string_value
         if class_path is None or matcher_params_file is None:
@@ -1011,6 +1011,7 @@ class MapNavNode(Node, ABC):
             self.get_logger().warn(f'Could not compute _match, returning None.')
             return None
 
+        # TODO: handle linalg error for h inversion
         match = Match(image_pair=self._map_matching_query.image_pair, pose=pose)
         output_data = self._compute_output(match, self._map_matching_query.input_data)
 
@@ -1044,7 +1045,7 @@ class MapNavNode(Node, ABC):
 
         :return:
         """
-        self.get_logger().error(f'Matching process returned and error:\n{e}\n{traceback.print_exc()}')
+        self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
 
     def map_matching_worker_callback(self, results: list) -> None:
         """Callback for matching worker.

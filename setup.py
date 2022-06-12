@@ -19,7 +19,7 @@ setup(
     version=package_data.version,
     packages=[
         package_data.package_name,
-        package_data.package_name + '.matchers',
+        package_data.package_name + '.pose_estimators',
         package_data.package_name + '.nodes',
         'LoFTR.loftr',
         'LoFTR.loftr.backbone',

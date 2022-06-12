@@ -1,6 +1,6 @@
-class_name: 'python_px4_ros2_map_nav.matchers.superglue.SuperGlue'
-args:  # Recommended outdoor config from SuperGlue repo's README.md
-  - 15  # min_matches
+class_name: 'python_px4_ros2_map_nav.pose_estimators.superglue.SuperGlueEstimator'
+args:  # Recommended outdoor config from SuperGlueEstimator repo's README.md
+  - 15  # _min_matches
   - superpoint:
       nms_radius: 3
       keypoint_threshold: 0.005

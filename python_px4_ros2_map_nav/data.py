@@ -273,7 +273,7 @@ class AsyncQuery:
     """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
 
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
-    easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.matchers.matcher.Matcher.worker`
+    easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.pose_estimators.matcher.PoseEstimator.worker`
     interface expects an image_pair and an input_data context as arguments (along with a guess which is not stored
     since it is no longer needed after the _match estimation).
     """
@@ -286,22 +286,27 @@ class AsyncQuery:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Pose:
-    """Represents camera match (rotation and translation)
-
-    :raise: ValueError if r or t is invalid (np.isnan)
-    """
+    """Represents camera match (rotation and translation)"""
     r: np.ndarray
     t: np.ndarray
     e: np.ndarray = field(init=False)
 
-    def __post_init__(self):
-        """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'e', np.hstack((self.r, self.t)))  # -self.r.T @ self.t
+    class PoseValueError(ValueError):
+        """Raised when the input arguments to the :class:`.Pose` class are invalid"""
+        pass
 
-        # Validity check
-        if np.isnan(self.r).any() or np.isnan(self.t).any():
-            raise ValueError(f'Rotation matrix or translation vector contained NaNs:\n{self.r}, {self.t}')
+    def __post_init__(self):
+        """Set computed fields and do validity checks after initialization
+
+        :raise: :class:`.PoseValueError` if r or t is invalid
+        """
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'e', np.hstack((self.r, self.t)))
+
+        # Validity checks
+        if np.isnan(self.r).any() or np.isnan(self.t).any() \
+            or self.r.shape != (3, 3) or self.t.shape != (3, 1):
+            raise PoseValueError(f'Pose input arguments were invalid: {r}, {t}.')
 
 
 # noinspection PyClassHasNoInit

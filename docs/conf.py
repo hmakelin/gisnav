@@ -24,7 +24,7 @@ package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 #python_px4_ros2_map_nav {version_string}
 #"""
 
-# -- Add SuperGlue to path ---------------------------------------------------
+# -- Add SuperGlueEstimator to path ---------------------------------------------------
 #from python_px4_ros2_map_nav.util import setup_sys_path
 #_, __ = setup_sys_path()
 # TODO: same logic as in setup_sys_path

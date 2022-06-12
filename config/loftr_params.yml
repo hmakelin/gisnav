@@ -1,3 +1,3 @@
-class_name: 'python_px4_ros2_map_nav.matchers.loftr.LoFTRMatcher'
+class_name: 'python_px4_ros2_map_nav.pose_estimators.loftr.LoFTREstimator'
 args:
-  - 15  # min_matches
+  - 15  # _min_matches

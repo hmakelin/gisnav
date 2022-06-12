@@ -546,10 +546,10 @@ class MapNavNode(Node, ABC):
         pose_estimator_params = self._load_config(params_file)
         module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
         pose_estimator = self._import_class(class_name, module_name)
-        post_estimator_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
+        pose_estimator_pool = ThreadPool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
                                          initargs=(pose_estimator, *pose_estimator_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
-        return pose_estimator, post_estimator_pool
+        return pose_estimator, pose_estimator_pool
 
     def _load_config(self, yaml_file: str) -> dict:
         """Loads config from the provided YAML file.

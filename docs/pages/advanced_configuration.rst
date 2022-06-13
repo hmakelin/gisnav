@@ -15,14 +15,14 @@ The ``ROS 2`` nodes can be found in the :py:mod:`python_px4_ros2_map_nav.nodes` 
 
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.MapNavNode` abstract base class implements a ROS 2 node that produces a vehicle position estimate from
+The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces a vehicle position estimate from
 visual inputs without the need for a GNSS (GPS) signal.
 
 .. _The MockGPSNode class:
 
 The MockGPSNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.MockGPSNode` extends the :class:`.MapNavNode` abstract base class to publish a mock GPS message generated
+The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
 from the output. It is used in the demo as an example of how GISNav can complement and in some cases replace GNSS
 navigation.
 
@@ -42,12 +42,12 @@ You may also want to try setting the following limits to be more tolerant::
 
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To integrate GISNav with your solution, you must implement the :class:`.MapNavNode` class by writing a :meth:`.publish` method::
+To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing a :meth:`.publish` method::
 
-    from python_px4_ros2_map_nav.nodes import MapNavNode
+    from python_px4_ros2_map_nav.nodes.base_node import BaseNode
     from python_px4_ros2_map_nav.data import OutputData
 
-    class MyCustomNode(MapNavNode):
+    class MyCustomNode(BaseNode):
 
         # You can override the __init__ method and do whatever you need here
         ...
@@ -66,7 +66,7 @@ it to the flight control software via the appropriate PX4/ROS 2 bridge topic.
 
 The Publish Method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.MapNavNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
+The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
 to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`.
 
 
@@ -75,7 +75,7 @@ PX4-ROS 2 Bridge Topics
 The node main process subscribes to the telemetry received via the PX4-ROS 2 bridge and defines a callback function for
 each topic to handle the received messages on the main thread.
 
-The :class:`.MapNavNode` subscribes to the following telemetry:
+The :class:`.BaseNode` subscribes to the following telemetry:
 
     #. :class:`px4_msgs.VehicleGlobalPosition` messages via 'VehicleGlobalPosition_PubSubTopic'
     #. :class:`px4_msgs.VehicleLocalPosition` messages via 'VehicleLocalPosition_PubSubTopic'
@@ -90,7 +90,7 @@ messages are passed between PX4 and your ROS node.
 
 WMS Client
 ---------------------------------------------------
-The :class:`.MapNavNode` Map rasters from WMS endpoint, requested by embedded :class:`.WMSClient` instance
+The :class:`.BaseNode` Map rasters from WMS endpoint, requested by embedded :class:`.WMSClient` instance
 
 The :class:`.WMSClient` on the other hand is instantiated
 in a dedicated process. A :py:attr:`._wms_timer` periodically requests the :class:`.WMSClient` to fetch a new map based

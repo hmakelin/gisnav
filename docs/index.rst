@@ -14,7 +14,6 @@
    :caption: Develop
    :hidden:
 
-   pages/development_objectives
    pages/advanced_configuration
    pages/api_documentation
 
@@ -23,6 +22,7 @@
    :caption: Contribute
    :hidden:
 
+   pages/development_objectives
    pages/devops
    pages/merge_requests
 

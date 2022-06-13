@@ -34,19 +34,19 @@ mock_gps_node module
    :undoc-members:
    :show-inheritance:
 
-Matchers package
+pose_estimators package
 --------------------------------------------
-matcher module
+pose_estimator module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.matchers.matcher
+.. automodule:: python_px4_ros2_map_nav.pose_estimators.pose_estimator
    :autosummary:
    :members:
    :undoc-members:
    :show-inheritance:
 
-keypoint_matcher module
+keypoint_pose_estimator module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.matchers.keypoint_matcher
+.. automodule:: python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator
    :autosummary:
    :members:
    :undoc-members:
@@ -54,7 +54,7 @@ keypoint_matcher module
 
 loftr module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.matchers.loftr
+.. automodule:: python_px4_ros2_map_nav.pose_estimators.loftr
    :autosummary:
    :members:
    :undoc-members:
@@ -62,7 +62,7 @@ loftr module
 
 superglue module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.matchers.superglue
+.. automodule:: python_px4_ros2_map_nav.pose_estimators.superglue
    :autosummary:
    :members:
    :undoc-members:

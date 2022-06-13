@@ -1,16 +1,24 @@
 Advanced Configuration
 ===================================================
+This section provides detailed information and code samples that you can use to try out or integrate GISNav with
+your own project.
+
+First, you might be interested in implementing your own `Custom Node`_, or if you are happy with the
+provided example nodes, you may also look into making your own `Custom Pose Estimator`_.
+
 ROS Nodes
 ---------------------------------------------------
 The ``ROS 2`` nodes can be found in :py:mod:`python_px4_ros2_map_nav.nodes`.
 
 .. _The BaseNode class:
+
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MapNavNode` abstract base class implements a ROS 2 node that produces a vehicle position estimate from
 visual inputs without the need for a GNSS (GPS) signal.
 
 .. _The MockGPSNode class:
+
 The MockGPSNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MockGpsNode` extends the :class:`.MapNavNode` abstract base class to publish a mock GPS message generated
@@ -30,6 +38,7 @@ You may also want to try setting the following limits to be more tolerant::
 
 
 .. _Custom Node:
+
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To integrate GISNav with your solution, you must implement the :class:`.MapNavNode` class by writing a :meth:`.publish` method::
@@ -52,6 +61,13 @@ To integrate GISNav with your solution, you must implement the :class:`.MapNavNo
 You can see a longer example in source code for the :class:`.MockGPSNode`
 class, which creates a :class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) message out of the output and publishes
 it to the flight control software via the appropriate PX4/ROS 2 bridge topic.
+
+
+The Publish Method
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The :class:`.MapNavNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
+to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`.
+
 
 PX4-ROS 2 Bridge Topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -80,12 +96,8 @@ in a dedicated process. A :py:attr:`._wms_timer` periodically requests the :clas
 on criteria defined in :meth:`._should_update_map`. Generally a new map is requested if the field of view (FOV) of the
 vehicle's camera no longer significantly overlaps with the previously requested map.
 
-Publish Method and Output
----------------------------------------------------
-The :class:`.MapNavNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
-to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`.
-
 .. _Pose Estimators:
+
 Pose Estimators
 ---------------------------------------------------
 Two pose estimators, SuperGlue and SuperGlue derivative LoFTR are provided with LoFTR as the default pose estimator.
@@ -100,6 +112,7 @@ implement the required static initializer and worker methods that are required t
 and multiprocessing.
 
 .. _Configuration:
+
 Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You would then need to create a configuration file ``config/my_custom_pose_estimator.yml`` that tells GISNav
@@ -112,6 +125,7 @@ arguments::
 
 
 .. _Custom Pose Estimator:
+
 Custom Pose Estimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You can use the below snippets to get started with your own :class:`.PoseEstimator`::
@@ -131,6 +145,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
             return Pose(r, t)
 
 .. _Custom Keypoint-Based Pose Estimator:
+
 Custom Keypoint-Based Pose Estimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 If you want to create a :class:`.KeypointPoseEstimator`, you can also start with the below snippet::

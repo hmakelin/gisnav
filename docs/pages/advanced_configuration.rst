@@ -169,3 +169,21 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
             )
             return matching_keypoints
 
+
+.. _Kalman Filter:
+
+Kalman Filter
+---------------------------------------------------
+The SimpleFilter class
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TODO: Filter abstract base class or interface
+
+An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the raw output from the
+:class:`.PoseEstimator`, and to (2) estimate the standard deviation of the output estimate. The standard deviation
+estimates are used for example by the :class:`.MockGpsNode` class to generate a mock `px4_msgs.VehicleGpsPosition`
+message, which requires the ``eph`` and ``epv`` values (horizontal and vertical error in meters) to be set.
+
+
+Custom Kalman or Particle Filter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TODO

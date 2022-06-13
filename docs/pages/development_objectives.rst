@@ -5,6 +5,7 @@ existing sensor fusion systems. It improves both local and global position and a
 backup global positioning for `GNSS <https://en.wikipedia.org/wiki/Satellite_navigation>`_-denied flight.
 
 .. _Guiding Principles:
+
 Guiding Principles
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The following principles have been used as design guidance when developing GISNav:
@@ -21,27 +22,28 @@ The following principles have been used as design guidance when developing GISNa
 
 * Support proven commercial off-the-shelf hardware platforms and `FOSS <https://en.wikipedia.org/wiki/Free_and_open-source_software>`_ software
 
-    Best bet is to work on open platforms with the wides adoption, to ensure development can continue far into the future from a stable foundation.
+    Best bet is to work on open platforms with the widest adoption, to ensure development can continue far into the future from a stable foundation.
 
 .. _Constraints:
+
 Constraints
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The `Guiding Principles`_ impose constraints on GISNav, namely:
 
 * Currently GISNav is intended for simulation only
 * Favorable operating terrain is strongly featured urban and semi-urban areas and traffic corridors (roads), not featureless natural terrain
-* Monocular stabilized camera required
-* Open-source software with permissive licenses only
+* Monocular stabilized camera should be sufficient
 * Drone or UAV size, flight altitude or velocity constrained only to such degree that allows commercial GNSS receivers to work
 * Focus on good flight conditions - reasonable assumption for most commercial use cases which is where most develoment effort should be, niche applications will follow
+* Open-source software and with permissive licenses only
 
 Development Focus
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Taking the `Constraints`_ into account, development focus should for example be in:
 
 * ROS is baked in, but PX4 could be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
-* Newer algorithms to improve accuracy, reliability or performance
-* Making adoption easier for different kinds of hardware platforms or configurations
+* Newer pose estimation algorithms to improve accuracy, reliability or performance
+* Using elevation or other data from the underlying GIS system to complement ortho-images to improve position and attitude estimates
+* Making adoption easier with pre-made configurations for popular hardware platforms
 * SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse
-the flight logs and compare against some thresholds to determine if the software passes the test.
-* Using elevation data from the underlying GIS system to complement ortho-images to improve estimates
+the flight logs and compare against some pre-set thresholds to determine if the software passes the test.

@@ -21,11 +21,11 @@ visual inputs without the need for a GNSS (GPS) signal.
 
 The MockGPSNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.MockGpsNode` extends the :class:`.MapNavNode` abstract base class to publish a mock GPS message generated
+The :class:`.MockGPSNode` extends the :class:`.MapNavNode` abstract base class to publish a mock GPS message generated
 from the output. It is used in the demo as an example of how GISNav can complement and in some cases replace GNSS
 navigation.
 
-In order for the :class:`.MockGpsNode` to work, you would need to configure your ``typhoon_h480`` build target to use
+In order for the :class:`.MockGPSNode` to work, you would need to configure your ``typhoon_h480`` build target to use
 the new GPS. This can be either configured before flight in the file ``TODO``, or during flight by setting the
 `SENS_GPS_PRIME <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ parameter with
 the `param <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ command::
@@ -180,7 +180,7 @@ TODO: Filter abstract base class or interface
 
 An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the raw output from the
 :class:`.PoseEstimator`, and to (2) estimate the standard deviation of the output estimate. The standard deviation
-estimates are used for example by the :class:`.MockGpsNode` class to generate a mock `px4_msgs.VehicleGpsPosition`
+estimates are used for example by the :class:`.MockGPSNode` class to generate a mock `px4_msgs.VehicleGpsPosition`
 message, which requires the ``eph`` and ``epv`` values (horizontal and vertical error in meters) to be set.
 
 

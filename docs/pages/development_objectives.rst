@@ -2,7 +2,7 @@ Development Objectives
 --------------------------------------------
 If you are interested in contributing to GISNav, you may consider the following points.
 
-.. _Project Intention
+.. _Project Intention:
 
 Project Intention
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

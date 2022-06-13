@@ -179,8 +179,8 @@ The SimpleFilter class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 TODO: Filter abstract base class or interface
 
-An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the raw output from the
-:class:`.PoseEstimator`, and to (2) estimate the standard deviation of the output estimate. The standard deviation
+An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the choppiness of the raw output from
+the :class:`.PoseEstimator`, and to (2) estimate the standard deviation of the position estimate. The standard deviation
 estimates are used for example by the :class:`.MockGPSNode` class to generate a mock `px4_msgs.VehicleGpsPosition`
 message, which requires the ``eph`` and ``epv`` values (horizontal and vertical error in meters) to be set.
 

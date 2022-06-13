@@ -8,7 +8,8 @@ provided example nodes, you may also look into making your own `Custom Pose Esti
 
 ROS Nodes
 ---------------------------------------------------
-The ``ROS 2`` nodes can be found in :py:mod:`python_px4_ros2_map_nav.nodes`.
+The ``ROS 2`` nodes can be found in the :py:mod:`python_px4_ros2_map_nav.nodes` package. Unless you want to use example
+:class:`.MockGPSNode`, you will have to implement your own `Custom Node`_.
 
 .. _The BaseNode class:
 

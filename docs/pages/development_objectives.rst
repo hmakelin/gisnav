@@ -30,7 +30,6 @@ Constraints
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The `Guiding Principles`_ impose constraints on GISNav, namely:
 
-* Currently GISNav is intended for simulation only
 * Favorable operating terrain is strongly featured urban and semi-urban areas and traffic corridors (roads), not featureless natural terrain
 * Monocular stabilized camera should be sufficient
 * Drone or UAV size, flight altitude or velocity constrained only to such degree that allows commercial GNSS receivers to work

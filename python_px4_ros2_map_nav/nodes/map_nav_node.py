@@ -750,8 +750,8 @@ class MapNavNode(Node, ABC):
             self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layer: {layer_str}, srs: {srs_str}.')
             if self._wms_results is not None:
                 assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
-            self._wms_results = self._wms_pool.starmap_async(
-                WMSClient.worker, [(bbox, self._map_size_with_padding, layer_str, srs_str)],
+            self._wms_results = self._wms_pool.apply_async(
+                WMSClient.worker, (bbox, self._map_size_with_padding, layer_str, srs_str),
                 callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
@@ -968,8 +968,8 @@ class MapNavNode(Node, ABC):
         :param result: Results from the asynchronous call
         :return:
         """
-        assert_len(result, 1)
-        result = result[0]
+        #assert_len(result, 1)
+        result = result #[0]
         assert_type(result, MapData)
         assert result.image.arr.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
         self.get_logger().info(f'Map received for bbox: {result.bbox}.')
@@ -992,7 +992,7 @@ class MapNavNode(Node, ABC):
         """
         self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
 
-    def _pose_estimation_worker_callback(self, results: list) -> None:
+    def _pose_estimation_worker_callback(self, result: list) -> None:
         """Callback for :meth:`.PoseEstimator.worker`
 
         Retrieves latest :py:attr:`._pose_estimation_query.input_data` and uses it to call :meth:`._compute_output`.
@@ -1000,7 +1000,7 @@ class MapNavNode(Node, ABC):
         initiating the pose estimation in the first place. For example, camera pitch may have changed since then,
         and current camera pitch should therefore not be used for processing the matches.
         """
-        pose = results[0]
+        pose = result  #[0]
         if pose is not None:
             self._pose_guess = pose
         else:
@@ -1318,9 +1318,9 @@ class MapNavNode(Node, ABC):
         """
         assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
         self._pose_estimation_query = AsyncQuery(
-            result=self._pose_estimator_pool.starmap_async(
+            result=self._pose_estimator_pool.apply_async(
                 self._pose_estimator.worker,
-                [(image_pair, self._pose_guess)],  # TODO: Can be NOne, ok?
+                (image_pair, self._pose_guess),  # TODO: Can be NOne, ok?
                 callback=self._pose_estimation_worker_callback,
                 error_callback=self._pose_estimation_worker_error_callback
             ),

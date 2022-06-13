@@ -57,7 +57,6 @@ class KeypointPoseEstimator(PoseEstimator):
         """
         matched_keypoints = self._find_matching_keypoints(image_pair)
         if matched_keypoints is None or matched_keypoints.count < self._min_matches:
-            print('NOT ENOUGH KPS')
             return None  # Not enough matching keypoints found
 
         mkp1, mkp2 = matched_keypoints.query_keypoints, matched_keypoints.reference_keypoints
@@ -73,5 +72,4 @@ class KeypointPoseEstimator(PoseEstimator):
         try:
             return Pose(r, t)
         except Pose.PoseValueError as _:
-            print('OTHER ERROR')
             return None  # The estimate is invalid

@@ -1,4 +1,4 @@
-"""Extends :class:`~BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
+"""Extends :class:`.BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import rclpy
 import time
 import traceback

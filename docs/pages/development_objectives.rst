@@ -10,7 +10,7 @@ Guiding Principles
 The following principles are used as design guidance in GISNav development:
 
 * Complement and improve - but do not replace - existing local and global position and attitude estimation systems
-* The natural or primary application is complementing GNSS in global positioning, while local position and attitude estimation or replacing GNSS (GNSS-denied flight) are secondary applications
+* The natural or primary application of map-based visual global positioning is complementing GNSS, while local position and attitude estimation or replacing GNSS (GNSS-denied flight) are secondary applications
 * Prioritize maintainability and well-defined interfaces over premature optimization
 * Support proven commercial off-the-shelf hardware platforms
 

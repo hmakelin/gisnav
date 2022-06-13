@@ -59,7 +59,7 @@ class WMSClient:
 
         The WMS requests are intended to be handled in a dedicated process (to avoid blocking the main thread), so this
         function is lru_cache'd to avoid recurrent instantiations every time a WMS request is sent. For example usage, see
-        :meth:`python_px4_ros2_map_nav.MapNavNode._wms_pool_worker` method.
+        :meth:`python_px4_ros2_map_nav.BaseNode._wms_pool_worker` method.
 
         :param url: WMS server endpoint url
         :param version_: WMS server version

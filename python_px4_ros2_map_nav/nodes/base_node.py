@@ -1,4 +1,4 @@
-"""Module that contains the MapNavNode ROS 2 node."""
+"""Module that contains the BaseNode ROS 2 node."""
 import sys
 import rclpy
 import traceback
@@ -35,7 +35,7 @@ from python_px4_ros2_map_nav.wms import WMSClient
 from python_px4_ros2_map_nav.filter import SimpleFilter
 
 
-class MapNavNode(Node, ABC):
+class BaseNode(Node, ABC):
     """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
     # Encoding of input video (input to CvBridge)
     IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header

@@ -1,4 +1,4 @@
-"""Extends :class:`~MapNavNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
+"""Extends :class:`~BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import rclpy
 import time
 import traceback
@@ -8,12 +8,12 @@ from typing import Union, get_args
 from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.nodes.map_nav_node import MapNavNode
+from python_px4_ros2_map_nav.nodes.base_node import BaseNode
 from python_px4_ros2_map_nav.data import ImageData, OutputData, Position
 from python_px4_ros2_map_nav.geo import GeoTrapezoid, GeoPoint
 
 
-class MockGPSNode(MapNavNode):
+class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     VEHICLE_GPS_POSITION_TOPIC_NAME = 'VehicleGpsPosition_PubSubTopic'

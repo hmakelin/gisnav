@@ -55,7 +55,7 @@ class SimpleFilter(Filter):
         ])
 
     #def update(self, position: Position) -> Optional[Position]:
-    def update(self, position: Position) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    def update(self, measurement: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns a filtered position with estimated standard deviations
 
         Pushes the measurement into the queue and removes the oldest one if queue is full.
@@ -63,10 +63,6 @@ class SimpleFilter(Filter):
         :param position: A new position observation (measurement)
         :return: Filtered position, AMSL altitude also gets filtered if provided, epx, epy and epz values provided of None if output not yet available
         """
-        assert_type(position, Position)
-        orig_crs_str = position.xy.crs
-        temp_crs_str = 'epsg:3857'  # Need to do filtering in (approximate) meters (for eph and epv estimation) so use EPSG:3857
-        measurement = np.array(position.xy.to_crs(temp_crs_str).coordinates + (position.z_ground,)).reshape(1, 3)
 
         if self._measurements is None:
             self._init_initial_state(measurement)

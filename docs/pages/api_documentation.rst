@@ -14,9 +14,9 @@ Use the search in the sidebar or these indices to find what you are looking for.
 
 Nodes package
 --------------------------------------------
-map_nav_node module
+base_node module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
+.. automodule:: python_px4_ros2_map_nav.nodes.base_node
    :autosummary:
    :members:
    :undoc-members:
@@ -24,7 +24,7 @@ map_nav_node module
 
 mock_gps_node module
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.nodes.map_nav_node
+.. automodule:: python_px4_ros2_map_nav.nodes.mock_gps_node
    :autosummary:
    :members:
    :undoc-members:

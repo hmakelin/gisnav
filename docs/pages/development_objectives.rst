@@ -45,5 +45,4 @@ Taking the `Constraints`_ into account, development focus should for example be 
 * Newer pose estimation algorithms to improve accuracy, reliability or performance
 * Using elevation or other data from the underlying GIS system to complement ortho-images to improve position and attitude estimates
 * Making adoption easier with pre-made configurations for popular hardware platforms
-* SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse
-the flight logs and compare against some pre-set thresholds to determine if the software passes the test.
+* SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse the flight logs and compare against some pre-set thresholds to determine if the software passes the test.

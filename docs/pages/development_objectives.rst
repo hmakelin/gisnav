@@ -1,5 +1,11 @@
 Development Objectives
 --------------------------------------------
+If you are interested in contributing to GISNav, you may consider the following points.
+
+.. _Project Intention
+
+Project Intention
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 GISNav demonstrates a map-based visual global positioning for airborne drones that complements and improves on
 existing sensor fusion systems. It improves both local and global position and attitude estimate accuracy, and provides
 backup global positioning for `GNSS <https://en.wikipedia.org/wiki/Satellite_navigation>`_-denied flight.
@@ -43,7 +49,7 @@ The `Guiding Principles`_ impose constraints on GISNav, namely:
 
 Development Focus
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Taking the `Constraints`_ into account, development focus should for example be in:
+Taking the `Constraints`_ into account, development focus could for example be in:
 
 * ROS is baked in, but PX4 could be complemented by other flight control software options such as Ardupilot through Mavlink compatible interface
 * Newer pose estimation algorithms to improve accuracy, reliability or performance

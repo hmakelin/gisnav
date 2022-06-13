@@ -2,13 +2,14 @@
 import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
+
 from python_px4_ros2_map_nav.data import Position  # LatLonAlt
-from python_px4_ros2_map_nav.geo import GeoPoint
-from python_px4_ros2_map_nav.assertions import assert_type
+from python_px4_ros2_map_nav.assertions import assert_type, assert_shape
+from python_px4_ros2_map_nav.filters.filter import Filter
 
 
 # TODO: how to handle uneven timesteps?
-class SimpleFilter:
+class SimpleFilter(Filter):
     """Simple Kalman filter implementation
 
     3-dimensional location model with velocity taken into account with total of 6 (3x2) state variables
@@ -53,7 +54,8 @@ class SimpleFilter:
             0  # z_vel
         ])
 
-    def filter(self, position: Position) -> Optional[Position]:
+    #def update(self, position: Position) -> Optional[Position]:
+    def update(self, position: Position) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns a filtered position with estimated standard deviations
 
         Pushes the measurement into the queue and removes the oldest one if queue is full.
@@ -109,17 +111,21 @@ class SimpleFilter:
             # Create a new position instance with filtered values converted back to the original CRS
             xyz_mean = mean[0::2]  # x, y, z - skip velocities
             xyz_sd = np.sqrt(np.diagonal(covariance)[0::2])  # x, y, z
-            filtered_position = Position(
-                xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
-                z_ground=xyz_mean[2],
-                z_amsl=position.z_amsl + (xyz_mean[2] - position.z_ground) if position.z_amsl is not None else None,
-                x_sd=xyz_sd[0],
-                y_sd=xyz_sd[1],
-                z_sd=xyz_sd[2]
-            )
+            #filtered_position = Position(
+            #    xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
+            #    z_ground=xyz_mean[2],
+            #    z_amsl=position.z_amsl + (xyz_mean[2] - position.z_ground) if position.z_amsl is not None else None,
+            #    x_sd=xyz_sd[0],
+            #    y_sd=xyz_sd[1],
+            #    z_sd=xyz_sd[2]
+            #)
 
-            assert filtered_position.xy.crs.lower() == orig_crs_str.lower()
-            return filtered_position
+            #assert filtered_position.xy.crs.lower() == orig_crs_str.lower()
+            #return filtered_position
+
+            assert_shape(xyz_mean, (3,))  # TODO: make shape adaptive, same shape as input, not hard-coded
+            assert_shape(xyz_sd, (3,))
+            return xyz_mean, xyz_sd
 
 
 

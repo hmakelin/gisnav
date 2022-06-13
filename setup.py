@@ -21,6 +21,7 @@ setup(
         package_data.package_name,
         package_data.package_name + '.pose_estimators',
         package_data.package_name + '.nodes',
+        package_data.package_name + '.filters',
         'LoFTR.loftr',
         'LoFTR.loftr.backbone',
         'LoFTR.loftr.loftr_module',

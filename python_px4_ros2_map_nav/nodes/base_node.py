@@ -32,7 +32,7 @@ from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
 from python_px4_ros2_map_nav.wms import WMSClient
-from python_px4_ros2_map_nav.filter import SimpleFilter
+from python_px4_ros2_map_nav.filters.simple_filter import SimpleFilter
 
 
 class BaseNode(Node, ABC):
@@ -1025,14 +1025,26 @@ class BaseNode(Node, ABC):
                 cv2.imshow("Projected FOV estimate", img)
                 cv2.waitKey(1)
 
+            # TODO: convert to epsg:3857 or whatever is fed to _kf.update
+            temp_crs_str = 'epsg:3857'
+
             # Get output from Kalman filter
-            filter_output = self._kf.filter(output_data.fixed_camera.position)
+            filter_output = self._kf.update(output_data.fixed_camera.position)
             if filter_output is None:
                 self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
                 return None
             else:
-                assert_type(filter_output, Position)
-                output_data.filtered_position = filter_output
+                xyz_mean, xyz_sd = filter_output
+                filtered_position = Position(
+                    xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(output_data.fixed_camera.position.xy.crs),
+                    z_ground=xyz_mean[2],
+                    z_amsl=output_data.fixed_camera.position.z_amsl + (xyz_mean[2] - output_data.fixed_camera.position.z_ground) if output_data.fixed_camera.position.z_amsl is not None else None,
+                    x_sd=xyz_sd[0],
+                    y_sd=xyz_sd[1],
+                    z_sd=xyz_sd[2]
+                )
+                assert filtered_position.xy.crs.lower() == output_data.fixed_camera.position.xy.crs.lower()
+                output_data.filtered_position = filtered_position
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
             self._map_input_data_prev = self._map_input_data

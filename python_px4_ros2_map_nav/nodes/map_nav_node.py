@@ -119,6 +119,7 @@ class MapNavNode(Node, ABC):
         #self._camera_info = None  # Not used, CameraInfo subscription is destroyed once self._camera_data is assigned
         self._vehicle_local_position = None
         self._vehicle_global_position = None  # TODO: save directly as 'Position' class? Grab z_ground from local position?
+        self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 

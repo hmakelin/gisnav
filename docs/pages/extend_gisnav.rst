@@ -1,7 +1,7 @@
-Advanced Configuration
+Extend GISNav
 ===================================================
 This section provides detailed information and code samples that you can use to try out or integrate GISNav with
-your own project.
+your own project by extending the it with your own dynamically loaded modules.
 
 First, you might be interested in implementing your own `Custom Node`_, or if you are happy with the
 provided example nodes, you may also look into making your own `Custom Pose Estimator`_.

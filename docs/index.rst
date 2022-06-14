@@ -14,7 +14,7 @@
    :caption: Develop
    :hidden:
 
-   pages/advanced_configuration
+   pages/extend_gisnav
    pages/api_documentation
 
 .. toctree::

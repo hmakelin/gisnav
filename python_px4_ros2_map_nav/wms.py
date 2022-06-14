@@ -6,8 +6,6 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.nodes.data import MapData, Dim, Img
-from python_px4_ros2_map_nav.nodes.geo import GeoBBox
 
 
 class WMSClient:
@@ -75,40 +73,38 @@ class WMSClient:
             wms_client = WMSClient(url, version_, timeout_)
 
     @staticmethod
-    def worker(bbox: GeoBBox, map_size: Tuple[int, int], layer_str: str, srs_str: str) -> MapData:
+    def worker(bbox: Tuple[4*(float,)], map_size: Tuple[int, int], layer_str: str, srs_str: str) -> np.ndarray:
         """Gets latest map from WMS server for given location
 
-        :param bbox: Bounding box of the map
+        :param bbox_: Bounding box of the map as tuple (left, bottom, right, top)
         :param map_size: Map size tuple (height, width)
         :param layer_str: WMS server layer
         :param srs_str: WMS server SRS
-        :return: ~data.MapData containing the map raster and supporting metadata
+        :return: np.ndarray map raster
         """
         assert wms_client is not None
         assert 'wms_client' in globals()
-        assert_type(bbox, GeoBBox)
         assert (all(isinstance(x, int) for x in map_size))
         assert_type(layer_str, str)
         assert_type(srs_str, str)
         map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
                                    WMSClient.IMAGE_TRANSPARENCY)
-        map_data = MapData(bbox=bbox, image=Img(map_))
-        return map_data
+        return map_
 
-    def _get_map(self, layer_str: str, srs_str: str, bbox_: GeoBBox, size_: Tuple[int, int], format_: str,
+    def _get_map(self, layer_str: str, srs_str: str, bbox_: Tuple[4*(float,)], size_: Tuple[int, int], format_: str,
                  transparent_: bool) -> np.ndarray:
         """Performs a WMS GetMap request with the supplied keyword arguments
 
         :param layer_str: WMS server layer
         :param srs_str: WMS server SRS
-        :param bbox_: Bounding box of the map
+        :param bbox_: Bounding box of the map as tuple (left, bottom, right, top)
         :param size_: Map size tuple (height, width)
         :param format_: Requested image format
         :param transparent_: Requested image background transparency
-        :return: Map raster
+        :return: Map raster (np.ndarray)
         """
         try:
-            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_.bounds, size=size_, format=format_,
+            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_, size=size_, format=format_,
                                     transparent=transparent_)
         except Exception as e:
             # TODO: handle exception

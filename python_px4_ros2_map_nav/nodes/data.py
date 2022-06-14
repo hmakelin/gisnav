@@ -1,4 +1,7 @@
-"""Module containing data structures to protect atomicity of related information"""
+"""Module containing immutable data structures to protect atomicity of related information
+
+They are used to define specific scopes within :class:`.BaseNode`
+"""
 from __future__ import annotations  # Python version 3.7+
 
 import cv2
@@ -19,6 +22,7 @@ from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoTrapezoid
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
+
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -267,20 +271,45 @@ class ImagePair:
     qry: ImageData
     ref: ContextualMapData
 
+
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class AsyncQuery:
-    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+class _AsyncQuery:
+    """Abstract base class of atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along
+    with its input data
 
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
-    easily reunited again in the callback function. The :meth:`python_px4_ros2_map_nav.pose_estimators.matcher.PoseEstimator.worker`
-    interface expects an image_pair and an input_data context as arguments (along with a guess which is not stored
-    since it is no longer needed after the _match estimation).
+    easily reunited again in the callback function.
+
+    Note: Do not try to instantiate this directly
     """
     result: AsyncResult
-    #query: Union[ImagePair, ]  # TODO: what is used for WMS?
-    image_pair: ImagePair  # TODO: what is used for WMS?
+    # TODO: derive from ABC and raise error on instantiation
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class AsyncPoseQuery(_AsyncQuery):
+    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+
+    The :meth:`.PoseEstimator.worker` interface expects an image_pair (query, reference images and camera intrinsics matrix)
+    and an input_data context as arguments (along with a guess which is not stored since it is no longer needed after
+    the _match estimation).
+    """
+    #result: AsyncResult
+    image_pair: ImagePair  # TODO: convert to query, reference and k instead?
     input_data: InputData
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class AsyncWMSQuery(_AsyncQuery):
+    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+
+    The :meth:`.WMSClient.worker` expects the :class:`.GeoBBox` bounds as input so they are needed here
+    """
+    #result: AsyncResult
+    geobbox: GeoBBox  # TODO: convert to bbox (bounds), layer_str, srs_str etc. instead?
 
 
 # noinspection PyClassHasNoInit

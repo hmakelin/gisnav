@@ -12,7 +12,7 @@ import yaml
 import copy
 
 from abc import ABC, abstractmethod
-from multiprocessing.pool import Pool, AsyncResult
+from multiprocessing.pool import Pool
 from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
@@ -25,9 +25,10 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
     GimbalDeviceSetAttitude, VehicleGpsPosition
 from sensor_msgs.msg import CameraInfo, Image
 
-
+# TODO: for data at least may be cleaner to just import the module and use it as prefix?
+#  almost everything is imported from data (except for abstract base classes)
 from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, \
-    InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
+    InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
@@ -60,7 +61,7 @@ class BaseNode(Node, ABC):
         self._package_share_dir = package_share_dir
 
         # WMS client and requests in a separate process
-        self._wms_results = None  # Must check for None when using this
+        self._wms_query = None  # Must check for None when using this
         url = self.get_parameter('wms.url').get_parameter_value().string_value
         version = self.get_parameter('wms.version').get_parameter_value().string_value
         timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
@@ -202,13 +203,13 @@ class BaseNode(Node, ABC):
         self.__wms_pool = value
 
     @property
-    def _wms_results(self) -> Optional[AsyncResult]:
+    def _wms_query(self) -> Optional[AsyncWMSQuery]:
         """Asynchronous results from a WMS client request."""
         return self.__wms_results
 
-    @_wms_results.setter
-    def _wms_results(self, value: Optional[AsyncResult]) -> None:
-        assert_type(value, get_args(Optional[AsyncResult]))
+    @_wms_query.setter
+    def _wms_query(self, value: Optional[AsyncWMSQuery]) -> None:
+        assert_type(value, get_args(Optional[AsyncWMSQuery]))
         self.__wms_results = value
 
     @property
@@ -252,13 +253,13 @@ class BaseNode(Node, ABC):
         self.__map_input_data = value
 
     @property
-    def _pose_estimation_query(self) -> Optional[AsyncQuery]:
+    def _pose_estimation_query(self) -> Optional[AsyncPoseQuery]:
         """Asynchronous results and input from a pose estimation thread or process."""
         return self.__pose_estimation_query
 
     @_pose_estimation_query.setter
-    def _pose_estimation_query(self, value: Optional[AsyncQuery]) -> None:
-        assert_type(value, get_args(Optional[AsyncQuery]))
+    def _pose_estimation_query(self, value: Optional[AsyncPoseQuery]) -> None:
+        assert_type(value, get_args(Optional[AsyncPoseQuery]))
         self.__pose_estimation_query = value
 
     @property
@@ -749,11 +750,17 @@ class BaseNode(Node, ABC):
         assert_type(srs_str, str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layer: {layer_str}, srs: {srs_str}.')
-            if self._wms_results is not None:
-                assert self._wms_results.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
-            self._wms_results = self._wms_pool.apply_async(
-                WMSClient.worker, (bbox, self._map_size_with_padding, layer_str, srs_str),
-                callback=self.wms_pool_worker_callback, error_callback=self.wms_pool_worker_error_callback)
+            if self._wms_query is not None:
+                assert self._wms_query.result.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
+            self._wms_query = AsyncWMSQuery(
+                result=self._wms_pool.apply_async(
+                    WMSClient.worker,
+                    (bbox.bounds, self._map_size_with_padding, layer_str, srs_str),
+                    callback=self.wms_pool_worker_callback,
+                    error_callback=self.wms_pool_worker_error_callback
+                ),
+                geobbox=bbox
+            )
         except Exception as e:
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
@@ -890,7 +897,7 @@ class BaseNode(Node, ABC):
 
         :return: True if there are pending results.
         """
-        return not self._wms_results.ready() if self._wms_results is not None else False
+        return not self._wms_query.result.ready() if self._wms_query is not None else False
 
     def _previous_map_too_close(self, bbox: GeoBBox) -> bool:
         """Checks if previous map is too close to new requested one.
@@ -970,11 +977,14 @@ class BaseNode(Node, ABC):
         :return:
         """
         #assert_len(result, 1)
-        result = result #[0]
-        assert_type(result, MapData)
-        assert result.image.arr.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
-        self.get_logger().info(f'Map received for bbox: {result.bbox}.')
-        self._map_data = result
+        map_ = result #[0]
+        # TODO: handle None
+        assert_type(map_, np.ndarray)  # TODO: move this to assertions, do not hard code 4*float here and in WMSClient
+        # TODO: create MapData again by retrieving self._wms_query
+        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
+        map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_))
+        self.get_logger().info(f'Map received for bbox: {map_data.bbox}.')
+        self._map_data = map_data
 
     def wms_pool_worker_error_callback(self, e: BaseException) -> None:
         """Handles errors from WMS pool worker.
@@ -1339,7 +1349,7 @@ class BaseNode(Node, ABC):
         """
         assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
         pose_guess = None if self._pose_guess is None else (self._pose_guess.r, self._pose_guess.t)  # TODO: to_tuple() for data.Pose?
-        self._pose_estimation_query = AsyncQuery(
+        self._pose_estimation_query = AsyncPoseQuery(
             result=self._pose_estimator_pool.apply_async(
                 self._pose_estimator.worker,
                 (image_pair.qry.image.arr, image_pair.ref.image.arr, image_pair.qry.camera_data.k, pose_guess),

@@ -6,8 +6,8 @@ from typing import Optional, Union, Tuple, List
 
 from owslib.wms import WebMapService
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
-from python_px4_ros2_map_nav.data import MapData, Dim, Img
-from python_px4_ros2_map_nav.geo import GeoBBox
+from python_px4_ros2_map_nav.nodes.data import MapData, Dim, Img
+from python_px4_ros2_map_nav.nodes.geo import GeoBBox
 
 
 class WMSClient:

@@ -9,8 +9,8 @@ from px4_msgs.msg import VehicleGpsPosition
 
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.base_node import BaseNode
-from python_px4_ros2_map_nav.data import ImageData, OutputData, Position
-from python_px4_ros2_map_nav.geo import GeoTrapezoid, GeoPoint
+from python_px4_ros2_map_nav.nodes.data import ImageData, OutputData, Position
+from python_px4_ros2_map_nav.nodes.geo import GeoTrapezoid, GeoPoint
 
 
 class MockGPSNode(BaseNode):

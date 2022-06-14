@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
-from python_px4_ros2_map_nav.data import Position
+from python_px4_ros2_map_nav.nodes.data import Position
 
 
 class Filter(ABC):

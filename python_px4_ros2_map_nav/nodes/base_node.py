@@ -26,9 +26,9 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
 from sensor_msgs.msg import CameraInfo, Image
 
 
-from python_px4_ros2_map_nav.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, \
+from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, \
     InputData, OutputData, ImagePair, AsyncQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
-from python_px4_ros2_map_nav.geo import GeoPoint, GeoBBox, GeoTrapezoid
+from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
 from python_px4_ros2_map_nav.wms import WMSClient

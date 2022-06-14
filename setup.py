@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import setup
 
-from python_px4_ros2_map_nav.data import PackageData
+from python_px4_ros2_map_nav.nodes.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('package.xml'))
 
 # Read requirements file

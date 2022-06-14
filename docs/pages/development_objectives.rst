@@ -56,3 +56,4 @@ Taking the `Constraints`_ into account, development focus could for example be i
 * Using elevation or other data from the underlying GIS system to complement ortho-images to improve position and attitude estimates especially when ground plane is not "flat"
 * Making adoption easier with pre-made configurations for popular hardware platforms
 * SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse the flight logs and compare against some pre-set thresholds to determine if the software passes the test.
+* Making it possible to re-initialize the dynamically loaded classes at runtime to make it easy to swap in specialized neural nets or pose estimators for different terrain

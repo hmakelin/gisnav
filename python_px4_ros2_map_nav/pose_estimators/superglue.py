@@ -8,7 +8,6 @@ import numpy as np
 from typing import Optional, Tuple
 from enum import Enum
 
-from python_px4_ros2_map_nav.data import ImagePair
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
 
@@ -41,22 +40,22 @@ class SuperGlueEstimator(KeypointPoseEstimator):
             SuperGlueEstimator.TorchDevice.CPU.value
         self._matching = Matching(params).eval().to(self._device)
 
-    def _find_matching_keypoints(self, image_pair: ImagePair, conf_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) \
-            -> Optional[KeypointPoseEstimator.KeypointMatches]:
-        """Finds matching keypoints between provided image and map
+    def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \
+            -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """Returns matching keypoints between provided query and reference image
 
-        :param image_pair: The image pair to match
-        :param conf_threshold: Confidence threshold for filtering out bad matches
-        :return: Matched keypoints, or None if none could be found
+        :param query: The first (query) image for pose estimation
+        :param reference: The second (reference) image for pose estimation
+        :return: Tuple of matched keypoint arrays for the images, or None if none could be found
         """
-        img_grayscale = cv2.cvtColor(image_pair.qry.image.arr, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(image_pair.ref.image.arr, cv2.COLOR_BGR2GRAY)
-        img_tensor = frame2tensor(img_grayscale, self._device)
-        map_tensor = frame2tensor(map_grayscale, self._device)
+        qry_grayscale = cv2.cvtColor(query, cv2.COLOR_BGR2GRAY)
+        ref_grayscale = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+        qry_tensor = frame2tensor(qry_grayscale, self._device)
+        ref_tensor = frame2tensor(ref_grayscale, self._device)
 
-        pred = self._matching({'image0': img_tensor, 'image1': map_tensor})
+        pred = self._matching({'image0': qry_tensor, 'image1': ref_tensor})
         pred = {k: v[0].cpu().detach().numpy() for k, v in pred.items()}
-        kp_img, kp_map = pred['keypoints0'], pred['keypoints1']
+        kp_qry, kp_ref = pred['keypoints0'], pred['keypoints1']
         matches, conf = pred['matches0'], pred['matching_scores0']
 
         valid = np.logical_and(matches > -1, conf >= conf_threshold)
@@ -64,6 +63,6 @@ class SuperGlueEstimator(KeypointPoseEstimator):
             return None
         else:
             # Valid matched keypoints ('mkp') that pass confidence threshold
-            mkp_img = kp_img[valid]
-            mkp_map = kp_map[matches[valid]]
-            return KeypointPoseEstimator.KeypointMatches(query_keypoints=mkp_img, reference_keypoints=mkp_map)
+            mkp_qry = kp_qry[valid]
+            mkp_ref = kp_ref[matches[valid]]
+            return mkp_qry, mkp_ref

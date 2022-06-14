@@ -7,7 +7,6 @@ from typing import Tuple, Optional
 from dataclasses import dataclass, field
 
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
-from python_px4_ros2_map_nav.data import ImagePair, Pose
 from python_px4_ros2_map_nav.assertions import assert_type, assert_len
 
 
@@ -24,25 +23,32 @@ class KeypointPoseEstimator(PoseEstimator):
         self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or _HOMOGRAPHY_MINIMUM_MATCHES)
 
     @abstractmethod
-    def _find_matching_keypoints(self, image_pair: ImagePair) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Returns matching keypoints between provided image pair
+    def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \
+            -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """Returns matching keypoints between provided query and reference image
 
         Note that this method is called by :meth:`.estimate_pose` and should not be used outside the implementing
         class.
 
-        :param image_pair: The image pair to find matching keypoints for
+        :param query: The first (query) image for pose estimation
+        :param reference: The second (reference) image for pose estimation
         :return: Tuple of matched keypoint arrays for the images, or None if none could be found
         """
         pass
 
-    def estimate_pose(self, image_pair: ImagePair, guess: Optional[Pose]) -> Optional[Pose]:
-        """Estimates pose from keypoints matched by :meth:`.find_matching_keypoints`
+    def estimate_pose(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
+                      guess: Optional[Tuple[np.ndarray, np.ndarray]]) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """Returns pose between given query and reference images, or None if no pose could not be estimated
 
-        :param image_pair: Image pair to estimate pose
-        :param guess: Optional initial guess for solution
-        :return: Pose estimate, or None if no estimate could be obtained
+        Uses :class:`._find_matching_keypoints` to first estimate matching keypoints before estimating pose.
+
+        :param query: The first (query) image for pose estimation
+        :param reference: The second (reference) image for pose estimation
+        :param k: Camera intrinsics matrix (3, 3)
+        :param guess: Optional initial guess for camera pose
+        :return: Pose tuple consisting of a rotation (3, 3) and translation (3, 1) np.ndarrays
         """
-        matched_keypoints = self._find_matching_keypoints(image_pair)
+        matched_keypoints = self._find_matching_keypoints(query, reference)
         if matched_keypoints is None or len(matched_keypoints[0]) < self._min_matches:
             return None  # Not enough matching keypoints found
 
@@ -51,12 +57,11 @@ class KeypointPoseEstimator(PoseEstimator):
         mkp2_3d = np.hstack((mkp2, padding))  # Set world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))
         use_guess = guess is not None
-        r, t = (guess.r, guess.t) if use_guess else (None, None)
-        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, image_pair.qry.camera_data.k, dist_coeffs, r, t,
-                                         useExtrinsicGuess=use_guess, iterationsCount=10)
+        r, t = guess if use_guess else (None, None)
+        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
+                                         iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
 
-        try:
-            return Pose(r, t)
-        except Pose.PoseValueError as _:
-            return None  # The estimate is invalid
+        # TODO: check validity here? Parent class and data.Pose does it too
+
+        return r, t

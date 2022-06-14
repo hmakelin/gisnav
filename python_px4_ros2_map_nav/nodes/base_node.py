@@ -1003,6 +1003,12 @@ class BaseNode(Node, ABC):
         """
         pose = result  #[0]
         if pose is not None:
+            try:
+                pose = Pose(*pose)  # May throw error?
+            except Pose.PoseValueError as _:
+                self.get_logger().warn(f'Estimated pose was not valid, skipping this one.')
+                return None
+
             self._pose_guess = pose
         else:
             self.get_logger().warn(f'Could not compute _match, returning None.')
@@ -1332,10 +1338,11 @@ class BaseNode(Node, ABC):
         :return:
         """
         assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
+        pose_guess = None if self._pose_guess is None else (self._pose_guess.r, self._pose_guess.t)  # TODO: to_tuple() for data.Pose?
         self._pose_estimation_query = AsyncQuery(
             result=self._pose_estimator_pool.apply_async(
                 self._pose_estimator.worker,
-                (image_pair, self._pose_guess),  # TODO: Can be NOne, ok?
+                (image_pair.qry.image.arr, image_pair.ref.image.arr, image_pair.qry.camera_data.k, pose_guess),
                 callback=self._pose_estimation_worker_callback,
                 error_callback=self._pose_estimation_worker_error_callback
             ),

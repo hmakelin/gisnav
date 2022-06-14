@@ -7,7 +7,6 @@ import numpy as np
 
 from typing import Optional, Tuple
 from enum import Enum
-from python_px4_ros2_map_nav.data import ImagePair
 from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
 from LoFTR.loftr import LoFTR, default_cfg
@@ -46,29 +45,31 @@ class LoFTREstimator(KeypointPoseEstimator):
         self._model.load_state_dict(torch.load(weights_path)['state_dict'])
         self._model = self._model.eval().cuda()
 
-    def _find_matching_keypoints(self, image_pair: ImagePair) -> Optional[KeypointPoseEstimator.KeypointMatches]:
-        """Uses LoFTR to find matching keypoints between provided image pair
+    def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \
+            -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """Returns matching keypoints between provided query and reference image
 
-        :param image_pair: The image pair to match
-        :return: Matched keypoints, or None if none could be found
+        :param query: The first (query) image for pose estimation
+        :param reference: The second (reference) image for pose estimation
+        :return: Tuple of matched keypoint arrays for the images, or None if none could be found
         """
-        img_grayscale = cv2.cvtColor(image_pair.qry.image.arr, cv2.COLOR_BGR2GRAY)
-        map_grayscale = cv2.cvtColor(image_pair.ref.image.arr, cv2.COLOR_BGR2GRAY)
-        img_tensor = torch.from_numpy(img_grayscale)[None][None].cuda() / 255.
-        map_tensor = torch.from_numpy(map_grayscale)[None][None].cuda() / 255.
+        qry_grayscale = cv2.cvtColor(query, cv2.COLOR_BGR2GRAY)
+        ref_grayscale = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+        qry_tensor = torch.from_numpy(qry_grayscale)[None][None].cuda() / 255.
+        ref_tensor = torch.from_numpy(ref_grayscale)[None][None].cuda() / 255.
 
-        batch = {'image0': img_tensor, 'image1': map_tensor}
+        batch = {'image0': qry_tensor, 'image1': ref_tensor}
 
         with torch.no_grad():
             self._model(batch)
-            mkp_img = batch['mkpts0_f'].cpu().numpy()
-            mkp_map = batch['mkpts1_f'].cpu().numpy()
+            mkp_qry = batch['mkpts0_f'].cpu().numpy()
+            mkp_ref = batch['mkpts1_f'].cpu().numpy()
             conf = batch['mconf'].cpu().numpy()
 
         valid = conf > self.CONFIDENCE_THRESHOLD
         if len(valid) == 0:
             return None
         else:
-            mkp_img = mkp_img[valid, :]
-            mkp_map = mkp_map[valid, :]
-            return KeypointPoseEstimator.KeypointMatches(query_keypoints=mkp_img, reference_keypoints=mkp_map)
+            mkp_qry = mkp_qry[valid, :]
+            mkp_ref = mkp_ref[valid, :]
+            return mkp_qry, mkp_ref

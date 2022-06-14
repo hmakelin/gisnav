@@ -23,28 +23,15 @@ class KeypointPoseEstimator(PoseEstimator):
     def __init__(self, min_matches: int):
         self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or _HOMOGRAPHY_MINIMUM_MATCHES)
 
-    # noinspection PyClassHasNoInit
-    @dataclass(frozen=True)
-    class KeypointMatches:
-        """Holds matching keypoints for :class:`.ImagePair`"""
-        query_keypoints: np.ndarray
-        reference_keypoints: np.ndarray
-        count: int = field(init=False)
-
-        def __post_init__(self):
-            """Post-initialization validity checks"""
-            assert_len(self.query_keypoints, len(self.reference_keypoints))
-            object.__setattr__(self, 'count', len(self.reference_keypoints))
-
     @abstractmethod
-    def _find_matching_keypoints(self, image_pair: ImagePair) -> Optional[KeypointMatches]:
+    def _find_matching_keypoints(self, image_pair: ImagePair) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns matching keypoints between provided image pair
 
         Note that this method is called by :meth:`.estimate_pose` and should not be used outside the implementing
         class.
 
         :param image_pair: The image pair to find matching keypoints for
-        :return: Matched keypoints, or None if none could be found
+        :return: Tuple of matched keypoint arrays for the images, or None if none could be found
         """
         pass
 
@@ -56,10 +43,10 @@ class KeypointPoseEstimator(PoseEstimator):
         :return: Pose estimate, or None if no estimate could be obtained
         """
         matched_keypoints = self._find_matching_keypoints(image_pair)
-        if matched_keypoints is None or matched_keypoints.count < self._min_matches:
+        if matched_keypoints is None or len(matched_keypoints[0]) < self._min_matches:
             return None  # Not enough matching keypoints found
 
-        mkp1, mkp2 = matched_keypoints.query_keypoints, matched_keypoints.reference_keypoints
+        mkp1, mkp2 = matched_keypoints
         padding = np.array([[0]] * len(mkp1))
         mkp2_3d = np.hstack((mkp2, padding))  # Set world z-coordinates to zero
         dist_coeffs = np.zeros((4, 1))

@@ -30,6 +30,22 @@ mock_gps_node module
    :undoc-members:
    :show-inheritance:
 
+data module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.nodes.data
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+geo module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.nodes.geo
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pose_estimators package
 --------------------------------------------
 pose_estimator module
@@ -64,33 +80,19 @@ superglue module
    :undoc-members:
    :show-inheritance:
 
+filters package
+---------------------------------------
+filter module
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. automodule:: python_px4_ros2_map_nav.filters.filter
+   :autosummary:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 assertions module
 ---------------------------------------
 .. automodule:: python_px4_ros2_map_nav.assertions
-   :autosummary:
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-data module
----------------------------------------
-.. automodule:: python_px4_ros2_map_nav.data
-   :autosummary:
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-geo module
----------------------------------------
-.. automodule:: python_px4_ros2_map_nav.geo
-   :autosummary:
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-filter module
----------------------------------------
-.. automodule:: python_px4_ros2_map_nav.filter
    :autosummary:
    :members:
    :undoc-members:

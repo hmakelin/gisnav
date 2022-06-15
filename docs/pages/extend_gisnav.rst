@@ -39,7 +39,7 @@ The :class:`.BaseNode` subscribes to the following telemetry and other input:
 
 You may add more subscribe and publish topics if you decide to implement your own Node. You will need to edit the
 ``uorb_rtps_message_ids.yaml`` file as described in the
-`microRTPS section of the PX4 User Guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html>`_ to ensure your
+`microRTPS section of the PX4 User Guide <https://docs.px4.io/master/en/middleware/micrortps.html>`_ to ensure your
 messages are passed between PX4 and your ROS node.
 
 The dockerized environment used in the ``README.md`` quick start
@@ -94,8 +94,8 @@ cases replace GNSS navigation.
 
 In order for the :class:`.MockGPSNode` to work, you would need to configure your ``typhoon_h480`` build target to use
 the new GPS. This can be either configured before flight in the file ``TODO``, or during flight by setting the
-`SENS_GPS_PRIME <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ parameter with
-the `param <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ command::
+`SENS_GPS_PRIME <https://docs.px4.io/master/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ parameter with
+the `param <https://docs.px4.io/master/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ command::
 
     param set SENS_GPS_PRIME 1
 
@@ -109,7 +109,7 @@ example in ``README.md``:
     * `EKF2_GPS_V_NOISE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_V_NOISE>`_
 
 You will also need to make PX4 receive the :class:`px4_msgs.VehicleGpsMessage` messages over the `PX4-ROS 2 Bridge`_,
-as described in the `PX4 User Guide <https://docs.px4.io/v1.12/en/>` for the version of PX4 you are using.
+as described in the `PX4 User Guide <https://docs.px4.io/master/en/>` for the version of PX4 you are using.
 
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

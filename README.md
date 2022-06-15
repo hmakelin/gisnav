@@ -10,7 +10,7 @@ drone's nadir-facing camera to a map of the drone's *approximate* global positio
 
 # Quick Start
 ## Prerequisites
-You will need a [tile based](https://wiki.openstreetmap.org/wiki/Tiles) endpoint for high-resolution aerial or 
+You will need a [tile based](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) endpoint for high-resolution aerial or 
 satellite imagery with coverage over the demo area (San Carlos or KSQL airport in CA, USA) for the following example 
 to work.
 

@@ -9,6 +9,11 @@ drone's nadir-facing camera to a map of the drone's *approximate* global positio
 [GIS](https://en.wikipedia.org/wiki/Geographic_information_system) system.
 
 # Quick Start
+## Prerequisites
+You will need a `tile based <https://wiki.openstreetmap.org/wiki/Tiles>`_ endpoint for high-resolution aerial or 
+satellite imagery with coverage over the demo area (San Carlos or KSQL airport in CA, USA) for the following example 
+to work.
+
 ## 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.

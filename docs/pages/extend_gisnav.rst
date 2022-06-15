@@ -59,7 +59,9 @@ Initialization
 :class:`.filters.Filter`, and :class:`.wms_clients.WMSClient` modules. You might for example want to provide your own
 instance of :class:`.pose_estimator.PoseEstimator` and prevent initializing the default pose estimator when you
 create your node. In that case you prevent initializing the default pose estimator by setting the
-:param:`.init_pose_estimator` to ``False``::
+:param:`.init_pose_estimator` to ``False``.
+
+.. code-block:: python
 
     from python_px4_ros2_map_nav.nodes import BaseNode
 
@@ -114,7 +116,9 @@ as described in the `PX4 User Guide <https://docs.px4.io/master/en/>` for the ve
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing a :meth:`.publish`
-method::
+method:
+
+.. code-block:: python
 
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
     from python_px4_ros2_map_nav.data import OutputData
@@ -136,7 +140,9 @@ software via the appropriate PX4/ROS 2 bridge topic.
 
 Once you have implemented your node, you can spin it up in the main script of your ``colcon`` package, as described in
 the `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_
-(The :class:`.BaseNode` extends the ``rclpy.nodes.Node``)::
+(The :class:`.BaseNode` extends the ``rclpy.nodes.Node``):
+
+.. code-block:: python
 
     import rclpy
 
@@ -176,7 +182,9 @@ your own pose estimator. If your pose estimator is keypoint-based, you may want 
 implement the required static initializer and worker methods that are required to make them work with multithreading
 and multiprocessing.
 
-You can then either provide an instance of your class to your node directly::
+You can then either provide an instance of your class to your node directly:
+
+.. code-block:: python
 
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
 
@@ -188,7 +196,9 @@ You can then either provide an instance of your class to your node directly::
     my_node.set_pose_estimator(my_pose_estimator)
 
 If you want to setup your :class:`.PoseEstimator` in a separate process, you cannot pass an instance and must pass a
-reference to the class name with initargs instead::
+reference to the class name with initargs instead:
+
+.. code-block:: python
 
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
 
@@ -222,7 +232,9 @@ arguments::
 
 Custom Pose Estimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-You can use the below snippets to get started with your own :class:`.PoseEstimator`::
+You can use the below snippets to get started with your own :class:`.PoseEstimator`:
+
+.. code-block:: python
 
     from typing import Optional
     from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
@@ -242,7 +254,9 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 
 Custom Keypoint-Based Pose Estimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you want to create a :class:`.KeypointPoseEstimator`, you can also start with the below snippet::
+If you want to create a :class:`.KeypointPoseEstimator`, you can also start with the below snippet:
+
+.. code-block:: python
 
     from typing import Optional
     from python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator

@@ -4,7 +4,6 @@ from typing import Optional, Tuple
 from pykalman import KalmanFilter
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_shape
-from python_px4_ros2_map_nav.filters.filter import Filter
 
 
 # TODO: how to handle uneven timesteps?

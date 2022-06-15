@@ -33,7 +33,7 @@ from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoBBox, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
 from python_px4_ros2_map_nav.wms import WMSClient
-from python_px4_ros2_map_nav.filters.simple_filter import SimpleFilter
+from python_px4_ros2_map_nav.kalman import SimpleFilter
 
 
 class BaseNode(Node, ABC):

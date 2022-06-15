@@ -7,7 +7,7 @@ from python_px4_ros2_map_nav.assertions import assert_type, assert_shape
 
 
 # TODO: how to handle uneven timesteps?
-class SimpleFilter(Filter):
+class SimpleFilter:
     """Simple Kalman filter implementation
 
     3-dimensional location model with velocity taken into account with total of 6 (3x2) state variables

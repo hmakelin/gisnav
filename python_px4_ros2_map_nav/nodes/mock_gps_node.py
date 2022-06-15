@@ -25,8 +25,23 @@ class MockGPSNode(BaseNode):
                                                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
                                                depth=1)
 
+    #region ROS Parameter Defaults
+    MISC_MOCK_GPS_SELECTION = 1
+    """GPS selection to include in mock GPS messages.
+
+    Applies if :py:attr:`~MISC_MOCK_GPS` is enabled."""
+
+    MISC_EXPORT_POSITION = 'position.json'
+    """Filename for exporting GeoJSON containing estimated field of view and position"""
+
+    MISC_EXPORT_PROJECTION = 'projection.json'
+    """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center"""
+    #endregion
+
     def __init__(self, name: str, package_share_dir: str):
+        """Class initializer"""
         super().__init__(name, package_share_dir)
+        self._declare_ros_params()
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
@@ -54,6 +69,21 @@ class MockGPSNode(BaseNode):
         export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
         if export_projection is not None:
             self._export_position(c, fov, export_projection)
+
+    def _declare_ros_params(self) -> None:
+        """Declares ROS parameters
+
+        :return:
+        """
+        try:
+            namespace = 'misc'
+            self.declare_parameters(namespace, [
+                ('mock_gps_selection', self.MISC_MOCK_GPS_SELECTION),
+                ('export_position', self.MISC_EXPORT_POSITION),
+                ('export_projection', self.MISC_EXPORT_PROJECTION),
+            ])
+        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
+            self.get_logger().warn(str(e))
 
     def _create_publisher(self, topic_name: str, class_: object) -> rclpy.publisher.Publisher:
         """Sets up an rclpy publisher.
@@ -100,6 +130,7 @@ class MockGPSNode(BaseNode):
         msg.selected = selection
         self._vehicle_gps_position_publisher.publish(msg)
 
+    # TODO: get rid of geo.py and data.py stuff here, should use common language
     def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file.
 

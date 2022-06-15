@@ -57,5 +57,5 @@ Taking the `Constraints`_ into account, development focus could for example be i
 * Making adoption easier with pre-made configurations for popular hardware platforms
 * SITL testing workbench development - have a way to fly premade flight plans in SITL simulation and automatically parse the flight logs and compare against some pre-set thresholds to determine if the software passes the test.
 * Making it possible to re-initialize the dynamically loaded classes (:class:`.PoseEstimator`, :class:`.Filter`, :class:`.WMSClient`) at runtime to make it easy to swap in specialized neural nets or pose estimators for different terrain
-* Moving to a more distributed 'ROS native' system where current modules that are managed by the
+* Moving to a more distributed 'ROS native' system in the long term where current modules that are managed by the
 :class:`.BaseNode` are spun as independent ROS nodes if possible.

@@ -53,12 +53,24 @@ The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and
 to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`. An
 example of the contents is provided below::
 
-    print(output_data)
-    >>> TODO
+Initialization
+***************************************************
+:class:`.BaseNode` supports lazy initialization of the :class:`.pose_estimators.PoseEstimator`,
+:class:`.filters.Filter`, and :class:`.wms_clients.WMSClient` modules. You might for example want to provide your own
+instance of :class:`.pose_estimator.PoseEstimator` and prevent initializing the default pose estimator when you
+create your node. In that case you prevent initializing the default pose estimator by setting the
+:param:`.init_pose_esitmator` to ``False``::
 
-:class:`.BaseNode` internally passes data around in dataclasses defined in :py:mod:`.nodes.data` and
-:py:mod:`.nodes.geo`, but transforms them to familiar numpy arrays before passing handing them over through the public
-API.
+    from python_px4_ros2_map_nav.nodes import BaseNode
+
+    class MyNode(BaseNode):
+        ...
+
+    my_node = MyNode(init_pose_estimator=False)
+    my_node.set_pose_estimator(pose_estimator)
+
+The node will run even without a pose estimator, and will simply keep logging warning messages that a pose estimator is
+missing if you choose to initialize it without one, and then to never provide one.
 
 .. _The MockGPSNode class:
 
@@ -163,17 +175,23 @@ You can then either provide an instance of your class to your node directly::
     my_pose_estimator = MyPoseEstimator()
     my_node.set_pose_estimator(my_pose_estimator)
 
-Or you pass a reference to the class name with initargs::
+If you want to setup your :class:`.PoseEstimator` in a separate process, you cannot pass an instance and must pass a
+reference to the class name with initargs instead::
 
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
 
     class MyNode(BaseNode):
         ...
 
-    my_node = MyNode()
-    my_pose_estimator = MyPoseEstimator()
-    my_node.set_pose_estimator(my_pose_estimator)
+    class MyPoseEstimator(PoseEstimator):
+        ...
 
+    my_node = MyNode()
+    my_node.set_pose_estimator(MyPoseEstimator, initargs=('hello world', 1, 2, 3), use_dedicated_process=True)
+
+If you try to use the ``use_dedicated_process=True`` flag while providing an instance of your class, :class:`.BaseNode`
+will simply log a warning and use multithreading in the same process with your :class:`.PoseEstimator` instead. This is
+to prevent having to pickle and send large and complex objects over to the initializer of the secondary process.
 
 .. _Configuration:
 

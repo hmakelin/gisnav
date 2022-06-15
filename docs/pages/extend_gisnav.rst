@@ -1,22 +1,26 @@
 Extend GISNav
 ===================================================
-This section provides detailed information and code samples that you can use to try out or integrate GISNav with
-your own project by extending the it with your own dynamically loaded modules.
+This section provides instruction and code samples that you can use to integrate GISNav with your own project by
+extending any one of the provided base classes in the :py:mod:`.nodes`, :py:mod:`.pose_estimators`, :py:mod:`.filters`,
+and :py:mod:`.wms_clients` packages.
 
-First, you might be interested in implementing your own `Custom Node`_, or if you are happy with the
-provided example nodes, you may also look into making your own `Custom Pose Estimator`_.
+You should start by implementing your own `Custom Node`_, and only move on to the other modules after you have a
+running node and your project needs more specific configuration.
 
 ROS Nodes
 ---------------------------------------------------
-The ``ROS 2`` nodes can be found in the :py:mod:`python_px4_ros2_map_nav.nodes` package. Unless you want to use example
-:class:`.MockGPSNode`, you will have to implement your own `Custom Node`_.
+The ``ROS 2`` nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package. The package includes the
+:class:`.BaseNode` abstract base class which must be extended by all implementing nodes. You may also want to look at
+the source code of the example :class:`.MockGPSNode` when implenting your own `Custom Node`_.
 
-.. _The BaseNode class:
+.. _The MockGPSNode class:
 
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces a vehicle position estimate from
 visual inputs without the need for a GNSS (GPS) signal.
+
+
 
 .. _The MockGPSNode class:
 
@@ -47,15 +51,14 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
     from python_px4_ros2_map_nav.data import OutputData
 
-    class MyCustomNode(BaseNode):
+    class MyNode(BaseNode):
 
         # You can override the __init__ method and do whatever you need here
         ...
 
-        def publish(output_data):
+        def publish(state_means, state_variance):
             """Prints the output into console"""
-            print(f'Here is the output: {output_data}')
-
+            print(f'Here is the position: {state}')
 
 :class:`.OutputData` for what fields are contained in the output data container.
 
@@ -63,12 +66,33 @@ You can see a longer example in source code for the :class:`.MockGPSNode`
 class, which creates a :class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) message out of the output and publishes
 it to the flight control software via the appropriate PX4/ROS 2 bridge topic.
 
+The :class:`.BaseNode` extends the ``rclpy.nodes.Node``, so now you can spin it up in the main script of your ``colcon``
+package, as described in the
+`ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_::
+
+    import rclpy
+
+    # Define or import MyNode here
+
+    def main(args=None):
+        rclpy.init(args=args)
+        my_node = MyNode()
+        rclpy.spin(my_node)
+        my_node.destroy_node()
+        rclpy.shutdown()
+
+    if __name__ == '__main__':
+        main()
+
 
 The Publish Method
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
-to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`.
+to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`. An
+example of the contents is provided below::
 
+    print(output_data)
+    >>> TODO
 
 PX4-ROS 2 Bridge Topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -111,6 +135,29 @@ your own pose estimator. If your pose estimator is keypoint-based, you may want 
 :class:`.KeypointPoseEstimator` and implement the :meth:`.find_matching_keypoints` method instead. The base classes
 implement the required static initializer and worker methods that are required to make them work with multithreading
 and multiprocessing.
+
+You can then either provide an instance of your class to your node directly::
+
+    from python_px4_ros2_map_nav.nodes.base_node import BaseNode
+
+    class MyNode(BaseNode):
+        ...
+
+    my_node = MyNode()
+    my_pose_estimator = MyPoseEstimator()
+    my_node.set_pose_estimator(my_pose_estimator)
+
+Or you pass a reference to the class name with initargs::
+
+    from python_px4_ros2_map_nav.nodes.base_node import BaseNode
+
+    class MyNode(BaseNode):
+        ...
+
+    my_node = MyNode()
+    my_pose_estimator = MyPoseEstimator()
+    my_node.set_pose_estimator(my_pose_estimator)
+
 
 .. _Configuration:
 

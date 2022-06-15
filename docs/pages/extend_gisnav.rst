@@ -78,6 +78,12 @@ create your node. In that case you prevent initializing the default pose estimat
 The node will run even without a pose estimator, and will simply keep logging warning messages that a pose estimator is
 missing if you choose to initialize it without one, and then to never provide one.
 
+When using the :meth:`.set_filter`, :meth:`.set_pose_estimator`, and :meth:`.set_wms_client` methods, setting
+the ``use_dedicated_process=True`` flag is recommended when you expect your module to do CPU or GPU heavy processing in
+the background. This is obvious for :class:`.PoseEstimator` s, but may also be useful for example if your potential
+:class:`.WMSClient` has an embedded server and is doing heavy `GDAL <https://gdal.org/>`_ processing in the background
+to generate the requested map rasters.
+
 .. _The MockGPSNode class:
 
 The MockGPSNode class

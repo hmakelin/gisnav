@@ -4,7 +4,8 @@ GISNav Documentation
 .. figure:: _static/img/logo.png
   :width: 400
 
-Welcome to GISNav's documentation! In the sidebar you will links to GISNav's developer and API documentation.
+Welcome to GISNav's documentation! In the sidebar you will find links to developer guides and API documentation, as
+well as information on the project's development goals.
 
 GISNav relies on ROS 2 and is assumed to be paired with PX4 Autopilot. You may also be interested in their
 documentation:

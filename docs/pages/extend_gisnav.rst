@@ -1,19 +1,19 @@
 Extend GISNav
 ===================================================
 This section provides instruction and code samples that you can use to integrate GISNav with your own project by
-extending any one of the provided base classes in the :py:mod:`.nodes`, :py:mod:`.pose_estimators`, :py:mod:`.filters`,
-and :py:mod:`.wms_clients` packages.
+extending the :class:`.BaseNode` class and possible even implementing your own :class:`PoseEstimator`.
 
-You should start by implementing your own `Custom Node`_, and only move on to the other modules after you have a
+You should start by implementing your own `Custom Node`_, and only move on to the other sections after you have a
 running node and your project needs more specific configuration.
 
 ROS Nodes
 ---------------------------------------------------
-The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package. The package includes the
-:class:`.BaseNode` abstract base class which must be extended by all implementing nodes. You may also want to look at
-the source code of the example :class:`.MockGPSNode` when implenting your own `Custom Node`_.
+The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
+The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
+The :class:`.MockGPSNode` when implementation is provided as an example to get you started implementing your own
+`Custom Node`_.
 
-.. _The MockGPSNode class:
+.. _The BaseNode class:
 
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -21,9 +21,9 @@ The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces
 visual inputs. It subscribes to a number of required topics over the `PX4-ROS 2 bridge
 <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ and maintains a connection to a WMS endpoint.
 
-ROS parameter server is used to manage configuration of the base node, and an example configuration is provided in
-``config/typhoon_h480__ksql_airport.yml``. If you make a `Custom Node`_, you will not need this file since
-:class:`.BaseNode` will use its own default values if no ROS parameters are not provided as a YAML file.
+ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
+configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
+values so it is not necessary pass this parameter file to your ROS node.
 
 .. _PX4-ROS 2 Bridge
 
@@ -42,56 +42,39 @@ You may add more subscribe and publish topics if you decide to implement your ow
 `microRTPS section of the PX4 User Guide <https://docs.px4.io/master/en/middleware/micrortps.html>`_ to ensure your
 messages are passed between PX4 and your ROS node.
 
-The dockerized environment used in the ``README.md`` quick start
-already handles this for you, so you will not need to configure the bridge if you are running the demo. However, you
-may want to susbcribe and publish to additional topics in your `Custom Node`_, in which case you will also need
-to configute the PX4-ROS 2 bridge.
+The dockerized environment used in the `Read Me`_ quick start has preconfigured these topics. However, you may want to
+subscribe and publish to additional topics in your `Custom Node`_, in which case you will also need to configure the
+PX4-ROS 2 bridge yourself.
 
 Publish Method
 ***************************************************
-The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
-to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`. An
-example of the contents is provided below::
-
-Initialization
-***************************************************
-:class:`.BaseNode` supports lazy initialization of the :class:`.pose_estimators.PoseEstimator`,
-:class:`.filters.Filter`, and :class:`.wms_clients.WMSClient` modules. You might for example want to provide your own
-instance of :class:`.pose_estimator.PoseEstimator` and prevent initializing the default pose estimator when you
-create your node. In that case you prevent initializing the default pose estimator by setting the
-:param:`.init_pose_estimator` to ``False``.
+The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method to which it passes the computed output
+data. The data provided to the method is defined in :class:`.OutputData`. An
+example of the contents is provided below:
 
 .. code-block:: python
 
-    from python_px4_ros2_map_nav.nodes import BaseNode
+    ...
 
-    class MyNode(BaseNode):
+    def publish(output_data):
+        print(f'{output_data}')
 
-        def __init__(self, name, share_dir, *args, **kwargs):
-            super().__init__(self, name, share_dir, *args, **kwargs)
+    # Output:
+    # > TODO
 
-            ...
-
-        ...
-
-    my_node = MyNode(init_pose_estimator=False)
-    my_node.set_pose_estimator(pose_estimator)
-
-The node will run even without a pose estimator, and will simply keep logging warning messages that a pose estimator is
-missing if you choose to initialize it without one, and then to never provide one.
-
-When using the :meth:`.set_filter`, :meth:`.set_pose_estimator`, and :meth:`.set_wms_client` methods, setting
-the ``use_dedicated_process=True`` flag is recommended when you expect your module to do CPU or GPU heavy processing in
-the background. This is obvious for :class:`.PoseEstimator` s, but may also be useful for example if your potential
-:class:`.WMSClient` has an embedded server and is doing heavy `GDAL <https://gdal.org/>`_ processing in the background
-to generate the requested map rasters.
+Dynamic Loading of Pose Estimator
+***************************************************
+:class:`.BaseNode` supports dynamic loading of the :class:`.pose_estimators.PoseEstimator`, so for example a
+specialized neural net or other model to replace the previous one could be swapped in mid-flight if needed. This would
+require setting the new :class:`.pose_estimators.PoseEstimator` initialization arguments via the ROS parameter server
+and using a ROS service (NOT IMPLEMENTED) to re-initialize the new pose estimator.
 
 .. _The MockGPSNode class:
 
 The MockGPSNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
-from the output. It is used in the `README.md` Quick Start demo as an example of how GISNav can complement and in some
+from the output. It is used in the `Read Me`_ Quick Start demo as an example of how GISNav can complement and in some
 cases replace GNSS navigation.
 
 In order for the :class:`.MockGPSNode` to work, you would need to configure your ``typhoon_h480`` build target to use
@@ -158,14 +141,21 @@ the `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Pu
     if __name__ == '__main__':
         main()
 
-WMS Client
----------------------------------------------------
-The :class:`.BaseNode` Map rasters from WMS endpoint, requested by embedded :class:`.WMSClient` instance
+.. _Map Udpate Behavior
 
-The :class:`.WMSClient` on the other hand is instantiated
-in a dedicated process. A :py:attr:`._wms_timer` periodically requests the :class:`.WMSClient` to fetch a new map based
-on criteria defined in :meth:`._should_update_map`. Generally a new map is requested if the field of view (FOV) of the
-vehicle's camera no longer significantly overlaps with the previously requested map.
+Map Update Behavior
+---------------------------------------------------
+The :class:`.BaseNode` continuously requests new map rasters from a WMS endpoint when the drone moves away from the
+area defined by previous maps. The requests are handled by the :class:`.WMSClient` class.
+
+The :class:`.WMSClient` is by default instantiated in a separate thread, but can also be run in a separate process
+since under the hood it uses the :class:`multiprocessing.pool.ThreadPool` multithreading API which is compatible with
+the actual multiprocessing :class:`multiprocessing.pool.Pool` API.
+
+A :py:attr:`._wms_timer` periodically requests the :class:`.WMSClient` to fetch a new map based
+on criteria defined in :meth:`._should_update_map` to keep unnecessary WMS requests to a minimum. Generally a new map
+is requested if the field of view (FOV) of the vehicle's camera no longer significantly overlaps with the previously
+requested map. The update behavior can be adjusted via the ROS parameter server.
 
 .. _Pose Estimators:
 
@@ -252,8 +242,8 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 
 .. _Custom Keypoint-Based Pose Estimator:
 
-Custom Keypoint-Based Pose Estimator
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Keypoint-Based Pose Estimator
+****************************************************
 If you want to create a :class:`.KeypointPoseEstimator`, you can also start with the below snippet:
 
 .. code-block:: python
@@ -277,21 +267,11 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
             )
             return matching_keypoints
 
-
 .. _Kalman Filter:
 
 Kalman Filter
 ---------------------------------------------------
-The SimpleFilter class
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TODO: Filter abstract base class or interface
-
 An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the choppiness of the raw output from
 the :class:`.PoseEstimator`, and to (2) estimate the standard deviation of the position estimate. The standard deviation
 estimates are used for example by the :class:`.MockGPSNode` class to generate a mock `px4_msgs.VehicleGpsPosition`
 message, which requires the ``eph`` and ``epv`` values (horizontal and vertical error in meters) to be set.
-
-
-Custom Kalman or Particle Filter
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TODO

@@ -59,11 +59,17 @@ Initialization
 :class:`.filters.Filter`, and :class:`.wms_clients.WMSClient` modules. You might for example want to provide your own
 instance of :class:`.pose_estimator.PoseEstimator` and prevent initializing the default pose estimator when you
 create your node. In that case you prevent initializing the default pose estimator by setting the
-:param:`.init_pose_esitmator` to ``False``::
+:param:`.init_pose_estimator` to ``False``::
 
     from python_px4_ros2_map_nav.nodes import BaseNode
 
     class MyNode(BaseNode):
+
+        def __init__(self, name, share_dir, *args, **kwargs):
+            super().__init__(self, name, share_dir, *args, **kwargs)
+
+            ...
+
         ...
 
     my_node = MyNode(init_pose_estimator=False)
@@ -77,8 +83,8 @@ missing if you choose to initialize it without one, and then to never provide on
 The MockGPSNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
-from the output. It is used in the demo as an example of how GISNav can complement and in some cases replace GNSS
-navigation.
+from the output. It is used in the `README.md` Quick Start demo as an example of how GISNav can complement and in some
+cases replace GNSS navigation.
 
 In order for the :class:`.MockGPSNode` to work, you would need to configure your ``typhoon_h480`` build target to use
 the new GPS. This can be either configured before flight in the file ``TODO``, or during flight by setting the

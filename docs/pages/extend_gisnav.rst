@@ -9,7 +9,7 @@ running node and your project needs more specific configuration.
 
 ROS Nodes
 ---------------------------------------------------
-The ``ROS 2`` nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package. The package includes the
+The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package. The package includes the
 :class:`.BaseNode` abstract base class which must be extended by all implementing nodes. You may also want to look at
 the source code of the example :class:`.MockGPSNode` when implenting your own `Custom Node`_.
 
@@ -17,10 +17,48 @@ the source code of the example :class:`.MockGPSNode` when implenting your own `C
 
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces a vehicle position estimate from
-visual inputs without the need for a GNSS (GPS) signal.
+The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces the vehicle position estimate from
+visual inputs. It subscribes to a number of required topics over the `PX4-ROS 2 bridge
+<https://docs.px4.io/master/en/ros/ros2_comm.html>`_ and maintains a connection to a WMS endpoint.
 
+ROS parameter server is used to manage configuration of the base node, and an example configuration is provided in
+``config/typhoon_h480__ksql_airport.yml``. If you make a `Custom Node`_, you will not need this file since
+:class:`.BaseNode` will use its own default values if no ROS parameters are not provided as a YAML file.
 
+.. _PX4-ROS 2 Bridge
+
+PX4-ROS 2 Bridge
+***************************************************
+The :class:`.BaseNode` subscribes to the following telemetry and other input:
+
+    #. :class:`px4_msgs.VehicleGlobalPosition` messages via 'VehicleGlobalPosition_PubSubTopic'
+    #. :class:`px4_msgs.VehicleLocalPosition` messages via 'VehicleLocalPosition_PubSubTopic'
+    #. :class:`px4_msgs.VehicleAttitude` messages via 'VehicleAttitude_PubSubTopic'
+    #. :class:`px4_msgs.Image` messages via 'image_raw'
+    #. :class:`px4_msgs.CameraInfo` messages via 'camera_info' *(not via PX4-ROS 2 bridge in demo)*
+
+You may add more subscribe and publish topics if you decide to implement your own Node. You will need to edit the
+``uorb_rtps_message_ids.yaml`` file as described in the
+`microRTPS section of the PX4 User Guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html>`_ to ensure your
+messages are passed between PX4 and your ROS node.
+
+The dockerized environment used in the ``README.md`` quick start
+already handles this for you, so you will not need to configure the bridge if you are running the demo. However, you
+may want to susbcribe and publish to additional topics in your `Custom Node`_, in which case you will also need
+to configute the PX4-ROS 2 bridge.
+
+Publish Method
+***************************************************
+The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
+to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`. An
+example of the contents is provided below::
+
+    print(output_data)
+    >>> TODO
+
+:class:`.BaseNode` internally passes data around in dataclasses defined in :py:mod:`.nodes.data` and
+:py:mod:`.nodes.geo`, but transforms them to familiar numpy arrays before passing handing them over through the public
+API.
 
 .. _The MockGPSNode class:
 
@@ -37,16 +75,22 @@ the `param <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.htm
 
     param set SENS_GPS_PRIME 1
 
-You may also want to try setting the following limits to be more tolerant::
+You may also want to try configuring the PX4 GPS consistency gates to initially be more tolerant for your PX4 build
+target, e.g. in the ``/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480`` file used by the
+example in ``README.md``:
 
-    TODO
+    * `EKF2_GPS_P_GATE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_P_GATE>`_
+    * `EKF2_GPS_P_NOISE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_P_NOISE>`_
+    * `EKF2_GPS_V_GATE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_V_GATE>`_
+    * `EKF2_GPS_V_NOISE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_V_NOISE>`_
 
-
-.. _Custom Node:
+You will also need to make PX4 receive the :class:`px4_msgs.VehicleGpsMessage` messages over the `PX4-ROS 2 Bridge`_,
+as described in the `PX4 User Guide <https://docs.px4.io/v1.12/en/>` for the version of PX4 you are using.
 
 Custom Node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing a :meth:`.publish` method::
+To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing a :meth:`.publish`
+method::
 
     from python_px4_ros2_map_nav.nodes.base_node import BaseNode
     from python_px4_ros2_map_nav.data import OutputData
@@ -56,19 +100,19 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
         # You can override the __init__ method and do whatever you need here
         ...
 
-        def publish(state_means, state_variance):
+        def publish(output_data):
             """Prints the output into console"""
-            print(f'Here is the position: {state}')
+            print(f'Here is the position: {output_data}')
 
-:class:`.OutputData` for what fields are contained in the output data container.
+See :class:`.OutputData` for what fields are contained in the output data container.
 
-You can see a longer example in source code for the :class:`.MockGPSNode`
-class, which creates a :class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) message out of the output and publishes
-it to the flight control software via the appropriate PX4/ROS 2 bridge topic.
+You can see a longer example in source code for the :class:`.MockGPSNode` class, which creates a
+:class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) message out of the output and publishes it to the flight control
+software via the appropriate PX4/ROS 2 bridge topic.
 
-The :class:`.BaseNode` extends the ``rclpy.nodes.Node``, so now you can spin it up in the main script of your ``colcon``
-package, as described in the
-`ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_::
+Once you have implemented your node, you can spin it up in the main script of your ``colcon`` package, as described in
+the `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_
+(The :class:`.BaseNode` extends the ``rclpy.nodes.Node``)::
 
     import rclpy
 
@@ -83,34 +127,6 @@ package, as described in the
 
     if __name__ == '__main__':
         main()
-
-
-The Publish Method
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method and leaves it to the implementing class
-to decide what to do with the computed output. The data provided to the method is defined in :class:`.OutputData`. An
-example of the contents is provided below::
-
-    print(output_data)
-    >>> TODO
-
-PX4-ROS 2 Bridge Topics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The node main process subscribes to the telemetry received via the PX4-ROS 2 bridge and defines a callback function for
-each topic to handle the received messages on the main thread.
-
-The :class:`.BaseNode` subscribes to the following telemetry:
-
-    #. :class:`px4_msgs.VehicleGlobalPosition` messages via 'VehicleGlobalPosition_PubSubTopic'
-    #. :class:`px4_msgs.VehicleLocalPosition` messages via 'VehicleLocalPosition_PubSubTopic'
-    #. :class:`px4_msgs.VehicleAttitude` messages via 'VehicleAttitude_PubSubTopic'
-    #. :class:`px4_msgs.Image` messages via 'image_raw'
-    #. :class:`px4_msgs.CameraInfo` messages via 'camera_info'
-
-You may add more subscribe and publish topics if you decide to implement your own Node. You will need to edit the
-``uorb_rtps_message_ids.yaml`` file as described in the
-`microRTPS section of the PX4 User Guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html>`_ to ensure your
-messages are passed between PX4 and your ROS node.
 
 WMS Client
 ---------------------------------------------------

@@ -52,7 +52,8 @@ make integration to other systems (e.g. via a ROS publisher) convenient:
 The latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_, while altitude above mean sea level (AMSL)
 and above ground is provided in meters. The standard deviations are also provided in meters in
 `ENU <https://en.wikipedia.org/wiki/Local_tangent_plane_coordinates>`_ frame
-`(x, y := longitude, latitude; z := altitude)`.
+`(x, y := longitude, latitude; z := altitude)`. The timestamp is synchronized with the `PX4 EKF2 reference time
+<https://github.com/PX4/px4_msgs/blob/master/msg/Ekf2Timestamps.msg>`_.
 
 For more information on the dimensions and units, please see the source code for the :meth:`.Position.to_dict` method.
 The :class:`.Position` class is used internally by :class:`.BaseNode` but has dependency to the internal

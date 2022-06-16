@@ -31,7 +31,7 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
     import pprint
     from python_px4_ros2_map_nav.nodes import BaseNode
 
-    def MyNode(BaseNode):
+    class MyNode(BaseNode):
 
         def __init__(self, name, share_dir):
             self.super().__init__(name, share_dir)
@@ -82,7 +82,7 @@ with primitive types and numpy arrays is used instead for the public API for bet
     from python_px4_ros2_map_nav.nodes import BaseNode
     from python_px4_ros2_map_nav.nodes.data import OutputData
 
-    def MyNode(BaseNode):
+    class MyNode(BaseNode):
 
         ...
 

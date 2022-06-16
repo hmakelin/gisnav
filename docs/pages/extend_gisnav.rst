@@ -1,25 +1,26 @@
-Extend GISNav
+Tutorial
 ===================================================
-This section provides code samples that you can use to integrate GISNav with your own project by extending the
-:class:`.BaseNode` abstract base class, and possibly even implementing your own :class:`.PoseEstimator`.
+This section provides instruction on how you can integrate GISNav with your own project as well as configure and extend
+its functionality so match your use case.
 
-You should start by implementing your own `Custom Node`_ and only move on to the other sections if your project needs
-more specific configuration.
+You should start from `Extend BaseNode>`_ and only move on to the other sections if your project needs more specific
+configuration.
 
-Nodes
+Integrate GISNav
 ---------------------------------------------------
 The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
 The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
 The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own
 `Custom Node`_.
 
-.. _The BaseNode class:
+.. _Extend BaseNode:
 
-The BaseNode class
+Extend BaseNode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.BaseNode` abstract base class extends the :class:`rclpy.node.Node` class by providing a new
 :meth:`.publish` method. The method provides a dictionary of the airborne drone's position and attitude estimates to
-make integration to other systems (e.g. via a ROS publisher) convenient:
+make integration to other systems (e.g. via a ROS publisher) convenient. To integrate GISNav with your solution, you
+must implement the :class:`.BaseNode` class by writing your own :meth:`.publish` method:
 
 .. note::
     Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
@@ -29,8 +30,11 @@ make integration to other systems (e.g. via a ROS publisher) convenient:
     import pprint
     from python_px4_ros2_map_nav.nodes import BaseNode
 
-    def MyExtendingNode(BaseNode):
-        self.pp = pprint.PrettyPrinter(indent=4)
+    def MyNode(BaseNode):
+
+        def __init__(self, name, share_dir):
+            self.super().__init__(name, share_dir)
+            self.pp = pprint.PrettyPrinter(indent=4)
 
         def publish(self, output_data):
             self.pp.print(output_data)
@@ -60,15 +64,10 @@ The :class:`.Position` class is used internally by :class:`.BaseNode` but has de
 `GeoPandas <https://geopandas.org/>`_ based :py:mod:`python_px4_ros2_map_nav.nodes.geo` module. Therefore, a dictionary
 with primitive types and numpy arrays is used instead for the public API for better accessibility.
 
-Configuration
-***************************************************
-ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
-configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
-values if no parameter file or an incomplete parameter file is provided.
+.. Configure PX4-ROS 2 Bridge:
 
-
-PX4-ROS 2 Bridge
-***************************************************
+Configure PX4-ROS 2 Bridge
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To compute the position and attitude estimates, the :class:`.BaseNode` class automatically subscribes to the following
 required telemetry and other input:
 
@@ -89,18 +88,41 @@ PX4-ROS 2 bridge yourself.
 
 See `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for further information.
 
-.. _PX4-ROS 2 Bridge
+Modify ROS Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
+configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
+values so it is not necessary pass this parameter file to your ROS node.
 
-Dynamic Loading of Pose Estimator
-***************************************************
-:class:`.BaseNode` supports dynamic loading of the :class:`.pose_estimators.PoseEstimator`, so for example a
-specialized neural net or other model to replace the previous one could be swapped in mid-flight if needed. This would
-require setting the new :class:`.pose_estimators.PoseEstimator` initialization arguments via the ROS parameter server
-and using a ROS service (NOT IMPLEMENTED) to re-initialize the new pose estimator.
+Spin up your own node
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the main script of your ``colcon`` package
+(the :class:`.BaseNode` extends the ``rclpy.nodes.Node``):
+
+.. note::
+    See `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_ for
+    more a tutorial on how to package your ROS node.
+
+.. code-block:: python
+
+    import rclpy
+
+    # Define or import MyNode here
+
+    def main(args=None):
+        rclpy.init(args=args)
+        my_node = MyNode()
+        rclpy.spin(my_node)
+        my_node.destroy_node()
+        rclpy.shutdown()
+
+    if __name__ == '__main__':
+        main()
+
 
 .. _The MockGPSNode class:
 
-The MockGPSNode class
+Example Integration (MockGPSNode)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
 from the output. It is used in the `Read Me`_ Quick Start demo as an example of how GISNav can complement and in some
@@ -125,52 +147,7 @@ example in ``README.md``:
 You will also need to make PX4 receive the :class:`px4_msgs.VehicleGpsMessage` messages over the `PX4-ROS 2 Bridge`_,
 as described in the `PX4 User Guide <https://docs.px4.io/master/en/>` for the version of PX4 you are using.
 
-Custom Node
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing a :meth:`.publish`
-method:
-
-.. code-block:: python
-
-    from python_px4_ros2_map_nav.nodes.base_node import BaseNode
-    from python_px4_ros2_map_nav.data import OutputData
-
-    class MyNode(BaseNode):
-
-        # You can override the __init__ method and do whatever you need here
-        ...
-
-        def publish(output_data):
-            """Prints the output into console"""
-            print(f'Here is the position: {output_data}')
-
-See :class:`.OutputData` for what fields are contained in the output data container.
-
-You can see a longer example in source code for the :class:`.MockGPSNode` class, which creates a
-:class:`px4_msgs.VehicleGpsPosition` mock GPS (GNSS) message out of the output and publishes it to the flight control
-software via the appropriate PX4/ROS 2 bridge topic.
-
-Once you have implemented your node, you can spin it up in the main script of your ``colcon`` package, as described in
-the `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_
-(The :class:`.BaseNode` extends the ``rclpy.nodes.Node``):
-
-.. code-block:: python
-
-    import rclpy
-
-    # Define or import MyNode here
-
-    def main(args=None):
-        rclpy.init(args=args)
-        my_node = MyNode()
-        rclpy.spin(my_node)
-        my_node.destroy_node()
-        rclpy.shutdown()
-
-    if __name__ == '__main__':
-        main()
-
-.. _Map Udpate Behavior
+.. _WMS Client:
 
 WMS Client
 ---------------------------------------------------
@@ -234,22 +211,9 @@ If you try to use the ``use_dedicated_process=True`` flag while providing an ins
 will simply log a warning and use multithreading in the same process with your :class:`.PoseEstimator` instead. This is
 to prevent having to pickle and send large and complex objects over to the initializer of the secondary process.
 
-.. _Configuration:
-
-Configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-You would then need to create a configuration file ``config/my_custom_pose_estimator.yml`` that tells GISNav
-how to initialize your new pose estimator. The configuraiton file will inclue the full path and initialization
-arguments::
-
-    class_name: 'python_px4_ros2_map_nav.pose_estimators.my_pose_estimator.MyPoseEstimator'
-    args:
-      - 15  # _min_matches
-
-
 .. _Custom Pose Estimator:
 
-Custom Pose Estimator
+Extend PoseEstimator
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You can use the below snippets to get started with your own :class:`.PoseEstimator`:
 
@@ -295,6 +259,28 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
                 reference_keypoints =
             )
             return matching_keypoints
+
+
+.. _Configuration:
+
+Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+You would then need to create a configuration file ``config/my_custom_pose_estimator.yml`` that tells GISNav
+how to initialize your new pose estimator. The configuraiton file will inclue the full path and initialization
+arguments::
+
+    class_name: 'python_px4_ros2_map_nav.pose_estimators.my_pose_estimator.MyPoseEstimator'
+    args:
+      - 15  # _min_matches
+
+.. _Dynamic Loading:
+
+Dynamic Loading
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+:class:`.BaseNode` supports dynamic loading of the :class:`.pose_estimators.PoseEstimator`, so for example a
+specialized neural net or other model to replace the previous one could be swapped in mid-flight if needed. This would
+require setting the new :class:`.pose_estimators.PoseEstimator` initialization arguments via the ROS parameter server
+and using a ROS service (NOT IMPLEMENTED) to re-initialize the new pose estimator.
 
 .. _Kalman Filter:
 

@@ -7,11 +7,13 @@ GISNav Documentation
 Welcome to GISNav's documentation! In the sidebar you will find links to developer guides and API documentation, as
 well as information on the project's development goals.
 
-GISNav relies on ROS 2 and is assumed to be paired with PX4 Autopilot. You may also be interested in their
-documentation:
+.. seealso::
 
-    * `ROS 2 Documentation <https://docs.ros.org/>`_
-    * `PX4 Autopilot User Guide <https://docs.px4.io/master/en/>`_
+    GISNav relies on ROS 2 and is assumed to be paired with PX4 Autopilot. You may also be interested in their
+    documentation:
+
+        * `ROS 2 Documentation <https://docs.ros.org/>`_
+        * `PX4 Autopilot User Guide <https://docs.px4.io/master/en/>`_
 
 
 .. toctree::

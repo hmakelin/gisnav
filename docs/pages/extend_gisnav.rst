@@ -73,7 +73,7 @@ The :class:`.Position` class is used internally by :class:`.BaseNode` but has de
 with primitive types and numpy arrays is used instead for the public API for better accessibility.
 
 .. note::
-    If you really want to access the :class:`.OutputData` instance instead of the dictionary, you can override the
+    If you want to access the :class:`.OutputData` instance instead of the dictionary, you can override the
     private :meth:`._publish` method, which is just a conversion wrapper for the public API
 
 .. code-block::

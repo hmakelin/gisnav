@@ -21,8 +21,8 @@ The :class:`.BaseNode` abstract base class extends the :class:`rclpy.node.Node` 
 :meth:`.publish` method. The method provides a dictionary of the airborne drone's position and attitude estimates to
 make integration to other systems (e.g. via a ROS publisher) convenient:
 
-.. note:
-Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
+.. note::
+    Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
 
 .. code-block:: python
 

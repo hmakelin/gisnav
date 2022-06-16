@@ -39,7 +39,7 @@ Own GIS Server
 If you want to run your own server or WMS proxy, you may want to consider e.g. these options:
 
     * `MapProxy <https://mapproxy.org/>`_ (used by the GISNav `Docker`_ example, proxy only)
-    * `GeoServer <https://geoserver.org/>`_ (full fledged GIS server)
+    * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>` GIS server)
 
 If you do not want to use commercial high-resolution data, you can load your own server with data from public domain
 sources such as:

@@ -86,6 +86,9 @@ with primitive types and numpy arrays is used instead for the public API for bet
 
         ...
 
+        def publish(self, output_data: dict):
+            pass
+
         # Override BaseNode._publish
         def _publish(self, output_data: OutputData):
             print(output_data.xy.crs)

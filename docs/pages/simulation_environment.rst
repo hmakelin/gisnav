@@ -23,7 +23,7 @@ You will need to setup the bridge with the following topic configuration:
 
 WMS Endpoint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.MapNavNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
+The :class:`.BaseNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
 then be used as input for the pose estimation. The WMS client :class:`.WMSClient` uses OWSLib and runs in a dedicated
 thread, although it can also be configured to run in a dedicated process.
 

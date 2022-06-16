@@ -64,7 +64,7 @@ Configuration
 ***************************************************
 ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
 configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
-values so it is not necessary pass this parameter file to your ROS node.
+values if no parameter file or an incomplete parameter file is provided.
 
 
 PX4-ROS 2 Bridge

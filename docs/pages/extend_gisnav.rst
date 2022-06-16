@@ -1,35 +1,70 @@
 Extend GISNav
 ===================================================
-This section provides instruction and code samples that you can use to integrate GISNav with your own project by
-extending the :class:`.BaseNode` class and possible even implementing your own :class:`PoseEstimator`.
+This section provides code samples that you can use to integrate GISNav with your own project by extending the
+:class:`.BaseNode` abstract base class, and possibly even implementing your own :class:`.PoseEstimator`.
 
-You should start by implementing your own `Custom Node`_, and only move on to the other sections after you have a
-running node and your project needs more specific configuration.
+You should start by implementing your own `Custom Node`_ and only move on to the other sections if your project needs
+more specific configuration.
 
-ROS Nodes
+Nodes
 ---------------------------------------------------
 The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
 The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
-The :class:`.MockGPSNode` when implementation is provided as an example to get you started implementing your own
+The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own
 `Custom Node`_.
 
 .. _The BaseNode class:
 
 The BaseNode class
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The :class:`.BaseNode` abstract base class implements a ROS 2 node that produces the vehicle position estimate from
-visual inputs. It subscribes to a number of required topics over the `PX4-ROS 2 bridge
-<https://docs.px4.io/master/en/ros/ros2_comm.html>`_ and maintains a connection to a WMS endpoint.
+The :class:`.BaseNode` abstract base class extends the :class:`rclpy.node.Node` class by providing a new
+:meth:`.publish` method. The method provides a dictionary of the airborne drone's position and attitude estimates to
+make integration to other systems (e.g. via a ROS publisher) convenient:
 
+.. code-block:: python
+
+    import pprint
+    from python_px4_ros2_map_nav.nodes import BaseNode
+
+    def MyExtendingNode(BaseNode):
+        self.pp = pprint.PrettyPrinter(indent=4)
+
+        def publish(self, output_data):
+            self.pp.print(output_data)
+
+    """
+    Output:
+    {    'alt_amsl': 125.0,
+         'alt_ground': 123.5,
+         'attitude': array([1, 0, 0, 0]),
+         'crs': 'epsg:4326',
+         'lat': 37.5,
+         'lon': -122.5,
+         'timestamp': 1655373141123,
+         'x_sd': 0.8,
+         'y_sd': 0.7,
+         'z_sd': 0.3}
+    """
+
+The latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_, while altitude above mean sea level (AMSL)
+and above ground is provided in meters. The standard deviations are also provided in meters.
+
+For more information on the dimensions and units, please see the source code for the :meth:`.Position.to_dict` method.
+The :class:`.Position` class is used internally by :class:`.BaseNode` but has dependency to the internal
+`GeoPandas <https://geopandas.org/>`_ based :py:mod:`python_px4_ros2_map_nav.nodes.geo` module. Therefore, a dictionary
+with primitive types and numpy arrays is used for the public API to make it more accessible.
+
+Configuration
+***************************************************
 ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
 configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
 values so it is not necessary pass this parameter file to your ROS node.
 
-.. _PX4-ROS 2 Bridge
 
 PX4-ROS 2 Bridge
 ***************************************************
-The :class:`.BaseNode` subscribes to the following telemetry and other input:
+To compute the position and attitude estimates, the :class:`.BaseNode` class automatically subscribes to the following
+required telemetry and other input:
 
     #. :class:`px4_msgs.VehicleGlobalPosition` messages via 'VehicleGlobalPosition_PubSubTopic'
     #. :class:`px4_msgs.VehicleLocalPosition` messages via 'VehicleLocalPosition_PubSubTopic'
@@ -46,21 +81,9 @@ The dockerized environment used in the `Read Me`_ quick start has preconfigured 
 subscribe and publish to additional topics in your `Custom Node`_, in which case you will also need to configure the
 PX4-ROS 2 bridge yourself.
 
-Publish Method
-***************************************************
-The :class:`.BaseNode` base class defines a :meth:`.publish` abstract method to which it passes the computed output
-data. The data provided to the method is defined in :class:`.OutputData`. An
-example of the contents is provided below:
+See `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for further information.
 
-.. code-block:: python
-
-    ...
-
-    def publish(output_data):
-        print(f'{output_data}')
-
-    # Output:
-    # > TODO
+.. _PX4-ROS 2 Bridge
 
 Dynamic Loading of Pose Estimator
 ***************************************************
@@ -143,7 +166,7 @@ the `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Pu
 
 .. _Map Udpate Behavior
 
-Map Update Behavior
+WMS Client
 ---------------------------------------------------
 The :class:`.BaseNode` continuously requests new map rasters from a WMS endpoint when the drone moves away from the
 area defined by previous maps. The requests are handled by the :class:`.WMSClient` class.

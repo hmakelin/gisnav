@@ -2,7 +2,7 @@
 > **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated
 > with [PX4](https://px4.io/) in a software-in-the-loop (SITL) simulation environment.
 
-`gisnav` is a [ROS 2](https://docs.ros.org/) package that enables map-based visual navigation for airborne drones.
+GISNav is a [ROS 2](https://docs.ros.org/) package that enables map-based visual navigation for airborne drones.
 
 A GISNav node provides an *accurate* **global** position for an airborne drone by visually comparing frames from the 
 drone's nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying 
@@ -39,15 +39,15 @@ git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 
 ## 3. Build your ROS 2 workspace
 ```
-cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts
-./build_ros2_workspace.bash
+cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts && \
+    ./build_ros2_workspace.bash
 ```
 
 ## 4. Run the example node
 ```
-cd $HOME/px4_ros_com_ros2
-ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
-    src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
+cd $HOME/px4_ros_com_ros2 && \
+    ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
+        src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
 ```
 
 # Generating Documentation

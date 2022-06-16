@@ -100,7 +100,7 @@ with primitive types and numpy arrays is used instead for the public API for bet
 
     'epsg:4326'
 
-.. Configure PX4-ROS 2 Bridge:
+.. _Configure PX4-ROS 2 Bridge:
 
 Configure PX4-ROS 2 Bridge
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -122,7 +122,9 @@ The dockerized environment used in the `Read Me`_ quick start has preconfigured 
 subscribe and publish to additional topics in your `Custom Node`_, in which case you will also need to configure the
 PX4-ROS 2 bridge yourself.
 
-See `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for further information.
+.. seealso::
+
+    `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for further information on PX4-ROS 2 bridge
 
 Modify ROS Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -134,10 +136,6 @@ Spin up your own node
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the main script of your ``colcon`` package
 (the :class:`.BaseNode` extends the ``rclpy.nodes.Node``):
-
-.. note::
-    See `ROS tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_ for
-    more a tutorial on how to package your ROS node.
 
 .. code-block:: python
 
@@ -155,6 +153,8 @@ Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the 
     if __name__ == '__main__':
         main()
 
+.. seealso::
+    `ROS Publisher-Subscriber (Python) tutorial <https://docs.ros.org/en/foxy/Tutorials/Writing-A-Simple-Py-Publisher-And-Subscriber.html>`_ for a step-by-step guide on how to implement a ROS node.
 
 .. _The MockGPSNode class:
 

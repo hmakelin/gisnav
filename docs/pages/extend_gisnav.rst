@@ -40,9 +40,11 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
         def publish(self, output_data):
             self.pp.print(output_data)
 
+..
+  Use json below for language to avoid highlight syntax, technically this is not json
 
-.. code-block::
-    :caption: Sample output
+.. code-block:: json
+    :caption: Sample output data printed to console
 
     {    'alt_amsl': 125.0,
          'alt_ground': 123.5,

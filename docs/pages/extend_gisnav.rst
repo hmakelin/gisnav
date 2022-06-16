@@ -26,6 +26,7 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
     Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
 
 .. code-block:: python
+    :caption: Example of custom node that prints output to console
 
     import pprint
     from python_px4_ros2_map_nav.nodes import BaseNode
@@ -39,8 +40,10 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
         def publish(self, output_data):
             self.pp.print(output_data)
 
-    """
-    Output:
+
+.. code-block::
+    :caption: Sample output
+
     {    'alt_amsl': 125.0,
          'alt_ground': 123.5,
          'attitude': array([1, 0, 0, 0]),
@@ -51,18 +54,46 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
          'x_sd': 0.8,
          'y_sd': 0.7,
          'z_sd': 0.3}
-    """
 
-The latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_, while altitude above mean sea level (AMSL)
-and above ground is provided in meters. The standard deviations are also provided in meters in
-`ENU <https://en.wikipedia.org/wiki/Local_tangent_plane_coordinates>`_ frame
-`(x, y := longitude, latitude; z := altitude)`. The timestamp is synchronized with the `PX4 EKF2 reference time
-<https://github.com/PX4/px4_msgs/blob/master/msg/Ekf2Timestamps.msg>`_.
+.. _Publish Format:
+
+Publish Format
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The dictionary items in the :meth:`.publish` method are in the following formats:
+
+    * Latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_.
+    * Altitude above mean sea level (AMSL) and above ground is provided in meters.
+    * Standard deviations are provided in meters in `ENU <https://en.wikipedia.org/wiki/Local_tangent_plane_coordinates>`_ frame `(x, y := longitude, latitude; z := altitude)`.
+    * Attitude quaternion is in (w, x, y, z) format (same as :class:`px4_msgs.VehicleAttitude` format).
+    * Timestamp is synchronized with the `PX4 EKF2 reference time <https://github.com/PX4/px4_msgs/blob/master/msg/Ekf2Timestamps.msg>`_.
 
 For more information on the dimensions and units, please see the source code for the :meth:`.Position.to_dict` method.
 The :class:`.Position` class is used internally by :class:`.BaseNode` but has dependency to the internal
 `GeoPandas <https://geopandas.org/>`_ based :py:mod:`python_px4_ros2_map_nav.nodes.geo` module. Therefore, a dictionary
 with primitive types and numpy arrays is used instead for the public API for better accessibility.
+
+.. note::
+    If you really want to access the :class:`.OutputData` instance instead of the dictionary, you can override the
+    private :meth:`._publish` method, which is just a conversion wrapper for the public API
+
+.. code-block::
+    :caption: Overriding private :meth:`._publish` method to gain access to :class:`.OutputData` `(not recommended)`
+
+    from python_px4_ros2_map_nav.nodes import BaseNode
+    from python_px4_ros2_map_nav.nodes.data import OutputData
+
+    def MyNode(BaseNode):
+
+        ...
+
+        # Override BaseNode._publish
+        def _publish(self, output_data: OutputData):
+            print(output_data.xy.crs)
+
+.. code-block::
+    :caption: Sample output
+
+    'epsg:4326'
 
 .. Configure PX4-ROS 2 Bridge:
 

@@ -4,22 +4,84 @@ To use and develop with GISNav, you must setup your simulation environment, whic
 the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
 find instruction and links to guides to setup everything locally.
 
+.. _QGroundControl:
+
+QGroundControl
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+`Download QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to get your
+ground control software up and running. You will need it to control your drone in the Gazebo simulation.
+
 .. Docker_
+
 
 Docker
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-A complete dockerized simulation environment is provided.
+A complete dockerized simulation environment is provided in the TODO repository. Follow the `Read Me`_ instructions to
+get started with the dockerized environment. Clone and build the docker repo:
+
+.. code-block::
+    :caption: Clone the dockerized simulation environment
+
+    cd $HOME && \
+        git clone https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git
+
+You will then need to build the environment by passing it the ``MAPPROXY_TILE_URL`` and ``NVIDIA_DRIVER_MAJOR_VERSION``
+arguments. See the `WMS Endpoint`_ section for instruction on how to get an URL for the ``MAPPROXY_TILE_URL`` argument
+if you do not have one yet. The example command uses ``nvidia-smi`` to find the major version installed on your system.
+
+.. code-block::
+    :caption: Build it
+
+    cd px4-ros2-map-nav-sim && \
+        docker-compose build \
+            --build-arg MAPPROXY_TILE_URL="https://example.server.com/tiles/%(z)s/%(y)s/%(x)s" \
+            --build-arg NVIDIA_DRIVER_MAJOR_VERSION=$(nvidia-smi | grep -oP 'Driver Version: \K[\d{3}]+') \
+            .
+
+Once you have your docker container you can run and terminate your
+simulation environment by doing:
+
+
+.. note::
+    You should see the Gazebo and QGroundControl windows pop up soon on your screen. If you do not see them, you may
+    need configure your ``xhost``:
+
+    .. code-block::
+            xhost  TODO
+
+.. code-block::
+    :caption: Run Gazebo example simulation with typhoon_h480 build target and ksql_airport.world
+
+    docker-compose up -d
+
+.. code-block::
+    :caption: Terminate example simulation
+
+    docker-compose down
+
+
+
 
 
 PX4 Autopilot
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You can setup your own PX4-Autopilot by following these instructions.
 
+Open a new terminal window and type in the following command:
+.. code-block::
+
+    make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
+
 
 PX4-ROS 2 microRTPS bridge
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+*******************************************
 You will need to setup the bridge with the following topic configuration:
 
+
+gscam2
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. _`WMS endpoint`:
 
 WMS Endpoint
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

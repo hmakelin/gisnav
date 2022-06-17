@@ -10,9 +10,11 @@ drone's nadir-facing camera to a map of the drone's *approximate* global positio
 
 # Quick Start
 ## Prerequisites
-You will need a [tile based](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) endpoint for high-resolution aerial or 
+* You will need a [tile based](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) endpoint for high-resolution aerial or 
 satellite imagery with coverage over the demo area (San Carlos or KSQL airport in CA, USA) for the following example 
 to work.
+* *Strongly recommended*: NVIDIA GPU and CUDA installed. It's not a strict requirement, but these instructions may not 
+work.
 
 ## 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
@@ -25,7 +27,7 @@ git clone https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git
 cd px4-ros2-map-nav-sim
 docker-compose build \
     --build-arg MAPPROXY_TILE_URL="https://example.server.com/tiles/%(z)s/%(y)s/%(x)s" \
-    --build-arg NVIDIA_DRIVER_MAJOR_VERSION=470 \
+    --build-arg NVIDIA_DRIVER_MAJOR_VERSION=$(nvidia-smi | grep -oP 'Driver Version: \K[\d{3}]+') \
     .
 docker-compose up -d
 ```

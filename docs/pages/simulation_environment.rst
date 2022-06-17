@@ -1,25 +1,26 @@
 Simulation Environment
---------------------------------------------
+===================================================
 To use and develop with GISNav, you must setup your simulation environment, which includes setting up ROS 2, PX4 and
 the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
 find instruction and links to guides to setup everything locally.
 
-.. _QGroundControl:
 
-QGroundControl
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-`Download QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to get your
-ground control software up and running. You will need it to control your drone in the Gazebo simulation.
+PX4 Autopilot and ROS 2 & Gazebo
+___________________________________________________
 
-.. Docker_
+You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
 
 
-Docker
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. _Docker:
+
+Option 1  *(recommended)*: Docker
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 A complete dockerized simulation environment is provided in the TODO repository. Follow the `Read Me`_ instructions to
 get started with the dockerized environment. Clone and build the docker repo:
 
-.. code-block::
+.. code-block:: bash
     :caption: Clone the dockerized simulation environment
 
     cd $HOME && \
@@ -29,7 +30,7 @@ You will then need to build the environment by passing it the ``MAPPROXY_TILE_UR
 arguments. See the `WMS Endpoint`_ section for instruction on how to get an URL for the ``MAPPROXY_TILE_URL`` argument
 if you do not have one yet. The example command uses ``nvidia-smi`` to find the major version installed on your system.
 
-.. code-block::
+.. code-block:: bash
     :caption: Build it
 
     cd px4-ros2-map-nav-sim && \
@@ -41,50 +42,60 @@ if you do not have one yet. The example command uses ``nvidia-smi`` to find the 
 Once you have your docker container you can run and terminate your
 simulation environment by doing:
 
+.. code-block:: bash
+    :caption: Run Gazebo example simulation with typhoon_h480 build target and ksql_airport.world
+
+    docker-compose up -d
 
 .. note::
     You should see the Gazebo and QGroundControl windows pop up soon on your screen. If you do not see them, you may
     need configure your ``xhost``:
 
-    .. code-block::
-            xhost  TODO
+    .. code-block:: bash
 
-.. code-block::
-    :caption: Run Gazebo example simulation with typhoon_h480 build target and ksql_airport.world
+        xhost TODO
 
-    docker-compose up -d
+Finally, once you are done with your simulation, you can terminate it from your Terminal window:
 
-.. code-block::
+.. code-block:: bash
     :caption: Terminate example simulation
 
     docker-compose down
 
 
+Option 2: Build It Yourself
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. _QGroundControl:
+
+QGroundControl
+**************************************************
+`Download and install QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to
+get your ground control software up and running. You will need it to control your drone in the Gazebo simulation.
 
 
 PX4 Autopilot
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**************************************************
 You can setup your own PX4-Autopilot by following these instructions.
 
 Open a new terminal window and type in the following command:
-.. code-block::
+.. code-block:: bash
 
     make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 
 
 PX4-ROS 2 microRTPS bridge
-*******************************************
+**************************************************
 You will need to setup the bridge with the following topic configuration:
 
 
 gscam2
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+**************************************************
 
 .. _`WMS endpoint`:
 
 WMS Endpoint
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+___________________________________________________
 The :class:`.BaseNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
 then be used as input for the pose estimation. The WMS client :class:`.WMSClient` uses OWSLib and runs in a dedicated
 thread, although it can also be configured to run in a dedicated process.
@@ -97,7 +108,7 @@ If your solution is Internet-connected, you can use any WMS endpoint. Otherwise 
 GeoServer or similar server onboard.
 
 Own GIS Server
-*******************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 If you want to run your own server or WMS proxy, you may want to consider e.g. these options:
 
     * `MapProxy <https://mapproxy.org/>`_ (used by the GISNav `Docker`_ example, proxy only)

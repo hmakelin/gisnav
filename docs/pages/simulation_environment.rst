@@ -109,9 +109,13 @@ GeoServer or similar server onboard.
 
 Own GIS Server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The benefit of running your own GIS server is that you can embed it onboard the drone and not rely on an internet
+connection. Accessing map tiles or rasters over the internet may be fine for simulation but most likely not for
+real-world use.
+
 If you want to run your own server or WMS proxy, you may want to consider e.g. these options:
 
-    * `MapProxy <https://mapproxy.org/>`_ (used by the GISNav `Docker`_ example, proxy only)
+    * `MapProxy <https://mapproxy.org/>`_ (used by the GISNav `Docker`_ example, proxy only but can cache tiles locally)
     * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
 
 If you do not want to use commercial high-resolution data, you can load your own server with data from public domain

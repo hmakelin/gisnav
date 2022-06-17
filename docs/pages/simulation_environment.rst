@@ -128,11 +128,6 @@ You can configure the WMS client via the ROS parameter server, or provide a YAML
     implementation in :class:`.BaseNode` for re-initializing the underlying :class:`.WMSClient` instance with new
     parameters.
 
-If you configure multiple layers, then multiple reference rasters will be passed on to :meth:`.PoseEstimator.worker`.
-For example, you may want to also use elevation data and not just RGB images as basis for your pose estimation.
-Currently :class:`.KeypointPoseEstimator` internally passes zero z-coordinates to :meth:`cv2.solvePnPRansac` which is
-not ideal if the ground is not very planar.
-
 Own GIS Server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The benefit of running your own GIS server is that you can embed it onboard the drone and not rely on an internet

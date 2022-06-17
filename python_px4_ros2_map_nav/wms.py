@@ -66,7 +66,7 @@ class WMSClient:
 
     @staticmethod
     def worker(layers: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str, image_format: str) \
-            -> List[np.ndarray]:
+            -> np.ndarray:
         """Requests one or more map layers from the WMS server
 
         :param layers: List of requested map layers
@@ -74,7 +74,7 @@ class WMSClient:
         :param map_size: Map size tuple (height, width)
         :param srs_str: WMS server SRS
         :param image_format: WMS server requested image format
-        :return: List of numpy arrays of requested map rasters
+        :return: Requested layers stacked into a numpy array raster
         """
         assert WMSClient.WMS_CLIENT_GLOBAL_VAR in globals()
         wms_client: WMSClient = globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR]
@@ -88,7 +88,7 @@ class WMSClient:
             raise
 
         map_ = np.frombuffer(map_.read(), np.uint8)
-        map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)  # TODO: what if multiple layers?
+        map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)
         assert_type(map_, np.ndarray)
         assert_ndim(map_, 3)
         return map_

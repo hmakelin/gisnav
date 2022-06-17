@@ -4,6 +4,7 @@ map_nav_node:
       url: 'http://localhost:8080/wms'
       version: '1.1.1'
       layers: ['Imagery']
+      styles: ['']
       srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
       request_timeout: 10
       image_format: 'image/jpeg'

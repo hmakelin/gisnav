@@ -169,7 +169,7 @@ class CameraData:
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
     #image: Img
-    bbox: GeoBox
+    bbox: GeoBBox
 
 
 # noinspection PyClassHasNoInit

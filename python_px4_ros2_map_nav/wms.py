@@ -65,11 +65,12 @@ class WMSClient:
             globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR] = WMSClient(url, version_, timeout_)
 
     @staticmethod
-    def worker(layers: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str, image_format: str) \
+    def worker(layers: List[str], styles: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str, image_format: str) \
             -> np.ndarray:
         """Requests one or more map layers from the WMS server
 
         :param layers: List of requested map layers
+        :param layers: Optional styles of same length as layers, use empty strings for default styles
         :param bbox: Bounding box of the map as tuple (left, bottom, right, top)
         :param map_size: Map size tuple (height, width)
         :param srs_str: WMS server SRS

@@ -1,117 +1,94 @@
-"""Contains an asynchronous client for requesting map rasters from an external WMS endpoint."""
+"""Contains a WMS client for asynchronously requesting map rasters from an external endpoint"""
+from __future__ import annotations
+
 import numpy as np
 import cv2
 
-from typing import Optional, Union, Tuple, List
-
+from typing import Optional, Union, Tuple, List, get_args
 from owslib.wms import WebMapService
+from owslib.util import ServiceException
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
 
 
 class WMSClient:
-    """WMS client for asynchronously requesting map rasters from external endpoint
+    """A WMS client for asynchronously requesting map rasters
 
-    This class defines static initializer and worker methods that are intended to be compatible with the
+    This class defines static initializer and worker methods that are intended to be used with the
     :class:`multiprocessing.pool.Pool` and :class:`multiprocessing.pool.ThreadPool` interfaces.
+
+    .. note::
+        You probably should not need to instantiate :class:`.WMSClient` directly from outside this class. Use the
+        :meth:`.initializer` to create your client instead, and the :meth:`.worker` to use it.
+
+    .. warning::
+        ``OWSLib`` *as of version 0.25.0* uses the Python ``requests`` library under the hood but does not seem to
+        document the various exceptions it raises that are passed through by ``OWSLib`` as part of its public API.
+        The :meth:`.worker` method is therefore expected to raise `errors and exceptions
+        <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_ that are specific to the
+        ``requests`` library.
+
+        These errors and exceptions are not handled by the :class:`.WMSClient` to avoid a direct dependency to
+        ``requests``. The recommended approach is therefore to handle them as unexpected errors in the error callback
+        of the invoking :meth:`multiprocessing.pool.Pool.apply_async`,
+        :meth:`multiprocessing.pool.ThreadPool.apply_async`, or similar method.
     """
 
-    REQUEST_DEFAULT_TIMEOUT = 30
-    """Default WMS request timeout in seconds"""
+    WMS_CLIENT_GLOBAL_VAR = '_wms_client'
+    """A global :class:`.WMSClient` instance is stored under this name"""
 
-    IMAGE_FORMAT = 'image/jpeg'
-    """Requested image format"""
-
-    IMAGE_TRANSPARENCY = False
+    _IMAGE_TRANSPARENCY = False
     """Image background transparency (not supported by jpeg format)"""
 
-    def __init__(self, url: str, version_: str, timeout_: int = REQUEST_DEFAULT_TIMEOUT):
+    def __init__(self, url: str, version: str, timeout: int):
         """Initializes instance attributes
 
-        This method is intended to be called inside :meth:`~initializer` together with a global variable declaration
-        so that attributes initialized here are also available for :meth:`~worker`. This way we avoid having to declare
-        a separate global variable for each attribute.
+        .. note::
+            You should probably not need to instantiate :class:`.WMSClient` directly from outside this class. Use the
+            :meth:`.initializer` instead.
 
         :param url: WMS endpoint url
-        :param version_: WMS version (e.g. 1.1.1)
-        :param timeout_: WMS request timeout in seconds
+        :param version: WMS version (e.g. '1.1.1')
+        :param timeout: WMS request timeout in seconds
         """
-        try:
-            self._wms = WebMapService(url, version=version_, timeout=timeout_)
-        except Exception as e:
-            # TODO: handle exception (e.g. ConnectionRefusedError)
-            raise e
-
-    @property
-    def _wms(self) -> WebMapService:
-        """The WMS client instance accessed by :meth:`~initializer`"""
-        return self.__wms
-
-    @_wms.setter
-    def _wms(self, value: WebMapService) -> None:
-        #assert_type(value, WebMapService)  # TODO assert type
-        self.__wms = value
+        # Do not handle possible connection related exceptions here (see class docstring)
+        self._wms = WebMapService(url, version=version, timeout=timeout)
 
     @staticmethod
-    def initializer(url: str, version_: str, timeout_: int = REQUEST_DEFAULT_TIMEOUT) -> None:
-        """Returns a cached WMS client.
-
-        The WMS requests are intended to be handled in a dedicated process (to avoid blocking the main thread), so this
-        function is lru_cache'd to avoid recurrent instantiations every time a WMS request is sent. For example usage, see
-        :meth:`python_px4_ros2_map_nav.BaseNode._wms_pool_worker` method.
+    def initializer(url: str, version_: str, timeout_: int) -> None:
+        """Creates a global instance of :class:`.WMSClient` under :py:attr:`.WMS_CLIENT_GLOBAL_VAR`.
 
         :param url: WMS server endpoint url
         :param version_: WMS server version
         :param timeout_: WMS request timeout seconds
-        :return: The cached WMS client
         """
-        assert_type(url, str)
-        assert_type(version_, str)
-        assert_type(timeout_, int)
-        # noinspection PyGlobalUndefined
-        if not 'wms_client' in globals():
-            global wms_client
-            wms_client = WMSClient(url, version_, timeout_)
+        if WMSClient.WMS_CLIENT_GLOBAL_VAR not in globals():
+            globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR] = WMSClient(url, version_, timeout_)
 
     @staticmethod
-    def worker(bbox: Tuple[4*(float,)], map_size: Tuple[int, int], layer_str: str, srs_str: str) -> np.ndarray:
-        """Gets latest map from WMS server for given location
+    def worker(layers: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str, image_format: str) \
+            -> List[np.ndarray]:
+        """Requests one or more map layers from the WMS server
 
-        :param bbox_: Bounding box of the map as tuple (left, bottom, right, top)
+        :param layers: List of requested map layers
+        :param bbox: Bounding box of the map as tuple (left, bottom, right, top)
         :param map_size: Map size tuple (height, width)
-        :param layer_str: WMS server layer
         :param srs_str: WMS server SRS
-        :return: np.ndarray map raster
+        :param image_format: WMS server requested image format
+        :return: List of numpy arrays of requested map rasters
         """
-        assert wms_client is not None
-        assert 'wms_client' in globals()
-        assert (all(isinstance(x, int) for x in map_size))
-        assert_type(layer_str, str)
-        assert_type(srs_str, str)
-        map_ = wms_client._get_map(layer_str, srs_str, bbox, map_size, WMSClient.IMAGE_FORMAT,
-                                   WMSClient.IMAGE_TRANSPARENCY)
-        return map_
+        assert WMSClient.WMS_CLIENT_GLOBAL_VAR in globals()
+        wms_client: WMSClient = globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR]
 
-    def _get_map(self, layer_str: str, srs_str: str, bbox_: Tuple[4*(float,)], size_: Tuple[int, int], format_: str,
-                 transparent_: bool) -> np.ndarray:
-        """Performs a WMS GetMap request with the supplied keyword arguments
-
-        :param layer_str: WMS server layer
-        :param srs_str: WMS server SRS
-        :param bbox_: Bounding box of the map as tuple (left, bottom, right, top)
-        :param size_: Map size tuple (height, width)
-        :param format_: Requested image format
-        :param transparent_: Requested image background transparency
-        :return: Map raster (np.ndarray)
-        """
+        # Do not handle possible requests library related exceptions here (see class docstring)
         try:
-            map_ = self._wms.getmap(layers=[layer_str], srs=srs_str, bbox=bbox_, size=size_, format=format_,
-                                    transparent=transparent_)
-        except Exception as e:
-            # TODO: handle exception
-            raise e
+            map_ = wms_client._wms.getmap(layers=layers, srs=srs_str, bbox=bbox, size=map_size, format=image_format,
+                                          transparent=_IMAGE_TRANSPARENCY)
+        except ServiceException as _:
+            # TODO: handle of OWSLib raised exceptions - currently passed on to error callback
+            raise
 
         map_ = np.frombuffer(map_.read(), np.uint8)
-        map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)
+        map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)  # TODO: what if multiple layers?
         assert_type(map_, np.ndarray)
         assert_ndim(map_, 3)
         return map_

@@ -107,6 +107,32 @@ GetMap request allows specifying a specific bounding box instead of a premade ti
 If your solution is Internet-connected, you can use any WMS endpoint. Otherwise you may choose to run your own mapproxy,
 GeoServer or similar server onboard.
 
+You can configure the WMS client via the ROS parameter server, or provide a YAML file when spinning up your node:
+
+.. code-block:: yaml
+    :caption: Example YAML configuration of wms ROS parameters
+
+    my_node:
+      ros__parameters:
+        wms:
+          url: 'http://localhost:8080/wms'
+          version: '1.1.1'
+          layers: ['Imagery']
+          srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
+          request_timeout: 10
+          image_format: 'image/jpeg'
+
+.. note::
+
+    The ``wms.url``, ``wms.version`` and ``wms.timeout`` ROS parameters are read-only because currently there is no
+    implementation in :class:`.BaseNode` for re-initializing the underlying :class:`.WMSClient` instance with new
+    parameters.
+
+If you configure multiple layers, then multiple reference rasters will be passed on to :meth:`.PoseEstimator.worker`.
+For example, you may want to also use elevation data and not just RGB images as basis for your pose estimation.
+Currently :class:`.KeypointPoseEstimator` internally passes zero z-coordinates to :meth:`cv2.solvePnPRansac` which is
+not ideal if the ground is not very planar.
+
 Own GIS Server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The benefit of running your own GIS server is that you can embed it onboard the drone and not rely on an internet
@@ -121,9 +147,27 @@ If you want to run your own server or WMS proxy, you may want to consider e.g. t
 If you do not want to use commercial high-resolution data, you can load your own server with data from public domain
 sources such as:
 
-    * US:
+    * `OSM-curated Aerial Imagery <https://wiki.openstreetmap.org/wiki/Aerial_imagery>`_
 
-        * `Farm Service Agency Aerial Photography Imagery Products and Programs <https://data.nal.usda.gov/dataset/farm-service-agency-aerial-photography-imagery-products-and-programs>`_
+        * Large list of sources with various licensing terms, see terms of use for each service individually
 
-You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is
-understood by your chosen GIS server.
+    * `Farm Service Agency Aerial Photography Imagery Products and Programs <https://data.nal.usda.gov/dataset/farm-service-agency-aerial-photography-imagery-products-and-programs>`_
+
+        * US coverage only
+
+.. note::
+    Commercial web-based map services are often tile-based (as opposed to WMS) because serving pre-computed tiles is
+    more efficient than computing unique rasters for each requested bounding box separately in large volumes. You may
+    need a WMS proxy if you decide to go with a web-based option.
+
+.. warning::
+    Many commercial services explicitly prohibit the caching of map tiles in their licensing terms, especially if their
+    business model is based on billing API requests. This is mainly to prevent disintermediation in case their tiles
+    are redistributed to a large number of end users.
+
+    While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you should
+    still make sure you understand the Terms of Use of the service you are using and that it fits your planned use case.
+
+.. seealso::
+    You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is
+    understood by your chosen GIS server.

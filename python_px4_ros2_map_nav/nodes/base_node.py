@@ -56,17 +56,20 @@ class BaseNode(Node, ABC):
     WMS_VERSION = '1.1.1'
     """WMS server version"""
 
-    WMS_LAYER = 'Imagery'
-    """WMS server map layer name
+    WMS_LAYERS = ['Imagery']
+    """WMS server requested map layers
 
-    The layer should cover the flight area of the vehicle at high resolution.
+    The layers should cover the flight area of the vehicle at high resolution.
     """
 
     WMS_SRS = 'EPSG:4326'
     """WMS server supported SRS"""
 
-    WMS_REQUEST_TIMEOUT = 5
+    WMS_REQUEST_TIMEOUT = 10
     """WMS client request timeout in seconds"""
+
+    WMS_IMAGE_FORMAT = 'image/jpeg'
+    """WMS client requested image format"""
 
     MISC_MAX_PITCH = 30
     """Maximum camera pitch in degrees from nadir for attempting a match against map
@@ -898,10 +901,12 @@ class BaseNode(Node, ABC):
             return None
 
         # Build and send WMS request
-        layer_str = self.get_parameter('wms.layer').get_parameter_value().string_value
+        layers = self.get_parameter('wms.layers').get_parameter_value().string_array_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
-        assert_type(layer_str, str)
+        image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value  # TODO: handle not set?
+        assert_type(layer_str, get_args(List[str]))
         assert_type(srs_str, str)
+        assert_type(image_format, str)
         try:
             self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layer: {layer_str}, srs: {srs_str}.')
             if self._wms_query is not None:
@@ -909,7 +914,7 @@ class BaseNode(Node, ABC):
             self._wms_query = AsyncWMSQuery(
                 result=self._wms_pool.apply_async(
                     WMSClient.worker,
-                    (bbox.bounds, self._map_size_with_padding, layer_str, srs_str),
+                    (bbox.bounds, self._map_size_with_padding, layers, srs_str, image_format),
                     callback=self.wms_pool_worker_callback,
                     error_callback=self.wms_pool_worker_error_callback
                 ),

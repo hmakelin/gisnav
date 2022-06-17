@@ -3,7 +3,7 @@ numpy
 opencv-python
 torch
 scipy>=1.4.0
-OWSLib
+OWSLib==0.25.0
 pyyaml
 pykalman
 

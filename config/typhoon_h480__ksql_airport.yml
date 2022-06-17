@@ -3,9 +3,10 @@ map_nav_node:
     wms:
       url: 'http://localhost:8080/wms'
       version: '1.1.1'
-      layer: 'Imagery'
+      layers: ['Imagery']
       srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
-      request_timeout: 5
+      request_timeout: 10
+      image_format: 'image/jpeg'
     misc:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
       export_position: 'position.json' # declared by MockGPSNode, not by base class

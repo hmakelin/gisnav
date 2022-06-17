@@ -1,4 +1,4 @@
-"""WMS client for requesting map rasters from external endpoint."""
+"""Contains an asynchronous client for requesting map rasters from an external WMS endpoint."""
 import numpy as np
 import cv2
 
@@ -9,10 +9,10 @@ from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
 
 
 class WMSClient:
-    """WMS client for requesting map rasters from external endpoint
+    """WMS client for asynchronously requesting map rasters from external endpoint
 
-    This class defines static initializer and worker methods that are intended to be passed to a separate process in a
-    :class:`multiprocessing.pool.Pool`.
+    This class defines static initializer and worker methods that are intended to be compatible with the
+    :class:`multiprocessing.pool.Pool` and :class:`multiprocessing.pool.ThreadPool` interfaces.
     """
 
     REQUEST_DEFAULT_TIMEOUT = 30

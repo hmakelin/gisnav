@@ -3,7 +3,7 @@ API Documentation
 This is an automatically generated API documentation for the `GISNav ROS 2 package`_.
 
 Unless you want to contribute to GISNav itself or really get into the weeds of how GISNav works, you probably
-will only be interested in the :class:`.BaseNode` class API.
+will only be interested in the :class:`.BaseNode` and :class:`.PoseEstimator` class APIs.
 
 .. _GISNav ROS 2 package: https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav
 

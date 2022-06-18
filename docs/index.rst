@@ -38,7 +38,6 @@ well as information on the project's development goals.
    :hidden:
 
    pages/development_objectives
-   pages/devops
    pages/merge_requests
 
 

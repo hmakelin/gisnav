@@ -18,9 +18,21 @@ class _GeoObject(ABC):
     """CRS used for GeoPoints by default unless something else is specified"""
 
     @property
+    @abstractmethod
+    def _geoseries(self) -> np.ndarray:
+        """Returns the contained geoseries"""
+        pass
+
+    @property
     def crs(self) -> str:
         """Returns current CRS string"""
         return str(self._geoseries.crs)
+
+    @property
+    @abstractmethod
+    def coordinates(self) -> np.ndarray:
+        """Returns the contained geoseries shape as numpy array."""
+        pass
 
     def to_crs(self, crs: str) -> _GeoObject:
         """Converts to provided CRS
@@ -38,12 +50,6 @@ class _GeoObject(ABC):
         :param driver: OGR format driver
         """
         self._geoseries.to_file(filename, driver=driver)
-
-    @property
-    @abstractmethod
-    def coordinates(self) -> np.ndarray:
-        """Returns the contained geoseries shape as numpy array."""
-        pass
 
 class _GeoPolygon(_GeoObject):
     """Abstract base class for other wrappers that contain GeoSeries with Shapely Polygons"""

@@ -1,8 +1,29 @@
 #####################################
 GISNav Documentation
 #####################################
-Welcome to GISNav's documentation! In the navbar you will find links to the user guide and API documentation, as
-well as information on how to contribute to the project.
+Welcome to GISNav's documentation!
+
+This site contains the following pages:
+
+    * Get Started
+
+        A demo to get you quickly started
+
+    * Setup
+
+        Detailed instructions on how to use the provided Docker environemt, or how to setup your own.
+
+    * User Guide
+
+        Instructions on how to integrate GISNav with your own project and how to extend its functionality.
+
+    * API Documentation
+
+        GISNav public API reference.
+
+    * Contribute
+
+        Contributions to GISNav are welcome! Please see this page for guidance.
 
 .. seealso::
 
@@ -16,7 +37,7 @@ well as information on how to contribute to the project.
    :maxdepth: 2
    :hidden:
 
-   pages/readme
+   pages/get_started
    pages/setup
    pages/user_guide
    pages/api_documentation

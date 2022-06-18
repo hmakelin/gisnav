@@ -7,13 +7,9 @@ its functionality so match your use case.
 You should start from `Extend BaseNode`_ and only move on to the other sections if your project needs more specific
 configuration.
 
-Extend GISNav
-===================================================
-This section details how to extend GISNav.
-
 
 Integrate GISNav
----------------------------------------------------
+====================================================
 The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
 The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
 The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own node.
@@ -22,7 +18,7 @@ The :class:`.MockGPSNode` implementation is provided for demonstration to help y
 .. _Extend BaseNode:
 
 Extend BaseNode
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 The :class:`.BaseNode` abstract base class extends the :class:`rclpy.node.Node` class by providing a new
 :meth:`.publish` method. The method provides a dictionary of the airborne drone's position and attitude estimates to
 make integration to other systems (e.g. via a ROS publisher) convenient. To integrate GISNav with your solution, you
@@ -66,7 +62,7 @@ must implement the :class:`.BaseNode` class by writing your own :meth:`.publish`
 .. _Publish Format:
 
 Publish Format
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 The dictionary items in the :meth:`.publish` method are in the following formats:
 
     * Latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_.
@@ -109,7 +105,7 @@ with primitive types and numpy arrays is used instead for the public API for bet
 .. _Configure PX4-ROS 2 Bridge:
 
 Configure PX4-ROS 2 Bridge
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 To compute the position and attitude estimates, the :class:`.BaseNode` class automatically subscribes to the following
 required telemetry and other input:
 
@@ -133,13 +129,13 @@ PX4-ROS 2 bridge yourself.
     `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for further information on PX4-ROS 2 bridge
 
 Modify ROS Parameters
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
 configuration is provided in ``config/typhoon_h480__ksql_airport.yml``. :class:`.BaseNode` will use its own default
 values so it is not necessary pass this parameter file to your ROS node.
 
 Spin up your own node
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the main script of your ``colcon`` package
 (the :class:`.BaseNode` extends the ``rclpy.nodes.Node``):
 
@@ -165,7 +161,7 @@ Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the 
 .. _The MockGPSNode class:
 
 Example Integration (MockGPSNode)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
 from the output. It is used in the Read Me Quick Start demo as an example of how GISNav can complement and in some
 cases replace GNSS navigation.
@@ -192,7 +188,7 @@ as described in the `PX4 User Guide <https://docs.px4.io/master/en/>` for the ve
 .. _WMS Client:
 
 WMS Client
----------------------------------------------------
+===================================================
 The :class:`.BaseNode` continuously requests new map rasters from a WMS endpoint when the drone moves away from the
 area defined by previous maps. The requests are handled by the :class:`.WMSClient` class.
 
@@ -208,12 +204,12 @@ requested map. The update behavior can be adjusted via the ROS parameter server.
 .. _Pose Estimators:
 
 Pose Estimators
----------------------------------------------------
+===================================================
 
 .. _SuperGlue & LoFTR:
 
 SuperGlue & LoFTR
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 Two pose estimators, SuperGlue and SuperGlue inspired LoFTR are provided with LoFTR as the default pose estimator.
 These were seen as state-of-the-art image matching algorithms at the time the software was written but newer algorithms
 may provide more reliable matching. Note that SuperGlue has restrictive licensing requirements if you are planning to
@@ -239,7 +235,7 @@ in the example ``config/typhoon_h480__ksql_airport.yml`` file:
 .. _Extend Pose Estimator:
 
 Extend PoseEstimator
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 
 You must extend the :class:`.PoseEstimator` abstract base and write your own :meth:`.estimate_pose` method to implement
 your own pose estimator. If your pose estimator is keypoint-based, you may want to extend
@@ -301,7 +297,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 .. _Keypoint-Based Pose Estimator:
 
 Keypoint-Based Pose Estimator
-****************************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 If you want to create a :class:`.KeypointPoseEstimator`, you can also start with the below snippet:
 
 .. code-block:: python
@@ -329,7 +325,7 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
 .. _Configuration:
 
 Configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 You would then need to create a configuration file ``config/my_custom_pose_estimator.yml`` that tells GISNav
 how to initialize your new pose estimator. The configuraiton file will inclue the full path and initialization
 arguments::
@@ -341,7 +337,7 @@ arguments::
 .. _Dynamic Loading:
 
 Dynamic Loading
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+____________________________________________________
 :class:`.BaseNode` supports dynamic loading of the :class:`.pose_estimators.PoseEstimator`, so for example a
 specialized neural net or other model to replace the previous one could be swapped in mid-flight if needed. This would
 require setting the new :class:`.pose_estimators.PoseEstimator` initialization arguments via the ROS parameter server
@@ -350,7 +346,7 @@ and using a ROS service (NOT IMPLEMENTED) to re-initialize the new pose estimato
 .. _Kalman Filter:
 
 Kalman Filter
----------------------------------------------------
+===================================================
 An embedded :class:`.SimpleFilter` Kalman filter is included to (1) smooth out the choppiness of the raw output from
 the :class:`.PoseEstimator`, and to (2) estimate the standard deviation of the position estimate. The standard deviation
 estimates are used for example by the :class:`.MockGPSNode` class to generate a mock `px4_msgs.VehicleGpsPosition`

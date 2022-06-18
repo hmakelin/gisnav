@@ -1,6 +1,8 @@
 **************************************************
 Contribute
 **************************************************
+All kinds of contributions are welcome, from raising issues with the software to software commits and pull requests
+(PRs). Please see below for guidance and suggestions on how and where to contribute.
 
 Development Objectives
 ==================================================
@@ -64,9 +66,15 @@ Taking the `Constraints`_ into account, development focus could for example be i
 * Moving to a more distributed 'ROS native' system in the long term where current modules that are managed by the :class:`.BaseNode` are spun as independent ROS nodes if possible.
 
 
+Raising Issues
+==================================================
 
-Merge Requests
-===================================================
+
+Improvement Suggestions
+==================================================
+
+Commits & Pull Requests
+==================================================
 Merge requests (Pull requests) are welcome! Take a look at the known issues or create one yourself for your MR before
 you start working so that others will also be aware of your pending work. You can also use it as an opportunity to
 get feedback on your idea before you commit to it.
@@ -75,3 +83,8 @@ Once you think your merge request passes all the checks in the CI pipeline, ping
 will try to review your MR as soon as possible.
 
 You can e-mail me or find me at TODO.
+
+Please follow a typical feature-branch workflow:
+
+* If your PR fixes or implements an issue, please link the issue in your pull requests
+* In your commit messages, please describe not only *what* you have done, but *why* you have done it. This helps the maintainer understand your thought process faster.

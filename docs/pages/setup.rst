@@ -1,13 +1,13 @@
-
+**************************************************
 Setup
-===================================================
+**************************************************
 To use and develop with GISNav, you must setup your simulation environment, which includes setting up ROS 2, PX4 and
 the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
 find instruction and links to guides to setup everything locally.
 
 
 PX4 Autopilot and ROS 2 & Gazebo
-___________________________________________________
+===================================================
 
 You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
 
@@ -15,8 +15,7 @@ You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px
 .. _Docker:
 
 Option 1  *(recommended)*: Docker
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
+---------------------------------------------------
 A complete dockerized simulation environment is provided in the TODO repository. Follow the Read Me instructions to
 get started with the dockerized environment. Clone and build the docker repo:
 
@@ -55,6 +54,7 @@ simulation environment by doing:
 
         xhost TODO
 
+
 Finally, once you are done with your simulation, you can terminate it from your Terminal window:
 
 .. code-block:: bash
@@ -64,18 +64,18 @@ Finally, once you are done with your simulation, you can terminate it from your 
 
 
 Option 2: Build It Yourself
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------------
 
 .. _QGroundControl:
 
 QGroundControl
-**************************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 `Download and install QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to
 get your ground control software up and running. You will need it to control your drone in the Gazebo simulation.
 
 
 PX4 Autopilot
-**************************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You can setup your own PX4-Autopilot by following these instructions.
 
 Open a new terminal window and type in the following command:
@@ -85,17 +85,17 @@ Open a new terminal window and type in the following command:
 
 
 PX4-ROS 2 microRTPS bridge
-**************************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You will need to setup the bridge with the following topic configuration:
 
 
 gscam2
-**************************************************
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. _`WMS endpoint`:
 
 WMS Endpoint
-___________________________________________________
+===================================================
 The :class:`.BaseNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
 then be used as input for the pose estimation. The WMS client :class:`.WMSClient` uses OWSLib and runs in a dedicated
 thread, although it can also be configured to run in a dedicated process.
@@ -123,13 +123,13 @@ You can configure the WMS client via the ROS parameter server, or provide a YAML
           image_format: 'image/jpeg'
 
 .. note::
-
     The ``wms.url``, ``wms.version`` and ``wms.timeout`` ROS parameters are read-only because currently there is no
     implementation in :class:`.BaseNode` for re-initializing the underlying :class:`.WMSClient` instance with new
     parameters.
 
+
 Own GIS Server
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------------------
 The benefit of running your own GIS server is that you can embed it onboard the drone and not rely on an internet
 connection. Accessing map tiles or rasters over the internet may be fine for simulation but most likely not for
 real-world use.
@@ -155,6 +155,7 @@ sources such as:
     more efficient than computing unique rasters for each requested bounding box separately in large volumes. You may
     need a WMS proxy if you decide to go with a web-based option.
 
+
 .. warning::
     Many commercial services explicitly prohibit the caching of map tiles in their licensing terms, especially if their
     business model is based on billing API requests. This is mainly to prevent disintermediation in case their tiles
@@ -162,6 +163,7 @@ sources such as:
 
     While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you should
     still make sure you understand the Terms of Use of the service you are using and that it fits your planned use case.
+
 
 .. seealso::
     You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is

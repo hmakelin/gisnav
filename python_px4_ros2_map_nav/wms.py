@@ -70,7 +70,7 @@ class WMSClient:
         """Requests one or more map layers from the WMS server
 
         :param layers: List of requested map layers
-        :param layers: Optional styles of same length as layers, use empty strings for default styles
+        :param styles: Optional styles of same length as layers, use empty strings for default styles
         :param bbox: Bounding box of the map as tuple (left, bottom, right, top)
         :param map_size: Map size tuple (height, width)
         :param srs_str: WMS server SRS

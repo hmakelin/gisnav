@@ -151,9 +151,9 @@ sources such as:
         * US coverage only
 
 .. note::
-    Commercial web-based map services are often tile-based (as opposed to WMS) because serving pre-computed tiles is
-    more efficient than computing unique rasters for each requested bounding box separately in large volumes. You may
-    need a WMS proxy if you decide to go with a web-based option.
+    Commercial web-based map services are often tile-based (as opposed to WMS) because it is more efficient to serve
+    pre-computed tiles than to compute unique rasters for each individual requested bounding box. You will need a WMS
+    proxy if you decide to go with a tile-based endpoint.
 
 
 .. warning::

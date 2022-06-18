@@ -16,10 +16,10 @@ Use the search in the sidebar or these indices to find what you are looking for.
 * :ref:`modindex`
 
 
-Nodes package
---------------------------------------------
+nodes package
+=================================================
 base_node module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.nodes.base_node
    :autosummary:
    :members:
@@ -27,7 +27,7 @@ base_node module
    :show-inheritance:
 
 mock_gps_node module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.nodes.mock_gps_node
    :autosummary:
    :members:
@@ -35,7 +35,7 @@ mock_gps_node module
    :show-inheritance:
 
 data module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.nodes.data
    :autosummary:
    :members:
@@ -43,7 +43,7 @@ data module
    :show-inheritance:
 
 geo module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.nodes.geo
    :autosummary:
    :members:
@@ -51,9 +51,9 @@ geo module
    :show-inheritance:
 
 pose_estimators package
---------------------------------------------
+=================================================
 pose_estimator module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.pose_estimators.pose_estimator
    :autosummary:
    :members:
@@ -61,7 +61,7 @@ pose_estimator module
    :show-inheritance:
 
 keypoint_pose_estimator module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator
    :autosummary:
    :members:
@@ -69,7 +69,7 @@ keypoint_pose_estimator module
    :show-inheritance:
 
 loftr module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.pose_estimators.loftr
    :autosummary:
    :members:
@@ -77,7 +77,7 @@ loftr module
    :show-inheritance:
 
 superglue module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 .. automodule:: python_px4_ros2_map_nav.pose_estimators.superglue
    :autosummary:
    :members:
@@ -85,7 +85,7 @@ superglue module
    :show-inheritance:
 
 kalman module
----------------------------------------
+=================================================
 .. automodule:: python_px4_ros2_map_nav.kalman
    :autosummary:
    :members:
@@ -93,7 +93,7 @@ kalman module
    :show-inheritance:
 
 assertions module
----------------------------------------
+=================================================
 .. automodule:: python_px4_ros2_map_nav.assertions
    :autosummary:
    :members:

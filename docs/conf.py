@@ -71,15 +71,14 @@ html_css_files = [
     'css/style.css',
 ]
 
-# Configure RTD theming options here
+# Configure pydata theming options here
 html_theme_options = {
     "logo": {
-        "image_light": "logo.png",
-        "image_dark": "logo_inverted.png",
+        "image_light": "img/logo.png",
+        "image_dark": "img/logo_inverted.png",
     },
-    'display_version': True
+    "collapse_navigation": True
 }
-html_logo = '_static/img/logo.png'
 
 # Make version number accessible in .rst files
 #rst_epilog = f'.. |version| replace:: **v{package_data.version}**'

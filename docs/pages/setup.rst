@@ -1,4 +1,5 @@
-Simulation Environment
+
+Setup
 ===================================================
 To use and develop with GISNav, you must setup your simulation environment, which includes setting up ROS 2, PX4 and
 the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
@@ -11,13 +12,12 @@ ___________________________________________________
 You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
 
 
-
 .. _Docker:
 
 Option 1  *(recommended)*: Docker
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A complete dockerized simulation environment is provided in the TODO repository. Follow the `Read Me`_ instructions to
+A complete dockerized simulation environment is provided in the TODO repository. Follow the Read Me instructions to
 get started with the dockerized environment. Clone and build the docker repo:
 
 .. code-block:: bash
@@ -166,3 +166,4 @@ sources such as:
 .. seealso::
     You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is
     understood by your chosen GIS server.
+

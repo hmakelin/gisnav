@@ -1,16 +1,23 @@
-Tutorial
-===================================================
+**************************************************
+User Guide
+**************************************************
 This section provides instruction on how you can integrate GISNav with your own project as well as configure and extend
 its functionality so match your use case.
 
-You should start from `Extend BaseNode>`_ and only move on to the other sections if your project needs more specific
+You should start from `Extend BaseNode`_ and only move on to the other sections if your project needs more specific
 configuration.
+
+Extend GISNav
+===================================================
+This section details how to extend GISNav.
+
 
 Integrate GISNav
 ---------------------------------------------------
 The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
 The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
 The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own node.
+
 
 .. _Extend BaseNode:
 
@@ -117,7 +124,7 @@ You may add more subscribe and publish topics if you decide to implement your ow
 `microRTPS section of the PX4 User Guide <https://docs.px4.io/master/en/middleware/micrortps.html>`_ to ensure your
 messages are passed between PX4 and your ROS node.
 
-The dockerized environment used in the `Read Me`_ quick start has preconfigured these topics. However, you may want to
+The dockerized environment used in the Read Me quick start has preconfigured these topics. However, you may want to
 subscribe and publish to additional topics in your own node, in which case you will also need to configure the
 PX4-ROS 2 bridge yourself.
 
@@ -160,7 +167,7 @@ Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the 
 Example Integration (MockGPSNode)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message generated
-from the output. It is used in the `Read Me`_ Quick Start demo as an example of how GISNav can complement and in some
+from the output. It is used in the Read Me Quick Start demo as an example of how GISNav can complement and in some
 cases replace GNSS navigation.
 
 In order for the :class:`.MockGPSNode` to work, you would need to configure your ``typhoon_h480`` build target to use

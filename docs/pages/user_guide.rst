@@ -24,9 +24,6 @@ The :class:`.BaseNode` abstract base class extends the :class:`rclpy.node.Node` 
 make integration to other systems (e.g. via a ROS publisher) convenient. To integrate GISNav with your solution, you
 must implement the :class:`.BaseNode` class by writing your own :meth:`.publish` method:
 
-.. note::
-    Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
-
 .. code-block:: python
     :caption: Example of custom node that prints output to console
 
@@ -70,6 +67,9 @@ The dictionary items in the :meth:`.publish` method are in the following formats
     * Standard deviations are provided in meters in `ENU <https://en.wikipedia.org/wiki/Local_tangent_plane_coordinates>`_ frame `(x, y := longitude, latitude; z := altitude)`.
     * Attitude quaternion is in (w, x, y, z) format (same as :class:`px4_msgs.VehicleAttitude` format).
     * Timestamp is synchronized with the `PX4 EKF2 reference time <https://github.com/PX4/px4_msgs/blob/master/msg/Ekf2Timestamps.msg>`_.
+
+.. note::
+    Currently the attitude of the (gimbal stabilized) camera is returned, not the attitude of the vehicle itself.
 
 For more information on the dimensions and units, please see the source code for the :meth:`.Position.to_dict` method.
 The :class:`.Position` class is used internally by :class:`.BaseNode` but has dependency to the internal

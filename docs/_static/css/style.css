@@ -7,15 +7,11 @@ img.logo__image {
 }
 
 /*
-body {
-    --themecolor: #0291DA
+html[data-theme="light"] {
+    --pst-color-primary: #FF4539;
 }
 
-.wy-side-nav-search {
-  background-color: var(--themecolor);
-}
-
-.wy-nav-top {
-  background-color: var(--themecolor);
+html[data-theme="dark"] {
+    --pst-color-primary: #FF4539;
 }
 */

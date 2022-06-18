@@ -42,10 +42,6 @@ class WMSClient:
     def __init__(self, url: str, version: str, timeout: int):
         """Initializes instance attributes
 
-        .. note::
-            You should probably not need to instantiate :class:`.WMSClient` directly from outside this class. Use the
-            :meth:`.initializer` instead.
-
         :param url: WMS endpoint url
         :param version: WMS version (e.g. '1.1.1')
         :param timeout: WMS request timeout in seconds

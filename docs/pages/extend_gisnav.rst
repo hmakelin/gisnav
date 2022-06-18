@@ -203,10 +203,37 @@ requested map. The update behavior can be adjusted via the ROS parameter server.
 
 Pose Estimators
 ---------------------------------------------------
+
+.. _SuperGlue & LoFTR:
+
+SuperGlue & LoFTR
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Two pose estimators, SuperGlue and SuperGlue derivative LoFTR are provided with LoFTR as the default pose estimator.
 These were seen as state-of-the-art image matching algorithms at the time the software was written but newer algorithms
 may provide more reliable matching. Note that SuperGlue has restrictive licensing requirements if you are planning to
-use it for your own project (see license file in the repository).
+use it for your own project (see license file in the repository), while LoFTR has a permissive license.
+
+.. warning::
+    LoFTR uses SuperGlue for *optimal transport* so make sure you use the *dual-softmax* version instead or otherwise
+    SuperGlue licensing terms apply.
+
+The initialization parameters for the pose estimators are currently passed via a configuration file, which :class:`.BaseNode`
+reads when it initializes the :class:`.PoseEstimator`. See the provided ``config/loftr_params.yml`` and
+``config/superglue_params.yml`` files for an example. These files can be provided along with other ROS parameters like
+in the example ``config/typhoon_h480__ksql_airport.yml`` file:
+
+.. code-block:: yaml
+
+    map_nav_node:
+      ros__parameters:
+        pose_estimator:
+          #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
+          params_file: 'config/loftr_params.yml'
+
+.. _Extend Pose Estimator:
+
+Extend PoseEstimator
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You must extend the :class:`.PoseEstimator` abstract base and write your own :meth:`.estimate_pose` method to implement
 your own pose estimator. If your pose estimator is keypoint-based, you may want to extend
@@ -247,10 +274,6 @@ If you try to use the ``use_dedicated_process=True`` flag while providing an ins
 will simply log a warning and use multithreading in the same process with your :class:`.PoseEstimator` instead. This is
 to prevent having to pickle and send large and complex objects over to the initializer of the secondary process.
 
-.. _Custom Pose Estimator:
-
-Extend PoseEstimator
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You can use the below snippets to get started with your own :class:`.PoseEstimator`:
 
 .. code-block:: python
@@ -269,7 +292,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
             # Do your pose estimation magic here
             return Pose(r, t)
 
-.. _Custom Keypoint-Based Pose Estimator:
+.. _Keypoint-Based Pose Estimator:
 
 Keypoint-Based Pose Estimator
 ****************************************************

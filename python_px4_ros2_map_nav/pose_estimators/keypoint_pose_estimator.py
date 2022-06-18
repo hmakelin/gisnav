@@ -1,13 +1,13 @@
 """Module that defines and abstract base class for keypoint-based pose estimators"""
-import numpy as np
 import cv2
+import numpy as np
 
 from abc import abstractmethod
 from typing import Tuple, Optional
 from dataclasses import dataclass, field
 
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
-from python_px4_ros2_map_nav.assertions import assert_type, assert_len
+from python_px4_ros2_map_nav.assertions import assert_type, assert_len, assert_pose
 
 
 class KeypointPoseEstimator(PoseEstimator):
@@ -20,6 +20,11 @@ class KeypointPoseEstimator(PoseEstimator):
     """Minimum matches for homography estimation, should be at least 4"""
 
     def __init__(self, min_matches: int):
+        """Class initializer
+
+        :param min_matches: Minimum (>=4) required matched keypoints for pose estimates
+        """
+        # Use provided value as long as it's above _HOMOGRAPHY_MINIMUM_MATCHES
         self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or _HOMOGRAPHY_MINIMUM_MATCHES)
 
     @abstractmethod
@@ -40,7 +45,7 @@ class KeypointPoseEstimator(PoseEstimator):
                       guess: Optional[Tuple[np.ndarray, np.ndarray]]) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns pose between given query and reference images, or None if no pose could not be estimated
 
-        Uses :class:`._find_matching_keypoints` to first estimate matching keypoints before estimating pose.
+        Uses :class:`._find_matching_keypoints` to estimate matching keypoints before estimating pose.
 
         :param query: The first (query) image for pose estimation
         :param reference: The second (reference) image for pose estimation
@@ -61,7 +66,8 @@ class KeypointPoseEstimator(PoseEstimator):
         _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp1, k, dist_coeffs, r, t, useExtrinsicGuess=use_guess,
                                          iterationsCount=10)
         r, _ = cv2.Rodrigues(r)
+        pose = r, t
 
-        # TODO: check validity here? Parent class and data.Pose does it too
+        assert_pose(pose)
 
         return r, t

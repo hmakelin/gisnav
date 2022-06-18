@@ -31,7 +31,7 @@ docker-compose build \
     .
 docker-compose up -d
 ```
-## 2. Clone this repository and dependencies
+## 2. Clone GISNav repository and dependencies
 ```
 mkdir -p $HOME/px4_ros_com_ros2/src && cd "$_"
 git clone https://github.com/PX4/px4_ros_com.git
@@ -39,13 +39,24 @@ git clone https://github.com/PX4/px4_msgs.git
 git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 ```
 
-## 3. Build your ROS 2 workspace
+## 3. Download LoFTR and weights
+Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the [LoFTR repo]
+(https://github.com/zju3dv/LoFTR). Extract the ``outdoor_ds.ckpt`` from the .zip package and copy it e.g. into a new 
+``weights`` folder:
+```
+cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav && \
+    git submodule update LoFTR
+    
+mkdir weights && cp ~/Downloads/outdoor_ds.ckpt ./weights
+```
+
+## 4. Build your ROS 2 workspace
 ```
 cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts && \
     ./build_ros2_workspace.bash
 ```
 
-## 4. Run the example node
+## 5. Run the example node
 ```
 cd $HOME/px4_ros_com_ros2 && \
     ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \

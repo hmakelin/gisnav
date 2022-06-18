@@ -19,15 +19,7 @@ from python_px4_ros2_map_nav.nodes.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 
 
-#version_string = f'v{version}'
-#rst_prolog = f"""
-#python_px4_ros2_map_nav {version_string}
-#"""
-
 # -- Add SuperGlueEstimator to path ---------------------------------------------------
-#from python_px4_ros2_map_nav.util import setup_sys_path
-#_, __ = setup_sys_path()
-# TODO: same logic as in setup_sys_path
 if 'get_package_share_directory' not in sys.modules:
     from ament_index_python.packages import get_package_share_directory
 share_dir = get_package_share_directory(package_data.package_name)

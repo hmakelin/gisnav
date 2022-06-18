@@ -912,19 +912,19 @@ class BaseNode(Node, ABC):
         styles = self.get_parameter('wms.styles').get_parameter_value().string_array_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
         image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value  # TODO: handle not set?
-        assert_type(layers, get_args(List[str]))
-        assert_type(styles, get_args(List[str]))
+        assert all(isinstance(x, str) for x in layers)
+        assert all(isinstance(x, str) for x in styles)
         assert len(styles) == len(layers)
         assert_type(srs_str, str)
         assert_type(image_format, str)
         try:
-            self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layer: {layer_str}, srs: {srs_str}.')
+            self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}.')
             if self._wms_query is not None:
                 assert self._wms_query.result.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
             self._wms_query = AsyncWMSQuery(
                 result=self._wms_pool.apply_async(
                     WMSClient.worker,
-                    (bbox.bounds, self._map_size_with_padding, layers, styles, srs_str, image_format),
+                    (layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format),
                     callback=self.wms_pool_worker_callback,
                     error_callback=self.wms_pool_worker_error_callback
                 ),

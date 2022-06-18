@@ -82,8 +82,8 @@ class WMSClient:
 
         # Do not handle possible requests library related exceptions here (see class docstring)
         try:
-            map_ = wms_client._wms.getmap(layers=layers, srs=srs_str, bbox=bbox, size=map_size, format=image_format,
-                                          transparent=_IMAGE_TRANSPARENCY)
+            map_ = wms_client._wms.getmap(layers=layers, styles=styles, srs=srs_str, bbox=bbox, size=map_size,
+                                          format=image_format, transparent=WMSClient._IMAGE_TRANSPARENCY)
         except ServiceException as _:
             # TODO: handle of OWSLib raised exceptions - currently passed on to error callback
             raise

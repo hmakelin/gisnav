@@ -208,7 +208,7 @@ Pose Estimators
 
 SuperGlue & LoFTR
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Two pose estimators, SuperGlue and SuperGlue derivative LoFTR are provided with LoFTR as the default pose estimator.
+Two pose estimators, SuperGlue and SuperGlue inspired LoFTR are provided with LoFTR as the default pose estimator.
 These were seen as state-of-the-art image matching algorithms at the time the software was written but newer algorithms
 may provide more reliable matching. Note that SuperGlue has restrictive licensing requirements if you are planning to
 use it for your own project (see license file in the repository), while LoFTR has a permissive license.

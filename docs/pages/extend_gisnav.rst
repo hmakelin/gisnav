@@ -10,8 +10,7 @@ Integrate GISNav
 ---------------------------------------------------
 The `ROS 2 <https://docs.ros.org/>`_ nodes can be found in the :py:mod:`.python_px4_ros2_map_nav.nodes` package.
 The package includes the :class:`.BaseNode` abstract base class which must be extended by all implementing nodes.
-The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own
-`Custom Node`_.
+The :class:`.MockGPSNode` implementation is provided for demonstration to help you get started with your own node.
 
 .. _Extend BaseNode:
 
@@ -119,7 +118,7 @@ You may add more subscribe and publish topics if you decide to implement your ow
 messages are passed between PX4 and your ROS node.
 
 The dockerized environment used in the `Read Me`_ quick start has preconfigured these topics. However, you may want to
-subscribe and publish to additional topics in your `Custom Node`_, in which case you will also need to configure the
+subscribe and publish to additional topics in your own node, in which case you will also need to configure the
 PX4-ROS 2 bridge yourself.
 
 .. seealso::

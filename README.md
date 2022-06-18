@@ -84,6 +84,5 @@ cd docs/ && make html
 ```
 
 # License
-This software is released under the MIT license. See the `LICENSE.md` in this repository for more information. Also see
-the [SuperGlue license file](https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/LICENSE) for SuperGlue
-licensing information.
+This software is released under the MIT license. See the `LICENSE.md` file contained in the repository for more 
+information.

@@ -27,7 +27,8 @@ class _GeoObject(ABC):
 
         :return: The same GeoPoint instance transformed to new CRS
         """
-        self._geoseries = self._geoseries.to_crs(crs)
+        if self._geoseries.crs != crs:
+            self._geoseries = self._geoseries.to_crs(crs)
         return self
 
     def to_file(self, filename: str, driver: str = 'GeoJSON') -> None:

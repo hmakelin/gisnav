@@ -41,6 +41,9 @@ class Position:
     y_sd: Optional[float]        # Standard deviation of error in y (longitude) dimension
     z_sd: Optional[float]        # Standard deviation of error in z (altitude) dimension
 
+    _KALMAN_FILTER_EPSG_CODE = 'epsg:3857'
+    """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
+
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
@@ -72,6 +75,30 @@ class Position:
         """Convenience property to get longitude in WGS 84"""
         return self.xy.lon
 
+    def to_array(self) -> np.ndarray:
+        """Returns position (x, y, z) coordinates in adjusted EPSG:3857 meters as numpy array
+
+        Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`
+        """
+        return np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coordinates + (self.z_ground,)).reshape(1, 3)
+
+    @staticmethod
+    def from_filtered_output(means: np.ndarray, sds: np.ndarray, original_position: Position) -> Position:
+        """Creates a Position from :class:`.SimpleFilter` output
+
+        :param means: Estimated means from Kalman filter
+        :param sds: Estimated standard deviations from Kalman filter
+        :return: New :class:`.Position` instance with adjusted x, y and altitude values
+        """
+        return Position(
+            xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE).to_crs(original_position.crs),
+            z_ground=means[2],
+            z_amsl=original_position.z_amsl + (means[2] - original_position.z_ground) \
+                if original_positionz_amsl is not None else None,
+            x_sd=sds[0],
+            y_sd=sds[1],
+            z_sd=sds[2]
+        )
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Attitude:

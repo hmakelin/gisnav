@@ -1210,26 +1210,26 @@ class BaseNode(Node, ABC):
                 cv2.imshow("Projected FOV estimate", img)
                 cv2.waitKey(1)
 
-            # TODO: convert to epsg:3857 or whatever is fed to _kf.update
             orig_crs_str = output_data.fixed_camera.position.xy.crs
-            temp_crs_str = 'epsg:3857'  # Need to do filtering in (approximate) meters (for eph and epv estimation) so use EPSG:3857
-            measurement = np.array(output_data.fixed_camera.position.xy.to_crs(temp_crs_str).coordinates + (output_data.fixed_camera.position.z_ground,)).reshape(1, 3)
-
             # Get output from Kalman filter
-            filter_output = self._kf.update(measurement)
+            filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
             if filter_output is None:
                 self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
                 return None
             else:
-                xyz_mean, xyz_sd = filter_output
-                filtered_position = Position(
-                    xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
-                    z_ground=xyz_mean[2],
-                    z_amsl=output_data.fixed_camera.position.z_amsl + (xyz_mean[2] - output_data.fixed_camera.position.z_ground) if output_data.fixed_camera.position.z_amsl is not None else None,
-                    x_sd=xyz_sd[0],
-                    y_sd=xyz_sd[1],
-                    z_sd=xyz_sd[2]
-                )
+                filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
+                                                                  #output_data.fixed_camera.position.z_amsl,
+                                                                  #output_data.fixed_camera.position.z_ground,
+                                                                  #orig_crs_str)
+                #xyz_mean, xyz_sd = filter_output
+                #filtered_position = Position(
+                #    xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
+                #    z_ground=xyz_mean[2],
+                #    z_amsl=output_data.fixed_camera.position.z_amsl + (xyz_mean[2] - output_data.fixed_camera.position.z_ground) if output_data.fixed_camera.position.z_amsl is not None else None,
+                #    x_sd=xyz_sd[0],
+                #    y_sd=xyz_sd[1],
+                #    z_sd=xyz_sd[2]
+                #)
                 assert filtered_position.xy.crs.lower() == orig_crs_str.lower()
                 output_data.filtered_position = filtered_position
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?

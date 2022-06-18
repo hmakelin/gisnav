@@ -83,11 +83,9 @@ superglue module
    :undoc-members:
    :show-inheritance:
 
-filters package
+kalman module
 ---------------------------------------
-filter module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. automodule:: python_px4_ros2_map_nav.filters.filter
+.. automodule:: python_px4_ros2_map_nav.kalman
    :autosummary:
    :members:
    :undoc-members:

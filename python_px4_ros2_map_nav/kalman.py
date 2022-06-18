@@ -1,4 +1,4 @@
-"""Kalman filter for producing a smooth position and variance estimates"""
+"""Kalman filter for producing smooth position and variance estimates"""
 import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
@@ -9,7 +9,7 @@ from python_px4_ros2_map_nav.assertions import assert_type, assert_shape
 class SimpleFilter:
     """Simple Kalman filter implementation
 
-    Implements 3D model with position and velocity amounting to a total of 6 state variable. Assumes only position is
+    Implements 3D model with position and velocity amounting to a total of 6 state variables. Assumes only position is
     observed while velocity is hidden.
     """
     _MIN_MEASUREMENTS = 20
@@ -56,12 +56,10 @@ class SimpleFilter:
         ])
 
     def update(self, measurement: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Returns filtered position and standard deviation estimates
-
-        Pushes the measurement into the queue and removes the oldest one if queue is full.
+        """Returns filtered position and standard deviation estimates, or None if not enough data is available yet
 
         :param measurement: A new measurement (position observation)
-        :return: Filtered position, AMSL altitude also gets filtered if provided, epx, epy and epz values provided of None if output not yet available
+        :return: Tuple of filtered measurement means and standard deviations, or None if output not yet available
         """
         if self._measurements is None:
             # First measurement, save initial state

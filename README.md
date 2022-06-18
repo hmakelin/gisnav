@@ -40,8 +40,8 @@ git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 ```
 
 ## 3. Download LoFTR and weights
-Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the [LoFTR repo]
-(https://github.com/zju3dv/LoFTR). Extract the ``outdoor_ds.ckpt`` from the .zip package and copy it e.g. into a new 
+Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the 
+[LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the ``outdoor_ds.ckpt`` from the .zip package and copy it e.g. into a new 
 ``weights`` folder:
 ```
 cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav && \

@@ -47,8 +47,9 @@ simulation environment by doing:
     docker-compose up -d
 
 .. note::
-    You should see the Gazebo and QGroundControl windows pop up soon on your screen. If you do not see them, you may
-    need configure your ``xhost``:
+    It may take a few minutes to build your Docker image. You should see the Gazebo and QGroundControl windows pop up
+    soon on your screen after your image has built and is run in a container. If you do not see them after a while, you
+    may need to configure your ``xhost``:
 
     .. code-block:: bash
 

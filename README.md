@@ -19,7 +19,7 @@ work.
 ## 1. Run the simulation environment
 See [README.md](https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git) at the `px4-ros2-map-nav-sim` repository
 for more instruction on what to provide for build arguments - the strings below are examples.
-```
+```bash
 xhost +
 
 cd $HOME
@@ -32,7 +32,7 @@ docker-compose build \
 docker-compose up -d
 ```
 ## 2. Clone GISNav repository and dependencies
-```
+```bash
 mkdir -p $HOME/px4_ros_com_ros2/src && cd "$_"
 git clone https://github.com/PX4/px4_ros_com.git
 git clone https://github.com/PX4/px4_msgs.git
@@ -43,7 +43,7 @@ git clone https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav.git
 Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the 
 [LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the ``outdoor_ds.ckpt`` from the .zip package and copy it e.g. into a new 
 ``weights`` folder:
-```
+```bash
 cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav && \
     git submodule update LoFTR
     
@@ -51,13 +51,13 @@ mkdir weights && cp ~/Downloads/outdoor_ds.ckpt ./weights
 ```
 
 ## 4. Build your ROS 2 workspace
-```
+```bash
 cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts && \
     ./build_ros2_workspace.bash
 ```
 
 ## 5. Run the example node
-```
+```bash
 cd $HOME/px4_ros_com_ros2 && \
     ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
         src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
@@ -67,19 +67,19 @@ cd $HOME/px4_ros_com_ros2 && \
 You can use Sphinx to generate the API documentation which will appear in the `docs/_build` folder.
 
 Load the ROS workspace in your shell if you have not yet done so (ROS `foxy` in this example):
-```
+```bash
 source /opt/ros/foxy/setup.bash
 source install/setup.bash
 ```
 
 Go to the `python_px4_ros2_map_nav` parent directory and install Sphinx:
-```
+```bash
 cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav/ && \
     pip3 install -r requirements-dev.txt
 ```
 
 Then go to `docs/` folder and generate the HTML documentation:
-```
+```bash
 cd docs/ && make html
 ```
 

@@ -90,8 +90,77 @@ PX4-ROS 2 microRTPS bridge
 You will need to setup the bridge with the following topic configuration:
 
 
-gscam2
+gscam
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+As described in the `Video Streaming <https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ section
+of PX4's User Guide, the ``typhoon_h480`` build target for Gazebo SITL supports UDP video streaming. You can use
+``gscam`` to pipe the video into ROS, from where it can be subscribed to by GISNav's :class:`.BaseNode`.
+
+Open a new terminal window and source your ROS environment (ROS ``foxy`` in this example):
+
+.. note::
+    If you work with your workspace often, you may want to add the sourcing of the workspace into your ``~/.bashrc``.
+
+.. code-block:: bash
+
+    source /opt/ros/foxy/setup.bash
+    source install/setup.bash
+
+Then install ``gscam`` and its dependencies from the
+`ROS package index <https://index.ros.org/p/gscam/github-ros-drivers-gscam/>`_ for your ROS distribution :
+
+.. code-block:: bash
+
+    sudo apt-get install gstreamer1.0-tools libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev
+    apt install ros-foxy-gscam
+
+
+Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these ones:
+
+.. seealso::
+    See the `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_ ROS tutorial on how to create a camera calibration file if you do not want to use the example file
+
+.. code-block:: yaml
+    :caption: gscam_params.yaml
+
+    gscam_publisher:
+      ros__parameters:
+        gscam_config: "gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600 ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert "
+        preroll: False
+        use_gst_timestamps: True
+        frame_id: 'mono'
+        image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
+
+.. code-block:: yaml
+    :caption: camera_params.yaml
+
+    image_width: 640
+    image_height: 360
+    camera_name: cgo3
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [205.46963709898583, 0, 320, 0, 205.46963709898583, 180, 0, 0, 1]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.41527, 0.31874, -0.00197, 0.00071, 0]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [4827.94, 0, 1223.5, 0, 0, 4835.62, 1024.5, 0, 0, 0, 1, 0]
+
+And run ``gscam`` with your new configuration when the PX4 Gazebo SITL is running:
+
+.. code-block:: bash
+
+    ros2 run gscam gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml
+
 
 .. _`WMS endpoint`:
 

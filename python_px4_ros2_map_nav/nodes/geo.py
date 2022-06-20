@@ -206,10 +206,9 @@ class GeoTrapezoid(_GeoPolygon):
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        if not (self._geoseries[0].is_valid and self._is_convex_isosceles_trapezoid):
+        if not (self._geoseries[0].is_valid and self._is_convex_isosceles_trapezoid()):
             raise GeoValueError(f'Not a valid convex isosceles trapezoid: {self._geoseries[0]}')
 
-    @property
     def _is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
         """Returns True if the quadrilateral is a convex isosceles trapezoid
 

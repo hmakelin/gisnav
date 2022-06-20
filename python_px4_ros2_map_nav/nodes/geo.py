@@ -4,9 +4,9 @@ from __future__ import annotations
 import numpy as np
 
 from abc import ABC, abstractmethod
-from functools import lru_cache
 from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
+from shapely.geometry.polygon import orient
 
 from python_px4_ros2_map_nav.assertions import assert_len, assert_type
 
@@ -14,30 +14,41 @@ from python_px4_ros2_map_nav.assertions import assert_len, assert_type
 class _GeoObject(ABC):
     """Abstract base class for other GeoSeries wrappers
 
-    Each _GeoObject wraps a :class:`geopandas.GeoSeries` of length one, i.e. they only contain a single Shapely shape.
-
-    The :class:`_GeoObject` methods expose :class:`geopandas.GeoSeries` methods to
+    Each instance wraps a :class:`geopandas.GeoSeries` instance of length one, i.e. containing a single Shapely shape.
+    The GeoSeries class is versatile and operates on an entire series, so this wrapper is provided to only expose
+    specific functionality that is needed in the application as well as provide an abstraction for a 'GeoObject' i.e. a
+    GeoSeries of length 1. For example, it is conceptually more convenient to handle a 'GeoPoint' object than a
+    GeoSeries of length 1 with a single Shapely Point in it.
     """
 
     DEFAULT_CRS = 'epsg:4326'
     """Use WGS 84 latitude and longitude by default"""
 
-    @property
-    @abstractmethod
-    def _geoseries(self) -> np.ndarray:
-        """Returns the contained :class:`geopandas.GeoSeries` instance"""
-        pass
+    #@property
+    #def _geoseries(self) -> np.ndarray:
+    #    """Returns the contained :class:`geopandas.GeoSeries` instance"""
+    #    return self._geoseries
+
+    #@property
+    #@_geoseries.setter
+    #def _geoseries(self, value: GeoSeries) -> None:
+    #    assert_type(value, GeoSeries)
+    #    assert_len(value[0], 1)
+    #    self._geoseries = value
 
     @property
     def crs(self) -> str:
-        """Returns current CRS string"""
-        return str(self._geoseries.crs)
+        """Returns current CRS string
+
+        .. note::
+            The underlying :class:`pyproj.crs.CRS` is converted to a (lower case) string
+        """
+        return self._geoseries.crs.srs.lower()
 
     @property
-    @abstractmethod
-    def coordinates(self) -> np.ndarray:
-        """Returns the wrapped shape as a numpy array."""
-        pass
+    def coords(self) -> np.ndarray:
+        """Returns the wrapped shape as a numpy array"""
+        return self._geoseries[0].coords[0]
 
     def to_crs(self, crs: str) -> _GeoObject:
         """Converts to provided CRS
@@ -49,206 +60,197 @@ class _GeoObject(ABC):
         return self
 
     def to_file(self, filename: str, driver: str = 'GeoJSON') -> None:
-        """Converts the wrapped GeoSeries to GeoJSON
+        """Saves the wrapped shape into a file (e.g. as GeoJSON)
 
         :param filename: File name
         :param driver: OGR format driver
         """
         self._geoseries.to_file(filename, driver=driver)
 
+    def __post_init__(self):
+        """Post-initialization validity checks"""
+        # TODO enforce, do not assert
+        assert_len(self._geoseries, 1)
+        #assert self._geoseries.crs is not None  # TODO: not asserted because data.FOV.fov_pix is currently GeoTrapezoid
+
+
 class _GeoPolygon(_GeoObject):
-    """Abstract base class for other wrappers that contain GeoSeries with Shapely Polygons"""
+    """Abstract base class for :class:`_GeoObject`s that contain a Shapely Polygon"""
 
     @property
     def center(self) -> GeoPoint:
-        """Returns center or centroid point of the polygon"""
+        """Returns center point of the polygon"""
         return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
-    # TODO: make return numpy array
     @property
-    @lru_cache(4)
     def bounds(self) -> Tuple[4*(float,)]:
-        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple for WMS GetMap requests"""
+        """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple (e.g. for WMS GetMap)"""
         return self._geoseries[0].bounds
 
+    @property
+    def area(self) -> float:
+        """Returns area of the bounding box"""
+        return self._geoseries.area[0]
+
+    @property
+    def length(self) -> float:
+        """Returns length of polygon in native CRS"""
+        return self._geoseries[0].length
+
+    @property
+    def meter_length(self) -> float:
+        """Returns length of polygon in meters"""
+        return self.center._spherical_adjustment * self.to_crs('epsg:3857').length
+
+    @property
+    def coords(self) -> np.ndarray:
+        """Returns a numpy array of the coordinates of the polygon exterior ring in counter-clockwise order
+
+        Coordinates provided in counter-clockwise order
+
+        .. note::
+            Shapely duplicates the Polygon starting point to close its boundary but this property removes the duplicate
+        """
+        assert_len(self._geoseries[0].exterior.coords, 5)
+        #exterior_coords = np.array(orient(self._geoseries[0], 1.0).exterior.coords)[:-1]
+        exterior_coords = np.array(self._geoseries[0].exterior.coords)[:-1]
+        assert_len(exterior_coords, 4)
+        return exterior_coords
+
+    def intersection(self, box: _GeoPolygon) -> GeoTrapezoid:
+        """Returns the intersection with the given :class:`._GeoPolygon`"""
+        return GeoTrapezoid(self._geoseries.intersection(box._geoseries))
+
     def __post_init__(self):
-        """Post-initialization validity checks"""
-        # TODO: Enforce validity checks instead of asserting
-        #assert_len(self._geoseries[0].exterior.coords, 4 + 1)  TODO 4 or 5?
-        assert_len(self._geoseries, 1)
+        """Post-initialization validity checks
+
+        :raise: ValueError if wrapped polygon is not valid
+        """
         assert_type(self._geoseries[0], Polygon)
-        assert self._geoseries.crs is not None
-        #assert self._geoseries[0].is_valid  # TODO: handle this like is_isosceles_trapezoid (this is pre-init check, the other one is post init check)
+
 
 class GeoPoint(_GeoObject):
-    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (geographical coordinate pair)
-
-    The GeoSeries class is very flexible, so this wrapper is provided to only expose specific functionality that is
-    needed in the application. It is also more convenient to handle a 'Point' conceptually than a series of length 1
-    with a single Point in it.
-
-    Pay attention to the axis order, i.e. (x, y) is (lon, lat) for EPSG:4326.
-    """
-    # TODO call these x and y instead of x and y (more generic)
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (a geographical coordinate pair)"""
     def __init__(self, x: float, y: float, crs: str = _GeoObject.DEFAULT_CRS):
-        """Initializes the wrapped GeoSeries
+        """Creates a geographical coordinate pair
 
-        Not that (x and y) are in ENU frame so easting comes before northing (e.g. lon before lat, even though WGS 84
-        is defined as lat before lon).
+        .. warning::
+            X and Y axes are in ENU frame so longitude comes before latitude (easting before northing) even though
+            WGS 84 is defined as latitude before longitude.
 
-        :param x: X axis coordinate (longitude)
-        :param y: Y axis coordinate (latitude)
-        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326') the (x, y) pair is provided in
+        :param x: ENU frame X axis coordinate (e.g. longitude in WGS 84)
+        :param y: ENU frame Y axis coordinate (e.g. latitude in WGS 84)
+        :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326' for WGS 84) for the coordinate pair
         """
         self._geoseries = GeoSeries([Point(x, y)], crs=crs)
-        assert_type(self._geoseries[0], Point)
-
-        # TODO: Enforce validity checks instead of asserting
-        assert_len(self._geoseries, 1)
-        assert_type(self._geoseries[0], Point)
-        #assert self._geoseries.crs is not None  # TODO: disabled because fov_pix is handled as GeoTrapezoid, fix it
-
-    # TODO: return numpy array, same as GeoBBox, maybe refactor these both into _GeoObject?
-    @property
-    @lru_cache(4)
-    def coordinates(self) -> Tuple[float, float]:  # TODO: return as numpy array
-        """X/Y (ENU frame) tuple in given CRS system units
-
-        Note that this only returns coordinates in the provided CRS units but always in the (x, y) axis
-        order, so e.g. WGS84 (lat, lon) pair would be returned as (lon, lat). Use :meth:`~latlon` to get WGS84
-        coordinates in the correct order.
-
-        :return: X/Y (e.g. lon/lat because of ENU frame) tuple
-        """
-        return self._geoseries[0].coords[0]
 
     @property
     def latlon(self) -> Tuple[float, float]:
-        """Convenience property to get lat/lon tuple in WGS 84
+        """(latitude, longitude) tuple in WGS 84
 
-        Note that this returns latitude and longitude in different order then :meth:`~get_coordinates`
+        .. note:
+            This returns latitude and longitude in WGS 84 format, i.e. (y, x) in ENU frame
         """
-        return self.to_crs('epsg:4326').coordinates[1::-1]
+        return self.to_crs('epsg:4326').coords[1::-1]
 
     @property
     def lat(self) -> float:
-        """Convenience property to get latitude in WGS 84"""
+        """Latitude in WGS 84"""
         return self.latlon[0]
 
     @property
     def lon(self) -> float:
-        """Convenience property to get longitude in WGS 84"""
+        """Longitude in WGS 84"""
         return self.latlon[1]
 
+    @property
     def _spherical_adjustment(self):
-        """Helper method to adjust distance measured in EPSG:3857 pseudo-meters into approximate real meters
+        """Helper property for correcting distance measured in EPSG:3857 pseudo-meters into approximate real meters
 
-        Uses a simple spherical model which is accurate enough for planned use scenarios
+        Uses a simple spherical model which is accurate enough for expected use cases
         """
-        # TODO: use a precise conversion?
-        return abs(np.cos(np.radians(self.lat)))
+        return np.cos(np.radians(abs(self.lat)))
 
 
-class GeoBBox(_GeoPolygon):
-    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a bounding box
-
-    Used for (square) map bounding boxes.
-    """
-    # TODO: have constructor make generic rectangle, and a static method to make square from circle
+class GeoSquare(_GeoPolygon):
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (square shaped) bounding box"""
     def __init__(self, center: GeoPoint, radius: float, crs: str = _GeoObject.DEFAULT_CRS):
-        """Creates a square bounding box with a circle of given radius inside
+        """Creates a square bounding box by enveloping a circle of given radius at given center
 
         :param center: Center of the bounding box
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        # TODO: spherical adjustment uses self.center property, which needs _geoseries defined! so what to do here?
-        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer((1/center._spherical_adjustment()) * radius)\
+        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer(radius/center._spherical_adjustment)\
             .to_crs(crs).envelope
         assert_type(self._geoseries[0], Polygon)
 
     @property
-    @lru_cache(4)
-    def coordinates(self) -> np.ndarray:
+    def coords(self) -> np.ndarray:
         """Returns a numpy array of the corners coordinates of the bbox
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as
         :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
         """
-        # TODO: fix this, hard coded order is prone to breaking even when using box function
-        # TODO: why sometimes 5, sometimes 4?
-        if len(self._geoseries[0].exterior.coords) == 5:
-            corners = box(*self.bounds).exterior.coords[:-1]
-        else:
-            len(self._geoseries[0].exterior.coords) == 4
-            corners = box(*self.bounds).exterior.coords
+        corners = box(*self.bounds).exterior.coords
         corners = np.array([
             corners[2],  # tl
             corners[3],  # bl
             corners[0],  # br
             corners[1]   # tr
         ])
-        # (lon, lat) to (lat, lon)
-        corners = np.flip(corners, axis=1).reshape(-1, 1, 2)
 
         return corners
 
-    @property
-    def area(self) -> float:
-        """Returns area of the box"""
-        return self._geoseries.area[0]
-
-    def intersection_area(self, box: GeoBBox):
-        """Returns area of the intersection between the two boxes"""
-        return self._geoseries.intersection(box._geoseries).area[0]  # TODO: access private attr
-
-
 class GeoTrapezoid(_GeoPolygon):
-    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex) trapezoid
+    """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex isosceles) trapezoid
 
     Used to represents camera field of view projected to ground plane.
     """
     def __init__(self, corners: np.ndarray, crs: str = _GeoObject.DEFAULT_CRS):
-        """Creates a square bounding box with a circle of given radius inside
+        """Creates a square bounding box by enveloping a circle of given radius inside
 
         :param corners: Trapezoid corner coordinates
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
+        :raise: :classs:`.GeoValueError` if the trapezoid is not valid (convex isosceles trapezoid)
         """
         self._geoseries = GeoSeries([Polygon(corners.squeeze())], crs=crs)
 
-    # TODO: how to know which corners are "bottom" corners and which ones are "top" corners?
-    #  Order should again be same as in create_src_corners, as in GeoBBox. Need to have some shared trapezoid corner order constant used by these three?
-    # Need to force constructor to distinguish between tl, bl, br, and tr?
-    @property
-    @lru_cache(4)
-    def coordinates(self) -> np.ndarray:
-        """Returns a numpy array of the corners coordinates of the trapezoid
+    def __post_init__(self):
+        """Post-initialization validity checks"""
+        if not self._geoseries[0].is_valid or not self._is_convex_isosceles_trapezoid:
+            raise GeoValueError(f'Not a valid convex isosceles trapezoid: {self._geoseries[0]}')
 
-        Order should be top-left, bottom-left, bottom-right, top-right (same as
-        :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
+    @property
+    def _is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
+        """Returns True if the quadrilateral is a convex isosceles trapezoid
+
+        If the estimated field of view (FOV) is not a convex isosceles trapezoid, it is a sign that (1) the match was bad or
+        (2) the gimbal the camera is mounted on has not had enough time to stabilize (camera has non-zero roll). Matches
+        where the FOV is not a convex isosceles trapezoid should be rejected assuming we can't determine (1) from (2) and
+        that it is better to wait for a good position estimate than to use a bad one.
+
+        See also :func:`~create_src_corners` for the assumed order of the quadrilateral corners.
+
+        :param diagonal_length_tolerance: Tolerance for relative length difference between trapezoid diagonals
+        :return: True if the quadrilateral is a convex isosceles trapezoid
         """
-        # Corners should be provided in tl, bl, br, tr order to constructor
-        # TODO: make this less prone to breaking
-        # TODO: why sometimes 5, sometimes 4?
-        if len(self._geoseries[0].exterior.coords) == 5:
-            corners = np.array(self._geoseries[0].exterior.coords[:-1])
-        else:
-            assert len(self._geoseries[0].exterior.coords) == 4
-            corners = np.array(self._geoseries[0].exterior.coords)
+        ul, ll, lr, ur = tuple(map(lambda pt: pt.squeeze().tolist(), self.coords))
 
-        # (lon, lat) to (lat, lon)
-        corners = np.flip(corners, axis=1).reshape(-1, 1, 2)
+        # Check convexity (exclude self-crossing trapezoids)
+        # Note: inverted y-axis, origin at upper left corner of image
+        if not (ul[0] < ur[0] and ul[1] < ll[1] and lr[0] > ll[0] and lr[1] > ur[1]):
+            return False
 
-        return corners
+        # Check diagonals same length within tolerance
+        ul_lr_length = math.sqrt((ul[0] - lr[0]) ** 2 + (ul[1] - lr[1]) ** 2)
+        ll_ur_length = math.sqrt((ll[0] - ur[0]) ** 2 + (ll[1] - ur[1]) ** 2)
+        if abs((ul_lr_length / ll_ur_length) - 1) > diagonal_length_tolerance:
+            return False
 
-    @property
-    def length(self) -> float:
-        # TODO: does not use crs, just returns raw lenght because fov_pix does not have crs
-        """Returns length of polygon"""
-        return self._geoseries[0].length
+        return True
 
-    @property
-    def meter_length(self) -> float:
-        """Returns length of polygon in meters"""
-        return self.center._spherical_adjustment() * self._geoseries.to_crs('epsg:3857')[0].length
 
+class GeoValueError(ValueError):
+    """Exception returned if a valid GeoObject could not be initialized from provided values."""
+    pass

@@ -24,6 +24,7 @@ base_node module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 mock_gps_node module
@@ -32,6 +33,7 @@ mock_gps_node module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 data module
@@ -40,6 +42,7 @@ data module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 geo module
@@ -48,6 +51,7 @@ geo module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 pose_estimators package
@@ -58,6 +62,7 @@ pose_estimator module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 keypoint_pose_estimator module
@@ -66,6 +71,7 @@ keypoint_pose_estimator module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 loftr module
@@ -74,6 +80,7 @@ loftr module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 superglue module
@@ -82,6 +89,7 @@ superglue module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 kalman module
@@ -90,6 +98,7 @@ kalman module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 assertions module
@@ -98,6 +107,7 @@ assertions module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 
 wms module
@@ -106,5 +116,6 @@ wms module
    :autosummary:
    :members:
    :undoc-members:
+   :special-members: __init__
    :show-inheritance:
 

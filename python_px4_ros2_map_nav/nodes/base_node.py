@@ -27,9 +27,9 @@ from sensor_msgs.msg import CameraInfo, Image
 
 # TODO: for data at least may be cleaner to just import the module and use it as prefix?
 #  almost everything is imported from data (except for abstract base classes)
-from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, \
+from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, DataValueError, \
     InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
-from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoBBox, GeoTrapezoid
+from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
 from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
 from python_px4_ros2_map_nav.wms import WMSClient
@@ -773,19 +773,17 @@ class BaseNode(Node, ABC):
 
         # Project principal point if required
         if self._is_gimbal_projection_enabled:
-            projected_position = self._projected_field_of_view_center(position)
-            if projected_position is None:
+            projected_center = self._projected_field_of_view_center(position)
+            if projected_center is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
-            else:
-                position = projected_position
 
         # Get map size based on altitude and update map if needed
         assert position.z_ground is not None
         map_radius = self._get_dynamic_map_radius(position.z_ground)
         max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
         assert 0 < map_radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
-        map_candidate = GeoBBox(position.xy, map_radius)
+        map_candidate = GeoSquare(projected_center if projected_center is not None else position.xy, map_radius)
         if self._should_update_map(map_candidate):  # _should_request_new_map
             self._update_map(map_candidate)  # _request_new_map
         else:
@@ -846,14 +844,14 @@ class BaseNode(Node, ABC):
         now_usec = time.time() * 1e6
         self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
-    def _projected_field_of_view_center(self, origin: Position) -> Optional[Position]:
+    def _projected_field_of_view_center(self, origin: Position) -> Optional[GeoPoint]:
         """Returns WGS84 coordinates of projected camera field of view (FOV).
 
         Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
         for next WMS GetMap request.
 
-        :param origin: Camera position  # TODO: why is this an argument but all else is not?
-        :return: Center of the FOV with same altitude as given origin, or None if not available
+        :param origin: Camera position
+        :return: Center of the projected FOV,  or None if not available
         """
         if self._gimbal_set_attitude is None:
             self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
@@ -879,29 +877,24 @@ class BaseNode(Node, ABC):
             return None
 
         # TODO handle none altitude
-        mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl)  # Redundant altitude call
+        try:
+            mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl)  # Redundant altitude call
+        except DataValueError as _:
+            # Not a valid FixedCamera
+            return None
 
         self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
 
-        center = np.mean(mock_fixed_camera.fov.fov.to_crs('epsg:4326').coordinates, axis=0).squeeze().tolist()
-        fov_center = Position(
-            xy=GeoPoint(*center[1::-1], crs='epsg:4326'),
-            z_ground=origin.z_ground,
-            z_amsl=None,
-            x_sd=None,
-            y_sd=None,
-            z_sd=None
-        )
-        return fov_center
+        return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
-    def _update_map(self, bbox: GeoBBox) -> None:
+    def _update_map(self, bbox: GeoSquare) -> None:
         """Instructs the WMS client to get a new map from the WMS server.
 
         :param bbox: Bounding box of map to update
         :return:
         """
         self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
-        assert_type(bbox, GeoBBox)
+        assert_type(bbox, GeoSquare)
 
         if self._map_size_with_padding is None:
             self.get_logger().warn('Map size not yet available - skipping WMS request.')
@@ -1068,7 +1061,7 @@ class BaseNode(Node, ABC):
         """
         return not self._wms_query.result.ready() if self._wms_query is not None else False
 
-    def _previous_map_too_close(self, bbox: GeoBBox) -> bool:
+    def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
         """Checks if previous map is too close to new requested one.
 
         This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
@@ -1079,18 +1072,18 @@ class BaseNode(Node, ABC):
         :param bbox: Bounding box of new map candidate
         :return: True if previous map is too close.
         """
-        assert_type(bbox, GeoBBox)
+        assert_type(bbox, GeoSquare)
         if self._map_output_data_prev is not None:
             previous_map_data = self._map_output_data_prev.fixed_camera.map_match.image_pair.ref.map_data  # TODO: use map_match not _match?
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
-            ratio = min(bbox.intersection_area(previous_map_data.bbox) / bbox.area,
-                   bbox.intersection_area(previous_map_data.bbox) / previous_map_data.bbox.area)
+            ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
+                        bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
             if ratio > area_threshold:
                 return True
 
         return False
 
-    def _should_update_map(self, bbox: GeoBBox) -> bool:
+    def _should_update_map(self, bbox: GeoSquare) -> bool:
         """Checks if a new WMS map request should be made to update old map.
 
         Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
@@ -1100,7 +1093,7 @@ class BaseNode(Node, ABC):
         :param bbox: Bounding box of new map candidate
         :return: True if map should be updated
         """
-        assert_type(bbox, GeoBBox)
+        assert_type(bbox, GeoSquare)
 
         # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
         if self._wms_results_pending() or self._previous_map_too_close(bbox):
@@ -1201,15 +1194,17 @@ class BaseNode(Node, ABC):
             # noinspection PyUnreachableCode
             if __debug__:
                 # Visualize projected FOV estimate
+                fov_pix = np.flip(output_data.fixed_camera.fov.fov_pix.coords, axis=1)
                 ref_img = output_data.fixed_camera.map_match.image_pair.ref.image.arr
                 map_with_fov = cv2.polylines(ref_img.copy(),
-                                             [np.int32(output_data.fixed_camera.fov.fov_pix.coordinates)], True,
+                                             [np.int32(fov_pix)], True,
                                              255, 3, cv2.LINE_AA)
 
                 img = np.vstack((map_with_fov, output_data.fixed_camera.map_match.image_pair.qry.image.arr))
                 cv2.imshow("Projected FOV estimate", img)
                 cv2.waitKey(1)
 
+            #print(f'orig {output_data.fixed_camera.position.xy._geoseries}')
             orig_crs_str = output_data.fixed_camera.position.xy.crs
             # Get output from Kalman filter
             filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
@@ -1218,20 +1213,10 @@ class BaseNode(Node, ABC):
                 return None
             else:
                 filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
-                                                                  #output_data.fixed_camera.position.z_amsl,
-                                                                  #output_data.fixed_camera.position.z_ground,
-                                                                  #orig_crs_str)
-                #xyz_mean, xyz_sd = filter_output
-                #filtered_position = Position(
-                #    xy=GeoPoint(*xyz_mean[0:2], temp_crs_str).to_crs(orig_crs_str),
-                #    z_ground=xyz_mean[2],
-                #    z_amsl=output_data.fixed_camera.position.z_amsl + (xyz_mean[2] - output_data.fixed_camera.position.z_ground) if output_data.fixed_camera.position.z_amsl is not None else None,
-                #    x_sd=xyz_sd[0],
-                #    y_sd=xyz_sd[1],
-                #    z_sd=xyz_sd[2]
-                #)
-                assert filtered_position.xy.crs.lower() == orig_crs_str.lower()
+                filtered_position.xy.to_crs(orig_crs_str)  # TODO: move this to publishing logic (making sure published CRS is epsg:4326)
                 output_data.filtered_position = filtered_position
+                #print(orig_crs_str)
+                #print(filtered_position.xy._geoseries)
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
             self._map_input_data_prev = self._map_input_data
@@ -1381,7 +1366,7 @@ class BaseNode(Node, ABC):
         radius = scaling * origin.z_ground
 
         assert_type(origin.xy, GeoPoint)
-        bbox = GeoBBox(origin.xy, radius)
+        bbox = GeoSquare(origin.xy, radius)
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
         return map_data
 
@@ -1391,19 +1376,22 @@ class BaseNode(Node, ABC):
 
         :param match: Estimated _match between images
         :param input_data: InputData of vehicle state variables from the time the image was taken
-        :return: Computed output_data if a valid estimate was obtained
+        :return: Computed output_data if a valid estimate was obtained, None otherwise
         """
         attitude = self._estimate_attitude(match)  # TODO Make a dataclass out of attitude?
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
+        try:
+            fixed_camera = FixedCamera(map_match=match, ground_elevation=input_data.ground_elevation)
+        except DataValueError as _:
+            # Could not estimate a valid FixedCamera
+            return None
+
         output_data = OutputData(input=input_data,
-                                 fixed_camera=FixedCamera(
-                                     map_match=match,
-                                     ground_elevation=input_data.ground_elevation
-                                 ),
-                                 filtered_position=None,
-                                 attitude=attitude)
+                                 fixed_camera=fixed_camera,
+                                 filtered_position = None,
+                                 attitude = attitude)
 
         if self._good_match(output_data):
             return output_data
@@ -1435,6 +1423,7 @@ class BaseNode(Node, ABC):
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
         return copy.deepcopy(input_data), contextual_map_data
 
+    # TODO: move these to initialization, get rid of this method
     def _good_match(self, output_data: OutputData) -> bool:
         """Uses heuristics for determining whether position estimate is good or not.
 
@@ -1445,12 +1434,6 @@ class BaseNode(Node, ABC):
         if output_data.fixed_camera.position.z_ground < 0:  # TODO: or is nan
             self.get_logger().warn(f'Match terrain altitude {output_data.fixed_camera.position.z_ground} was negative, assume bad '
                                    f'match.')
-            return False
-
-        # Estimated field of view has unexpected shape?
-        if not output_data.fixed_camera.fov.is_convex_isosceles_trapezoid():
-            self.get_logger().warn(f'Match fov_pix {output_data.fixed_camera.fov.fov_pix.coordinates.squeeze().tolist()} was not a convex isosceles '
-                                   f'trapezoid, assume bad match.')
             return False
 
         # Estimated translation vector blows up?

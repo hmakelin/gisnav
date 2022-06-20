@@ -1,7 +1,4 @@
-"""Module containing immutable data structures to protect atomicity of related information
-
-They are used to define specific scopes within :class:`.BaseNode`
-"""
+"""Module containing immutable dataclasses to protect atomicity of related information (object-based 'contexts')"""
 from __future__ import annotations  # Python version 3.7+
 
 import cv2
@@ -9,7 +6,6 @@ import numpy as np
 import os
 import math
 
-from functools import lru_cache
 from xml.etree import ElementTree
 from typing import Optional, Union, get_args
 from collections import namedtuple
@@ -18,7 +14,7 @@ from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation
 
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
-from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoTrapezoid
+from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoTrapezoid, GeoValueError
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
@@ -30,16 +26,17 @@ class Position:
     """Represents a 3D position with geographical xy-coordinates and an altitude expressed in meters
 
     Ground altitude is required while altitude above mean sea level (AMSL) is optional. If position is e.g. output from
-    a Kalman filter, epx, epy and epz properties can also be provided.
+    a Kalman filter, x_sd, y_sd and z_sd properties can also be provided.
 
-    Note: In GeoPandas (x,y) is (lon, lat), while WGS84 coordinates are (lat, lon) by convention
+    .. note::
+        (x, y, z) coordinates are in ENU frame
     """
-    xy: GeoPoint  # XY coordinates (e.g. longitude & latitude in WGS84)
-    z_ground: float              # altitude above ground plane in meters (positive)
-    z_amsl: Optional[float]      # altitude above mean sea level (AMSL) in meters if known (positive)
-    x_sd: Optional[float]        # Standard deviation of error in x (latitude) dimension
-    y_sd: Optional[float]        # Standard deviation of error in y (longitude) dimension
-    z_sd: Optional[float]        # Standard deviation of error in z (altitude) dimension
+    xy: GeoPoint                # XY coordinates (e.g. longitude & latitude in WGS84)
+    z_ground: float             # altitude above ground plane in meters (positive)
+    z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known (positive)
+    x_sd: Optional[float]       # Standard deviation of error in x (latitude) dimension
+    y_sd: Optional[float]       # Standard deviation of error in y (longitude) dimension
+    z_sd: Optional[float]       # Standard deviation of error in z (altitude) dimension
 
     _KALMAN_FILTER_EPSG_CODE = 'epsg:3857'
     """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
@@ -80,7 +77,9 @@ class Position:
 
         Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`
         """
-        return np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coordinates + (self.z_ground,)).reshape(1, 3)
+        #return np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords + (self.z_ground,)).reshape(1, 3)
+        return np.append(self.xy._spherical_adjustment * np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
+                         np.array((self.z_ground))).reshape(1, 3)
 
     @staticmethod
     def from_filtered_output(means: np.ndarray, sds: np.ndarray, original_position: Position) -> Position:
@@ -91,10 +90,10 @@ class Position:
         :return: New :class:`.Position` instance with adjusted x, y and altitude values
         """
         return Position(
-            xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE).to_crs(original_position.crs),
+            xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE),
             z_ground=means[2],
             z_amsl=original_position.z_amsl + (means[2] - original_position.z_ground) \
-                if original_positionz_amsl is not None else None,
+                if original_position.z_amsl is not None else None,
             x_sd=sds[0],
             y_sd=sds[1],
             z_sd=sds[2]
@@ -234,7 +233,8 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self.map_data.bbox.to_crs('epsg:4326').coordinates
+        dst_corners = self.map_data.bbox.to_crs('epsg:4326').coords  # .reshape(-1, 1, 2)
+        dst_corners = np.flip(dst_corners, axis=1)  # from ENU frame to WGS 84 axis order
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
@@ -333,7 +333,7 @@ class AsyncPoseQuery(_AsyncQuery):
 class AsyncWMSQuery(_AsyncQuery):
     """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
 
-    The :meth:`.WMSClient.worker` expects the :class:`.GeoBBox` bounds as input so they are needed here
+    The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input so they are needed here
     """
     #result: AsyncResult
     geobbox: GeoBBox  # TODO: convert to bbox (bounds), layer_str, srs_str etc. instead?
@@ -431,37 +431,6 @@ class FOV:
 
         return altitude_scaling
 
-    # TODO: make this private, and use a new "is_valid()" to combine this condition with the shapely built in is_valid flag
-    def is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
-        """Returns True if provided quadrilateral is a convex isosceles trapezoid
-
-        If the estimated field of view (FOV) is not a convex isosceles trapezoid, it is a sign that (1) the match was bad or
-        (2) the gimbal the camera is mounted on has not had enough time to stabilize (camera has non-zero roll). Matches
-        where the FOV is not a convex isosceles trapezoid should be rejected assuming we can't determine (1) from (2) and
-        that it is better to wait for a good position estimate than to use a bad one.
-
-        See also :func:`~create_src_corners` for the assumed order of the quadrilateral corners.
-
-        :param diagonal_length_tolerance: Tolerance for relative length difference between trapezoid diagonals
-        :return: True if the quadrilateral is a convex isosceles trapezoid
-        """
-        fov_pix = self.fov_pix.coordinates
-        assert_len(fov_pix, 4)
-        ul, ll, lr, ur = tuple(map(lambda pt: pt.squeeze().tolist(), fov_pix))
-
-        # Check convexity (exclude self-crossing trapezoids)
-        # Note: inverted y-axis, origin at upper left corner of image
-        if not (ul[0] < ur[0] and ul[1] < ll[1] and lr[0] > ll[0] and lr[1] > ur[1]):
-            return False
-
-        # Check diagonals same length within tolerance
-        ul_lr_length = math.sqrt((ul[0] - lr[0]) ** 2 + (ul[1] - lr[1]) ** 2)
-        ll_ur_length = math.sqrt((ll[0] - ur[0]) ** 2 + (ll[1] - ur[1]) ** 2)
-        if abs((ul_lr_length / ll_ur_length) - 1) > diagonal_length_tolerance:
-            return False
-
-        return True
-
     def __post_init__(self):
         """Set computed fields after initialization."""
         # Data class is frozen so need to use object.__setattr__ to assign values
@@ -473,32 +442,36 @@ class FOV:
 class FixedCamera:
     """WGS84-fixed camera attributes
 
-    Colletcts field of view and map_match under a single structure that is intended to be stored in input data context as
+    Collects field of view and map_match under a single structure that is intended to be stored in input data context as
     visual odometry fix reference. Includes the needed map_match and pix_to_wgs84 transformation for the vo fix.
+
+    :raise: DataValueError if a valid FixedCamera could not be initialized
     """
-    fov: FOV = field(init=False)  # TODO: move down to Match and get rid of FixedCamera? Use 'Match' for storing the vo fix instead
+    fov: FOV = field(init=False)
     ground_elevation: Optional[float]
     position: Position = field(init=False)
     map_match: Match
 
-    def _estimate_fov(self) -> FOV:
+    def _estimate_fov(self) -> Optional[FOV]:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
-        :return: Field of view and principal point in pixel and WGS84 coordinates, respectively
+        :return: Field of view and principal point in pixel and WGS84 coordinates, or None if could not estimate
         """
-        # TODO: what if wgs84 coordinates are not valid? H projects FOV to horizon?
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
         h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
         fov_pix, c_pix = self._get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
         fov_wgs84, c_wgs84 = self._get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
 
-        fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
-                  fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
-                  c_pix=c_pix,
-                  c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
-                  )
-
-        return fov
+        try:
+            fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
+                      fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
+                      c_pix=c_pix,
+                      c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
+                      )
+            return fov
+        except GeoValueError as _:
+            # Not a valid field of view
+            return None
 
     @staticmethod
     def _get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -528,7 +501,7 @@ class FixedCamera:
 
         return dst_fov, principal_point_dst
 
-    def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Position:
+    def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Optional[Position]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
@@ -544,7 +517,7 @@ class FixedCamera:
 
         # Check that we have all the values needed for a global position
         if not all([(isinstance(x, float) or np.isnan(x)) for x in t_wgs84.squeeze()]):
-            self.get_logger().warn(f'Could not determine global position, some fields were empty: {t_wgs84}.')
+            # Not a valid position estimate
             return None
 
         lon, lat = t_wgs84.squeeze()[1::-1]
@@ -561,11 +534,19 @@ class FixedCamera:
         return position
 
     def __post_init__(self):
-        """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'fov', self._estimate_fov())  # Need to do before calling self._estimate_position
-        object.__setattr__(self, 'position', self._estimate_position(self.ground_elevation))
+        """Post-initialization computed fields and validity checks."""
+        fov = self._estimate_fov()
+        if fov is not None:
+            # Data class is frozen so need to use object.__setattr__ to assign values
+            object.__setattr__(self, 'fov', fov)  # Need to do before calling self._estimate_position
+        else:
+            raise DataValueError('Could not initialize a valid FixedCamera.')
 
+        position = self._estimate_position(self.ground_elevation)
+        if position is not None:
+            object.__setattr__(self, 'position', position)
+        else:
+            raise DataValueError('Could not initialize a valid FixedCamera.')
 
 # noinspection PyClassHasNoInit
 @dataclass
@@ -628,6 +609,11 @@ class PackageData:
             return package_data
         else:
             raise FileNotFoundError(f'Could not find package file at {package_file}.')
+
+
+class DataValueError(ValueError):
+    """Exception returned if a valid dataclass could not be initialized from provided values."""
+    pass
 
 
 def create_src_corners(h: int, w: int) -> np.ndarray:

@@ -200,7 +200,7 @@ class GeoTrapezoid(_GeoPolygon):
 
         :param corners: Trapezoid corner coordinates
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
-        :raise: :classs:`.GeoValueError` if the trapezoid is not valid (convex isosceles trapezoid)
+        :raise: :class:`.GeoValueError` if the trapezoid is not valid (convex isosceles trapezoid)
         """
         self._geoseries = GeoSeries([Polygon(corners.squeeze())], crs=crs)
 

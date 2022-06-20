@@ -12,15 +12,20 @@ from python_px4_ros2_map_nav.assertions import assert_len, assert_type
 
 
 class _GeoObject(ABC):
-    """Abstract base class for other GeoSeries wrappers"""
+    """Abstract base class for other GeoSeries wrappers
 
-    DEFAULT_CRS = 'epsg:4326'  # WGS84 latitude/longitude
-    """CRS used for GeoPoints by default unless something else is specified"""
+    Each _GeoObject wraps a :class:`geopandas.GeoSeries` of length one, i.e. they only contain a single Shapely shape.
+
+    The :class:`_GeoObject` methods expose :class:`geopandas.GeoSeries` methods to
+    """
+
+    DEFAULT_CRS = 'epsg:4326'
+    """Use WGS 84 latitude and longitude by default"""
 
     @property
     @abstractmethod
     def _geoseries(self) -> np.ndarray:
-        """Returns the contained geoseries"""
+        """Returns the contained :class:`geopandas.GeoSeries` instance"""
         pass
 
     @property
@@ -31,7 +36,7 @@ class _GeoObject(ABC):
     @property
     @abstractmethod
     def coordinates(self) -> np.ndarray:
-        """Returns the contained geoseries shape as numpy array."""
+        """Returns the wrapped shape as a numpy array."""
         pass
 
     def to_crs(self, crs: str) -> _GeoObject:

@@ -212,12 +212,14 @@ class GeoTrapezoid(_GeoPolygon):
     def _is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
         """Returns True if the quadrilateral is a convex isosceles trapezoid
 
-        If the estimated field of view (FOV) is not a convex isosceles trapezoid, it is a sign that (1) the match was bad or
-        (2) the gimbal the camera is mounted on has not had enough time to stabilize (camera has non-zero roll). Matches
-        where the FOV is not a convex isosceles trapezoid should be rejected assuming we can't determine (1) from (2) and
-        that it is better to wait for a good position estimate than to use a bad one.
+        .. note::
+            If the estimated field of view (FOV) is not a convex isosceles trapezoid, it is a sign that (1) the match
+            was bad or (2) the gimbal the camera is mounted on has not had enough time to stabilize (camera has
+            non-zero roll). Matches where the FOV is not a convex isosceles trapezoid should be rejected assuming we
+            can't tell (1) from (2) and that it is better to wait for a good position estimate than to use a bad one.
 
-        See also :func:`~create_src_corners` for the assumed order of the quadrilateral corners.
+        .. seealso::
+            :func:`.create_src_corners` for the assumed order of the quadrilateral corners.
 
         :param diagonal_length_tolerance: Tolerance for relative length difference between trapezoid diagonals
         :return: True if the quadrilateral is a convex isosceles trapezoid

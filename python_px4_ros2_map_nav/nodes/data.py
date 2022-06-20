@@ -77,8 +77,7 @@ class Position:
 
         Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`
         """
-        #return np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords + (self.z_ground,)).reshape(1, 3)
-        return np.append(self.xy._spherical_adjustment * np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
+        return np.append(np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
                          np.array((self.z_ground))).reshape(1, 3)
 
     @staticmethod
@@ -94,9 +93,9 @@ class Position:
             z_ground=means[2],
             z_amsl=original_position.z_amsl + (means[2] - original_position.z_ground) \
                 if original_position.z_amsl is not None else None,
-            x_sd=sds[0],
-            y_sd=sds[1],
-            z_sd=sds[2]
+            x_sd=sds[0],  # TODO: need to scale by spherical adjustment?
+            y_sd=sds[1],  # TODO: need to scale by spherical adjustment?
+            z_sd=sds[2]   # TODO: need to scale by spherical adjustment?
         )
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -461,7 +460,6 @@ class FixedCamera:
         h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
         fov_pix, c_pix = self._get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
         fov_wgs84, c_wgs84 = self._get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
-
         try:
             fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
                       fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X

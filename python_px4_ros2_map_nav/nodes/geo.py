@@ -24,18 +24,6 @@ class _GeoObject(ABC):
     DEFAULT_CRS = 'epsg:4326'
     """Use WGS 84 latitude and longitude by default"""
 
-    #@property
-    #def _geoseries(self) -> np.ndarray:
-    #    """Returns the contained :class:`geopandas.GeoSeries` instance"""
-    #    return self._geoseries
-
-    #@property
-    #@_geoseries.setter
-    #def _geoseries(self, value: GeoSeries) -> None:
-    #    assert_type(value, GeoSeries)
-    #    assert_len(value[0], 1)
-    #    self._geoseries = value
-
     @property
     def crs(self) -> str:
         """Returns current CRS string
@@ -50,7 +38,7 @@ class _GeoObject(ABC):
         """Returns the wrapped shape as a numpy array"""
         return self._geoseries[0].coords[0]
 
-    def to_crs(self, crs: str) -> _GeoObject:
+    def to_crs(self, crs: str) -> _GeoObject:  # TODO: return None? Misleading this way
         """Converts to provided CRS
 
         :return: The same GeoPoint instance transformed to new CRS
@@ -100,7 +88,7 @@ class _GeoPolygon(_GeoObject):
     @property
     def meter_length(self) -> float:
         """Returns length of polygon in meters"""
-        return self.center._spherical_adjustment * self.to_crs('epsg:3857').length
+        return self.center._spherical_adjustment * self._geoseries.to_crs('epsg:3857')[0].length
 
     @property
     def coords(self) -> np.ndarray:
@@ -218,7 +206,7 @@ class GeoTrapezoid(_GeoPolygon):
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        if not self._geoseries[0].is_valid or not self._is_convex_isosceles_trapezoid:
+        if not (self._geoseries[0].is_valid and self._is_convex_isosceles_trapezoid):
             raise GeoValueError(f'Not a valid convex isosceles trapezoid: {self._geoseries[0]}')
 
     @property

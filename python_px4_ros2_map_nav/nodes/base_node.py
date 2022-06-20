@@ -1204,7 +1204,6 @@ class BaseNode(Node, ABC):
                 cv2.imshow("Projected FOV estimate", img)
                 cv2.waitKey(1)
 
-            #print(f'orig {output_data.fixed_camera.position.xy._geoseries}')
             orig_crs_str = output_data.fixed_camera.position.xy.crs
             # Get output from Kalman filter
             filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
@@ -1215,8 +1214,7 @@ class BaseNode(Node, ABC):
                 filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
                 filtered_position.xy.to_crs(orig_crs_str)  # TODO: move this to publishing logic (making sure published CRS is epsg:4326)
                 output_data.filtered_position = filtered_position
-                #print(orig_crs_str)
-                #print(filtered_position.xy._geoseries)
+
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
             self._map_input_data_prev = self._map_input_data

@@ -237,7 +237,15 @@ class ContextualMapData(_ImageHolder):
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
+        # Ratio of boundaries in pixels and meters -> Altitude (z) scaling factor
+        vertical_scaling = abs(self.map_data.bbox.meter_length / \
+                               (2*self.map_data.image.dim.width + 2*self.map_data.image.dim.height))
+
         pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped
+
+        pix_to_wgs84_[2][2] = -vertical_scaling * pix_to_wgs84_[2][2]
+
+        # TODO: call it 'affine' instead?
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
 
     def _rotate_and_crop_map(self) -> np.ndarray:
@@ -457,7 +465,9 @@ class FixedCamera:
         :return: Field of view and principal point in pixel and WGS84 coordinates, or None if could not estimate
         """
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
-        h_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ self.map_match.inv_h
+        pix_to_wgs84_2d = self.map_match.image_pair.ref.pix_to_wgs84
+        pix_to_wgs84_2d[2][2] = 1
+        h_wgs84 = pix_to_wgs84_2d @ self.map_match.inv_h
         fov_pix, c_pix = self._get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
         fov_wgs84, c_wgs84 = self._get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
         try:
@@ -511,7 +521,7 @@ class FixedCamera:
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
         assert_type(self.map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
         t_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ np.append(self.map_match.camera_position[0:2], 1)
-        t_wgs84[2] = -self.fov.scaling * self.map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        t_wgs84[2] = -self.map_match.image_pair.ref.pix_to_wgs84[2][2] * self.map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
 
         # Check that we have all the values needed for a global position
         if not all([(isinstance(x, float) or np.isnan(x)) for x in t_wgs84.squeeze()]):

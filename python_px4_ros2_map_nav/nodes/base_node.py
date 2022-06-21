@@ -13,7 +13,7 @@ import copy
 
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool
-from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
+#from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor

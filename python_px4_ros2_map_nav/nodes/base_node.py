@@ -872,7 +872,7 @@ class BaseNode(Node, ABC):
         try:
             pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
             mock_match = Match(mock_image_pair, pose)
-        except ValueError as e:
+        except DataValueError as e:
             self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
 

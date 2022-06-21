@@ -354,10 +354,6 @@ class Pose:
     t: np.ndarray
     e: np.ndarray = field(init=False)
 
-    class PoseValueError(ValueError):
-        """Raised when the input arguments to the :class:`.Pose` class are invalid"""
-        pass
-
     def __post_init__(self):
         """Set computed fields and do validity checks after initialization
 
@@ -369,7 +365,7 @@ class Pose:
         # Validity checks
         if np.isnan(self.r).any() or np.isnan(self.t).any() \
             or self.r.shape != (3, 3) or self.t.shape != (3, 1):
-            raise PoseValueError(f'Pose input arguments were invalid: {r}, {t}.')
+            raise DataValueError(f'Pose input arguments were invalid: {r}, {t}.')
 
 
 # noinspection PyClassHasNoInit

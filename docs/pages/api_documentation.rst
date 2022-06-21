@@ -111,7 +111,7 @@ assertions module
    :show-inheritance:
 
 wms module
----------------------------------------
+=================================================
 .. automodule:: python_px4_ros2_map_nav.wms
    :autosummary:
    :members:

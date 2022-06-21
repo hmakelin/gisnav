@@ -871,10 +871,16 @@ class BaseNode(Node, ABC):
 
         try:
             pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
-            mock_match = Match(mock_image_pair, pose)
         except DataValueError as e:
             self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
+
+        try:
+            mock_match = Match(mock_image_pair, pose)
+        except np.linalg.LinAlgError as _:
+            self.get_logger().warn(f'Could not invert homography matrix, returning None for projected FOV center..')
+            return None
+
 
         # TODO handle none altitude
         try:

@@ -24,8 +24,8 @@ def main(args=None):
         pr = None
     try:
         rclpy.init(args=args)
-        matcher = MockGPSNode('map_nav_node', get_package_share_directory(package_name))
-        rclpy.spin(matcher)
+        mock_gps_node = MockGPSNode('mock_gps_node', get_package_share_directory(package_name))
+        rclpy.spin(mock_gps_node)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')
         if pr is not None:
@@ -36,9 +36,9 @@ def main(args=None):
             ps.print_stats()
             print(s.getvalue())
     finally:
-        matcher.destroy_timers()
-        matcher.terminate_wms_pool()
-        matcher.destroy_node()
+        mock_gps_node.destroy_timers()
+        mock_gps_node.terminate_wms_pool()
+        mock_gps_node.destroy_node()
         rclpy.shutdown()
 
 

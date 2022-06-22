@@ -1,4 +1,4 @@
-map_nav_node:
+mock_gps_node:
   ros__parameters:
     wms:
       url: 'http://localhost:8080/wms'

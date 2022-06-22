@@ -43,8 +43,6 @@ class Position:
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        # TODO: enforce these checks instead of just asserting?
         assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
                or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
 

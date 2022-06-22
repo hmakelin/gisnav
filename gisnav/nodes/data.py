@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation
 
-from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_shape, assert_len
-from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoTrapezoid, GeoValueError
+from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
+from gisnav.nodes.geo import GeoPoint, GeoTrapezoid, GeoValueError
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')

@@ -8,8 +8,8 @@ import numpy as np
 from typing import Optional, Tuple
 from enum import Enum
 
-from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
+from gisnav.assertions import assert_type
+from gisnav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
 
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor

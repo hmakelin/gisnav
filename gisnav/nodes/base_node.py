@@ -27,13 +27,13 @@ from sensor_msgs.msg import CameraInfo, Image
 
 # TODO: for data at least may be cleaner to just import the module and use it as prefix?
 #  almost everything is imported from data (except for abstract base classes)
-from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
+from gisnav.nodes.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
     InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
-from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoSquare, GeoTrapezoid
-from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
-from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
-from python_px4_ros2_map_nav.wms import WMSClient
-from python_px4_ros2_map_nav.kalman import SimpleFilter
+from gisnav.nodes.geo import GeoPoint, GeoSquare, GeoTrapezoid
+from gisnav.assertions import assert_type, assert_ndim, assert_len, assert_shape
+from gisnav.pose_estimators.pose_estimator import PoseEstimator
+from gisnav.wms import WMSClient
+from gisnav.kalman import SimpleFilter
 
 
 class BaseNode(Node, ABC):
@@ -148,7 +148,7 @@ class BaseNode(Node, ABC):
     location. This parameter is used during :meth:`._should_update_map` calls.
     """
 
-    POSE_ESTIMATOR_CLASS = 'python_px4_ros2_map_nav.pose_estimators.loftr.LoFTREstimator'
+    POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTREstimator'
     """Default :class:`.PoseEstimator` to use for matching images to maps."""
 
     POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yml'  # TODO: add config folder: config/superglue_params.yml
@@ -303,7 +303,7 @@ class BaseNode(Node, ABC):
 
     @property
     def _time_sync(self) -> Optional[TimePair]:
-        """A :class:`python_px4_ros2_map_nav.data.TimePair` with local and foreign (EKF2) timestamps in microseconds
+        """A :class:`gisnav.data.TimePair` with local and foreign (EKF2) timestamps in microseconds
 
         The pair will contain the local system time and the EKF2 time received via the PX4-ROS 2 bridge. The pair can
         then at any time be used to locally estimate the EKF2 system time.
@@ -1170,7 +1170,7 @@ class BaseNode(Node, ABC):
 
     #region WMSWorkerCallbacks
     def wms_pool_worker_callback(self, result: List[MapData]) -> None:
-        """Handles result from :meth:`python_px4_ros2_map_nav.wms.worker`.
+        """Handles result from :meth:`gisnav.wms.worker`.
 
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
         :class:`~data.MapData`.

@@ -5,7 +5,7 @@ import rclpy
 
 from ament_index_python.packages import get_package_share_directory
 
-from python_px4_ros2_map_nav.nodes.mock_gps_node import MockGPSNode
+from gisnav.nodes.mock_gps_node import MockGPSNode
 
 
 def main(args=None):

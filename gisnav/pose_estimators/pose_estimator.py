@@ -6,7 +6,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
-from python_px4_ros2_map_nav.assertions import assert_type, assert_pose
+from gisnav.assertions import assert_type, assert_pose
 
 
 class PoseEstimator(ABC):

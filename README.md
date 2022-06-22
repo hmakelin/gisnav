@@ -44,7 +44,7 @@ Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weigh
 [LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the ``outdoor_ds.ckpt`` from the .zip package and copy it e.g. into a new 
 ``weights`` folder:
 ```bash
-cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav && \
+cd $HOME/px4_ros_com_ros2/src/gisnav && \
     git submodule update LoFTR
     
 mkdir weights && cp ~/Downloads/outdoor_ds.ckpt ./weights
@@ -59,8 +59,8 @@ cd $HOME/px4_ros_com_ros2/src/px4_ros_com/scripts && \
 ## 5. Run the example node
 ```bash
 cd $HOME/px4_ros_com_ros2 && \
-    ros2 run python_px4_ros2_map_nav map_nav_node --ros-args --log-level info --params-file \
-        src/python_px4_ros2_map_nav/params/typhoon_h480__ksql_airport.yml
+    ros2 run gisnav map_nav_node --ros-args --log-level info --params-file \
+        src/gisnav/params/typhoon_h480__ksql_airport.yml
 ```
 
 # Generating Documentation
@@ -74,7 +74,7 @@ source install/setup.bash
 
 Go to the `python_px4_ros2_map_nav` parent directory and install Sphinx:
 ```bash
-cd $HOME/px4_ros_com_ros2/src/python_px4_ros2_map_nav/ && \
+cd $HOME/px4_ros_com_ros2/src/gisnav/ && \
     pip3 install -r requirements-dev.txt
 ```
 

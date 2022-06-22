@@ -7,7 +7,7 @@ import cv2
 from typing import Optional, Union, Tuple, List, get_args
 from owslib.wms import WebMapService
 from owslib.util import ServiceException
-from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim
+from gisnav.assertions import assert_type, assert_ndim
 
 
 class WMSClient:

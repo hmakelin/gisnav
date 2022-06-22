@@ -7,8 +7,8 @@ import numpy as np
 
 from typing import Optional, Tuple
 from enum import Enum
-from python_px4_ros2_map_nav.assertions import assert_type
-from python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
+from gisnav.assertions import assert_type
+from gisnav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
 from LoFTR.loftr import LoFTR, default_cfg
 
 from ament_index_python.packages import get_package_share_directory
@@ -41,7 +41,7 @@ class LoFTREstimator(KeypointPoseEstimator):
         self._device = LoFTREstimator.TorchDevice.CUDA.value if torch.cuda.is_available() else \
             LoFTREstimator.TorchDevice.CPU.value
         self._model = LoFTR(config=default_cfg)
-        weights_path = os.path.join(get_package_share_directory('python_px4_ros2_map_nav'), self.WEIGHTS_PATH)  # TODO: provide as arg to constructor, do not hard-code path here
+        weights_path = os.path.join(get_package_share_directory('gisnav'), self.WEIGHTS_PATH)  # TODO: provide as arg to constructor, do not hard-code path here
         self._model.load_state_dict(torch.load(weights_path)['state_dict'])
         self._model = self._model.eval().cuda()
 

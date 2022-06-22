@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 # -- Version information -----------------------------------------------------
-from python_px4_ros2_map_nav.nodes.data import PackageData
+from gisnav.nodes.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 
 

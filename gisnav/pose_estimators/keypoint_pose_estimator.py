@@ -6,8 +6,8 @@ from abc import abstractmethod
 from typing import Tuple, Optional
 from dataclasses import dataclass, field
 
-from python_px4_ros2_map_nav.pose_estimators.pose_estimator import PoseEstimator
-from python_px4_ros2_map_nav.assertions import assert_type, assert_len, assert_pose
+from gisnav.pose_estimators.pose_estimator import PoseEstimator
+from gisnav.assertions import assert_type, assert_len, assert_pose
 
 
 class KeypointPoseEstimator(PoseEstimator):

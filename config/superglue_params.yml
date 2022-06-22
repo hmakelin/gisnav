@@ -1,4 +1,4 @@
-class_name: 'python_px4_ros2_map_nav.pose_estimators.superglue.SuperGlueEstimator'
+class_name: 'gisnav.pose_estimators.superglue.SuperGlueEstimator'
 args:  # Recommended outdoor config from SuperGlueEstimator repo's README.md
   - 15  # _min_matches
   - superpoint:

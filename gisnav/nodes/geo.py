@@ -8,7 +8,7 @@ from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
 from shapely.geometry.polygon import orient
 
-from python_px4_ros2_map_nav.assertions import assert_len, assert_type
+from gisnav.assertions import assert_len, assert_type
 
 
 class _GeoObject(ABC):
@@ -177,7 +177,7 @@ class GeoSquare(_GeoPolygon):
         """Returns a numpy array of the corners coordinates of the bbox
 
         Order should be top-left, bottom-left, bottom-right, top-right (same as
-        :meth:`python_px4_ros2_map_nav.transform.create_src_corners`).
+        :meth:`gisnav.transform.create_src_corners`).
         """
         corners = box(*self.bounds).exterior.coords
         corners = np.array([

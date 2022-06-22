@@ -36,7 +36,7 @@ def generate_launch_description():
     )
 
     node = Node(
-        package='python_px4_ros2_map_nav',
+        package='gisnav',
         name='map_nav_node',
         executable='map_nav_node',
         parameters=[config]

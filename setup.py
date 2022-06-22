@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import setup
 
-from python_px4_ros2_map_nav.nodes.data import PackageData
+from gisnav.nodes.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('package.xml'))
 
 # Read requirements file
@@ -52,7 +52,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'map_nav_node = python_px4_ros2_map_nav.__main__:main'
+            'map_nav_node = gisnav.__main__:main'
         ],
     },
 )

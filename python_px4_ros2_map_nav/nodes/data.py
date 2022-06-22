@@ -73,26 +73,24 @@ class Position:
     def to_array(self) -> np.ndarray:
         """Returns position (x, y, z) coordinates in (adjusted EPSG:3857 for xy) meters as numpy array
 
-        Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`
-
-        .. warning:
-            The (x, y, z) tuple is not in any kind of defined CRS, you should only use :meth:`.from_filtered_output` to
-            read it back into a :class:`.Position` instance.
+        Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`.
         """
-        return np.append(self.xy.spherical_adjustment * np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
+        return np.append(np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
                          np.array(self.z_ground)).reshape(1, 3)
 
     @staticmethod
     def from_filtered_output(means: np.ndarray, sds: np.ndarray, original_position: Position) -> Position:
         """Creates a Position from :class:`.SimpleFilter` output
 
+        .. note::
+            Assumes these are smoothed from output given by :meth:`.to_array`
+
         :param means: Estimated means from Kalman filter
         :param sds: Estimated standard deviations from Kalman filter
         :param original_position: The original position the means and sds were derived from
         :return: New :class:`.Position` instance with adjusted x, y and altitude values
         """
-        sds[0:2] = sds[0:2]/original_position.xy.spherical_adjustment
-        means[0:2] = means[0:2]/original_position.xy.spherical_adjustment
+        sds[0:2] = sds[0:2] * original_position.xy.spherical_adjustment
         return Position(
             xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE),
             z_ground=means[2],

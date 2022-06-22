@@ -479,7 +479,6 @@ class FixedCamera:
 
     def __post_init__(self):
         """Post-initialization computed fields and validity checks."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
         img = self.image_pair.qry
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         try:
@@ -490,7 +489,6 @@ class FixedCamera:
 
         fov = self._estimate_fov()
         if fov is not None:
-            # Data class is frozen so need to use object.__setattr__ to assign values
             object.__setattr__(self, 'fov', fov)  # Need to do before calling self._estimate_position
         else:
             raise DataValueError('Could not initialize a valid FixedCamera.')

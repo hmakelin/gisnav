@@ -297,7 +297,7 @@ class ContextualMapData(_ImageHolder):
         object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
 
 
-# TODO: enforce types for ImagePair (qry cannot be MapData, can happen if _match.__matmul__ is called in the wrong order! E.g. inside _estimate_map_pose
+# TODO: enforce types for ImagePair
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
@@ -370,28 +370,6 @@ class Pose:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class Match:
-    """Represents a matched image pair with estimated match and camera position
-
-    :raise: np.linalg.LinAlgError if homography matrix is not invertible
-    """
-    image_pair: ImagePair
-    pose: Pose
-    h: np.ndarray = field(init=False)
-    inv_h: np.ndarray = field(init=False)
-    camera_position: np.ndarray = field(init=False)
-
-    def __post_init__(self):
-        """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        img = self.image_pair.qry
-        object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
-        object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
-        object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
 
@@ -450,22 +428,26 @@ class FixedCamera:
 
     :raise: DataValueError if a valid FixedCamera could not be initialized
     """
-    fov: FOV = field(init=False)
+    image_pair: ImagePair
+    pose: Pose
     ground_elevation: Optional[float]
+    fov: FOV = field(init=False)
     position: Position = field(init=False)
-    map_match: Match
+    h: np.ndarray = field(init=False)
+    inv_h: np.ndarray = field(init=False)
+    camera_position: np.ndarray = field(init=False)
 
     def _estimate_fov(self) -> Optional[FOV]:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
 
         :return: Field of view and principal point in pixel and WGS84 coordinates, or None if could not estimate
         """
-        assert_type(self.map_match.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
-        pix_to_wgs84_2d = self.map_match.image_pair.ref.pix_to_wgs84
+        assert_type(self.image_pair.ref, ContextualMapData)  # Need pix_to_wgs84, FixedCamera should have map data match
+        pix_to_wgs84_2d = self.image_pair.ref.pix_to_wgs84
         pix_to_wgs84_2d[2][2] = 1
-        h_wgs84 = pix_to_wgs84_2d @ self.map_match.inv_h
-        fov_pix, c_pix = self._get_fov_and_c(self.map_match.image_pair.qry.image.dim, self.map_match.inv_h)
-        fov_wgs84, c_wgs84 = self._get_fov_and_c(self.map_match.image_pair.ref.image.dim, h_wgs84)
+        h_wgs84 = pix_to_wgs84_2d @ self.inv_h
+        fov_pix, c_pix = self._get_fov_and_c(self.image_pair.qry.image.dim, self.inv_h)
+        fov_wgs84, c_wgs84 = self._get_fov_and_c(self.image_pair.ref.image.dim, h_wgs84)
         try:
             fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
                       fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
@@ -515,9 +497,9 @@ class FixedCamera:
         """
         assert self.fov is not None  # Call _estimate_fov before _estimate_position!
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
-        assert_type(self.map_match.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
-        t_wgs84 = self.map_match.image_pair.ref.pix_to_wgs84 @ np.append(self.map_match.camera_position[0:2], 1)
-        t_wgs84[2] = -self.map_match.image_pair.ref.pix_to_wgs84[2][2] * self.map_match.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        assert_type(self.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
+        t_wgs84 = self.image_pair.ref.pix_to_wgs84 @ np.append(self.camera_position[0:2], 1)
+        t_wgs84[2] = -self.image_pair.ref.pix_to_wgs84[2][2] * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
 
         # Check that we have all the values needed for a global position
         if not all([(isinstance(x, float) or np.isnan(x)) for x in t_wgs84.squeeze()]):
@@ -539,6 +521,15 @@ class FixedCamera:
 
     def __post_init__(self):
         """Post-initialization computed fields and validity checks."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        img = self.image_pair.qry
+        object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
+        try:
+            object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
+        except np.linalg.LinAlgError as _:
+            raise DataValueError('H was not invertible')
+        object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
+
         fov = self._estimate_fov()
         if fov is not None:
             # Data class is frozen so need to use object.__setattr__ to assign values
@@ -551,6 +542,8 @@ class FixedCamera:
             object.__setattr__(self, 'position', position)
         else:
             raise DataValueError('Could not initialize a valid FixedCamera.')
+
+
 
 # noinspection PyClassHasNoInit
 @dataclass

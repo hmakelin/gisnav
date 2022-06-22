@@ -27,7 +27,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 # TODO: for data at least may be cleaner to just import the module and use it as prefix?
 #  almost everything is imported from data (except for abstract base classes)
-from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, Match, CameraData, Attitude, DataValueError, \
+from python_px4_ros2_map_nav.nodes.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
     InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
 from python_px4_ros2_map_nav.nodes.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from python_px4_ros2_map_nav.assertions import assert_type, assert_ndim, assert_len, assert_shape
@@ -875,16 +875,10 @@ class BaseNode(Node, ABC):
             self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
             return None
 
-        try:
-            mock_match = Match(mock_image_pair, pose)
-        except np.linalg.LinAlgError as _:
-            self.get_logger().warn(f'Could not invert homography matrix, returning None for projected FOV center..')
-            return None
-
-
         # TODO handle none altitude
         try:
-            mock_fixed_camera = FixedCamera(map_match=mock_match, ground_elevation=self._altitude_agl)  # Redundant altitude call
+            mock_fixed_camera = FixedCamera(pose=pose, image_pair=mock_image_pair,
+                                            ground_elevation=self._altitude_agl)  # Redundant altitude call
         except DataValueError as _:
             # Not a valid FixedCamera
             return None
@@ -1080,7 +1074,7 @@ class BaseNode(Node, ABC):
         """
         assert_type(bbox, GeoSquare)
         if self._map_output_data_prev is not None:
-            previous_map_data = self._map_output_data_prev.fixed_camera.map_match.image_pair.ref.map_data  # TODO: use map_match not _match?
+            previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
             ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
                         bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
@@ -1182,8 +1176,8 @@ class BaseNode(Node, ABC):
         pose = result  #[0]
         if pose is not None:
             try:
-                pose = Pose(*pose)  # May throw error?
-            except Pose.PoseValueError as _:
+                pose = Pose(*pose)
+            except DataValueError as _:
                 self.get_logger().warn(f'Estimated pose was not valid, skipping this one.')
                 return None
 
@@ -1192,21 +1186,20 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Could not compute _match, returning None.')
             return None
 
-        # TODO: handle linalg error for h inversion
-        match = Match(image_pair=self._pose_estimation_query.image_pair, pose=pose)
-        output_data = self._compute_output(match, self._pose_estimation_query.input_data)
+        output_data = self._compute_output(self._pose_estimation_query.image_pair, pose,
+                                           self._pose_estimation_query.input_data)
 
         if output_data is not None:
             # noinspection PyUnreachableCode
             if __debug__:
                 # Visualize projected FOV estimate
                 fov_pix = np.flip(output_data.fixed_camera.fov.fov_pix.coords, axis=1)
-                ref_img = output_data.fixed_camera.map_match.image_pair.ref.image.arr
+                ref_img = output_data.fixed_camera.image_pair.ref.image.arr
                 map_with_fov = cv2.polylines(ref_img.copy(),
                                              [np.int32(fov_pix)], True,
                                              255, 3, cv2.LINE_AA)
 
-                img = np.vstack((map_with_fov, output_data.fixed_camera.map_match.image_pair.qry.image.arr))
+                img = np.vstack((map_with_fov, output_data.fixed_camera.image_pair.qry.image.arr))
                 cv2.imshow("Projected FOV estimate", img)
                 cv2.waitKey(1)
 
@@ -1298,23 +1291,23 @@ class BaseNode(Node, ABC):
             self._blurs = np.append(self._blurs, blur)
 
     @staticmethod
-    def _estimate_attitude(map_match: Match) -> np.ndarray:
+    def _estimate_attitude(pose: Pose, rotation: float) -> np.ndarray:
         """Estimates gimbal attitude from _match and camera yaw in global NED frame
 
         Estimates attitude in NED frame so need map match (uses ContextualMapData.rotation), not just any match
 
-        :param map_match: Map match
+        :param pose: Estimated pose
+        :param rotation: The map data rotation
         """
         # TODO: Estimate vehicle attitude from estimated camera attitude
         #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
         #  at least when using GimbalDeviceSetAttitude provided quaternion
         # Convert estimated rotation to attitude quaternion for publishing
-        rT = map_match.pose.r.T
+        rT = pose.r.T
         assert not np.isnan(rT).any()
         gimbal_estimated_attitude = Rotation.from_matrix(rT)  # in rotated map pixel frame
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _match
-        assert (map_match.image_pair.ref, ContextualMapData)
-        gimbal_estimated_attitude *= Rotation.from_rotvec(map_match.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
         # Re-arrange axes from unrotated (original) map pixel frame to NED frame
         rotvec = gimbal_estimated_attitude.as_rotvec()
@@ -1375,19 +1368,19 @@ class BaseNode(Node, ABC):
         return map_data
 
     #region Match
-    def _compute_output(self, match: Match, input_data: InputData) -> Optional[OutputData]:
+    def _compute_output(self, image_pair: ImagePair, pose: Pose, input_data: InputData) -> Optional[OutputData]:
         """Process the estimated camera _match into OutputData
 
         :param match: Estimated _match between images
         :param input_data: InputData of vehicle state variables from the time the image was taken
         :return: Computed output_data if a valid estimate was obtained, None otherwise
         """
-        attitude = self._estimate_attitude(match)  # TODO Make a dataclass out of attitude?
+        attitude = self._estimate_attitude(pose, image_pair.ref.rotation)
 
         # Init output
         # TODO: make OutputData immutable and assign all values in constructor here
         try:
-            fixed_camera = FixedCamera(map_match=match, ground_elevation=input_data.ground_elevation)
+            fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation)
         except DataValueError as _:
             # Could not estimate a valid FixedCamera
             return None
@@ -1441,11 +1434,11 @@ class BaseNode(Node, ABC):
             return False
 
         # Estimated translation vector blows up?
-        camera_data = output_data.fixed_camera.map_match.image_pair.qry.camera_data
+        camera_data = output_data.fixed_camera.image_pair.qry.camera_data
         reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])
-        if (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 3 * reference).any() or \
-                (np.abs(output_data.fixed_camera.map_match.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'Match.pose.t {output_data.fixed_camera.map_match.pose.t} & map_match.pose.t {output_data.fixed_camera.map_match.pose.t} have values '
+        if (np.abs(output_data.fixed_camera.pose.t).squeeze() >= 3 * reference).any() or \
+                (np.abs(output_data.fixed_camera.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
+            self.get_logger().error(f'fixed_camera.pose.t {output_data.fixed_camera.pose.t} & fixed_camera.pose.t {output_data.fixed_camera.pose.t} have values '
                                     f'too large compared to (cx, cy, fx): {reference}.')
             return False
 

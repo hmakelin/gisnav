@@ -1,16 +1,12 @@
 """Extends :class:`.BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import rclpy
 import time
-import traceback
 import numpy as np
 
-from typing import Union, get_args
 from px4_msgs.msg import VehicleGpsPosition
 
-from python_px4_ros2_map_nav.assertions import assert_type
 from python_px4_ros2_map_nav.nodes.base_node import BaseNode
-from python_px4_ros2_map_nav.nodes.data import ImageData, OutputData, Position
-from python_px4_ros2_map_nav.nodes.geo import GeoTrapezoid, GeoPoint
+from python_px4_ros2_map_nav.nodes.data import OutputData, Position
 
 
 class MockGPSNode(BaseNode):
@@ -25,18 +21,8 @@ class MockGPSNode(BaseNode):
                                                reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
                                                depth=1)
 
-    #region ROS Parameter Defaults
     MISC_MOCK_GPS_SELECTION = 1
-    """GPS selection to include in mock GPS messages.
-
-    Applies if :py:attr:`~MISC_MOCK_GPS` is enabled."""
-
-    MISC_EXPORT_POSITION = 'position.json'
-    """Filename for exporting GeoJSON containing estimated field of view and position"""
-
-    MISC_EXPORT_PROJECTION = 'projection.json'
-    """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center"""
-    #endregion
+    """GPS selection to include in mock GPS messages"""
 
     def __init__(self, name: str, package_share_dir: str):
         """Class initializer"""
@@ -58,17 +44,6 @@ class MockGPSNode(BaseNode):
             self._publish_mock_gps_msg(output_data.filtered_position, mock_gps_selection)
         except AssertionError as ae:
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
-        export_geojson = self.get_parameter('misc.export_position').get_parameter_value().string_value
-        if export_geojson is not None:
-            self._export_position(output_data.filtered_position.xy, output_data.fixed_camera.fov.fov, export_geojson)
-
-    #def publish_projected_fov(self, fov: np.ndarray, c: np.ndarray) -> None:
-    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:  # TODO Change signature back to np.ndarray for c?
-        """Writes field of view (FOV) and map center into GeoJSON file"""
-        # Export to file in GIS readable format
-        export_projection = self.get_parameter('misc.export_projection').get_parameter_value().string_value
-        if export_projection is not None:
-            self._export_position(c, fov, export_projection)
 
     def _declare_ros_params(self) -> None:
         """Declares ROS parameters
@@ -78,9 +53,7 @@ class MockGPSNode(BaseNode):
         try:
             namespace = 'misc'
             self.declare_parameters(namespace, [
-                ('mock_gps_selection', self.MISC_MOCK_GPS_SELECTION),
-                ('export_position', self.MISC_EXPORT_POSITION),
-                ('export_projection', self.MISC_EXPORT_PROJECTION),
+                ('mock_gps_selection', self.MISC_MOCK_GPS_SELECTION)
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -129,24 +102,3 @@ class MockGPSNode(BaseNode):
         msg.heading_offset = np.nan
         msg.selected = selection
         self._vehicle_gps_position_publisher.publish(msg)
-
-    # TODO: get rid of geo.py and data.py stuff here, should use common language
-    def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
-        """Exports the computed position and field of view (FOV) into a geojson file.
-
-        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
-
-        :param position: Computed camera position or e.g. principal point for gimbal projection
-        :param: fov: Field of view of camera
-        :param filename: Name of file to write into
-        :return:
-        """
-        assert_type(position, GeoPoint)
-        assert_type(fov, GeoTrapezoid)
-        assert_type(filename, str)
-        try:
-            # TODO: get rid of private property access
-            position._geoseries.append(fov._geoseries).to_file(filename)
-        except Exception as e:
-            self.get_logger().error(f'Could not write file {filename} because of exception:'
-                                    f'\n{e}\n{traceback.print_exc()}')

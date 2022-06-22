@@ -155,6 +155,20 @@ class BaseNode(Node, ABC):
     """Default parameter file with args for the default:class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer` 
     method.
     """
+
+    DEBUG_EXPORT_POSITION = '' # 'position.json'
+    """Filename for exporting GeoJSON containing estimated field of view and position
+    
+    .. note::
+        Set to '' to disable
+    """
+
+    DEBUG_EXPORT_PROJECTION = '' # 'projection.json'
+    """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center
+        
+    .. note::
+        Set to '' to disable
+    """
     #endregion
 
     def __init__(self, name: str, package_share_dir: str) -> None:
@@ -691,6 +705,15 @@ class BaseNode(Node, ABC):
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
 
+        try:
+            namespace = 'debug'
+            self.declare_parameters(namespace, [
+                ('export_position', self.DEBUG_EXPORT_POSITION),
+                ('export_projection', self.DEBUG_EXPORT_PROJECTION),
+            ])
+        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
+            self.get_logger().warn(str(e))
+
     def _setup_pose_estimation_pool(self, params_file: str) -> Tuple[type, Pool]:
         """Imports a :class:`.PoseEstimator` configured in a params file and returns a pool
 
@@ -871,9 +894,32 @@ class BaseNode(Node, ABC):
             # Not a valid FixedCamera
             return None
 
-        self.publish_projected_fov(mock_fixed_camera.fov.fov, mock_fixed_camera.fov.c)
+        if __debug__:
+            export_projection = self.get_parameter('debug.export_projection').get_parameter_value().string_value
+            if export_projection != '':
+                self._export_position(c, fov, export_projection)
 
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
+
+    def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
+        """Exports the computed position and field of view (FOV) into a geojson file.
+
+        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
+
+        :param position: Computed camera position or e.g. principal point for gimbal projection
+        :param: fov: Field of view of camera
+        :param filename: Name of file to write into
+        :return:
+        """
+        assert_type(position, GeoPoint)
+        assert_type(fov, GeoTrapezoid)
+        assert_type(filename, str)
+        try:
+            # TODO: get rid of private property access
+            position._geoseries.append(fov._geoseries).to_file(filename)
+        except Exception as e:
+            self.get_logger().error(f'Could not write file {filename} because of exception:'
+                                    f'\n{e}\n{traceback.print_exc()}')
 
     def _update_map(self, bbox: GeoSquare) -> None:
         """Instructs the WMS client to get a new map from the WMS server.
@@ -1210,6 +1256,12 @@ class BaseNode(Node, ABC):
 
                 self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
 
+                if __debug__:
+                    export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
+                    if export_geojson != '':
+                        self._export_position(output_data.filtered_position.xy, output_data.fixed_camera.fov.fov,
+                                              export_geojson)
+
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
         else:
@@ -1508,14 +1560,6 @@ class BaseNode(Node, ABC):
     @abstractmethod
     def publish(self, output_data: OutputData) -> None:
         """Publishes or exports computed output
-
-        This method should be implemented by an extending class to adapt for any given use case.
-        """
-        pass
-
-    @abstractmethod
-    def publish_projected_fov(self, fov: GeoTrapezoid, c: GeoPoint) -> None:
-        """Publishes projected field of view (FOV) and principal point
 
         This method should be implemented by an extending class to adapt for any given use case.
         """

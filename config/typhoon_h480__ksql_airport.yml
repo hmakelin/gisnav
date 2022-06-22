@@ -10,8 +10,6 @@ map_nav_node:
       image_format: 'image/jpeg'
     misc:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
-      export_position: 'position.json' # declared by MockGPSNode, not by base class
-      export_projection: 'projection.json' # declared by MockGPSNode, not by base class
       max_pitch: 30  # 30  # Used by _should_match
       variance_estimation_length: 20
       min_match_altitude: 80
@@ -27,3 +25,6 @@ map_nav_node:
     pose_estimator:
       #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
       params_file: 'config/loftr_params.yml'
+    debug:
+      export_position: 'position.json'
+      export_projection: 'projection.json'

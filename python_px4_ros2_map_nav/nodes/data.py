@@ -408,7 +408,7 @@ class FixedCamera:
         fov_wgs84, c_wgs84 = self._get_fov_and_c(self.image_pair.ref.image.dim, h_wgs84)
         try:
             fov = FOV(fov_pix=fov_pix,
-                      fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
+                      fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),
                       c_pix=c_pix,
                       c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                       )

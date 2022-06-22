@@ -1073,11 +1073,15 @@ class BaseNode(Node, ABC):
         :return: True if previous map is too close.
         """
         assert_type(bbox, GeoSquare)
-        if self._map_output_data_prev is not None:
-            previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
+        #if self._map_output_data_prev is not None:
+        if self._map_data is not None:
+            #previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
+            previous_map_data = self._map_data
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
+
             ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
-                        bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
+                        previous_map_data.bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
+
             if ratio > area_threshold:
                 return True
 
@@ -1095,8 +1099,10 @@ class BaseNode(Node, ABC):
         """
         assert_type(bbox, GeoSquare)
 
-        # Check conditions (1) and (2) - previous results pending or requested new map too close to old one
-        if self._wms_results_pending() or self._previous_map_too_close(bbox):
+        if self._wms_results_pending():
+            return False
+
+        if self._previous_map_too_close(bbox):
             return False
 
         # Check condition (3) - whether camera pitch is too large if using gimbal projection
@@ -1208,7 +1214,7 @@ class BaseNode(Node, ABC):
             filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
             if filter_output is None:
                 self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
-                return None
+                #return None
             else:
                 filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
                 filtered_position.xy.to_crs(orig_crs_str)  # TODO: move this to publishing logic (making sure published CRS is epsg:4326)

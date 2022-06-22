@@ -897,7 +897,7 @@ class BaseNode(Node, ABC):
         if __debug__:
             export_projection = self.get_parameter('debug.export_projection').get_parameter_value().string_value
             if export_projection != '':
-                self._export_position(c, fov, export_projection)
+                self._export_position(mock_fixed_camera.fov.c, mock_fixed_camera.fov.fov, export_projection)
 
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 

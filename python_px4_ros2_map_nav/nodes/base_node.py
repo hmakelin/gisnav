@@ -636,7 +636,7 @@ class BaseNode(Node, ABC):
             crs = 'epsg:4326'
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
-                z_ground=self._altitude_agl,
+                z_ground=self._altitude_agl,  # not None
                 z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
                 x_sd=None,
                 y_sd=None,

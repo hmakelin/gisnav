@@ -48,9 +48,7 @@ class Position:
         assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
                or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
 
-        # Need at least one kind of altitude info (should use GeoPoint otherwise)
-        assert self.z_ground is not None or self.z_amsl is not None
-        # assert self.z_ground is not None  # TODO: enable this once _position_from_vehicle_global_position usage is fixed (*NEED* ground altitude! only in the simulator scenario the amsl and ground altitude are the same)
+        assert self.z_ground is not None
 
     @property
     def eph(self) -> Optional[float]:

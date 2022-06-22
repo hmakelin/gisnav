@@ -1187,7 +1187,7 @@ class BaseNode(Node, ABC):
             # noinspection PyUnreachableCode
             if __debug__:
                 # Visualize projected FOV estimate
-                fov_pix = np.flip(output_data.fixed_camera.fov.fov_pix.coords, axis=1)
+                fov_pix = output_data.fixed_camera.fov.fov_pix
                 ref_img = output_data.fixed_camera.image_pair.ref.image.arr
                 map_with_fov = cv2.polylines(ref_img.copy(),
                                              [np.int32(fov_pix)], True,

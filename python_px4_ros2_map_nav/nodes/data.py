@@ -370,7 +370,7 @@ class InputData:
 @dataclass
 class FOV:
     """Camera field of view related attributes"""
-    fov_pix: GeoTrapezoid  # TODO: no longer needs to be GeoTrapezoid, make it np.ndarray?
+    fov_pix: np.ndarray
     fov: Optional[GeoTrapezoid]
     c: GeoPoint
     c_pix: np.ndarray
@@ -407,7 +407,7 @@ class FixedCamera:
         fov_pix, c_pix = self._get_fov_and_c(self.image_pair.qry.image.dim, self.inv_h)
         fov_wgs84, c_wgs84 = self._get_fov_and_c(self.image_pair.ref.image.dim, h_wgs84)
         try:
-            fov = FOV(fov_pix=GeoTrapezoid(np.flip(fov_pix, axis=2), crs=''),  # TODO: can we give it a crs? Or edit GeoTrapezoid to_crs so that it returns an error if crs not given
+            fov = FOV(fov_pix=fov_pix,
                       fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),  # TODO: rename these just "pix" and "wgs84", redundancy in calling them fov_X
                       c_pix=c_pix,
                       c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')

@@ -59,7 +59,7 @@ class _GeoObject(ABC):
         """Post-initialization validity checks"""
         # TODO enforce, do not assert
         assert_len(self._geoseries, 1)
-        #assert self._geoseries.crs is not None  # TODO: not asserted because data.FOV.fov_pix is currently GeoTrapezoid
+        assert self._geoseries.crs is not None
 
 
 class _GeoPolygon(_GeoObject):

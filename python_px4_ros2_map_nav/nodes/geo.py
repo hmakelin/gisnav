@@ -88,7 +88,7 @@ class _GeoPolygon(_GeoObject):
     @property
     def meter_length(self) -> float:
         """Returns length of polygon in meters"""
-        return self.center._spherical_adjustment * self._geoseries.to_crs('epsg:3857')[0].length
+        return self.center.spherical_adjustment * self._geoseries.to_crs('epsg:3857')[0].length
 
     @property
     def coords(self) -> np.ndarray:
@@ -152,7 +152,7 @@ class GeoPoint(_GeoObject):
         return self.latlon[1]
 
     @property
-    def _spherical_adjustment(self):
+    def spherical_adjustment(self):
         """Helper property for correcting distance measured in EPSG:3857 pseudo-meters into approximate real meters
 
         Uses a simple spherical model which is accurate enough for expected use cases
@@ -169,7 +169,7 @@ class GeoSquare(_GeoPolygon):
         :param radius: Radius of enclosed circle in meters
         :param crs: Coordinate Reference System (CRS) string (e.g. 'epsg:4326')
         """
-        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer(radius/center._spherical_adjustment)\
+        self._geoseries = center.to_crs('epsg:3857')._geoseries.buffer(radius / center.spherical_adjustment)\
             .to_crs(crs).envelope
         assert_type(self._geoseries[0], Polygon)
 

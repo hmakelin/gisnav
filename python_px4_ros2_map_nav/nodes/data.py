@@ -71,12 +71,16 @@ class Position:
         return self.xy.lon
 
     def to_array(self) -> np.ndarray:
-        """Returns position (x, y, z) coordinates in adjusted EPSG:3857 meters as numpy array
+        """Returns position (x, y, z) coordinates in (adjusted EPSG:3857 for xy) meters as numpy array
 
         Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`
+
+        .. warning:
+            The (x, y, z) tuple is not in any kind of defined CRS, you should only use :meth:`.from_filtered_output` to
+            read it back into a :class:`.Position` instance.
         """
-        return np.append(np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
-                         np.array((self.z_ground))).reshape(1, 3)
+        return np.append(self.xy.spherical_adjustment * np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
+                         np.array(self.z_ground)).reshape(1, 3)
 
     @staticmethod
     def from_filtered_output(means: np.ndarray, sds: np.ndarray, original_position: Position) -> Position:
@@ -84,16 +88,19 @@ class Position:
 
         :param means: Estimated means from Kalman filter
         :param sds: Estimated standard deviations from Kalman filter
+        :param original_position: The original position the means and sds were derived from
         :return: New :class:`.Position` instance with adjusted x, y and altitude values
         """
+        sds[0:2] = sds[0:2]/original_position.xy.spherical_adjustment
+        means[0:2] = means[0:2]/original_position.xy.spherical_adjustment
         return Position(
             xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE),
             z_ground=means[2],
             z_amsl=original_position.z_amsl + (means[2] - original_position.z_ground) \
                 if original_position.z_amsl is not None else None,
-            x_sd=sds[0],  # TODO: need to scale by spherical adjustment?
-            y_sd=sds[1],  # TODO: need to scale by spherical adjustment?
-            z_sd=sds[2]   # TODO: need to scale by spherical adjustment?
+            x_sd=sds[0],
+            y_sd=sds[1],
+            z_sd=sds[2]
         )
 
 

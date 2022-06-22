@@ -502,7 +502,6 @@ class FixedCamera:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
 
-
 # noinspection PyClassHasNoInit
 @dataclass
 class OutputData:
@@ -519,11 +518,6 @@ class OutputData:
     fixed_camera: FixedCamera
     filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional
     attitude: np.ndarray
-
-    def __post_init__(self):
-        """Validate the data structure"""
-        # TODO: Enforce types
-        pass
 
 
 # noinspection PyClassHasNoInit

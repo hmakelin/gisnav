@@ -100,7 +100,6 @@ class _GeoPolygon(_GeoObject):
             Shapely duplicates the Polygon starting point to close its boundary but this property removes the duplicate
         """
         assert_len(self._geoseries[0].exterior.coords, 5)
-        #exterior_coords = np.array(orient(self._geoseries[0], 1.0).exterior.coords)[:-1]
         exterior_coords = np.array(self._geoseries[0].exterior.coords)[:-1]
         assert_len(exterior_coords, 4)
         return exterior_coords

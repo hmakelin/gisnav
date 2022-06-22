@@ -131,7 +131,6 @@ class Attitude:
         """
         nadir_pitch = np.array([0, np.sin(np.pi/4), 0, np.sin(np.pi/4)])  # Adjust origin to nadir facing camera
         r = Rotation.from_quat(self.q) * Rotation.from_quat(nadir_pitch)
-        att = Attitude(r.as_quat())
         q = r.as_quat()
         q = np.array([q[1], -q[0], q[2], -q[3]])  # NED to ESD
         att = Attitude(q)

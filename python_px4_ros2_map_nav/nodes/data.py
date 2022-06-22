@@ -128,27 +128,25 @@ class Attitude:
         att = Attitude(q)
         return att
 
-# noinspection PyClassHasNoInit
+
 @dataclass(frozen=True)
 class _ImageHolder:
     """Parent dataclass for image holders
 
-    Should not be instantiated directly.
+    .. note:: This class should not be instantiated directly.
     """
     image: np.ndarray
 
 
-# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Img:
-    """Image class to hold image raster and related metadata"""
+    """Class to hold image raster and related metadata"""
     arr: np.ndarray
     dim: Dim = field(init=False)
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'dim', Dim(*self.arr.shape[0:2]))  # TODO: correct order of unpack?
+        object.__setattr__(self, 'dim', Dim(*self.arr.shape[0:2]))  # order is h, w, c
 
 
 # noinspection PyClassHasNoInit
@@ -170,8 +168,7 @@ class ImageData(_ImageHolder):
 class CameraData:
     """Camera intrinsics matrix"""
     k: np.ndarray
-    height: float
-    width: float
+    dim: Dim
     fx: float = field(init=False)
     fy: float = field(init=False)
     cx: float = field(init=False)
@@ -180,7 +177,6 @@ class CameraData:
     def __post_init__(self):
         """Post-initialization validity checks"""
         assert_shape(self.k, (3, 3))
-        # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'fx', self.k[0][0])
         object.__setattr__(self, 'fy', self.k[1][1])
         object.__setattr__(self, 'cx', self.k[0][2])

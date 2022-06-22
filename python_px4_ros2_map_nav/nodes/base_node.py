@@ -591,29 +591,17 @@ class BaseNode(Node, ABC):
         return diagonal, diagonal
 
     @property
-    def _declared_img_size(self) -> Optional[Tuple[int, int]]:
+    def _img_dim(self) -> Optional[Dim]:
         """Returns image resolution size as it is declared in the latest CameraInfo message.
 
         :return: Image resolution tuple (height, width) or None if not available
         """
         if self._camera_data is not None:
-            return self._camera_data.height, self._camera_data.width  # numpy order: h, w, c --> height first
+            return self._camera_data.dim
         else:
             self.get_logger().warn('Camera data was not available, returning None as declared image size.')
             return None
 
-    @property
-    def _img_dim(self) -> Optional[Dim]:
-        """Returns image dimensions as it is declared in the latest CameraInfo message.
-
-        This method is a wrapper for :meth:`~declared_img_size`.
-
-        :return: Image dimensions or None if not available
-        """
-        if self._declared_img_size is None:
-            self.get_logger().warn('Declared size not available - returning None as image dimensions.')
-            return None
-        return Dim(*self._declared_img_size)
 
     @property
     def _vehicle_position(self) -> Optional[Position]:
@@ -952,10 +940,10 @@ class BaseNode(Node, ABC):
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
 
         # Check that image dimensions match declared dimensions
-        if self._declared_img_size is not None:
+        if self._img_dim is not None:
             cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self._declared_img_size, f'Converted cv_image shape {cv_img_shape} did not match ' \
-                                                            f'declared image shape {self._declared_img_size}.'
+            assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match ' \
+                                                  f'declared image shape {self._img_dim}.'
 
         # Process image frame
         # TODO: save previous image frame and check that new timestamp is greater
@@ -994,7 +982,7 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'CameraInfo did not contain intrinsics or resolution information: {msg}.')
             return None
         else:
-            self._camera_data = CameraData(k=msg.k.reshape((3, 3)), height=msg.height, width=msg.width)
+            self._camera_data = CameraData(k=msg.k.reshape((3, 3)), dim=Dim(msg.height, msg.width))
             camera_info_topic = self._topics.get('camera_info', {}).get(self.TOPICS_SUBSCRIBER_KEY, None)
             if camera_info_topic is not None:
                 self.get_logger().warn('CameraInfo received. Assuming CameraInfo is static, destroying the '
@@ -1032,7 +1020,7 @@ class BaseNode(Node, ABC):
 
         if self._camera_data is not None:
             #assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy  # TODO: with calibrated values this may not be exact, try something else with tolerance and warn if not within tolerance
-            hfov = 2 * math.atan(self._camera_data.width / (2 * self._camera_data.fx))
+            hfov = 2 * math.atan(self._camera_data.dim.width / (2 * self._camera_data.fx))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
             # TODO: does this happen? Trying to update map before camera info has been received?

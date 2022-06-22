@@ -17,11 +17,11 @@ def main(args=None):
     :return:
     """
     package_name = __name__.rsplit('.')[-2]  # should match package.xml declared package_name
-    #if __debug__:
-    #    pr = cProfile.Profile()  # TODO: re-enable
-    #    pr.enable()
-    #else:
-    pr = None
+    if __debug__:
+        pr = cProfile.Profile()
+        pr.enable()
+    else:
+        pr = None
     try:
         rclpy.init(args=args)
         matcher = MockGPSNode('map_nav_node', get_package_share_directory(package_name))

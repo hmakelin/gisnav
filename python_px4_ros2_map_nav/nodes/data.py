@@ -95,6 +95,8 @@ class Position:
             y_sd=sds[1],  # TODO: need to scale by spherical adjustment?
             z_sd=sds[2]   # TODO: need to scale by spherical adjustment?
         )
+
+
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Attitude:
@@ -129,6 +131,7 @@ class Attitude:
         return att
 
 
+# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class _ImageHolder:
     """Parent dataclass for image holders
@@ -138,6 +141,7 @@ class _ImageHolder:
     image: np.ndarray
 
 
+# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class Img:
     """Class to hold image raster and related metadata"""

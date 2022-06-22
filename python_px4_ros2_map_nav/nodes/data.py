@@ -542,7 +542,6 @@ class FixedCamera:
 # noinspection PyClassHasNoInit
 @dataclass
 class OutputData:
-    # TODO: add extrinsic matrix / _match, pix_to_wgs84 transformation?
     # TODO: freeze this data structure to reduce unintentional re-assignment?
     """Algorithm output passed onto publish method.
 

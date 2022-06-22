@@ -140,7 +140,8 @@ class Attitude:
 class _ImageHolder:
     """Parent dataclass for image holders
 
-    .. note:: This class should not be instantiated directly.
+    .. note::
+        This class should not be instantiated directly.
     """
     image: np.ndarray
 
@@ -153,7 +154,7 @@ class Img:
     dim: Dim = field(init=False)
 
     def __post_init__(self):
-        """Set computed fields after initialization."""
+        """Set computed variables post-initialization"""
         object.__setattr__(self, 'dim', Dim(*self.arr.shape[0:2]))  # order is h, w, c
 
 
@@ -161,14 +162,9 @@ class Img:
 @dataclass(frozen=True)
 class ImageData(_ImageHolder):
     """Keeps image frame related data in one place and protects it from corruption."""
-    #image: Img
     frame_id: str
     timestamp: int
     camera_data: CameraData
-
-    def __post_init__(self):
-        """Post-initialization validity checks"""
-        assert_type(self.camera_data, CameraData)
 
 
 # noinspection PyClassHasNoInit
@@ -183,7 +179,7 @@ class CameraData:
     cy: float = field(init=False)
 
     def __post_init__(self):
-        """Post-initialization validity checks"""
+        """Set computed variables post-initialization"""
         assert_shape(self.k, (3, 3))
         object.__setattr__(self, 'fx', self.k[0][0])
         object.__setattr__(self, 'fy', self.k[1][1])
@@ -195,7 +191,6 @@ class CameraData:
 @dataclass(frozen=True)
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
-    #image: Img
     bbox: GeoBBox
 
 
@@ -203,10 +198,10 @@ class MapData(_ImageHolder):
 @dataclass(frozen=True)
 class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
-    image: Img = field(init=False)  # This is the map_cropped image which is same size as the camera frames, init in __post_init__
+    image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
     rotation: float
-    crop: Dim  # TODO: Redundant with .image.dim but need this to generate .image
-    map_data: MapData   # This is the original larger (square) map with padding
+    crop: Dim                       # Same value will also be found at image.dim
+    map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
 
     def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -263,14 +258,12 @@ class ContextualMapData(_ImageHolder):
         map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
         map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
         #if visualize:
-        #if True:
             #cv2.imshow('padded', self.map_data.image.arr)
             #cv2.waitKey(1)
             #cv2.imshow('rotated', map_rotated)
             #cv2.waitKey(1)
             #cv2.imshow('cropped', map_cropped)
             #cv2.waitKey(1)
-        # TODO: below assertion should not be!
         assert map_cropped.shape[0:2] == self.crop, f'Cropped shape {map_cropped.shape} did not match dims {self.crop}.'
         return map_cropped
 
@@ -293,13 +286,10 @@ class ContextualMapData(_ImageHolder):
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        #super().__post_init__()
         object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))  # TODO: correct order of unpack?
         object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
 
 
-# TODO: enforce types for ImagePair
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ImagePair:
@@ -317,10 +307,10 @@ class _AsyncQuery:
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
     easily reunited again in the callback function.
 
-    Note: Do not try to instantiate this directly
+    .. note::
+        You should not try to instantiate this class directly. Use child classes instead.
     """
     result: AsyncResult
-    # TODO: derive from ABC and raise error on instantiation
 
 
 # noinspection PyClassHasNoInit
@@ -332,8 +322,7 @@ class AsyncPoseQuery(_AsyncQuery):
     and an input_data context as arguments (along with a guess which is not stored since it is no longer needed after
     the _match estimation).
     """
-    #result: AsyncResult
-    image_pair: ImagePair  # TODO: convert to query, reference and k instead?
+    image_pair: ImagePair
     input_data: InputData
 
 
@@ -342,10 +331,9 @@ class AsyncPoseQuery(_AsyncQuery):
 class AsyncWMSQuery(_AsyncQuery):
     """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
 
-    The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input so they are needed here
+    The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input it is needed here
     """
-    #result: AsyncResult
-    geobbox: GeoBBox  # TODO: convert to bbox (bounds), layer_str, srs_str etc. instead?
+    geobbox: GeoSquare
 
 
 # noinspection PyClassHasNoInit
@@ -359,7 +347,7 @@ class Pose:
     def __post_init__(self):
         """Set computed fields and do validity checks after initialization
 
-        :raise: :class:`.PoseValueError` if r or t is invalid
+        :raise: :class:`.DataValueError` if r or t is invalid
         """
         # Data class is frozen so need to use object.__setattr__ to assign values
         object.__setattr__(self, 'e', np.hstack((self.r, self.t)))
@@ -373,51 +361,19 @@ class Pose:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class InputData:
-    """InputData of vehicle state and other variables needed for postprocessing both map and visual odometry matches.
-
-    :return:
-    """
-    ground_elevation: Optional[float]  # Assumed elevation of ground plane above mean sea level (AMSL)
-
-    def __post_init__(self):
-        """Validate the data structure"""
-        # TODO: Enforce types
-        pass
+    """InputData of vehicle state and other variables needed for postprocessing pose estimates"""
+    ground_elevation: Optional[float]
+    """Assumed elevation of ground plane above mean sea level (AMSL)"""
 
 
 # noinspection PyClassHasNoInit
 @dataclass
 class FOV:
     """Camera field of view related attributes"""
-    fov_pix: GeoTrapezoid  # np.ndarray  # TODO: not real GEOtrapezoid, just trapezoid but need shapely functions!
-    fov: Optional[GeoTrapezoid]  #Optional[np.ndarray]  # TODO: rename fov_wgs84? Can be None if can't be projected to WGS84?
+    fov_pix: GeoTrapezoid  # TODO: no longer needs to be GeoTrapezoid, make it np.ndarray?
+    fov: Optional[GeoTrapezoid]
     c: GeoPoint
-    c_pix: np.ndarray  # TODO: try to get proj string for fov_pix, then can also make this a GeoPoint
-    scaling: float = field(init=False)
-
-    # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
-    def _estimate_altitude_scaling(self) -> float:
-        """Estimates altitude scaling factor from field of view matched against known map
-
-        Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
-        find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
-        of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
-        the corresponding WGS84 latitude and latitude coordinates.
-
-        :return: Altitude scaling factor
-        """
-        distance_in_pixels = self.fov_pix.length
-        distance_in_meters = self.fov.meter_length
-
-        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
-        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
-
-        return altitude_scaling
-
-    def __post_init__(self):
-        """Set computed fields after initialization."""
-        # Data class is frozen so need to use object.__setattr__ to assign values
-        object.__setattr__(self, 'scaling', self._estimate_altitude_scaling())
+    c_pix: np.ndarray
 
 
 # noinspection PyClassHasNoInit

@@ -476,6 +476,11 @@ class BaseNode(Node, ABC):
 
     #region Computed Properties
     @property
+    def _wms_results_pending(self) -> bool:
+        """True if there are pending results"""
+        return not self._wms_query.result.ready() if self._wms_query is not None else False
+
+    @property
     def _synchronized_time(self) -> Optional[int]:
         """Returns current (estimated) EKF2 timestamp in microseconds
 
@@ -816,7 +821,7 @@ class BaseNode(Node, ABC):
         :param class_: Message definition class (e.g. px4_msgs.msg.VehicleLocalPosition)
         :return: The subscriber instance
         """
-        callback_name = topic_name.lower() + '_callback'
+        callback_name = f'_{topic_name.lower()}_callback'
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
@@ -955,8 +960,8 @@ class BaseNode(Node, ABC):
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
             return None
 
-    #region microRTPSBridgeCallbacks
-    def image_raw_callback(self, msg: Image) -> None:
+    # region microRTPSBridgeCallbacks
+    def _image_raw_callback(self, msg: Image) -> None:
         """Handles latest image frame from camera.
 
         For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
@@ -1012,7 +1017,7 @@ class BaseNode(Node, ABC):
             image_pair = ImagePair(image_data, contextual_map_data)
             self._estimate(image_pair, inputs)
 
-    def camera_info_callback(self, msg: CameraInfo) -> None:
+    def _camera_info_callback(self, msg: CameraInfo) -> None:
         """Handles latest camera info message.
 
         :param msg: CameraInfo message from the PX4-ROS 2 bridge
@@ -1029,7 +1034,7 @@ class BaseNode(Node, ABC):
                                        'subscription.')
                 camera_info_topic.destroy()
 
-    def vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
+    def _vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest VehicleLocalPosition message.
 
         Uses the EKF2 system time in the message to synchronize local system time.
@@ -1041,7 +1046,7 @@ class BaseNode(Node, ABC):
         self._vehicle_local_position = msg
         self._sync_timestamps(self._vehicle_local_position.timestamp)
 
-    def vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
+    def _vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
         """Handles latest VehicleAttitude message.
 
         :param msg: VehicleAttitude from the PX4-ROS 2 bridge
@@ -1049,32 +1054,7 @@ class BaseNode(Node, ABC):
         """
         self._vehicle_attitude = msg
 
-    def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
-        """Returns map radius that adjusts for camera altitude.
-
-        :param altitude: Altitude of camera in meters
-        :return: Suitable map radius in meters
-        """
-        assert_type(altitude, get_args(Union[int, float]))
-        max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
-
-        if self._camera_data is not None:
-            #assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy  # TODO: with calibrated values this may not be exact, try something else with tolerance and warn if not within tolerance
-            hfov = 2 * math.atan(self._camera_data.dim.width / (2 * self._camera_data.fx))
-            map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
-        else:
-            # TODO: does this happen? Trying to update map before camera info has been received?
-            self.get_logger().warn(f'Could not get camera data, using best guess for map width.')
-            map_radius = 3*altitude  # Arbitrary guess
-
-        if map_radius > max_map_radius:
-            self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
-                                   f'max_map_radius instead.')
-            map_radius = max_map_radius
-
-        return map_radius
-
-    def vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
+    def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest VehicleGlobalPosition message.
 
         :param msg: VehicleGlobalPosition from the PX4-ROS 2 bridge
@@ -1082,69 +1062,7 @@ class BaseNode(Node, ABC):
         """
         self._vehicle_global_position = msg
 
-    def _wms_results_pending(self) -> bool:
-        """Checks whether there are pending wms_results.
-
-        :return: True if there are pending results.
-        """
-        return not self._wms_query.result.ready() if self._wms_query is not None else False
-
-    def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
-        """Checks if previous map is too close to new requested one.
-
-        This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
-        update interval should not improve accuracy of position estimation unless the map is so old that the field of
-        view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
-        or is too small compared to the size of the map (vehicle altitude has significantly decreased).
-
-        :param bbox: Bounding box of new map candidate
-        :return: True if previous map is too close.
-        """
-        assert_type(bbox, GeoSquare)
-        #if self._map_output_data_prev is not None:
-        if self._map_data is not None:
-            #previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
-            previous_map_data = self._map_data
-            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
-
-            ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
-                        previous_map_data.bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
-
-            if ratio > area_threshold:
-                return True
-
-        return False
-
-    def _should_update_map(self, bbox: GeoSquare) -> bool:
-        """Checks if a new WMS map request should be made to update old map.
-
-        Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
-        that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
-        large and gimbal projection is used so that map center would be too far or even beyond the horizon.
-
-        :param bbox: Bounding box of new map candidate
-        :return: True if map should be updated
-        """
-        assert_type(bbox, GeoSquare)
-
-        if self._wms_results_pending():
-            return False
-
-        if self._previous_map_too_close(bbox):
-            return False
-
-        # Check condition (3) - whether camera pitch is too large if using gimbal projection
-        # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
-        use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
-        if use_gimbal_projection:
-            max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-            if self._camera_pitch_too_high(max_pitch):
-                self.get_logger().warn(f'Camera pitch not available or above maximum {max_pitch}. Will not update map.')
-                return False
-
-        return True
-
-    def gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
+    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Handles latest GimbalDeviceAttitudeStatus message.
 
         :param msg: GimbalDeviceAttitudeStatus from the PX4-ROS 2 bridge
@@ -1152,7 +1070,7 @@ class BaseNode(Node, ABC):
         """
         self._gimbal_device_attitude_status = msg
 
-    def gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
+    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
         """Handles latest GimbalDeviceSetAttitude message.
 
         :param msg: GimbalDeviceSetAttitude from the PX4-ROS 2 bridge
@@ -1160,7 +1078,7 @@ class BaseNode(Node, ABC):
         """
         """Handles latest GimbalDeviceSetAttitude message."""
         self._gimbal_device_set_attitude = msg
-    #endregion
+    # endregion
 
     #region WMSWorkerCallbacks
     def wms_pool_worker_callback(self, result: List[MapData]) -> None:
@@ -1261,8 +1179,87 @@ class BaseNode(Node, ABC):
         else:
             self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
     #endregion
+    def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
+        """Checks if previous map is too close to new requested one.
 
-    # TODO: no need to give max pitch arg, can be checked inside method
+        This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
+        update interval should not improve accuracy of position estimation unless the map is so old that the field of
+        view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
+        or is too small compared to the size of the map (vehicle altitude has significantly decreased).
+
+        :param bbox: Bounding box of new map candidate
+        :return: True if previous map is too close.
+        """
+        assert_type(bbox, GeoSquare)
+        #if self._map_output_data_prev is not None:
+        if self._map_data is not None:
+            #previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
+            previous_map_data = self._map_data
+            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
+
+            ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
+                        previous_map_data.bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
+
+            if ratio > area_threshold:
+                return True
+
+        return False
+
+    def _should_update_map(self, bbox: GeoSquare) -> bool:
+        """Checks if a new WMS map request should be made to update old map.
+
+        Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
+        that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
+        large and gimbal projection is used so that map center would be too far or even beyond the horizon.
+
+        :param bbox: Bounding box of new map candidate
+        :return: True if map should be updated
+        """
+        assert_type(bbox, GeoSquare)
+
+        if self._wms_results_pending:
+            return False
+
+        if self._previous_map_too_close(bbox):
+            return False
+
+        # Check condition (3) - whether camera pitch is too large if using gimbal projection
+        # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
+        use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
+        if use_gimbal_projection:
+            max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
+            if self._camera_pitch_too_high(max_pitch):
+                self.get_logger().warn(f'Camera pitch not available or above maximum {max_pitch}. Will not update map.')
+                return False
+
+        return True
+
+    def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
+        """Returns map radius that adjusts for camera altitude.
+
+        :param altitude: Altitude of camera in meters
+        :return: Suitable map radius in meters
+        """
+        assert_type(altitude, get_args(Union[int, float]))
+        max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
+
+        if self._camera_data is not None:
+            #assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy  # TODO: with calibrated values this may not be exact, try something else with tolerance and warn if not within tolerance
+            hfov = 2 * math.atan(self._camera_data.dim.width / (2 * self._camera_data.fx))
+            map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
+        else:
+            # TODO: does this happen? Trying to update map before camera info has been received?
+            self.get_logger().warn(f'Could not get camera data, using best guess for map width.')
+            map_radius = 3*altitude  # Arbitrary guess
+
+        if map_radius > max_map_radius:
+            self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
+                                   f'max_map_radius instead.')
+            map_radius = max_map_radius
+
+        return map_radius
+
+    # TODO: no need to give max pitch arg, make property?
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown.
 

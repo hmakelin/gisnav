@@ -1475,13 +1475,6 @@ class BaseNode(Node, ABC):
 
         return True
 
-    def _have_map_match(self) -> None:
-        """Returns True if an existing map match is in store
-
-        :return: True if a map match has been made earlier
-        """
-        return self._map_output_data_prev is not None
-
     def _should_map_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.
 

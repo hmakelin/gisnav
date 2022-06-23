@@ -492,8 +492,8 @@ class BaseNode(Node, ABC):
             return None
         else:
             now_usec = time.time() * 1e6
-            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than ' \
-                                                     f'timestamp stored earlier for synchronization ' \
+            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than '\
+                                                     f'timestamp stored earlier for synchronization '\
                                                      f'{self._time_sync.local}.'
             ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
             return ekf2_timestamp_usec
@@ -939,10 +939,9 @@ class BaseNode(Node, ABC):
 
     # region microRTPSBridgeCallbacks
     def _image_raw_callback(self, msg: Image) -> None:
-        """Handles latest image frame from camera
+        """Handles latest :class:`px4_msgs.msg.Image` message
 
         :param msg: The :class:`px4_msgs.msg.Image` message from the PX4-ROS 2 bridge
-        :return:
         """
         # Estimate EKF2 timestamp first to get best estimate
         if self._synchronized_time is None:
@@ -955,7 +954,7 @@ class BaseNode(Node, ABC):
         # Check that image dimensions match declared dimensions
         if self._img_dim is not None:
             cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match ' \
+            assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match '\
                                                   f'declared image shape {self._img_dim}.'
 
         if self._camera_data is None:
@@ -976,10 +975,9 @@ class BaseNode(Node, ABC):
             self._estimate(image_pair, inputs)
 
     def _camera_info_callback(self, msg: CameraInfo) -> None:
-        """Handles latest camera info message.
+        """Handles latest :class:`px4_msgs.msg.CameraInfo` message
 
-        :param msg: CameraInfo message from the PX4-ROS 2 bridge
-        :return:
+        :param msg: :class:`px4_msgs.msg.CameraInfo` message from the PX4-ROS 2 bridge
         """
         if not all(hasattr(msg, attr) for attr in ['k', 'height', 'width']):
             self.get_logger().warn(f'CameraInfo did not contain intrinsics or resolution information: {msg}.')
@@ -993,11 +991,11 @@ class BaseNode(Node, ABC):
                 camera_info_topic.destroy()
 
     def _vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
-        """Handles latest VehicleLocalPosition message.
+        """Handles latest :class:`px4_msgs.msg.VehicleLocalPosition` message
 
         Uses the EKF2 system time in the message to synchronize local system time.
 
-        :param msg: VehicleLocalPosition from the PX4-ROS 2 bridge
+        :param msg: :class:`px4_msgs.msg.VehicleLocalPosition` message from the PX4-ROS 2 bridge
         :return:
         """
         assert_type(msg.timestamp, int)
@@ -1005,36 +1003,35 @@ class BaseNode(Node, ABC):
         self._sync_timestamps(self._vehicle_local_position.timestamp)
 
     def _vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
-        """Handles latest VehicleAttitude message.
+        """Handles latest :class:`px4_msgs.msg.VehicleAttitude` message
 
-        :param msg: VehicleAttitude from the PX4-ROS 2 bridge
+        :param msg: :class:`px4_msgs.msg.VehicleAttitude` message from the PX4-ROS 2 bridge
         :return:
         """
         self._vehicle_attitude = msg
 
     def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
-        """Handles latest VehicleGlobalPosition message.
+        """Handles latest :class:`px4_msgs.msg.VehicleGlobalPosition` message
 
-        :param msg: VehicleGlobalPosition from the PX4-ROS 2 bridge
+        :param msg: :class:`px4_msgs.msg.VehicleGlobalPosition` message from the PX4-ROS 2 bridge
         :return:
         """
         self._vehicle_global_position = msg
 
     def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
-        """Handles latest GimbalDeviceAttitudeStatus message.
+        """Handles latest :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` message
 
-        :param msg: GimbalDeviceAttitudeStatus from the PX4-ROS 2 bridge
+        :param msg: :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` message from the PX4-ROS 2 bridge
         :return:
         """
         self._gimbal_device_attitude_status = msg
 
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
-        """Handles latest GimbalDeviceSetAttitude message.
+        """Handles latest :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message
 
-        :param msg: GimbalDeviceSetAttitude from the PX4-ROS 2 bridge
+        :param msg: :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message from the PX4-ROS 2 bridge
         :return:
         """
-        """Handles latest GimbalDeviceSetAttitude message."""
         self._gimbal_device_set_attitude = msg
     # endregion
 

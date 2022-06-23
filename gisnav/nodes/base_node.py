@@ -924,26 +924,18 @@ class BaseNode(Node, ABC):
         assert_len(styles, len(layers))
         assert_type(srs_str, str)
         assert_type(image_format, str)
-        # noinspection PyBroadException - see comment in except block below
-        try:
-            assert self._wms_query.result.ready(), f'Update map was called while previous results were not yet ready.'
-            self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
-                                   f'{image_format}.')
-            self._wms_query = AsyncWMSQuery(
-                result=self._wms_pool.apply_async(
-                    WMSClient.worker,
-                    (layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format),
-                    callback=self._wms_pool_worker_callback,
-                    error_callback=self._wms_pool_worker_error_callback
-                ),
-                geobbox=bbox
-            )
-        except Exception as e:  # TODO: catch IOError instead?
-            # These are *probably* connection related exceptions from requests library. They do not seem to be part of
-            # OWSLib public API so WMSClient does not handle them (in case OWSLib devs change it). Handling them would
-            # require direct dependency to requests. Log exception as error here and move on.
-            self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
-            return
+        assert self._wms_query.result.ready(), f'New map was requested while previous results were not yet ready.'
+        self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
+                               f'{image_format}.')
+        self._wms_query = AsyncWMSQuery(
+            result=self._wms_pool.apply_async(
+                WMSClient.worker,
+                (layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format),
+                callback=self._wms_pool_worker_callback,
+                error_callback=self._wms_pool_worker_error_callback
+            ),
+            geobbox=bbox
+        )
 
     # region microRTPSBridgeCallbacks
     def _image_raw_callback(self, msg: Image) -> None:
@@ -1091,6 +1083,10 @@ class BaseNode(Node, ABC):
         :param e: Exception returned by the worker
         :return:
         """
+        # TODO: handle IOError separately?
+        # These are *probably* connection related exceptions from requests library. They do not seem to be part of
+        # OWSLib public API so WMSClient does not handle them (in case OWSLib devs change it). Handling them would
+        # require direct dependency to requests. Log exception as error here and move on.
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
     #endregion
 

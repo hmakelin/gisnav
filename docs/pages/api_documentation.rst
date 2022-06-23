@@ -36,24 +36,6 @@ mock_gps_node module
    :special-members: __init__
    :show-inheritance:
 
-data module
---------------------------------------------
-.. automodule:: gisnav.data
-   :autosummary:
-   :members:
-   :undoc-members:
-   :special-members: __init__
-   :show-inheritance:
-
-geo module
---------------------------------------------
-.. automodule:: gisnav.geo
-   :autosummary:
-   :members:
-   :undoc-members:
-   :special-members: __init__
-   :show-inheritance:
-
 pose_estimators package
 =================================================
 pose_estimator module
@@ -86,6 +68,24 @@ loftr_pose_estimator module
 superglue_poes_estimator module
 --------------------------------------------
 .. automodule:: gisnav.pose_estimators.superglue_pose_estimator
+   :autosummary:
+   :members:
+   :undoc-members:
+   :special-members: __init__
+   :show-inheritance:
+
+data module
+=================================================
+.. automodule:: gisnav.data
+   :autosummary:
+   :members:
+   :undoc-members:
+   :special-members: __init__
+   :show-inheritance:
+
+geo module
+=================================================
+.. automodule:: gisnav.geo
    :autosummary:
    :members:
    :undoc-members:

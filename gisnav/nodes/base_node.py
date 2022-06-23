@@ -28,7 +28,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
     InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
-from gisnav.assertions import assert_type
+from gisnav.assertions import assert_type, assert_len
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
 from gisnav.kalman import SimpleFilter
@@ -770,7 +770,7 @@ class BaseNode(Node, ABC):
             return
 
         if self._is_gimbal_projection_enabled:
-            projected_center = self._projected_field_of_view_center(self._vehicle_position)
+            projected_center = self._guess_fov_center(self._vehicle_position)
             if projected_center is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
@@ -824,55 +824,59 @@ class BaseNode(Node, ABC):
     # endregion
 
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
-        """Synchronizes local timestamp with EKF2's system time.
+        """Synchronizes local timestamp with PX4 EKF2's reference time
 
-        This synchronization is done in the :meth:`~vehicle_local_position_callback` and therefore expected to be done
-        at high frequency. See :py:attr:`~_time_sync` for more information.
+        This synchronization is triggered in the :meth:`._vehicle_local_position_callback` and therefore expected to be
+        done at high frequency.
 
-        :param ekf2_timestamp_usec: The time since the EKF2 system start in microseconds
-        :return:
+        .. seealso:
+            :py:attr:`._time_sync` and :py:attr:`._synchronized_time`
+
+        :param ekf2_timestamp_usec: Time since PX4 EKF2 system start in microseconds
         """
         assert_type(ekf2_timestamp_usec, int)
         now_usec = time.time() * 1e6
         self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
 
-    def _projected_field_of_view_center(self, origin: Position) -> Optional[GeoPoint]:
-        """Returns WGS84 coordinates of projected camera field of view (FOV).
+    def _guess_fov_center(self, origin: Position) -> Optional[GeoPoint]:
+        """Guesses WGS84 coordinates of camera field of view (FOV) projected on ground from given origin
 
-        Used in :meth:`~_map_update_timer_callback` when gimbal projection is enabled to determine center coordinates
-        for next WMS GetMap request.
+        Triggered by :meth:`._map_update_timer_callback` when gimbal projection is enabled to determine center
+        coordinates for next WMS GetMap request.
 
         :param origin: Camera position
-        :return: Center of the projected FOV,  or None if not available
+        :return: Center of the projected FOV, or None if not available
         """
         if self._gimbal_set_attitude is None:
             self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
             return None
 
-        # Need coordinates in image frame
         assert_type(self._gimbal_set_attitude, Attitude)
-        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()
+        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
 
-        # TODO: use CameraData class to get k, or push the logic inside _project_gimbal_fov to reduce redundancy!
         if self._camera_data is None:
             self.get_logger().warn('Camera data not available, could not create a mock pose to generate a FOV guess.')
             return None
 
         translation = -gimbal_set_attitude.r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
-        mock_image_pair = self._mock_image_pair(origin)  # TODO ensure not None and that this is distance from ground plane, not AMSL altitude
+        mock_image_pair = self._mock_image_pair(origin)
 
         try:
             pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
         except DataValueError as e:
-            self.get_logger().error(f'Pose inputs had problems {gimbal_set_attitude.r}, {translation}: {e}.')
+            self.get_logger().warn(f'Pose input values: {gimbal_set_attitude.r}, {translation} were invalid: {e}.')
             return None
 
-        # TODO handle none altitude
-        try:
-            mock_fixed_camera = FixedCamera(pose=pose, image_pair=mock_image_pair,
-                                            ground_elevation=self._altitude_agl)  # Redundant altitude call
-        except DataValueError as _:
-            # Not a valid FixedCamera
+        altitude = self._altitude_agl
+        if altitude is not None:
+            try:
+                mock_fixed_camera = FixedCamera(pose=pose, image_pair=mock_image_pair,
+                                                ground_elevation=altitude)
+            except DataValueError as _:
+                self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
+                return None
+        else:
+            self.get_logger().warn(f'Could not create a valid mock projection of FOV because AGL altitude unknown.')
             return None
 
         if __debug__:
@@ -883,7 +887,7 @@ class BaseNode(Node, ABC):
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
     def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
-        """Exports the computed position and field of view (FOV) into a geojson file.
+        """Exports the computed position and field of view (FOV) into a geojson file
 
         The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
 
@@ -896,39 +900,35 @@ class BaseNode(Node, ABC):
         assert_type(fov, GeoTrapezoid)
         assert_type(filename, str)
         try:
-            # TODO: get rid of private property access
             position._geoseries.append(fov._geoseries).to_file(filename)
         except Exception as e:
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
 
     def _request_new_map(self, bbox: GeoSquare) -> None:
-        """Instructs the WMS client to get a new map from the WMS server.
+        """Instructs the WMS client to request a new map from the WMS server
 
-        :param bbox: Bounding box of map to update
-        :return:
+        :param bbox: Bounding box of map requested map
         """
-        self.get_logger().info(f'Updating map at {bbox.center.latlon}.')
-        assert_type(bbox, GeoSquare)
-
         if self._map_size_with_padding is None:
             self.get_logger().warn('Map size not yet available - skipping WMS request.')
-            return None
+            return
 
         # Build and send WMS request
         layers = self.get_parameter('wms.layers').get_parameter_value().string_array_value
         styles = self.get_parameter('wms.styles').get_parameter_value().string_array_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
-        image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value  # TODO: handle not set?
+        image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value
         assert all(isinstance(x, str) for x in layers)
         assert all(isinstance(x, str) for x in styles)
-        assert len(styles) == len(layers)
+        assert_len(styles, len(layers))
         assert_type(srs_str, str)
         assert_type(image_format, str)
+        # noinspection PyBroadException - see comment in except block below
         try:
-            self.get_logger().info(f'Getting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}.')
-            if self._wms_query is not None:
-                assert self._wms_query.result.ready(), f'Update map was called while previous results were not yet ready.'  # Should not happen - check _should_update_map conditions
+            assert self._wms_query.result.ready(), f'Update map was called while previous results were not yet ready.'
+            self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
+                                   f'{image_format}.')
             self._wms_query = AsyncWMSQuery(
                 result=self._wms_pool.apply_async(
                     WMSClient.worker,
@@ -939,8 +939,11 @@ class BaseNode(Node, ABC):
                 geobbox=bbox
             )
         except Exception as e:
+            # These are probably connection related exceptions from requests library. They do not seem to be part of
+            # OWSLib public API so WMSClient does not handle them (in case OWSLib devs change it). Handling them would
+            # require direct dependency to requests. Log exception as error here and move on.
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')
-            return None
+            return
 
     # region microRTPSBridgeCallbacks
     def _image_raw_callback(self, msg: Image) -> None:

@@ -1101,7 +1101,7 @@ class BaseNode(Node, ABC):
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
     #endregion
 
-    # region MatchingWorkerCallbacks
+    # region Pose Estimation Callbacks
     def _pose_estimation_worker_error_callback(self, e: BaseException) -> None:
         """Error callback for matching worker"""
         self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')

@@ -401,6 +401,7 @@ class FixedCamera:
     h: np.ndarray = field(init=False)
     inv_h: np.ndarray = field(init=False)
     camera_position: np.ndarray = field(init=False)
+    attitude: Attitude = field(init=False)
 
     def _estimate_fov(self) -> Optional[FOV]:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
@@ -423,6 +424,29 @@ class FixedCamera:
         except GeoValueError as _:
             # Not a valid field of view
             return None
+
+    def _estimate_attitude(self) -> np.ndarray:
+        """Estimates gimbal (not vehicle) attitude in NED frame
+
+        .. note::
+            Stabilized gimbal *actual* (not set) attitude relative to vehicle body frame not always known so it is
+            currently not computed.
+
+        :return: Gimbal attitude in NED frame
+        """
+        # Convert estimated rotation to attitude quaternion for publishing
+        rT = self.pose.r.T
+        assert not np.isnan(rT).any()
+        gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
+        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body
+        gimbal_estimated_attitude *= Rotation.from_rotvec(
+            self.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
+
+        # Re-arrange axes from unrotated (original) map pixel frame to NED frame
+        rotvec = gimbal_estimated_attitude.as_rotvec()
+        gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
+
+        return Attitude(gimbal_set_attitude_ned.as_quat())
 
     @staticmethod
     def _get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -513,6 +537,8 @@ class FixedCamera:
             # This comes from Position.__post_init__
             raise
 
+        object.__setattr__(self, 'attitude', self._estimate_attitude())
+
         camera_data = img.camera_data
         reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])
         # TODO: The 3 and 6 are an arbitrary thresholds, make configurable?
@@ -531,13 +557,11 @@ class OutputData:
     :param input: The input data used for the match
     :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_match and field of view)
     :param filtered_position: Filtered position from the Kalman filter
-    :param attitude: Camera attitude quaternion
     :return:
     """
     input: InputData
     fixed_camera: FixedCamera
     filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional, try to make immutable
-    attitude: np.ndarray
 
 
 # noinspection PyClassHasNoInit

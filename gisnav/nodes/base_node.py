@@ -1286,31 +1286,6 @@ class BaseNode(Node, ABC):
             # Add latest value
             self._blurs = np.append(self._blurs, blur)
 
-    @staticmethod
-    def _estimate_attitude(pose: Pose, rotation: float) -> np.ndarray:
-        """Estimates gimbal attitude from _match and camera yaw in global NED frame
-
-        Estimates attitude in NED frame so need map match (uses ContextualMapData.rotation), not just any match
-
-        :param pose: Estimated pose
-        :param rotation: The map data rotation
-        """
-        # TODO: Estimate vehicle attitude from estimated camera attitude
-        #  Problem is gimbal relative attitude to vehicle body not known if gimbal not yet stabilized to set attitude,
-        #  at least when using GimbalDeviceSetAttitude provided quaternion
-        # Convert estimated rotation to attitude quaternion for publishing
-        rT = pose.r.T
-        assert not np.isnan(rT).any()
-        gimbal_estimated_attitude = Rotation.from_matrix(rT)  # in rotated map pixel frame
-        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body _match
-        gimbal_estimated_attitude *= Rotation.from_rotvec(rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
-
-        # Re-arrange axes from unrotated (original) map pixel frame to NED frame
-        rotvec = gimbal_estimated_attitude.as_rotvec()
-        gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
-
-        return gimbal_estimated_attitude
-
     # region Mock Image Pair
     def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
         """Creates mock :class:`.ImagePair` for guessing projected FOV needed for map requests, or None if not available
@@ -1386,8 +1361,6 @@ class BaseNode(Node, ABC):
         :param input_data: Input used for the pose estimation (snapshot of vehicle state from time of image)
         :return: Computed output if a valid estimate was obtained, None otherwise
         """
-        attitude = self._estimate_attitude(pose, image_pair.ref.rotation)
-
         try:
             fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation)
         except DataValueError as _:
@@ -1396,8 +1369,7 @@ class BaseNode(Node, ABC):
 
         output_data = OutputData(input=input_data,
                                  fixed_camera=fixed_camera,
-                                 filtered_position = None,
-                                 attitude = attitude)
+                                 filtered_position = None)
 
         return output_data
 

@@ -641,12 +641,13 @@ class BaseNode(Node, ABC):
             return None
     #endregion
 
-    #region Initialization
+    # region Initialization
     def __declare_ros_params(self) -> None:
         """Declares ROS parameters
 
-        Note that some parameters are declared read_only and cannot be changed at runtime because there is currently no
-        way to reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
+        .. note::
+            Some parameters are declared read_only and cannot be changed at runtime because there is currently no
+            way to reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
         """
         read_only = ParameterDescriptor(read_only=True)
         try:
@@ -705,10 +706,10 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(str(e))
 
     def _setup_pose_estimation_pool(self, params_file: str) -> Tuple[type, Pool]:
-        """Imports a :class:`.PoseEstimator` configured in a params file and returns a pool
+        """Returns the pose estimator type along with an initialized pool
 
         :param params_file: Parameter file with pose estimator full class path and initialization arguments
-        :return: Tuple containing the class and pose estimation pool
+        :return: Tuple containing the class type and the initialized pose estimation pool
         """
         pose_estimator_params = self._load_config(params_file)
         module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
@@ -719,27 +720,28 @@ class BaseNode(Node, ABC):
         return pose_estimator, pose_estimator_pool
 
     def _load_config(self, yaml_file: str) -> dict:
-        """Loads config from the provided YAML file.
+        """Loads config from the provided YAML file
 
         :param yaml_file: Path to the yaml file
         :return: The loaded yaml file as dictionary
         """
         assert_type(yaml_file, str)
         with open(os.path.join(self._package_share_dir, yaml_file), 'r') as f:
+            # noinspection PyBroadException
             try:
                 config = yaml.safe_load(f)
                 self.get_logger().info(f'Loaded config:\n{config}.')
                 return config
             except Exception as e:
-                self.get_logger().error(f'Could not load config file {yaml_file} because of exception:'
-                                        f'\n{e}\n{traceback.print_exc()}')
+                self.get_logger().error(f'Could not load config file {yaml_file} because of unexpected exception.')
+                raise
 
     def _setup_map_update_timer(self) -> rclpy.timer.Timer:
-        """Sets up a timer to throttle map update requests.
+        """Sets up a timer to throttle map update requests
 
         Initially map updates were triggered in VehicleGlobalPosition message callbacks, but were moved to a separate
         timer since map updates may be needed even if the EKF2 filter does not publish a global position reference (e.g.
-        when GPS fusion is turned off in the EKF2_AID_MASK).
+        when GPS fusion is turned off in the EKF2_AID_MASK parameter).
 
         :return: The timer instance
         """
@@ -753,47 +755,38 @@ class BaseNode(Node, ABC):
         return timer
 
     def _map_update_timer_callback(self) -> None:
-        """Attempts to update the stored map at regular intervals.
+        """Attempts to update the stored map at regular intervals
 
-        Calls :meth:`~_update_map` if the center and altitude coordinates for the new map raster are available and the
-        :meth:`~_should_update_map` check passes.
+        Calls :meth:`._update_map` if the center and altitude coordinates for the new map raster are available and the
+        :meth:`._should_update_map` check passes.
 
-        New map is retrieved based on rough guess of the vehicle's global position. If projection is enabled, the
-        center of the projected camera field of view is used instead of vehicle position to ensure the field of view is
-        best contained in the new map raster.
-
-        :return:
+        New map is retrieved based on a guess of the vehicle's global position. If
+        :py:attr:`._is_gimbal_projection_enabled`, the center of the projected camera field of view is used instead of
+        vehicle position to ensure the field of view is best contained in the new map raster.
         """
-        # Try to get lat, lon, alt from VehicleGlobalPosition if available
-        position = self._vehicle_position  # TODO: remove redundant position assignment
-
-        # Cannot determine vehicle global position
-        if position is None:
-            self.get_logger().warn(f'Could not determine vehicle global position and therefore cannot update map.')
+        if self._vehicle_position is None:
+            self.get_logger().warn(f'Could not determine vehicle approximate global position and therefore cannot '
+                                   f'update map.')
             return
 
-        # Project principal point if required
         if self._is_gimbal_projection_enabled:
-            projected_center = self._projected_field_of_view_center(position)
+            projected_center = self._projected_field_of_view_center(self._vehicle_position)
             if projected_center is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
 
-        # Get map size based on altitude and update map if needed
         assert position.z_ground is not None
-        map_radius = self._get_dynamic_map_radius(position.z_ground)
-        map_candidate = GeoSquare(projected_center if projected_center is not None else position.xy, map_radius)
-        if self._should_update_map(map_candidate):  # _should_request_new_map
-            self._update_map(map_candidate)  # _request_new_map
+        map_radius = self._get_dynamic_map_radius(self._vehicle_position.z_ground)
+        map_candidate = GeoSquare(projected_center if projected_center is not None else self._vehicle_position.xy,
+                                  map_radius)
+        if self._should_request_new_map(map_candidate):
+            self._request_new_map(map_candidate)
         else:
-            self.get_logger().debug('Map center and radius not changed enough to update map yet, '
+            self.get_logger().debug('Needed map not different enough to request new map yet, '
                                     'or previous results are not ready.')
 
     def _setup_subscribers(self) -> None:
-        """Creates and stores subscribers for microRTPS bridge topics.
-
-        :return:
-        """
+        """Creates and stores subscribers for microRTPS bridge topics"""
         for topic_name, d in self._topics.items():
             assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
             assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
@@ -803,11 +796,11 @@ class BaseNode(Node, ABC):
 
         self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
-    def _create_subscriber(self, topic_name: str, class_: object) -> rclpy.subscription.Subscription:
-        """Sets up an rclpy subscriber.
+    def _create_subscriber(self, topic_name: str, class_: type) -> rclpy.subscription.Subscription:
+        """Returns an rclpy subscription
 
         :param topic_name: Name of the microRTPS topic
-        :param class_: Message definition class (e.g. px4_msgs.msg.VehicleLocalPosition)
+        :param class_: Message definition class type (e.g. px4_msgs.msg.VehicleLocalPosition)
         :return: The subscriber instance
         """
         callback_name = f'_{topic_name.lower()}_callback'
@@ -828,8 +821,8 @@ class BaseNode(Node, ABC):
         imported_class = getattr(sys.modules[module_name], class_name, None)
         assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
         return imported_class
-
-    #endregion
+    # endregion
+    
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.
 
@@ -909,7 +902,7 @@ class BaseNode(Node, ABC):
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
 
-    def _update_map(self, bbox: GeoSquare) -> None:
+    def _request_new_map(self, bbox: GeoSquare) -> None:
         """Instructs the WMS client to get a new map from the WMS server.
 
         :param bbox: Bounding box of map to update
@@ -1194,7 +1187,7 @@ class BaseNode(Node, ABC):
 
         return False
 
-    def _should_update_map(self, bbox: GeoSquare) -> bool:
+    def _should_request_new_map(self, bbox: GeoSquare) -> bool:
         """Checks if a new WMS map request should be made to update old map.
 
         Map is updated unless (1) there is a previous map that is close enough to provided center and has radius

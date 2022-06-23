@@ -147,7 +147,7 @@ class _ImageHolder:
     .. note::
         This class should not be instantiated directly.
     """
-    image: np.ndarray
+    image: Img
 
 
 # noinspection PyClassHasNoInit

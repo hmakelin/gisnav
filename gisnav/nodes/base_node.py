@@ -939,16 +939,9 @@ class BaseNode(Node, ABC):
 
     # region microRTPSBridgeCallbacks
     def _image_raw_callback(self, msg: Image) -> None:
-        """Handles latest image frame from camera.
+        """Handles latest image frame from camera
 
-        For every image frame, uses :meth:`~_should_match` to determine whether a new :meth:`_match` call needs to be
-        made to the neural network. Inputs for the :meth:`_match` call are collected with :meth:`~_match_inputs` and
-        saved into :py:attr:`~_stored_inputs` for later use. When the match call returns,
-        the :meth:`~_matching_worker_callback` will use the stored inputs for post-processing the matches based on
-        the same input_data of data that was used to make the call. It is assumed that the latest stored inputs are the
-        same ones that were used for making the :meth:`_match` call, no additional checking or verification is used.
-
-        :param msg: The Image message from the PX4-ROS 2 bridge to decode
+        :param msg: The :class:`px4_msgs.msg.Image` message from the PX4-ROS 2 bridge
         :return:
         """
         # Estimate EKF2 timestamp first to get best estimate
@@ -956,9 +949,7 @@ class BaseNode(Node, ABC):
             self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
             return None
 
-        self.get_logger().debug('Camera image callback triggered.')
         assert_type(msg, Image)
-
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
 
         # Check that image dimensions match declared dimensions
@@ -967,8 +958,6 @@ class BaseNode(Node, ABC):
             assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match ' \
                                                   f'declared image shape {self._img_dim}.'
 
-        # Process image frame
-        # TODO: save previous image frame and check that new timestamp is greater
         if self._camera_data is None:
             self.get_logger().warn('Camera data not yet available, skipping frame.')
             return None
@@ -976,21 +965,13 @@ class BaseNode(Node, ABC):
         image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=self._synchronized_time,
                                camera_data=self._camera_data)
 
-        # TODO: store image_data as self._image_data and move the stuff below into a dedicated self._matching_timer?
-        if self._should_map_match(image_data.image.arr):  # TODO: possibly redundant checking with _odom_should_match?
+        if self._should_map_match(image_data.image.arr):
             assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
-            try:
-                inputs, contextual_map_data = self._match_inputs()
-            except TypeError as e:
-                # TODO: handle invalid/unavailable inputs with a warning, not error
-                self.get_logger().error(f'Data class initialization type error:\n{e}\n{traceback.print_exc()}. '
-                                        f'Skipping map matching.')
-                return
-
-            self._map_input_data = inputs
-            assert self._map_data is not None  # TODO: check in should_map_match
+            assert self._map_data is not None
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
+            inputs, contextual_map_data = self._match_inputs()
+            self._map_input_data = inputs
             image_pair = ImagePair(image_data, contextual_map_data)
             self._estimate(image_pair, inputs)
 
@@ -1432,7 +1413,7 @@ class BaseNode(Node, ABC):
             return False
 
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
-        return copy.deepcopy(input_data), contextual_map_data   # TODO: remove deep copy?
+        return input_data, contextual_map_data
 
     def _should_map_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.

@@ -106,7 +106,7 @@ class BaseNode(Node, ABC):
     of view of the camera projected on ground generally moves *much faster* than the vehicle itself.
     
     .. note::
-        This parameter provides a hard lower limit for WMS GetMap request frequency. Even if this parameter is set low, 
+        This parameter provides a hard upper limit for WMS GetMap request frequency. Even if this parameter is set low, 
         WMS GetMap requests will likely be much less frequent because they will throttled by the conditions set in  
         :meth:`._should_update_map` (private method - see source code for reference).
     """

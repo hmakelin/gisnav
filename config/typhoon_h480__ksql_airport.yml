@@ -17,7 +17,6 @@ mock_gps_node:
       blur_window_length: 100
     map_update:
       update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
-      default_altitude: 130
       gimbal_projection: True
       max_pitch: 30  # Applies if gimbal_projection: True, used by _should_update_map
       max_map_radius: 1000

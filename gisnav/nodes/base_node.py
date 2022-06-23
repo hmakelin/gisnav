@@ -35,139 +35,139 @@ from gisnav.kalman import SimpleFilter
 
 
 class BaseNode(Node, ABC):
-    """ROS 2 Node that publishes position estimate based on visual match of drone video to map of same location."""
+    """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
     # Encoding of input video (input to CvBridge)
-    IMAGE_ENCODING = 'bgr8'  # E.g. gscam2 only supports bgr8 so this is used to override encoding in image header
+    # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
+    _IMAGE_ENCODING = 'bgr8'
 
     # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
-    TOPICS_MSG_KEY = 'message'
-    TOPICS_SUBSCRIBER_KEY = 'subscriber'
+    _TOPICS_MSG_KEY = 'message'
+    _TOPICS_SUBSCRIBER_KEY = 'subscriber'
 
     # Process counts for multiprocessing pools
-    WMS_PROCESS_COUNT = 1  # should be 1
-    MATCHER_PROCESS_COUNT = 1  # should be 1, same for both map and vo matching pools
+    _WMS_PROCESS_COUNT = 1      # should be 1
+    _MATCHER_PROCESS_COUNT = 1  # should be 1
 
-    #region ROS Parameter Defaults
-    WMS_URL = 'http://localhost:8080/wms'
-    """WMS server endpoint URL"""
+    # region ROS Parameter Defaults
+    ROS_D_WMS_URL = 'http://localhost:8080/wms'
+    """Default WMS server endpoint URL"""
 
-    WMS_VERSION = '1.1.1'
-    """WMS server version"""
+    ROS_D_WMS_VERSION = '1.1.1'
+    """Default WMS server version"""
 
-    WMS_LAYERS = ['Imagery']
-    """WMS server requested map layers
+    ROS_D_WMS_LAYERS = ['Imagery']
+    """Default WMS request layers parameter
 
-    The layers should cover the flight area of the vehicle at high resolution.
+    .. note::
+        The combined layers should cover the flight area of the vehicle at high resolution. Typically this list would 
+        have just one layer for high resolution aerial or satellite imagery.
     """
 
-    WMS_STYLES = ['']
-    """WMS server list of requested styles
+    ROS_D_WMS_STYLES = ['']
+    """Default WMS request styles parameter
     
-    Must be same length as :py:attr:`.WMS_LAYERS`. Empty strings for default styles.
+    Must be same length as :py:attr:`.ROS_D_WMS_LAYERS`. Use empty strings for server default styles.
     """
 
-    WMS_SRS = 'EPSG:4326'
-    """WMS server supported SRS"""
+    ROS_D_WMS_SRS = 'EPSG:4326'
+    """Default WMS request SRS parameter"""
 
-    WMS_REQUEST_TIMEOUT = 10
-    """WMS client request timeout in seconds"""
+    ROS_D_WMS_REQUEST_TIMEOUT = 10
+    """Default WMS client request timeout in seconds"""
 
-    WMS_IMAGE_FORMAT = 'image/jpeg'
-    """WMS client requested image format"""
+    ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
+    """Default WMS client request image format"""
 
-    MISC_MAX_PITCH = 30
-    """Maximum camera pitch in degrees from nadir for attempting a match against map
+    ROS_D_MISC_MAX_PITCH = 30
+    """Default maximum camera pitch from nadir in degrees for attempting to estimate pose against reference map
 
-    See also :py:attr:`~MAP_UPDATE_MAP_PITCH`.
+    .. seealso::
+        :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH` 
+        :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
 
-    MISC_VARIANCE_ESTIMATION_LENGTH = 20
-    """Determines how many observations are used to estimate the variance and SD for the position estimate."""
+    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 20
+    """Default observation series length for smoothing and estimating the variance of the position estimate"""
 
-    MISC_MIN_MATCH_ALTITUDE = 80
-    """Minimum altitude in meters under which matches against map will not be attempted."""
+    ROS_D_MISC_MIN_MATCH_ALTITUDE = 80
+    """Default minimum ground altitude in meters under which matches against map will not be attempted"""
 
-    MISC_BLUR_THRESHOLD = 2
-    """Threshold standard deviation for Laplacian blur detector."""
+    ROS_D_MISC_BLUR_THRESHOLD = 2
+    """Default threshold standard deviation for Laplacian image blur detector"""
 
-    MISC_BLUR_WINDOW_LENGTH = 20
-    """Window length for rolling blur filtering"""
+    ROS_D_MISC_BLUR_WINDOW_LENGTH = 20
+    """Default window length for rolling image blur filtering"""
 
-    MISC_MIN_MATCHES = 15
-    """Minimum number of keypoint matches required from matcher for continuing with match post-processing"""
-
-    MAP_UPDATE_UPDATE_DELAY = 1  # seconds
-    """Delay in seconds for throttling WMS GetMap requests.
+    ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
+    """Default delay in seconds for throttling WMS GetMap requests
 
     When the camera is mounted on a gimbal and is not static, this delay should be set quite low to ensure that whenever
     camera field of view is moved to some other location, the map update request will follow very soon after. The field
-    of view of the camera projected on the ground may move much faster than the vehicle itself.
+    of view of the camera projected on ground generally moves *much faster* than the vehicle itself.
+    
+    .. note::
+        This parameter provides a hard lower limit for WMS GetMap request frequency. Even if this parameter is set low, 
+        WMS GetMap requests will likely be much less frequent because they will throttled by the conditions set in  
+        :meth:`._should_update_map` (private method - see source code for reference).
     """
 
-    MAP_UPDATE_DEFAULT_ALTITUDE = 130
-    """Default altitude in meters used for WMS GetMap request map bounding box estimation
-
-    This value is not used for estimating the altitude of the vehicle itself. A good value is the maximum or expected
-    operating altitude of the vehicle.
-    """
-
-    MAP_UPDATE_GIMBAL_PROJECTION = True
-    """Flag to enable map updates based on field of view (FOV) projected onto ground
+    ROS_D_MAP_UPDATE_GIMBAL_PROJECTION = True
+    """Default flag to enable map updates based on expected center of field of view (FOV) projected onto ground
 
     When this flag is enabled, map rasters are retrieved for the expected center of the camera FOV instead of the
     expected position of the vehicle, which increases the chances that the FOV is fully contained in the map raster.
-    This increases the chances of getting a good map match.
+    This again increases the chances of getting a good pose estimate.
+    
+    .. seealso:
+        :py:attr:`.ROS_D_MISC_MAX_PITCH`
+        :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH`
     """
 
-    MAP_UPDATE_MAX_PITCH = 30
-    """Maximum camera pitch in degrees from nadir for attempting to update the stored map
+    ROS_D_MAP_UPDATE_MAX_PITCH = 30
+    """Default maximum camera pitch from nadir in degrees for attempting to update the stored map
 
-    This limit only applies when camera field of view (FOV) projection - 'gimbal_projection' - is enabled. This value
-    will prevent unnecessary WMS GetMap requests when the camera FOV is e.g. far in the horizon.
+    This limit only applies when camera field of view (FOV) projection is enabled. This value will prevent unnecessary 
+    WMS GetMap requests when the camera is looking far into the horizon and it would be unrealistic to get a good pose 
+    estimate against a map.
 
-    See also :py:attr:`~MISC_MAP_PITCH`.
+    .. seealso:
+        :py:attr:`.ROS_D_MISC_MAX_PITCH`
+        :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
 
-    MAP_UPDATE_MAX_MAP_RADIUS = 1000
-    """Maximum map radius for WMS GetMap request bounding boxes
+    ROS_D_MAP_UPDATE_MAX_MAP_WIDTH = 400
+    """Default maximum map width in meters for WMS GetMap request bounding boxes
 
     This limit prevents unintentionally requesting very large maps if camera field of view is projected far into the
-    horizon. This may happen e.g. if :py:attr:`~MAP_UPDATE_MAX_PITCH` is set too high relative to the camera's vertical
-    view angle.
+    horizon. This may happen e.g. if :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH` is set too high relative to the camera's
+    vertical view angle. If the WMS server back-end needs to e.g. piece the large map together from multiple files the 
+    request might timeout in any case.
     """
 
-    MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT = 400
-    """Default radius for WMS GetMap request bounding boxes if nothing is provided"""
+    ROS_D_MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD = 0.85
+    """Default map bounding box area intersection threshold that prevents a new map from being retrieved
 
-    MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD = 0.85
-    """A map area intersection threshold that if not exceeded, a new map is retrieved.
-
-    This prevents unnecessary WMS GetMap requests to replace an old map with a new map that is almost from the same
-    location. This parameter is used during :meth:`._should_update_map` calls.
+    This prevents unnecessary WMS GetMap requests to replace an old map with a new map that covers almost the same area.
     """
 
-    POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTRPoseEstimator'
-    """Default :class:`.PoseEstimator` to use for matching images to maps."""
+    ROS_D_POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTRPoseEstimator'
+    """Default :class:`.PoseEstimator` to use for estimating pose camera pose against reference map"""
 
-    POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yml'  # TODO: add config folder: config/superglue_params.yml
-    """Default parameter file with args for the default:class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer` 
-    method.
-    """
+    ROS_D_POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yml'
+    """Default parameter file with args for the default :class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer`"""
 
-    DEBUG_EXPORT_POSITION = '' # 'position.json'
+    ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
     """Filename for exporting GeoJSON containing estimated field of view and position
-    
-    .. note::
-        Set to '' to disable
+
+    Set to '' to disable
     """
 
-    DEBUG_EXPORT_PROJECTION = '' # 'projection.json'
+    ROS_D_DEBUG_EXPORT_PROJECTION = '' # 'projection.json'
     """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center
         
-    .. note::
-        Set to '' to disable
+    Set to '' to disable
     """
-    #endregion
+    # endregion
 
     def __init__(self, name: str, package_share_dir: str) -> None:
         """Initializes the ROS 2 node.
@@ -189,7 +189,7 @@ class BaseNode(Node, ABC):
         assert_type(url, str)
         assert_type(version, str)
         assert_type(timeout, int)
-        self._wms_pool = Pool(self.WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
+        self._wms_pool = Pool(self._WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
                               initargs=(url, version, timeout))
 
         # Setup map update timer
@@ -197,13 +197,13 @@ class BaseNode(Node, ABC):
 
         # Dict for storing all microRTPS bridge subscribers
         self._topics = {
-            'VehicleAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleAttitude},
-            'VehicleLocalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleLocalPosition},
-            'VehicleGlobalPosition_PubSubTopic': {self.TOPICS_MSG_KEY: VehicleGlobalPosition},
-            'GimbalDeviceAttitudeStatus_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
-            'GimbalDeviceSetAttitude_PubSubTopic': {self.TOPICS_MSG_KEY: GimbalDeviceSetAttitude},
-            'camera_info': {self.TOPICS_MSG_KEY: CameraInfo},
-            'image_raw': {self.TOPICS_MSG_KEY: Image},
+            'VehicleAttitude_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleAttitude},
+            'VehicleLocalPosition_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleLocalPosition},
+            'VehicleGlobalPosition_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleGlobalPosition},
+            'GimbalDeviceAttitudeStatus_PubSubTopic': {self._TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
+            'GimbalDeviceSetAttitude_PubSubTopic': {self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude},
+            'camera_info': {self._TOPICS_MSG_KEY: CameraInfo},
+            'image_raw': {self._TOPICS_MSG_KEY: Image},
         }
         self._setup_subscribers()
 
@@ -651,20 +651,19 @@ class BaseNode(Node, ABC):
     def __declare_ros_params(self) -> None:
         """Declares ROS parameters
 
-        Note that some parameters are declared read_only and cannot be changed at runtime.
-
-        :return:
+        Note that some parameters are declared read_only and cannot be changed at runtime because there is currently no
+        way to reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
         """
         read_only = ParameterDescriptor(read_only=True)
         try:
             namespace = 'wms'
             self.declare_parameters(namespace, [
-                ('url', self.WMS_URL, read_only),
-                ('version', self.WMS_VERSION, read_only),
-                ('layers', self.WMS_LAYERS),
-                ('styles', self.WMS_STYLES),
-                ('srs', self.WMS_SRS),
-                ('request_timeout', self.WMS_REQUEST_TIMEOUT)
+                ('url', self.ROS_D_WMS_URL, read_only),
+                ('version', self.ROS_D_WMS_VERSION, read_only),
+                ('layers', self.ROS_D_WMS_LAYERS),
+                ('styles', self.ROS_D_WMS_STYLES),
+                ('srs', self.ROS_D_WMS_SRS),
+                ('request_timeout', self.ROS_D_WMS_REQUEST_TIMEOUT)
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -672,11 +671,11 @@ class BaseNode(Node, ABC):
         try:
             namespace = 'misc'
             self.declare_parameters(namespace, [
-                ('max_pitch', self.MISC_MAX_PITCH),
-                ('variance_estimation_length', self.MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
-                ('min_match_altitude', self.MISC_MIN_MATCH_ALTITUDE),
-                ('blur_threshold', self.MISC_BLUR_THRESHOLD),
-                ('blur_window_length', self.MISC_BLUR_WINDOW_LENGTH),
+                ('max_pitch', self.ROS_D_MISC_MAX_PITCH),
+                ('variance_estimation_length', self.ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
+                ('min_match_altitude', self.ROS_D_MISC_MIN_MATCH_ALTITUDE),
+                ('blur_threshold', self.ROS_D_MISC_BLUR_THRESHOLD),
+                ('blur_window_length', self.ROS_D_MISC_BLUR_WINDOW_LENGTH),
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -684,12 +683,11 @@ class BaseNode(Node, ABC):
         try:
             namespace = 'map_update'
             self.declare_parameters(namespace, [
-                ('update_delay', self.MAP_UPDATE_UPDATE_DELAY, read_only),
-                ('default_altitude', self.MAP_UPDATE_DEFAULT_ALTITUDE),
-                ('gimbal_projection', self.MAP_UPDATE_GIMBAL_PROJECTION),
-                ('max_map_radius', self.MAP_UPDATE_MAP_RADIUS_METERS_DEFAULT),
-                ('update_map_area_threshold', self.MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
-                ('max_pitch', self.MAP_UPDATE_MAX_PITCH)
+                ('update_delay', self.ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
+                ('gimbal_projection', self.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
+                ('max_map_radius', self.ROS_D_MAP_UPDATE_MAX_MAP_WIDTH),
+                ('update_map_area_threshold', self.ROS_D_MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
+                ('max_pitch', self.ROS_D_MAP_UPDATE_MAX_PITCH)
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -697,8 +695,8 @@ class BaseNode(Node, ABC):
         try:
             namespace = 'pose_estimator'
             self.declare_parameters(namespace, [
-                ('class', self.POSE_ESTIMATOR_CLASS, read_only),
-                ('params_file', self.POSE_ESTIMATOR_PARAMS_FILE, read_only)
+                ('class', self.ROS_D_POSE_ESTIMATOR_CLASS, read_only),
+                ('params_file', self.ROS_D_POSE_ESTIMATOR_PARAMS_FILE, read_only)
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -706,8 +704,8 @@ class BaseNode(Node, ABC):
         try:
             namespace = 'debug'
             self.declare_parameters(namespace, [
-                ('export_position', self.DEBUG_EXPORT_POSITION),
-                ('export_projection', self.DEBUG_EXPORT_PROJECTION),
+                ('export_position', self.ROS_D_DEBUG_EXPORT_POSITION),
+                ('export_projection', self.ROS_D_DEBUG_EXPORT_PROJECTION),
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
@@ -721,7 +719,7 @@ class BaseNode(Node, ABC):
         pose_estimator_params = self._load_config(params_file)
         module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
         pose_estimator = self._import_class(class_name, module_name)
-        pose_estimator_pool = Pool(self.MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
+        pose_estimator_pool = Pool(self._MATCHER_PROCESS_COUNT, initializer=pose_estimator.initializer,
                                    initargs=(pose_estimator, *pose_estimator_params.get('args', []),))  # TODO: handle missing args, do not use default value
 
         return pose_estimator, pose_estimator_pool
@@ -790,8 +788,6 @@ class BaseNode(Node, ABC):
         # Get map size based on altitude and update map if needed
         assert position.z_ground is not None
         map_radius = self._get_dynamic_map_radius(position.z_ground)
-        max_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
-        assert 0 < map_radius <= max_radius, f'Radius should be between 0 and {max_radius}.'
         map_candidate = GeoSquare(projected_center if projected_center is not None else position.xy, map_radius)
         if self._should_update_map(map_candidate):  # _should_request_new_map
             self._update_map(map_candidate)  # _request_new_map
@@ -807,9 +803,9 @@ class BaseNode(Node, ABC):
         for topic_name, d in self._topics.items():
             assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
             assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
-            class_ = d.get(self.TOPICS_MSG_KEY, None)
+            class_ = d.get(self._TOPICS_MSG_KEY, None)
             assert class_ is not None, f'Message definition not provided for {topic_name}.'
-            self._topics.update({topic_name: {self.TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
+            self._topics.update({topic_name: {self._TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
 
         self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
@@ -981,7 +977,7 @@ class BaseNode(Node, ABC):
         self.get_logger().debug('Camera image callback triggered.')
         assert_type(msg, Image)
 
-        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self.IMAGE_ENCODING)
+        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
 
         # Check that image dimensions match declared dimensions
         if self._img_dim is not None:
@@ -1027,7 +1023,7 @@ class BaseNode(Node, ABC):
             return None
         else:
             self._camera_data = CameraData(k=msg.k.reshape((3, 3)), dim=Dim(msg.height, msg.width))
-            camera_info_topic = self._topics.get('camera_info', {}).get(self.TOPICS_SUBSCRIBER_KEY, None)
+            camera_info_topic = self._topics.get('camera_info', {}).get(self._TOPICS_SUBSCRIBER_KEY, None)
             if camera_info_topic is not None:
                 self.get_logger().warn('CameraInfo received. Assuming CameraInfo is static, destroying the '
                                        'subscription.')

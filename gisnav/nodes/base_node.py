@@ -1068,33 +1068,30 @@ class BaseNode(Node, ABC):
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
     #endregion
 
-    #region MatchingWorkerCallbacks
+    # region MatchingWorkerCallbacks
     def _pose_estimation_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for matching worker.
-
-        :return:
-        """
+        """Error callback for matching worker"""
         self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
 
-    def _pose_estimation_worker_callback(self, result: list) -> None:
+    def _pose_estimation_worker_callback(self, result: Optional[Pose]) -> None:
         """Callback for :meth:`.PoseEstimator.worker`
 
         Retrieves latest :py:attr:`._pose_estimation_query.input_data` and uses it to call :meth:`._compute_output`.
         The input data is needed so that the post-processing is done using the same state information that was used for
         initiating the pose estimation in the first place. For example, camera pitch may have changed since then,
         and current camera pitch should therefore not be used for processing the matches.
-        """
-        pose = result  #[0]
-        if pose is not None:
-            try:
-                pose = Pose(*pose)
-            except DataValueError as _:
-                self.get_logger().warn(f'Estimated pose was not valid, skipping this one.')
-                return None
 
-            self._pose_guess = pose
+        :param result: Pose result from WMS worker, or None if pose could not be estimated
+        """
+        if result is not None:
+            try:
+                pose = Pose(*result)
+                self._pose_guess = pose
+            except DataValueError as _:
+                self.get_logger().warn(f'Estimated pose was not valid, skipping this frame.')
+                return None
         else:
-            self.get_logger().warn(f'Could not compute _match, returning None.')
+            self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
             return None
 
         output_data = self._compute_output(self._pose_estimation_query.image_pair, pose,
@@ -1111,21 +1108,19 @@ class BaseNode(Node, ABC):
                                              255, 3, cv2.LINE_AA)
 
                 img = np.vstack((map_with_fov, output_data.fixed_camera.image_pair.qry.image.arr))
-                cv2.imshow("Projected FOV estimate", img)
+                cv2.imshow("Projected FOV", img)
                 cv2.waitKey(1)
 
-            orig_crs_str = output_data.fixed_camera.position.xy.crs
             # Get output from Kalman filter
+            orig_crs_str = output_data.fixed_camera.position.xy.crs
             filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
             if filter_output is None:
                 self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
-                #return None
             else:
                 filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
-                filtered_position.xy.to_crs(orig_crs_str)  # TODO: move this to publishing logic (making sure published CRS is epsg:4326)
+                filtered_position.xy.to_crs(orig_crs_str)
                 output_data.filtered_position = filtered_position
-
-                self.publish(output_data)  # TODO: move this to the map and vo matching callbacks?
+                self.publish(output_data)
 
                 if __debug__:
                     export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
@@ -1136,8 +1131,9 @@ class BaseNode(Node, ABC):
             self._map_input_data_prev = self._map_input_data
             self._map_output_data_prev = output_data
         else:
-            self.get_logger().debug('Position estimate was not good or could not be obtained, skipping this map match.')
-    #endregion
+            self.get_logger().warn('Could not estimate position from pose, skipping this map match.')
+    # endregion
+
     def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
         """Checks if previous map is too close to new requested one.
 

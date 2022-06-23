@@ -245,7 +245,7 @@ class BaseNode(Node, ABC):
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 
-    #region Properties
+    # region Properties
     @property
     def _package_share_dir(self) -> str:
         """ROS 2 package share directory"""
@@ -472,9 +472,9 @@ class BaseNode(Node, ABC):
     def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
         assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
         self.__gimbal_device_set_attitude = value
-    #endregion
+    # endregion
 
-    #region Computed Properties
+    # region Computed Properties
     @property
     def _wms_results_pending(self) -> bool:
         """True if there are pending results"""
@@ -639,7 +639,7 @@ class BaseNode(Node, ABC):
             return position
         else:
             return None
-    #endregion
+    # endregion
 
     # region Initialization
     def __declare_ros_params(self) -> None:
@@ -822,7 +822,7 @@ class BaseNode(Node, ABC):
         assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
         return imported_class
     # endregion
-    
+
     def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
         """Synchronizes local timestamp with EKF2's system time.
 

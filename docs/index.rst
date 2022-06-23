@@ -15,7 +15,7 @@ This site contains the following pages:
 
     * `User Guide <pages/user_guide.html>`_
 
-        Instructions on how to integrate GISNav with your own project and how to extend its functionality.
+        Instructions on how to integrate GISNav with your own project and how to extend its functionality
 
     * `API Documentation <pages/api_documentation.html>`_
 

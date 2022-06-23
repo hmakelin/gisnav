@@ -939,7 +939,7 @@ class BaseNode(Node, ABC):
                 geobbox=bbox
             )
         except Exception as e:
-            # These are probably connection related exceptions from requests library. They do not seem to be part of
+            # These are *probably* connection related exceptions from requests library. They do not seem to be part of
             # OWSLib public API so WMSClient does not handle them (in case OWSLib devs change it). Handling them would
             # require direct dependency to requests. Log exception as error here and move on.
             self.get_logger().error(f'Something went wrong with WMS worker:\n{e},\n{traceback.print_exc()}.')

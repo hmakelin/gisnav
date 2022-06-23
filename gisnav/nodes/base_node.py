@@ -1455,7 +1455,7 @@ class BaseNode(Node, ABC):
             return False
 
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
-        return copy.deepcopy(input_data), contextual_map_data
+        return copy.deepcopy(input_data), contextual_map_data   # TODO: remove deep copy?
 
     # TODO: move these to initialization, get rid of this method
     def _good_match(self, output_data: OutputData) -> bool:

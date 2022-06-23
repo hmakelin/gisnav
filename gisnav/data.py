@@ -361,6 +361,11 @@ class Pose:
             or self.r.shape != (3, 3) or self.t.shape != (3, 1):
             raise DataValueError(f'Pose input arguments were invalid: {r}, {t}.')
 
+    def __iter__(self):
+        """Convenience interface for converting e.g. to tuple"""
+        for item in (self.r, self.t):
+            yield item
+
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -531,7 +536,7 @@ class OutputData:
     """
     input: InputData
     fixed_camera: FixedCamera
-    filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional
+    filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional, try to make immutable
     attitude: np.ndarray
 
 

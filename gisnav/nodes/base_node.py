@@ -639,6 +639,29 @@ class BaseNode(Node, ABC):
             return position
         else:
             return None
+
+    @property
+    def _estimation_inputs(self) -> Optional[Tuple[InputData, ContextualMapData]]:
+        """Returns snapshot of vehicle state and reference map data required for pose estimation
+
+        Pose estimation is asynchronous, so this property provides a way of taking snapshot of the required input
+        arguments to :meth:`._compute_output` and :meth:`._estimate`.
+        """
+        input_data = InputData(
+            ground_elevation=self._ground_elevation_amsl  # TODO: handle None
+        )
+
+        # Get cropped and rotated map
+        if self._gimbal_set_attitude is not None:
+            camera_yaw = self._gimbal_set_attitude.yaw
+            assert_type(camera_yaw, float)
+            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+        else:
+            self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
+            return
+
+        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
+        return input_data, contextual_map_data
     # endregion
 
     # region Initialization
@@ -964,12 +987,12 @@ class BaseNode(Node, ABC):
         image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=self._synchronized_time,
                                camera_data=self._camera_data)
 
-        if self._should_map_match(image_data.image.arr):
+        if self._should_estimate(image_data.image.arr):
             assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
             assert self._map_data is not None
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
-            inputs, contextual_map_data = self._match_inputs()
+            inputs, contextual_map_data = self._estimation_inputs
             self._map_input_data = inputs
             image_pair = ImagePair(image_data, contextual_map_data)
             self._estimate(image_pair, inputs)
@@ -1230,36 +1253,24 @@ class BaseNode(Node, ABC):
 
         return False
 
-    # TODO: this is a check, should not push blur here? Easy to call this multiple times for the same frame
-    def _image_too_blurry(self, img: np.ndarray) -> bool:
+    def _image_too_blurry(self, blur: float) -> bool:
         """Returns True if image is deemed too blurry for matching
-
-        Also pushes the blur value to a stack using :meth:`~_push_blur`.
 
         :param img: Image to match
         :return: True if image is too blurry
         """
         blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
-        blur = cv2.Laplacian(img, cv2.CV_64F).var()
-        self._push_blur(blur)
         sd = np.std(self._blurs)
         mn = np.mean(self._blurs)
         threshold = mn - blur_threshold * sd
-        if blur < threshold:
-            # Expected to reject a fixed proportion of images so debug message more appropriate than warning
-            self.get_logger().debug(f'Image too blurry (blur: {blur}, mean: {mn}, sd: {sd}, threshold: {threshold}). '
-                                    f'Skipping matching.')
-            return True
-        else:
-            return False
+        return blur < threshold
 
     def _push_blur(self, blur: float) -> None:
-        """Pushes blur estimates to :py:attr:`~_blurs`
+        """Pushes blur estimates to :py:attr:`._blurs` queue
 
-        Pops the oldest estimate from the stack if needed.
+        Pops the oldest estimate from the queue if full
 
         :param blur: Blur value
-        :return:
         """
         if self._blurs is None:
             self._blurs = np.array([blur])
@@ -1269,10 +1280,10 @@ class BaseNode(Node, ABC):
             obs_count = len(self._blurs)
             assert 0 <= obs_count <= window_length
             if obs_count == window_length:
-                # Pop oldest values
+                # Pop oldest value
                 self._blurs = np.delete(self._blurs, 0, 0)
 
-            # Add newest values
+            # Add latest value
             self._blurs = np.append(self._blurs, blur)
 
     @staticmethod
@@ -1352,18 +1363,17 @@ class BaseNode(Node, ABC):
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
         return map_data
 
-    #region Match
+    # region Pose estimation
     def _compute_output(self, image_pair: ImagePair, pose: Pose, input_data: InputData) -> Optional[OutputData]:
-        """Process the estimated camera _match into OutputData
+        """Estimates output (vehicle position) from estimated pose
 
-        :param match: Estimated _match between images
-        :param input_data: InputData of vehicle state variables from the time the image was taken
-        :return: Computed output_data if a valid estimate was obtained, None otherwise
+        :param image_pair: Input image pair
+        :param pose: Estimated pose between image pair
+        :param input_data: Input used for the pose estimation (snapshot of vehicle state from time of image)
+        :return: Computed output if a valid estimate was obtained, None otherwise
         """
         attitude = self._estimate_attitude(pose, image_pair.ref.rotation)
 
-        # Init output
-        # TODO: make OutputData immutable and assign all values in constructor here
         try:
             fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation)
         except DataValueError as _:
@@ -1377,63 +1387,44 @@ class BaseNode(Node, ABC):
 
         return output_data
 
-    def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
-        """Returns a dictionary input_data of the input data required to perform and process a match.
+    def _should_estimate(self, img: np.ndarray) -> bool:
+        """Determines whether :meth:`._estimate` should be called
 
-        Processing of matches is asynchronous, so this method provides a way of taking a input_data of the input arguments
-        to :meth:`_process_matches` from the time image used for the matching was taken.
+        Match should be attempted if (1) a reference map has been retrieved, (2) there are no pending match results,
+        (3) camera pitch is not too high (e.g. facing horizon instead of nadir), (4) drone is not flying too low, and
+        (5) image is not too blurry.
 
-        :return: The input data
+        :param img: Image from which to estimate pose
+        :return: True if pose estimation be attempted
         """
-        input_data = InputData(
-            ground_elevation=self._ground_elevation_amsl  # TODO: handle None
-        )
-
-        # Get cropped and rotated map
-        if self._gimbal_set_attitude is not None:
-            camera_yaw = self._gimbal_set_attitude.yaw
-            assert_type(camera_yaw, float)
-            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
-        else:
-            self.get_logger().warn(f'Camera yaw unknown, cannot match.')
-            return False
-
-        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
-        return input_data, contextual_map_data
-
-    def _should_map_match(self, img: np.ndarray) -> bool:
-        """Determines whether _match should be called based on whether previous match is still being processed.
-
-        Match should be attempted if (1) there are no pending match results, (2) camera pitch is not too high (e.g.
-        facing horizon instead of nadir), (3) drone is not flying too low, and (4) image is not too blurry.
-
-        :param img: Image to match
-        :return: True if matching should be attempted
-        """
-        # Check that _map_data exists (map has been retrieved)
+        # Check condition (1) - that _map_data exists
         if self._map_data is None:
+            self.get_logger().debug(f'No reference map available. Skipping pose estimation.')
             return False
 
-        # Check condition (1) - that a request is not already running
-        if not (self._pose_estimation_query is None or self._pose_estimation_query.result.ready()):  # TODO: confirm that hasattr result
+        # Check condition (2) - that a request is not already running
+        if not (self._pose_estimation_query is None or self._pose_estimation_query.result.ready()):
+            self.get_logger().debug(f'Previous pose estimation results pending. Skipping pose estimation.')
             return False
 
-        # Check condition (2) - whether camera pitch is too large
+        # Check condition (3) - whether camera pitch is too large
         max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
         if self._camera_pitch_too_high(max_pitch):
-            self.get_logger().warn(f'Camera pitch is not available or above limit {max_pitch}. Skipping matching.')
+            self.get_logger().warn(f'Camera pitch not available or above limit {max_pitch}. Skipping pose estimation.')
             return False
 
-        # Check condition (3) - whether vehicle altitude is too low
+        # Check condition (4) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        # TODO: handle none altitude_agl
-        if not isinstance(min_alt, int) or self._altitude_agl < min_alt:
-            self.get_logger().warn(f'Altitude {self._altitude_agl} was lower than minimum threshold for matching ({min_alt}) or '
-                                   f'could not be determined. Skipping matching.')
+        if not isinstance(min_alt, int) or self._altitude_agl is None or self._altitude_agl < min_alt:
+            self.get_logger().warn(f'Altitude {self._altitude_agl} was lower than minimum threshold for matching '
+                                   f'({min_alt}) or could not be determined. Skipping pose estimation.')
             return False
 
-        # Check condition (4) - is image too blurry?
-        if self._image_too_blurry(img):
+        # Check condition (5) - is image too blurry?
+        blur = cv2.Laplacian(img, cv2.CV_64F).var()
+        self._push_blur(blur)
+        if self._image_too_blurry(blur):
+            self.get_logger().debug(f'Camera frame too blurry relative to others. Skipping pose estimation.')
             return False
 
         return True
@@ -1446,7 +1437,7 @@ class BaseNode(Node, ABC):
         :return:
         """
         assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
-        pose_guess = None if self._pose_guess is None else (self._pose_guess.r, self._pose_guess.t)  # TODO: to_tuple() for data.Pose?
+        pose_guess = None if self._pose_guess is None else tuple(self._pose_guess)
         self._pose_estimation_query = AsyncPoseQuery(
             result=self._pose_estimator_pool.apply_async(
                 self._pose_estimator.worker,
@@ -1457,7 +1448,7 @@ class BaseNode(Node, ABC):
             image_pair=image_pair,
             input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
         )
-    #endregion
+    # endregion
 
     # region PublicAPI
     @abstractmethod

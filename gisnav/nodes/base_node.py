@@ -1556,12 +1556,10 @@ class BaseNode(Node, ABC):
         """
         pass
 
-    def terminate_pools(self):
+    def terminate_pools(self) -> None:
         """Terminates the WMS and pose estimator pools
 
         Call this method before destroying your node and shutting down.
-
-        :return:
         """
         if self._pose_estimator_pool is not None:
             self.get_logger().info('Terminating pose estimator pool.')
@@ -1571,12 +1569,10 @@ class BaseNode(Node, ABC):
             self.get_logger().info('Terminating WMS pool.')
             self._wms_pool.terminate()
 
-    def destroy_timers(self):
+    def destroy_timers(self) -> None:
         """Destroys the map update timer
 
         Call this method before destroying your node and shutting down.
-
-        :return:
         """
         if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')

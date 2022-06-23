@@ -886,12 +886,12 @@ class BaseNode(Node, ABC):
 
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
-    def _export_position(self, position: Position, fov: GeoTrapezoid, filename: str) -> None:
+    def _export_position(self, position: GeoPoint, fov: GeoTrapezoid, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file
 
         The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
 
-        :param position: Computed camera position or e.g. principal point for gimbal projection
+        :param position: Computed camera position or projected principal point for gimbal projection
         :param: fov: Field of view of camera
         :param filename: Name of file to write into
         :return:

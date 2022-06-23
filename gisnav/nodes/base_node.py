@@ -938,7 +938,7 @@ class BaseNode(Node, ABC):
                 ),
                 geobbox=bbox
             )
-        except Exception as e:
+        except Exception as e:  # TODO: catch IOError instead?
             # These are *probably* connection related exceptions from requests library. They do not seem to be part of
             # OWSLib public API so WMSClient does not handle them (in case OWSLib devs change it). Handling them would
             # require direct dependency to requests. Log exception as error here and move on.

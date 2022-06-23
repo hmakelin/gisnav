@@ -118,7 +118,7 @@ class BaseNode(Node, ABC):
     expected position of the vehicle, which increases the chances that the FOV is fully contained in the map raster.
     This again increases the chances of getting a good pose estimate.
     
-    .. seealso:
+    .. seealso::
         :py:attr:`.ROS_D_MISC_MAX_PITCH`
         :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH`
     """
@@ -130,7 +130,7 @@ class BaseNode(Node, ABC):
     WMS GetMap requests when the camera is looking far into the horizon and it would be unrealistic to get a good pose 
     estimate against a map.
 
-    .. seealso:
+    .. seealso::
         :py:attr:`.ROS_D_MISC_MAX_PITCH`
         :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
@@ -1559,7 +1559,8 @@ class BaseNode(Node, ABC):
     def terminate_pools(self) -> None:
         """Terminates the WMS and pose estimator pools
 
-        Call this method before destroying your node and shutting down.
+        .. note::
+            Call this method before destroying your node and shutting down.
         """
         if self._pose_estimator_pool is not None:
             self.get_logger().info('Terminating pose estimator pool.')
@@ -1572,7 +1573,8 @@ class BaseNode(Node, ABC):
     def destroy_timers(self) -> None:
         """Destroys the map update timer
 
-        Call this method before destroying your node and shutting down.
+        .. note::
+            Call this method before destroying your node and shutting down.
         """
         if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')

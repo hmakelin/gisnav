@@ -482,11 +482,11 @@ class BaseNode(Node, ABC):
 
     @property
     def _synchronized_time(self) -> Optional[int]:
-        """Returns current (estimated) EKF2 timestamp in microseconds
+        """Estimated EKF2 system reference time in microseconds or None if not available
 
-        See :py:attr:`~_time_sync` for more information.
-
-        :return: Estimated EKF2 system time in microseconds or None if not available"""
+        .. seealso:
+            :py:attr:`._time_sync` and :meth:`._sync_timestamps`
+        """
         if self._time_sync is None:
             self.get_logger().warn('Could not estimate EKF2 timestamp.')
             return None
@@ -500,14 +500,16 @@ class BaseNode(Node, ABC):
 
     @property
     def _is_gimbal_projection_enabled(self) -> bool:
-        """Checks if map rasters should be retrieved for projected field of view instead of vehicle position.
+        """True if map rasters should be retrieved for projected field of view instead of vehicle position
 
         If this is set to false, map rasters are retrieved for the vehicle's global position instead. This is typically
         fine as long as the camera is not aimed too far in to the horizon and has a relatively wide field of view. For
         best results, this should be on to ensure the field of view is fully contained within the area of the retrieved
         map raster.
 
-        :return: True if field of view projection should be used for updating map rasters
+        .. note::
+            If you know your camera will be nadir-facing, disabling ``map_update.gimbal_projection`` may improve
+            performance by a small amount.
         """
         gimbal_projection_flag = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
@@ -521,10 +523,11 @@ class BaseNode(Node, ABC):
     def _gimbal_set_attitude(self) -> Optional[Attitude]:
         """Gimbal set attitude in NED frame or None if not available
 
-        Gimbal set attitude is given in FRD frame. Need to get yaw from VehicleAttitude to constrtuct gimbal set
-        attitude in NED frame.
+        Gimbal set attitude is given in FRD frame. Combines it with vehicle yaw from VehicleAttitude to construct a
+        gimbal set attitude in NED frame.
 
-        Note that this is only the set attitude, actual gimbal attitude may differ if gimbal has not yet stabilized.
+        .. note::
+            This is only the set attitude, actual gimbal attitude may differ if gimbal has not yet stabilized.
         """
         if self._vehicle_attitude is None or self._gimbal_device_set_attitude is None:
             self.get_logger().debug('Vehicle or gimbal set attitude not yet available.')
@@ -545,12 +548,10 @@ class BaseNode(Node, ABC):
 
     @property
     def _altitude_agl(self) -> Optional[float]:
-        """Returns altitude above ground level, or None it not available
+        """Altitude above ground level in meters, or None if not available
 
-        This method tries to return the 'dist_bottom' value from class:`px4_msgs.VehicleLocalPosition` first, and 'z'
-        second. If neither are valid, a None is returned.
-
-        :return: Altitude AGL in meters or None if information is not available
+        This property tries to use the 'dist_bottom' value from class:`px4_msgs.VehicleLocalPosition` first, and 'z'
+        second. If neither are valid, the property value is 'None'.
         """
         if self._vehicle_local_position is not None:
             if self._vehicle_local_position.dist_bottom_valid:
@@ -568,12 +569,12 @@ class BaseNode(Node, ABC):
 
     @property
     def _ground_elevation_amsl(self) -> Optional[float]:
-        """Returns ground elevation in meters above mean sea level (AMSL)
+        """Ground elevation in meters above mean sea level (AMSL) or None if information is not available
 
-        It is assumed to be same as :class:`px4_msgs.VehicleLocalPosition` reference altitude. See also
-        :meth:`~_altitude_agl`.
+        It is assumed to be same as :class:`px4_msgs.VehicleLocalPosition` reference altitude.
 
-        :return: Altitude of ground surface in meters above mean sea level or None if information is not available
+        .. seealso::
+            :py:attr:`._altitude_agl`
         """
         if self._vehicle_local_position is not None:
             if hasattr(self._vehicle_local_position, 'ref_alt') and \
@@ -588,17 +589,15 @@ class BaseNode(Node, ABC):
 
     @property
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
-        """Returns map size with padding for rotation without clipping corners.
+        """Padded map size tuple (height, width) or None if the information is not available.
 
-        Because the deep learning models used for predicting matching keypoints between camera image frames and
-        retrieved map rasters are not assumed to be rotation invariant, the map rasters are rotated based on camera yaw
-        so that they align with the camera images. To keep the scale of the map after rotation the same, black corners
-        would appear unless padding is used. Retrieved maps therefore have to squares with the side lengths matching the
-        diagonal of the camera frames so that scale is preserved and no black corners appear in the map rasters after
-        rotation.
-
-        :return: Padded map size tuple (height, width) or None if the info is not available. The height and width will
-        both be equal to the diagonal of the declared (:py:attr:`~_camera_info`) camera frame dimensions.
+        Because the deep learning models used for predicting matching keypoints or poses between camera image frames
+        and map rasters are not assumed to be rotation invariant in general, the map rasters are rotated based on
+        camera yaw so that they align with the camera images. To keep the scale of the map after rotation the same,
+        black corners would appear unless padding is used. Retrieved maps therefore have to be squares with the side
+        lengths matching the diagonal of the camera frames so that scale is preserved and no black corners appear in
+        the map rasters after rotation. The height and width will both be equal to the diagonal of the declared
+        (:py:attr:`._camera_data`) camera frame dimensions.
         """
         if self._img_dim is None:
             self.get_logger().warn(f'Dimensions not available - returning None as map size.')
@@ -609,40 +608,30 @@ class BaseNode(Node, ABC):
 
     @property
     def _img_dim(self) -> Optional[Dim]:
-        """Returns image resolution size as it is declared in the latest CameraInfo message.
-
-        :return: Image resolution tuple (height, width) or None if not available
-        """
+        """Image resolution from latest :class:`px4_msgs.msg.CameraInfo` message, None if not available"""
         if self._camera_data is not None:
             return self._camera_data.dim
         else:
             self.get_logger().warn('Camera data was not available, returning None as declared image size.')
             return None
 
-
     @property
     def _vehicle_position(self) -> Optional[Position]:
-        """Returns Vehicle position guess in WGS84 coordinates and altitude in meters above ground
-
-        To be used for update map requests.
-
-        :return: Position or None if not available"""
+        """Vehicle position guess in WGS84 coordinates and altitude in meters above ground, None if not available"""
         if self._vehicle_global_position is not None:
-            # TODO: do not assert global position alt - not necessarily needed?
             assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
                    hasattr(self._vehicle_global_position, 'alt')
             if self._altitude_agl is None:
-                # TODO: can AMSL altitude used for map updates? I.e. an exception here to assign z_groud = z_amsl just for updating the map?
-                self.get_logger().warn('Could not ground altitude, cannot provide reliable position for map update.')
+                # TODO: AMSL altitude can be used for map update requests, this should not be a strict requirement
+                self.get_logger().warn('Could not get ground altitude, no reliable position guess for map update.')
                 return None
 
-            # TODO: give position a timestamp - what timestamp to use here? Or this should never get published so not that imporant? Latest timestamp?
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
                 z_ground=self._altitude_agl,  # not None
-                z_amsl=self._vehicle_global_position.alt,  # TODO can be used for map updates as an exception?
+                z_amsl=self._vehicle_global_position.alt,
                 x_sd=None,
                 y_sd=None,
                 z_sd=None

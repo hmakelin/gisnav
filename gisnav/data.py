@@ -305,7 +305,7 @@ class ImagePair:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class _AsyncQuery:
-    """Abstract base class of atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along
+    """Abstract base class of a structure that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along
     with its input data
 
     The intention is to keep the result of the query in the same place along with the inputs so that they can be
@@ -320,7 +320,7 @@ class _AsyncQuery:
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class AsyncPoseQuery(_AsyncQuery):
-    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
 
     The :meth:`.PoseEstimator.worker` interface expects an image_pair (query, reference images and camera intrinsics matrix)
     and an input_data context as arguments (along with a guess which is not stored since it is no longer needed after
@@ -333,7 +333,7 @@ class AsyncPoseQuery(_AsyncQuery):
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class AsyncWMSQuery(_AsyncQuery):
-    """Atomic pair that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
+    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
 
     The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input it is needed here
     """

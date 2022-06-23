@@ -6,7 +6,7 @@ import numpy as np
 from px4_msgs.msg import VehicleGpsPosition
 
 from gisnav.nodes.base_node import BaseNode
-from gisnav.data import OutputData, Position
+from gisnav.data import Position
 
 
 class MockGPSNode(BaseNode):
@@ -31,17 +31,17 @@ class MockGPSNode(BaseNode):
         self._vehicle_gps_position_publisher = self._create_publisher(self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                       VehicleGpsPosition)
 
-    def publish(self, output_data: OutputData) -> None:
+    def publish(self, position: Position) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        if not isinstance(output_data.filtered_position, Position) \
-                or not all([output_data.filtered_position.epv, output_data.filtered_position.eph]):
+        if not isinstance(position, Position) \
+                or not all([position.epv, position.eph]):
             self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
                                    'skipping publishing.')
             return None
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
         try:
-            self._publish_mock_gps_msg(output_data.filtered_position, mock_gps_selection)
+            self._publish_mock_gps_msg(position, mock_gps_selection)
         except AssertionError as ae:
             self.get_logger().error(f'Assertion error when trying to publish:\n{ae}')
 

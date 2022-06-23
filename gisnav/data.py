@@ -549,22 +549,6 @@ class FixedCamera:
 
 
 # noinspection PyClassHasNoInit
-@dataclass
-class OutputData:
-    # TODO: freeze this data structure to reduce unintentional re-assignment?
-    """Algorithm output passed onto publish method.
-
-    :param input: The input data used for the match
-    :param fixed_camera: Camera that is fixed to wgs84 coordinates (map_match and field of view)
-    :param filtered_position: Filtered position from the Kalman filter
-    :return:
-    """
-    input: InputData
-    fixed_camera: FixedCamera
-    filtered_position: Optional[Position]  # TODO: currently added post init, thence Optional, try to make immutable
-
-
-# noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class PackageData:
     """Stores data parsed from package.xml (not comprehensive)"""

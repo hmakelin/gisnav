@@ -26,7 +26,7 @@ from sensor_msgs.msg import CameraInfo, Image
 # TODO: for data at least may be cleaner to just import the module and use it as prefix?
 #  almost everything is imported from data (except for abstract base classes)
 from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
-    InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
+    InputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from gisnav.assertions import assert_type, assert_len
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
@@ -225,7 +225,7 @@ class BaseNode(Node, ABC):
         # Must check for None when using these
         self._map_input_data = None
         self._map_input_data_prev = None
-        self._map_output_data_prev = None
+        self._fixed_camera_prev = None
 
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
@@ -412,6 +412,16 @@ class BaseNode(Node, ABC):
     def _map_input_data_prev(self, value: Optional[InputData]) -> None:
         assert_type(value, get_args(Optional[InputData]))
         self.__map_input_data_prev = value
+
+    @property
+    def _fixed_camera_prev(self) -> Optional[FixedCamera]:
+        """Previous estimated :class:`.FixedCamera`"""
+        return self.__fixed_camera_prev
+
+    @_fixed_camera_prev.setter
+    def _fixed_camera_prev(self, value: Optional[FixedCamera]) -> None:
+        assert_type(value, get_args(Optional[FixedCamera]))
+        self.__fixed_camera_prev = value
 
     @property
     def _camera_data(self) -> Optional[CameraData]:
@@ -645,7 +655,7 @@ class BaseNode(Node, ABC):
         """Returns snapshot of vehicle state and reference map data required for pose estimation
 
         Pose estimation is asynchronous, so this property provides a way of taking snapshot of the required input
-        arguments to :meth:`._compute_output` and :meth:`._estimate`.
+        arguments to :meth:`._estimate`.
         """
         input_data = InputData(
             ground_elevation=self._ground_elevation_amsl  # TODO: handle None
@@ -1117,44 +1127,46 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
             return None
 
-        output_data = self._compute_output(self._pose_estimation_query.image_pair, pose,
-                                           self._pose_estimation_query.input_data)
+        try:
+            fixed_camera = FixedCamera(pose=pose, image_pair=self._pose_estimation_query.image_pair,
+                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation)
+        except DataValueError as _:
+            self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
+            return None
 
-        if output_data is not None:
-            # noinspection PyUnreachableCode
-            if __debug__:
-                # Visualize projected FOV estimate
-                fov_pix = output_data.fixed_camera.fov.fov_pix
-                ref_img = output_data.fixed_camera.image_pair.ref.image.arr
-                map_with_fov = cv2.polylines(ref_img.copy(),
-                                             [np.int32(fov_pix)], True,
-                                             255, 3, cv2.LINE_AA)
+        assert fixed_camera is not None
+        # noinspection PyUnreachableCode
+        if __debug__:
+            # Visualize projected FOV estimate
+            fov_pix = fixed_camera.fov.fov_pix
+            ref_img = fixed_camera.image_pair.ref.image.arr
+            map_with_fov = cv2.polylines(ref_img.copy(),
+                                         [np.int32(fov_pix)], True,
+                                         255, 3, cv2.LINE_AA)
 
-                img = np.vstack((map_with_fov, output_data.fixed_camera.image_pair.qry.image.arr))
-                cv2.imshow("Projected FOV", img)
-                cv2.waitKey(1)
+            img = np.vstack((map_with_fov, fixed_camera.image_pair.qry.image.arr))
+            cv2.imshow("Projected FOV", img)
+            cv2.waitKey(1)
 
-            # Get output from Kalman filter
-            orig_crs_str = output_data.fixed_camera.position.xy.crs
-            filter_output = self._kf.update(output_data.fixed_camera.position.to_array())
-            if filter_output is None:
-                self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
-            else:
-                filtered_position = Position.from_filtered_output(*filter_output, output_data.fixed_camera.position)
-                filtered_position.xy.to_crs(orig_crs_str)
-                output_data.filtered_position = filtered_position
-                self.publish(output_data)
-
-                if __debug__:
-                    export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
-                    if export_geojson != '':
-                        self._export_position(output_data.filtered_position.xy, output_data.fixed_camera.fov.fov,
-                                              export_geojson)
-
-            self._map_input_data_prev = self._map_input_data
-            self._map_output_data_prev = output_data
+        # Get output from Kalman filter
+        orig_crs_str = fixed_camera.position.xy.crs
+        filter_output = self._kf.update(fixed_camera.position.to_array())
+        if filter_output is None:
+            self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
         else:
-            self.get_logger().warn('Could not estimate position from pose, skipping this map match.')
+            filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
+            filtered_position.xy.to_crs(orig_crs_str)
+            self.publish(filtered_position)
+
+            if __debug__:
+                export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
+                if export_geojson != '':
+                    self._export_position(filtered_position.xy, fixed_camera.fov.fov,
+                                          export_geojson)
+
+        assert fixed_camera is not None
+        self._map_input_data_prev = self._map_input_data
+        self._fixed_camera_prev = fixed_camera
     # endregion
 
     def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
@@ -1353,26 +1365,6 @@ class BaseNode(Node, ABC):
     # endregion
 
     # region Pose estimation
-    def _compute_output(self, image_pair: ImagePair, pose: Pose, input_data: InputData) -> Optional[OutputData]:
-        """Estimates output (vehicle position) from estimated pose
-
-        :param image_pair: Input image pair
-        :param pose: Estimated pose between image pair
-        :param input_data: Input used for the pose estimation (snapshot of vehicle state from time of image)
-        :return: Computed output if a valid estimate was obtained, None otherwise
-        """
-        try:
-            fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation)
-        except DataValueError as _:
-            # Could not estimate a valid FixedCamera
-            return None
-
-        output_data = OutputData(input=input_data,
-                                 fixed_camera=fixed_camera,
-                                 filtered_position = None)
-
-        return output_data
-
     def _should_estimate(self, img: np.ndarray) -> bool:
         """Determines whether :meth:`._estimate` should be called
 
@@ -1438,7 +1430,7 @@ class BaseNode(Node, ABC):
 
     # region PublicAPI
     @abstractmethod
-    def publish(self, output_data: OutputData) -> None:
+    def publish(self, position: Position) -> None:
         """Publishes the estimated position
 
         This method should be implemented by the extending class to adapt the base node for any given use case.

@@ -1311,57 +1311,71 @@ class BaseNode(Node, ABC):
 
         return gimbal_estimated_attitude
 
+    # region Mock Image Pair
     def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
-        """Creates a mock image pair to be used for guessing the projected FOV needed for map updates
+        """Creates mock :class:`.ImagePair` for guessing projected FOV needed for map requests, or None if not available
 
-        The mock image pair which will be paired with a pose guess to compute the expected field of view. The expected
-        field of view (or its principal point) is used to more accurately retrieve a new map from WMS that matches with
-        where the camera is looking.
+        The mock image pair will be paired with a pose guess to compute the expected field of view. The expected field
+        of view is used to request a new map that overlaps with what the camera is looking at.
 
-        :param origin: Vehicle position (altitude AMSL not required)
-        :param terrain_altitude: Vehicle altitude from ground (assumed ground plane), required
-        :return: Mock image pair that can be paired with a pose guess to generate a FOV guess, or None if required info not yet available
+        .. seealso:
+            :meth:`._mock_map_data` and :meth:`._mock_image_data`
+
+        :param origin: Vehicle position
+        :return: Mock image pair that can be paired with a pose guess to generate a FOV guess, or None if not available
         """
-        # TODO: handle none return values
         image_data = self._mock_image_data()
         map_data = self._mock_map_data(origin)
-        contextual_map_data = ContextualMapData(rotation=0, crop=self._img_dim, map_data=map_data)  # TODO: redudnant img dim, check none
+        if image_data is None or map_data is None:
+            self.get_logger().warn('Missing required inputs for generating mock image PAIR.')
+            return None
+        contextual_map_data = ContextualMapData(rotation=0, crop=image_data.image.dim, map_data=map_data)
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair
 
+    # TODO: make property?
     def _mock_image_data(self) -> Optional[ImageData]:
-        """Creates a mock ImageData to be used for guessing the projected FOV needed for map updates or None if required info not yet available"""
-        # TODO: none checks
-        image_data = ImageData(image=Img(np.zeros(self._img_dim)),  # TODO: if none?
-                               frame_id='mock_image_data',  # TODO: have a proper frame_id
-                               timestamp=self._synchronized_time,  # TODO: none?
-                               camera_data=self._camera_data)  # TODO: if none?
+        """Creates mock :class:`.ImageData` for guessing projected FOV for map requests, or None if not available
+
+        .. seealso:
+            :meth:`._mock_map_data` and :meth:`._mock_image_pair`
+        """
+        if self._img_dim is None or self._synchronized_time is None or self._camera_data is None:
+            self.get_logger().warn('Missing required inputs for generating mock image DATA.')
+            return None
+
+        image_data = ImageData(image=Img(np.zeros(self._img_dim)),
+                               frame_id='mock_image_data',  # TODO
+                               timestamp=self._synchronized_time,
+                               camera_data=self._camera_data)
         return image_data
 
     def _mock_map_data(self, origin: Position) -> Optional[MapData]:
-        """Creates a mock MapData to be used for guessing the projected FOV needed for map updates
+        """Creates mock :class:`.MapData` for guessing projected FOV needed for map requests, or None if not available
 
-        The mock map data is used as part of mock image pair which will be paired with a pose guess to compute the
-        expected field of view. The expected field of view (or its principal point) is used to more accurately retrieve
-        a new map from WMS that matches with where the camera is looking.
+        The mock image pair will be paired with a pose guess to compute the expected field of view. The expected field
+        of view is used to request a new map that overlaps with what the camera is looking at.
 
-        :param origin: Vehicle position (altitude AMSL not required)
-        :return: MapData with mock images but expected bbox based on the image pixel size or None if required info not yet available
+        .. seealso:
+            :meth:`._mock_image_pair` and :meth:`._mock_image_data`
+
+        :param origin: Vehicle position
+        :return: Mock map data with mock images but with real expected bbox, or None if not available
         """
-        # TODO: none checks
         assert_type(origin, Position)
-        assert_type(self._camera_data, CameraData)
-        # TODO: make a new CameraData structure; k, cx, cy currently together with ImageData in flat structure
-        # TODO: assumes fx == fy
+        if self._camera_data is None or self._map_size_with_padding is None:
+            self.get_logger().warn('Missing required inputs for generating mock MAP DATA.')
+            return None
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = (self._map_size_with_padding[0]/2) / self._camera_data.fx  # TODO: handle None/No dim yet
+        scaling = (self._map_size_with_padding[0]/2) / self._camera_data.fx
         radius = scaling * origin.z_ground
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoSquare(origin.xy, radius)
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
         return map_data
+    # endregion
 
     # region Pose estimation
     def _compute_output(self, image_pair: ImagePair, pose: Pose, input_data: InputData) -> Optional[OutputData]:

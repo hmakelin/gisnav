@@ -6,7 +6,7 @@ import numpy as np
 from px4_msgs.msg import VehicleGpsPosition
 
 from gisnav.nodes.base_node import BaseNode
-from gisnav.nodes.data import OutputData, Position
+from gisnav.data import OutputData, Position
 
 
 class MockGPSNode(BaseNode):

@@ -7,14 +7,14 @@ import os
 import math
 
 from xml.etree import ElementTree
-from typing import Optional, Union, get_args
+from typing import Optional
 from collections import namedtuple
 from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation
 
 from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
-from gisnav.nodes.geo import GeoPoint, GeoTrapezoid, GeoValueError
+from gisnav.geo import GeoPoint, GeoTrapezoid, GeoValueError
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')

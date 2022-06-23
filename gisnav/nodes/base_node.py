@@ -17,20 +17,18 @@ from multiprocessing.pool import Pool
 from typing import Optional, Union, Tuple, get_args, List
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
-from geojson import Point, Polygon, Feature, FeatureCollection, dump
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
-from functools import partial
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
-    GimbalDeviceSetAttitude, VehicleGpsPosition
+    GimbalDeviceSetAttitude
 from sensor_msgs.msg import CameraInfo, Image
 
 # TODO: for data at least may be cleaner to just import the module and use it as prefix?
 #  almost everything is imported from data (except for abstract base classes)
-from gisnav.nodes.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
-    InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, FOV, Img, Pose, Position
-from gisnav.nodes.geo import GeoPoint, GeoSquare, GeoTrapezoid
-from gisnav.assertions import assert_type, assert_ndim, assert_len, assert_shape
+from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
+    InputData, OutputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
+from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
+from gisnav.assertions import assert_type
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
 from gisnav.kalman import SimpleFilter

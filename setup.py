@@ -2,7 +2,7 @@ import os
 from glob import glob
 from setuptools import setup
 
-from gisnav.nodes.data import PackageData
+from gisnav.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('package.xml'))
 
 # Read requirements file

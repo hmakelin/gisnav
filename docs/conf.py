@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 # -- Version information -----------------------------------------------------
-from gisnav.nodes.data import PackageData
+from gisnav.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 
 

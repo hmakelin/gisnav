@@ -20,7 +20,7 @@ nodes package
 =================================================
 base_node module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.nodes.base_node
+.. automodule:: gisnav.nodes.base_node
    :autosummary:
    :members:
    :undoc-members:
@@ -29,7 +29,7 @@ base_node module
 
 mock_gps_node module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.nodes.mock_gps_node
+.. automodule:: gisnav.nodes.mock_gps_node
    :autosummary:
    :members:
    :undoc-members:
@@ -38,7 +38,7 @@ mock_gps_node module
 
 data module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.nodes.data
+.. automodule:: gisnav.data
    :autosummary:
    :members:
    :undoc-members:
@@ -47,7 +47,7 @@ data module
 
 geo module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.nodes.geo
+.. automodule:: gisnav.geo
    :autosummary:
    :members:
    :undoc-members:
@@ -58,7 +58,7 @@ pose_estimators package
 =================================================
 pose_estimator module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.pose_estimators.pose_estimator
+.. automodule:: gisnav.pose_estimators.pose_estimator
    :autosummary:
    :members:
    :undoc-members:
@@ -67,25 +67,25 @@ pose_estimator module
 
 keypoint_pose_estimator module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.pose_estimators.keypoint_pose_estimator
+.. automodule:: gisnav.pose_estimators.keypoint_pose_estimator
    :autosummary:
    :members:
    :undoc-members:
    :special-members: __init__
    :show-inheritance:
 
-loftr module
+loftr_pose_estimator module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.pose_estimators.loftr
+.. automodule:: gisnav.pose_estimators.loftr_pose_estimator
    :autosummary:
    :members:
    :undoc-members:
    :special-members: __init__
    :show-inheritance:
 
-superglue module
+superglue_poes_estimator module
 --------------------------------------------
-.. automodule:: python_px4_ros2_map_nav.pose_estimators.superglue
+.. automodule:: gisnav.pose_estimators.superglue_pose_estimator
    :autosummary:
    :members:
    :undoc-members:
@@ -94,7 +94,7 @@ superglue module
 
 kalman module
 =================================================
-.. automodule:: python_px4_ros2_map_nav.kalman
+.. automodule:: gisnav.kalman
    :autosummary:
    :members:
    :undoc-members:
@@ -103,7 +103,7 @@ kalman module
 
 assertions module
 =================================================
-.. automodule:: python_px4_ros2_map_nav.assertions
+.. automodule:: gisnav.assertions
    :autosummary:
    :members:
    :undoc-members:
@@ -112,7 +112,7 @@ assertions module
 
 wms module
 =================================================
-.. automodule:: python_px4_ros2_map_nav.wms
+.. automodule:: gisnav.wms
    :autosummary:
    :members:
    :undoc-members:

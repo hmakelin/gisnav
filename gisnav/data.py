@@ -508,6 +508,14 @@ class FixedCamera:
             # This comes from Position.__post_init__
             raise
 
+        camera_data = img.camera_data
+        reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])
+        # TODO: The 3 and 6 are an arbitrary thresholds, make configurable?
+        if (np.abs(self.pose.t).squeeze() >= 3 * reference).any() or \
+                (np.abs(self.pose.t).squeeze() >= 6 * reference).any():
+            raise DataValueError(f'pose.t {self.pose.t} & pose.t {self.pose.t} have values too large compared to ' \
+                                 f'(cx, cy, fx): {reference}.')
+
 
 # noinspection PyClassHasNoInit
 @dataclass

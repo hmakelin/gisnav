@@ -1427,11 +1427,7 @@ class BaseNode(Node, ABC):
                                  filtered_position = None,
                                  attitude = attitude)
 
-        if self._good_match(output_data):
-            return output_data
-        else:
-            self.get_logger().debug(f'Bad match computed, returning None for this frame.')
-            return None
+        return output_data
 
     def _match_inputs(self) -> Tuple[InputData, ContextualMapData]:
         """Returns a dictionary input_data of the input data required to perform and process a match.
@@ -1456,24 +1452,6 @@ class BaseNode(Node, ABC):
 
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
         return copy.deepcopy(input_data), contextual_map_data   # TODO: remove deep copy?
-
-    # TODO: move these to initialization, get rid of this method
-    def _good_match(self, output_data: OutputData) -> bool:
-        """Uses heuristics for determining whether position estimate is good or not.
-
-        :param output_data: Computed output
-        :return: True if match is good
-        """
-        # Estimated translation vector blows up?
-        camera_data = output_data.fixed_camera.image_pair.qry.camera_data
-        reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])
-        if (np.abs(output_data.fixed_camera.pose.t).squeeze() >= 3 * reference).any() or \
-                (np.abs(output_data.fixed_camera.pose.t).squeeze() >= 6 * reference).any():  # TODO: The 3 and 6 are an arbitrary threshold, make configurable
-            self.get_logger().error(f'fixed_camera.pose.t {output_data.fixed_camera.pose.t} & fixed_camera.pose.t {output_data.fixed_camera.pose.t} have values '
-                                    f'too large compared to (cx, cy, fx): {reference}.')
-            return False
-
-        return True
 
     def _should_map_match(self, img: np.ndarray) -> bool:
         """Determines whether _match should be called based on whether previous match is still being processed.

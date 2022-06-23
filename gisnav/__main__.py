@@ -37,7 +37,7 @@ def main(args=None):
             print(s.getvalue())
     finally:
         mock_gps_node.destroy_timers()
-        mock_gps_node.terminate_wms_pool()
+        mock_gps_node.terminate_pools()
         mock_gps_node.destroy_node()
         rclpy.shutdown()
 

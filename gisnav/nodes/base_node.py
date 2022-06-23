@@ -1547,31 +1547,38 @@ class BaseNode(Node, ABC):
         )
     #endregion
 
-    #region PublicAPI
+    # region PublicAPI
     @abstractmethod
     def publish(self, output_data: OutputData) -> None:
-        """Publishes or exports computed output
+        """Publishes the estimated position
 
-        This method should be implemented by an extending class to adapt for any given use case.
+        This method should be implemented by the extending class to adapt the base node for any given use case.
         """
         pass
-    #endregion
 
-    def terminate_wms_pool(self):
-        """Terminates the WMS Pool.
+    def terminate_pools(self):
+        """Terminates the WMS and pose estimator pools
+
+        Call this method before destroying your node and shutting down
 
         :return:
         """
+        if self._pose_estimator_pool is not None:
+            self.get_logger().info('Terminating pose estimator pool.')
+            self._pose_estimator_pool.terminate()
+
         if self._wms_pool is not None:
             self.get_logger().info('Terminating WMS pool.')
             self._wms_pool.terminate()
 
     def destroy_timers(self):
-        """Destroys the map update timer.
+        """Destroys the map update timer
+
+        Call this method before destroying your node and shutting down.
 
         :return:
         """
         if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')
-            assert_type(self._map_update_timer, rclpy.timer.Timer)
             self._map_update_timer.destroy()
+    # endregion

@@ -135,8 +135,8 @@ class BaseNode(Node, ABC):
         :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
 
-    ROS_D_MAP_UPDATE_MAX_MAP_WIDTH = 400
-    """Default maximum map width in meters for WMS GetMap request bounding boxes
+    ROS_D_MAP_UPDATE_MAX_MAP_RADIUS = 400
+    """Default maximum map radius (half of map width) in meters for WMS GetMap request bounding boxes
 
     This limit prevents unintentionally requesting very large maps if camera field of view is projected far into the
     horizon. This may happen e.g. if :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH` is set too high relative to the camera's
@@ -680,7 +680,7 @@ class BaseNode(Node, ABC):
             self.declare_parameters(namespace, [
                 ('update_delay', self.ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
                 ('gimbal_projection', self.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
-                ('max_map_radius', self.ROS_D_MAP_UPDATE_MAX_MAP_WIDTH),
+                ('max_map_radius', self.ROS_D_MAP_UPDATE_MAX_MAP_RADIUS),
                 ('update_map_area_threshold', self.ROS_D_MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
                 ('max_pitch', self.ROS_D_MAP_UPDATE_MAX_PITCH)
             ])
@@ -1135,10 +1135,10 @@ class BaseNode(Node, ABC):
     # endregion
 
     def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
-        """Checks if previous map is too close to new requested one.
+        """Returns True previous map is too close to new requested one
 
-        This check is made to avoid retrieving a new map that is almost the same as the previous map. Increasing map
-        update interval should not improve accuracy of position estimation unless the map is so old that the field of
+        This check is made to avoid retrieving a new map that is almost the same as the previous map. Relaxing map
+        update constraints should not improve accuracy of position estimates unless the map is so old that the field of
         view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
         or is too small compared to the size of the map (vehicle altitude has significantly decreased).
 
@@ -1146,12 +1146,9 @@ class BaseNode(Node, ABC):
         :return: True if previous map is too close.
         """
         assert_type(bbox, GeoSquare)
-        #if self._map_output_data_prev is not None:
         if self._map_data is not None:
-            #previous_map_data = self._map_output_data_prev.fixed_camera.image_pair.ref.map_data  # TODO: use map_match not _match?
             previous_map_data = self._map_data
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
-
             ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
                         previous_map_data.bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
 
@@ -1161,14 +1158,14 @@ class BaseNode(Node, ABC):
         return False
 
     def _should_request_new_map(self, bbox: GeoSquare) -> bool:
-        """Checks if a new WMS map request should be made to update old map.
+        """Returns True if a new map should be requested to replace the old map
 
         Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
         that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
         large and gimbal projection is used so that map center would be too far or even beyond the horizon.
 
         :param bbox: Bounding box of new map candidate
-        :return: True if map should be updated
+        :return: True if new map should be requested
         """
         assert_type(bbox, GeoSquare)
 
@@ -1178,8 +1175,6 @@ class BaseNode(Node, ABC):
         if self._previous_map_too_close(bbox):
             return False
 
-        # Check condition (3) - whether camera pitch is too large if using gimbal projection
-        # TODO: do not even attempt to compute center arg in this case? Would have to be checked earlier?
         use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if use_gimbal_projection:
             max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
@@ -1190,7 +1185,7 @@ class BaseNode(Node, ABC):
         return True
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
-        """Returns map radius that adjusts for camera altitude.
+        """Returns map radius that adjusts for camera altitude to be used for new map requests
 
         :param altitude: Altitude of camera in meters
         :return: Suitable map radius in meters
@@ -1199,29 +1194,27 @@ class BaseNode(Node, ABC):
         max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
 
         if self._camera_data is not None:
-            #assert camera_info.k[0] == camera_info.k[4]  # Assert assumption that fx = fy  # TODO: with calibrated values this may not be exact, try something else with tolerance and warn if not within tolerance
             hfov = 2 * math.atan(self._camera_data.dim.width / (2 * self._camera_data.fx))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
-            # TODO: does this happen? Trying to update map before camera info has been received?
-            self.get_logger().warn(f'Could not get camera data, using best guess for map width.')
+            # Update map before CameraInfo has been received
+            self.get_logger().warn(f'Could not get camera data, using guess for map width.')
             map_radius = 3*altitude  # Arbitrary guess
 
         if map_radius > max_map_radius:
             self.get_logger().warn(f'Dynamic map radius {map_radius} exceeds max map radius {max_map_radius}, using '
-                                   f'max_map_radius instead.')
+                                   f'max radius {max_map_radius} instead.')
             map_radius = max_map_radius
 
         return map_radius
 
-    # TODO: no need to give max pitch arg, make property?
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
-        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown.
+        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown
 
         Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
-        worthwhile.
+        not worthwhile.
 
-        :param max_pitch: The limit for the pitch over which it will be considered too high
+        :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
@@ -1232,7 +1225,7 @@ class BaseNode(Node, ABC):
                 self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
                 return True
         else:
-            self.get_logger().warn(f'Gimbal attitude was not available, assuming camera pitch too high.')
+            self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
             return True
 
         return False

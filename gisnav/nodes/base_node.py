@@ -1464,12 +1464,6 @@ class BaseNode(Node, ABC):
         :param output_data: Computed output
         :return: True if match is good
         """
-        # Altitude below startin altitude?
-        if output_data.fixed_camera.position.z_ground < 0:  # TODO: or is nan
-            self.get_logger().warn(f'Match terrain altitude {output_data.fixed_camera.position.z_ground} was negative, assume bad '
-                                   f'match.')
-            return False
-
         # Estimated translation vector blows up?
         camera_data = output_data.fixed_camera.image_pair.qry.camera_data
         reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])

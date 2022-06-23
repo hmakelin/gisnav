@@ -42,11 +42,17 @@ class Position:
     """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
 
     def __post_init__(self):
-        """Set computed fields after initialization."""
+        """Set computed fields after initialization
+
+        :raise: :class:`.DataValueError` if r or t is invalid
+        """
         assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
                or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
 
         assert self.z_ground is not None
+
+        if self.z_ground < 0:
+            raise DataValueError(f'Ground altitude was negative {self.z_ground}.')
 
     @property
     def eph(self) -> Optional[float]:
@@ -381,8 +387,6 @@ class FixedCamera:
 
     Collects field of view and map_match under a single structure that is intended to be stored in input data context as
     visual odometry fix reference. Includes the needed map_match and pix_to_wgs84 transformation for the vo fix.
-
-    :raise: DataValueError if a valid FixedCamera could not be initialized
     """
     image_pair: ImagePair
     pose: Pose
@@ -476,7 +480,10 @@ class FixedCamera:
         return position
 
     def __post_init__(self):
-        """Post-initialization computed fields and validity checks."""
+        """Post-initialization computed fields and validity checks
+
+        :raise: DataValueError if a valid FixedCamera could not be initialized
+        """
         img = self.image_pair.qry
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         try:
@@ -491,11 +498,15 @@ class FixedCamera:
         else:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
-        position = self._estimate_position(self.ground_elevation)
-        if position is not None:
-            object.__setattr__(self, 'position', position)
-        else:
-            raise DataValueError('Could not initialize a valid FixedCamera.')
+        try:
+            position = self._estimate_position(self.ground_elevation)
+            if position is not None:
+                object.__setattr__(self, 'position', position)
+            else:
+                raise DataValueError('Could not initialize a valid FixedCamera.')
+        except DataValueError as _:
+            # This comes from Position.__post_init__
+            raise
 
 
 # noinspection PyClassHasNoInit

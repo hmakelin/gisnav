@@ -177,7 +177,7 @@ class BaseNode(Node, ABC):
         """
         assert_type(name, str)
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
-        self.__declare_ros_params()  # TODO: need to handle already declared exceptions
+        self.__declare_ros_params()
 
         self._package_share_dir = package_share_dir
 

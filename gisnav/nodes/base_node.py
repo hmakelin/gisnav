@@ -951,8 +951,8 @@ class BaseNode(Node, ABC):
                 result=self._wms_pool.apply_async(
                     WMSClient.worker,
                     (layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format),
-                    callback=self.wms_pool_worker_callback,
-                    error_callback=self.wms_pool_worker_error_callback
+                    callback=self._wms_pool_worker_callback,
+                    error_callback=self._wms_pool_worker_error_callback
                 ),
                 geobbox=bbox
             )
@@ -1081,7 +1081,7 @@ class BaseNode(Node, ABC):
     # endregion
 
     #region WMSWorkerCallbacks
-    def wms_pool_worker_callback(self, result: List[MapData]) -> None:
+    def _wms_pool_worker_callback(self, result: List[MapData]) -> None:
         """Handles result from :meth:`gisnav.wms.worker`.
 
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
@@ -1100,7 +1100,7 @@ class BaseNode(Node, ABC):
         self.get_logger().info(f'Map received for bbox: {map_data.bbox}.')
         self._map_data = map_data
 
-    def wms_pool_worker_error_callback(self, e: BaseException) -> None:
+    def _wms_pool_worker_error_callback(self, e: BaseException) -> None:
         """Handles errors from WMS pool worker.
 
         :param e: Exception returned by the worker

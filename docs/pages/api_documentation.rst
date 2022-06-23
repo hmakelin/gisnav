@@ -65,7 +65,7 @@ loftr_pose_estimator module
    :special-members: __init__
    :show-inheritance:
 
-superglue_poes_estimator module
+superglue_pose_estimator module
 --------------------------------------------
 .. automodule:: gisnav.pose_estimators.superglue_pose_estimator
    :autosummary:

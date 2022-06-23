@@ -157,13 +157,13 @@ class BaseNode(Node, ABC):
     """Default parameter file with args for the default :class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer`"""
 
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
-    """Filename for exporting GeoJSON containing estimated field of view and position
+    """Default filename for exporting GeoJSON containing estimated field of view and position
 
     Set to '' to disable
     """
 
     ROS_D_DEBUG_EXPORT_PROJECTION = '' # 'projection.json'
-    """Filename for exporting GeoJSON containing projected field of view (FOV) and FOV center
+    """Default filename for exporting GeoJSON containing projected field of view (FOV) and FOV center
         
     Set to '' to disable
     """

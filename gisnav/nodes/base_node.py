@@ -1559,7 +1559,7 @@ class BaseNode(Node, ABC):
     def terminate_pools(self):
         """Terminates the WMS and pose estimator pools
 
-        Call this method before destroying your node and shutting down
+        Call this method before destroying your node and shutting down.
 
         :return:
         """

@@ -1480,7 +1480,6 @@ class BaseNode(Node, ABC):
 
         :return: True if a map match has been made earlier
         """
-        #assert self._map_input_data_prev is not None  # TODO: why was this here?
         return self._map_output_data_prev is not None
 
     def _should_map_match(self, img: np.ndarray) -> bool:

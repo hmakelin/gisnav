@@ -446,7 +446,7 @@ class FixedCamera:
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
-        return Attitude(gimbal_set_attitude_ned.as_quat())
+        return Attitude(gimbal_estimated_attitude.as_quat())
 
     @staticmethod
     def _get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

@@ -19,7 +19,7 @@ from gisnav.nodes.data import PackageData
 package_data = PackageData.parse_package_data(os.path.abspath('../package.xml'))
 
 
-# -- Add SuperGlueEstimator to path ---------------------------------------------------
+# -- Add SuperGluePoseEstimator to path ---------------------------------------------------
 if 'get_package_share_directory' not in sys.modules:
     from ament_index_python.packages import get_package_share_directory
 share_dir = get_package_share_directory(package_data.package_name)

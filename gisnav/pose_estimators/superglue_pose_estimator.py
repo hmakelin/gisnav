@@ -1,6 +1,4 @@
-"""Module that contains an adapter for the SuperGlueEstimator GNN model."""
-import os
-import sys
+"""Module that contains an adapter for the SuperGluePoseEstimator GNN model."""
 import torch
 import cv2
 import numpy as np
@@ -8,14 +6,13 @@ import numpy as np
 from typing import Optional, Tuple
 from enum import Enum
 
-from gisnav.assertions import assert_type
 from gisnav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
 
 from SuperGluePretrainedNetwork.models.matching import Matching
 from SuperGluePretrainedNetwork.models.utils import frame2tensor
 
 
-class SuperGlueEstimator(KeypointPoseEstimator):
+class SuperGluePoseEstimator(KeypointPoseEstimator):
     """Adapter for Superglue, an Attentional Graph Neural Network based keypoint matcher"""
 
     DEFAULT_CONFIDENCE_THRESHOLD = 0.7
@@ -33,11 +30,11 @@ class SuperGlueEstimator(KeypointPoseEstimator):
         so that attributes initialized here are also available for :meth:`.worker`.
 
         :param min_matches: Minimum required keypoint matches (should be >= 4)
-        :param params: SuperGlueEstimator config to be passed to :class:`models.matching.Matching`
+        :param params: SuperGluePoseEstimator config to be passed to :class:`models.matching.Matching`
         """
-        super(SuperGlueEstimator, self).__init__(min_matches)
-        self._device = SuperGlueEstimator.TorchDevice.CUDA.value if torch.cuda.is_available() else \
-            SuperGlueEstimator.TorchDevice.CPU.value
+        super(SuperGluePoseEstimator, self).__init__(min_matches)
+        self._device = SuperGluePoseEstimator.TorchDevice.CUDA.value if torch.cuda.is_available() else \
+            SuperGluePoseEstimator.TorchDevice.CPU.value
         self._matching = Matching(params).eval().to(self._device)
 
     def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \

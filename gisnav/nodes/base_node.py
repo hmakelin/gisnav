@@ -148,7 +148,7 @@ class BaseNode(Node, ABC):
     location. This parameter is used during :meth:`._should_update_map` calls.
     """
 
-    POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTREstimator'
+    POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTRPoseEstimator'
     """Default :class:`.PoseEstimator` to use for matching images to maps."""
 
     POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yml'  # TODO: add config folder: config/superglue_params.yml

@@ -1295,7 +1295,7 @@ class BaseNode(Node, ABC):
     def _image_too_blurry(self, blur: float) -> bool:
         """Returns True if image is deemed too blurry for matching
 
-        :param img: Image to match
+        :param blur: Image blur value
         :return: True if image is too blurry
         """
         blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value

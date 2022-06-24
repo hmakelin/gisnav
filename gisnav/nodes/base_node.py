@@ -1287,7 +1287,7 @@ class BaseNode(Node, ABC):
 
         # Get output from Kalman filter
         orig_crs_str = fixed_camera.position.xy.crs
-        filter_output = self._kf.update(fixed_camera.position.to_array())
+        filter_output = self._kf.filter(fixed_camera.position.to_array())
         if filter_output is None:
             self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
         else:

@@ -56,7 +56,7 @@ class SimpleFilter:
             0                           # z_vel
         ])
 
-    def update(self, measurement: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    def filter(self, measurement: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns position and standard deviation estimates, or None if not enough data is available yet
 
         :param measurement: A new measurement (position observation)

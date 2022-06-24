@@ -33,8 +33,7 @@ class MockGPSNode(BaseNode):
 
     def publish(self, position: Position) -> None:
         """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition message and as GeoJSON data"""
-        if not isinstance(position, Position) \
-                or not all([position.epv, position.eph]):
+        if not isinstance(position, Position) or not all([position.epv, position.eph]):
             self.get_logger().warn('Some required fields required for publishing mock GPS message were None, '
                                    'skipping publishing.')
             return None
@@ -71,14 +70,13 @@ class MockGPSNode(BaseNode):
     def _publish_mock_gps_msg(self, position: Position, selection: int) -> None:
         """Publishes a mock :class:`px4_msgs.msg.VehicleGpsPosition` out of estimated position, velocities and errors.
 
-        :param position: Estimated vehicle position
+        :param position: Visually estimated vehicle position and attitude
         :param selection: GPS selection (see :class:`px4_msgs.msg.VehicleGpsPosition` for comment)
         :return:
         """
         assert all([position.eph, position.epv, position.z_amsl])
-        # TODO: check inputs?
         msg = VehicleGpsPosition()
-        msg.timestamp = self._synchronized_time  # TODO: use timestamp from position, should not createa new timestamp here # TODO: also check None
+        msg.timestamp = position.timestamp
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan

@@ -33,6 +33,8 @@ class Position:
     """
     xy: GeoPoint                # XY coordinates (e.g. longitude & latitude in WGS84)
     z_ground: float             # altitude above ground plane in meters (positive)
+    attitude: Attitude          # attitude in NED frame
+    timestamp: int              # Reference timestamp of position
     z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known (positive)
     x_sd: Optional[float]       # Standard deviation of error in x (latitude) dimension
     y_sd: Optional[float]       # Standard deviation of error in y (longitude) dimension
@@ -102,7 +104,9 @@ class Position:
                 if original_position.z_amsl is not None else None,
             x_sd=sds[0],
             y_sd=sds[1],
-            z_sd=sds[2]
+            z_sd=sds[2],
+            attitude=original_position.attitude,
+            timestamp=original_position.timestamp
         )
 
 
@@ -401,7 +405,7 @@ class FixedCamera:
     h: np.ndarray = field(init=False)
     inv_h: np.ndarray = field(init=False)
     camera_position: np.ndarray = field(init=False)
-    attitude: Attitude = field(init=False)
+    timestamp: int
 
     def _estimate_fov(self) -> Optional[FOV]:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates
@@ -503,7 +507,9 @@ class FixedCamera:
             z_amsl=alt + ground_elevation if ground_elevation is not None else None,
             x_sd=None,
             y_sd=None,
-            z_sd=None
+            z_sd=None,
+            attitude=self._estimate_attitude(),
+            timestamp=self.image_pair.qry.timestamp
         )
 
         return position
@@ -536,8 +542,6 @@ class FixedCamera:
         except DataValueError as _:
             # This comes from Position.__post_init__
             raise
-
-        object.__setattr__(self, 'attitude', self._estimate_attitude())
 
         camera_data = img.camera_data
         reference = np.array([camera_data.cx, camera_data.cy, camera_data.fx])

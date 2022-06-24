@@ -644,7 +644,9 @@ class BaseNode(Node, ABC):
                 z_amsl=self._vehicle_global_position.alt,
                 x_sd=None,
                 y_sd=None,
-                z_sd=None
+                z_sd=None,
+                attitude=self._vehicle_attitude,  # TODO: is this correct?
+                timestamp=self._synchronized_time
             )
             return position
         else:
@@ -904,7 +906,7 @@ class BaseNode(Node, ABC):
         if altitude is not None:
             try:
                 mock_fixed_camera = FixedCamera(pose=pose, image_pair=mock_image_pair,
-                                                ground_elevation=altitude)
+                                                ground_elevation=altitude, timestamp=self._synchronized_time)
             except DataValueError as _:
                 self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
                 return None
@@ -1129,7 +1131,8 @@ class BaseNode(Node, ABC):
 
         try:
             fixed_camera = FixedCamera(pose=pose, image_pair=self._pose_estimation_query.image_pair,
-                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation)
+                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation,
+                                       timestamp=self._pose_estimation_query.image_pair.qry.timestamp)
         except DataValueError as _:
             self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
             return None
@@ -1434,6 +1437,8 @@ class BaseNode(Node, ABC):
         """Publishes the estimated position
 
         This method should be implemented by the extending class to adapt the base node for any given use case.
+
+        :param position: Visually estimated position and attitude
         """
         pass
 

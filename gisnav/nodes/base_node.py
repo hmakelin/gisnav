@@ -9,7 +9,6 @@ import time
 import importlib
 import os
 import yaml
-import copy
 
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool
@@ -23,8 +22,6 @@ from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPos
     GimbalDeviceSetAttitude
 from sensor_msgs.msg import CameraInfo, Image
 
-# TODO: for data at least may be cleaner to just import the module and use it as prefix?
-#  almost everything is imported from data (except for abstract base classes)
 from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
     InputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid

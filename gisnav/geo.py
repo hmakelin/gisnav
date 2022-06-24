@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
-from shapely.geometry.polygon import orient
 
 from gisnav.assertions import assert_len, assert_type
 

@@ -845,14 +845,11 @@ class BaseNode(Node, ABC):
     def _setup_subscribers(self) -> None:
         """Creates and stores subscribers for microRTPS bridge topics"""
         for topic_name, d in self._topics.items():
-            assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
-            assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
             class_ = d.get(self._TOPICS_MSG_KEY, None)
-            qos = d.get(self._TOPICS_QOS_KEY, rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value)
             assert class_ is not None, f'Message definition not provided for {topic_name}.'
+            qos = d.get(self._TOPICS_QOS_KEY, rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value)
             self._topics.update({topic_name: {self._TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_,
                                                                                                    qos)}})
-
         self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
     def _create_subscriber(self, topic_name: str, class_: type, qos: rclpy.qos.QoSProfile) \

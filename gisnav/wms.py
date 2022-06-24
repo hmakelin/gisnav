@@ -7,6 +7,7 @@ import cv2
 from typing import Tuple, List
 from owslib.wms import WebMapService
 from owslib.util import ServiceException
+
 from gisnav.assertions import assert_type, assert_ndim
 
 

@@ -810,7 +810,7 @@ class BaseNode(Node, ABC):
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
 
-        assert position.z_ground is not None
+        assert self._vehicle_position.z_ground is not None
         map_radius = self._get_dynamic_map_radius(self._vehicle_position.z_ground)
         map_candidate = GeoSquare(projected_center if projected_center is not None else self._vehicle_position.xy,
                                   map_radius)

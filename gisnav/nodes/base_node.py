@@ -1238,6 +1238,7 @@ class BaseNode(Node, ABC):
         return map_radius
     # endregion
 
+    # region Shared
     def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown
 
@@ -1260,54 +1261,6 @@ class BaseNode(Node, ABC):
 
         return False
 
-    def _image_too_blurry(self, blur: float) -> bool:
-        """Returns True if image is deemed too blurry for matching
-
-        :param blur: Image blur value
-        :return: True if image is too blurry
-        """
-        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
-        sd = np.std(self._blurs)
-        mn = np.mean(self._blurs)
-        threshold = mn - blur_threshold * sd
-        return blur < threshold
-
-    def _push_blur(self, blur: float) -> None:
-        """Pushes blur estimates to :py:attr:`._blurs` queue
-
-        Pops the oldest estimate from the queue if full
-
-        :param blur: Blur value
-        """
-        if self._blurs is None:
-            self._blurs = np.array([blur])
-        else:
-            window_length = self.get_parameter('misc.blur_window_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for storing blur should be >0 ({window_length} provided).'
-            obs_count = len(self._blurs)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest value
-                self._blurs = np.delete(self._blurs, 0, 0)
-
-            # Add latest value
-            self._blurs = np.append(self._blurs, blur)
-
-    def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
-        """Synchronizes local timestamp with PX4 EKF2's reference time
-
-        This synchronization is triggered in the :meth:`._vehicle_local_position_callback` and therefore expected to be
-        done at high frequency.
-
-        .. seealso:
-            :py:attr:`._time_sync` and :py:attr:`._synchronized_time`
-
-        :param ekf2_timestamp_usec: Time since PX4 EKF2 system start in microseconds
-        """
-        assert_type(ekf2_timestamp_usec, int)
-        now_usec = time.time() * 1e6
-        self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
-
     def _export_position(self, position: GeoPoint, fov: GeoTrapezoid, filename: str) -> None:
         """Exports the computed position and field of view (FOV) into a geojson file
 
@@ -1326,6 +1279,7 @@ class BaseNode(Node, ABC):
         except Exception as e:
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
+    # endregion
 
     # region Mock Image Pair
     def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
@@ -1393,7 +1347,7 @@ class BaseNode(Node, ABC):
         return map_data
     # endregion
 
-    # region Pose estimation
+    # region Pose Estimation
     def _should_estimate(self, img: np.ndarray) -> bool:
         """Determines whether :meth:`._estimate` should be called
 
@@ -1435,6 +1389,39 @@ class BaseNode(Node, ABC):
             return False
 
         return True
+
+    def _image_too_blurry(self, blur: float) -> bool:
+        """Returns True if image is deemed too blurry for matching
+
+        :param blur: Image blur value
+        :return: True if image is too blurry
+        """
+        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
+        sd = np.std(self._blurs)
+        mn = np.mean(self._blurs)
+        threshold = mn - blur_threshold * sd
+        return blur < threshold
+
+    def _push_blur(self, blur: float) -> None:
+        """Pushes blur estimates to :py:attr:`._blurs` queue
+
+        Pops the oldest estimate from the queue if full
+
+        :param blur: Blur value
+        """
+        if self._blurs is None:
+            self._blurs = np.array([blur])
+        else:
+            window_length = self.get_parameter('misc.blur_window_length').get_parameter_value().integer_value
+            assert window_length > 0, f'Window length for storing blur should be >0 ({window_length} provided).'
+            obs_count = len(self._blurs)
+            assert 0 <= obs_count <= window_length
+            if obs_count == window_length:
+                # Pop oldest value
+                self._blurs = np.delete(self._blurs, 0, 0)
+
+            # Add latest value
+            self._blurs = np.append(self._blurs, blur)
 
     def _estimate(self, image_pair: ImagePair, input_data: InputData) -> None:
         """Instructs the pose estimator to estimate the pose between the image pair
@@ -1492,3 +1479,18 @@ class BaseNode(Node, ABC):
             self.get_logger().info('Destroying map update timer.')
             self._map_update_timer.destroy()
     # endregion
+
+    def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
+        """Synchronizes local timestamp with PX4 EKF2's reference time
+
+        This synchronization is triggered in the :meth:`._vehicle_local_position_callback` and therefore expected to be
+        done at high frequency.
+
+        .. seealso:
+            :py:attr:`._time_sync` and :py:attr:`._synchronized_time`
+
+        :param ekf2_timestamp_usec: Time since PX4 EKF2 system start in microseconds
+        """
+        assert_type(ekf2_timestamp_usec, int)
+        now_usec = time.time() * 1e6
+        self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)

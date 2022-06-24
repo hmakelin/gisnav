@@ -43,6 +43,7 @@ class BaseNode(Node, ABC):
     # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
     _TOPICS_MSG_KEY = 'message'
     _TOPICS_SUBSCRIBER_KEY = 'subscriber'
+    _TOPICS_QOS_KEY = 'qos'
 
     # Process counts for multiprocessing pools
     _WMS_PROCESS_COUNT = 1      # should be 1
@@ -197,13 +198,34 @@ class BaseNode(Node, ABC):
 
         # Dict for storing all microRTPS bridge subscribers
         self._topics = {
-            'VehicleAttitude_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleAttitude},
-            'VehicleLocalPosition_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleLocalPosition},
-            'VehicleGlobalPosition_PubSubTopic': {self._TOPICS_MSG_KEY: VehicleGlobalPosition},
-            'GimbalDeviceAttitudeStatus_PubSubTopic': {self._TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus},
-            'GimbalDeviceSetAttitude_PubSubTopic': {self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude},
-            'camera_info': {self._TOPICS_MSG_KEY: CameraInfo},
-            'image_raw': {self._TOPICS_MSG_KEY: Image},
+            'VehicleAttitude_PubSubTopic': {
+                self._TOPICS_MSG_KEY: VehicleAttitude,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
+            'VehicleLocalPosition_PubSubTopic': {
+                self._TOPICS_MSG_KEY: VehicleLocalPosition,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
+            'VehicleGlobalPosition_PubSubTopic': {
+                self._TOPICS_MSG_KEY: VehicleGlobalPosition,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
+            'GimbalDeviceAttitudeStatus_PubSubTopic': {
+                self._TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
+            'GimbalDeviceSetAttitude_PubSubTopic': {
+                self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
+            'camera_info': {
+                self._TOPICS_MSG_KEY: CameraInfo,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value
+            },
+            'image_raw': {
+                self._TOPICS_MSG_KEY: Image,
+                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+            },
         }
         self._setup_subscribers()
 
@@ -826,22 +848,26 @@ class BaseNode(Node, ABC):
             assert topic_name is not None, f'Topic name not provided in topic: {topic_name}, {d}.'
             assert d is not None, f'Dictionary not provided for topic: {topic_name}.'
             class_ = d.get(self._TOPICS_MSG_KEY, None)
+            qos = d.get(self._TOPICS_QOS_KEY, rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value)
             assert class_ is not None, f'Message definition not provided for {topic_name}.'
-            self._topics.update({topic_name: {self._TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_)}})
+            self._topics.update({topic_name: {self._TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_,
+                                                                                                   qos)}})
 
         self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
 
-    def _create_subscriber(self, topic_name: str, class_: type) -> rclpy.subscription.Subscription:
+    def _create_subscriber(self, topic_name: str, class_: type, qos: rclpy.qos.QoSProfile) \
+            -> rclpy.subscription.Subscription:
         """Returns an rclpy subscription
 
         :param topic_name: Name of the microRTPS topic
         :param class_: Message definition class type (e.g. px4_msgs.msg.VehicleLocalPosition)
+        :param qos: Subscription quality of service profile
         :return: The subscriber instance
         """
         callback_name = f'_{topic_name.lower()}_callback'
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
-        return self.create_subscription(class_, topic_name, callback, 10)  # TODO: add explicit QoSProfile
+        return self.create_subscription(class_, topic_name, callback, qos)  # TODO: add explicit QoSProfile
 
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported

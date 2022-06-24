@@ -32,7 +32,10 @@ class MockGPSNode(BaseNode):
                                                                      rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
 
     def publish(self, position: Position) -> None:
-        """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition` message"""
+        """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition` message
+
+        :param position: Position to publish
+        """
         assert_type(position, Position)
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value

@@ -82,7 +82,7 @@ class WMSClient:
             map_ = wms_client._wms.getmap(layers=layers, styles=styles, srs=srs_str, bbox=bbox, size=map_size,
                                           format=image_format, transparent=WMSClient._IMAGE_TRANSPARENCY)
         except ServiceException as _:
-            # TODO: handle of OWSLib raised exceptions - currently passed on to error callback
+            # TODO: handle OWSLib exceptions - currently passed on to error callback
             raise
 
         map_ = np.frombuffer(map_.read(), np.uint8)

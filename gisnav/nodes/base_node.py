@@ -959,7 +959,8 @@ class BaseNode(Node, ABC):
         assert_len(styles, len(layers))
         assert_type(srs_str, str)
         assert_type(image_format, str)
-        assert self._wms_query.result.ready(), f'New map was requested while previous results were not yet ready.'
+        assert self._wms_query is None or self._wms_query.result.ready(), f'New map was requested while previous ' \
+                                                                          f'results were not yet ready.'
         self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
                                f'{image_format}.')
         self._wms_query = AsyncWMSQuery(

@@ -867,7 +867,7 @@ class BaseNode(Node, ABC):
         callback_name = f'_{topic_name.lower()}_callback'
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
-        return self.create_subscription(class_, topic_name, callback, qos)  # TODO: add explicit QoSProfile
+        return self.create_subscription(class_, topic_name, callback, qos)
 
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported

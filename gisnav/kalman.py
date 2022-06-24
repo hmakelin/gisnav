@@ -3,7 +3,7 @@ import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
 
-from gisnav.assertions import assert_type, assert_shape
+from gisnav.assertions import assert_shape
 
 
 class SimpleFilter:

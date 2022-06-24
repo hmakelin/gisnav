@@ -1012,75 +1012,6 @@ class BaseNode(Node, ABC):
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
     #endregion
 
-    # region Pose Estimation Callbacks
-    def _pose_estimation_worker_error_callback(self, e: BaseException) -> None:
-        """Error callback for matching worker"""
-        self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
-
-    def _pose_estimation_worker_callback(self, result: Optional[Pose]) -> None:
-        """Callback for :meth:`.PoseEstimator.worker`
-
-        Retrieves latest :py:attr:`._pose_estimation_query.input_data` and uses it to call :meth:`._compute_output`.
-        The input data is needed so that the post-processing is done using the same state information that was used for
-        initiating the pose estimation in the first place. For example, camera pitch may have changed since then,
-        and current camera pitch should therefore not be used for processing the matches.
-
-        :param result: Pose result from WMS worker, or None if pose could not be estimated
-        """
-        if result is not None:
-            try:
-                pose = Pose(*result)
-                self._pose_guess = pose
-            except DataValueError as _:
-                self.get_logger().warn(f'Estimated pose was not valid, skipping this frame.')
-                return None
-        else:
-            self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
-            return None
-
-        try:
-            fixed_camera = FixedCamera(pose=pose, image_pair=self._pose_estimation_query.image_pair,
-                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation,
-                                       timestamp=self._pose_estimation_query.image_pair.qry.timestamp)
-        except DataValueError as _:
-            self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
-            return None
-
-        assert fixed_camera is not None
-        # noinspection PyUnreachableCode
-        if __debug__:
-            # Visualize projected FOV estimate
-            fov_pix = fixed_camera.fov.fov_pix
-            ref_img = fixed_camera.image_pair.ref.image.arr
-            map_with_fov = cv2.polylines(ref_img.copy(),
-                                         [np.int32(fov_pix)], True,
-                                         255, 3, cv2.LINE_AA)
-
-            img = np.vstack((map_with_fov, fixed_camera.image_pair.qry.image.arr))
-            cv2.imshow("Projected FOV", img)
-            cv2.waitKey(1)
-
-        # Get output from Kalman filter
-        orig_crs_str = fixed_camera.position.xy.crs
-        filter_output = self._kf.update(fixed_camera.position.to_array())
-        if filter_output is None:
-            self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
-        else:
-            filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
-            filtered_position.xy.to_crs(orig_crs_str)
-            self.publish(filtered_position)
-
-            if __debug__:
-                export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
-                if export_geojson != '':
-                    self._export_position(filtered_position.xy, fixed_camera.fov.fov,
-                                          export_geojson)
-
-        assert fixed_camera is not None
-        self._map_input_data_prev = self._map_input_data
-        self._fixed_camera_prev = fixed_camera
-    # endregion
-
     # region Map Updates
     def _guess_fov_center(self, origin: Position) -> Optional[GeoPoint]:
         """Guesses WGS84 coordinates of camera field of view (FOV) projected on ground from given origin
@@ -1238,49 +1169,6 @@ class BaseNode(Node, ABC):
         return map_radius
     # endregion
 
-    # region Shared
-    def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
-        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown
-
-        Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
-        not worthwhile.
-
-        :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
-        :return: True if pitch is too high
-        """
-        assert_type(max_pitch, get_args(Union[int, float]))
-        if self._gimbal_set_attitude is not None:
-            # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
-            pitch = np.degrees(self._gimbal_set_attitude.pitch) + 90
-            if pitch > max_pitch:
-                self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
-                return True
-        else:
-            self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
-            return True
-
-        return False
-
-    def _export_position(self, position: GeoPoint, fov: GeoTrapezoid, filename: str) -> None:
-        """Exports the computed position and field of view (FOV) into a geojson file
-
-        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
-
-        :param position: Computed camera position or projected principal point for gimbal projection
-        :param: fov: Field of view of camera
-        :param filename: Name of file to write into
-        :return:
-        """
-        assert_type(position, GeoPoint)
-        assert_type(fov, GeoTrapezoid)
-        assert_type(filename, str)
-        try:
-            position._geoseries.append(fov._geoseries).to_file(filename)
-        except Exception as e:
-            self.get_logger().error(f'Could not write file {filename} because of exception:'
-                                    f'\n{e}\n{traceback.print_exc()}')
-    # endregion
-
     # region Mock Image Pair
     def _mock_image_pair(self, origin: Position) -> Optional[ImagePair]:
         """Creates mock :class:`.ImagePair` for guessing projected FOV needed for map requests, or None if not available
@@ -1345,6 +1233,75 @@ class BaseNode(Node, ABC):
         bbox = GeoSquare(origin.xy, radius)
         map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
         return map_data
+    # endregion
+
+    # region Pose Estimation Callbacks
+    def _pose_estimation_worker_error_callback(self, e: BaseException) -> None:
+        """Error callback for matching worker"""
+        self.get_logger().error(f'Pose estimator encountered an unexpected exception:\n{e}\n{traceback.print_exc()}.')
+
+    def _pose_estimation_worker_callback(self, result: Optional[Pose]) -> None:
+        """Callback for :meth:`.PoseEstimator.worker`
+
+        Retrieves latest :py:attr:`._pose_estimation_query.input_data` and uses it to call :meth:`._compute_output`.
+        The input data is needed so that the post-processing is done using the same state information that was used for
+        initiating the pose estimation in the first place. For example, camera pitch may have changed since then,
+        and current camera pitch should therefore not be used for processing the matches.
+
+        :param result: Pose result from WMS worker, or None if pose could not be estimated
+        """
+        if result is not None:
+            try:
+                pose = Pose(*result)
+                self._pose_guess = pose
+            except DataValueError as _:
+                self.get_logger().warn(f'Estimated pose was not valid, skipping this frame.')
+                return None
+        else:
+            self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
+            return None
+
+        try:
+            fixed_camera = FixedCamera(pose=pose, image_pair=self._pose_estimation_query.image_pair,
+                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation,
+                                       timestamp=self._pose_estimation_query.image_pair.qry.timestamp)
+        except DataValueError as _:
+            self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
+            return None
+
+        assert fixed_camera is not None
+        # noinspection PyUnreachableCode
+        if __debug__:
+            # Visualize projected FOV estimate
+            fov_pix = fixed_camera.fov.fov_pix
+            ref_img = fixed_camera.image_pair.ref.image.arr
+            map_with_fov = cv2.polylines(ref_img.copy(),
+                                         [np.int32(fov_pix)], True,
+                                         255, 3, cv2.LINE_AA)
+
+            img = np.vstack((map_with_fov, fixed_camera.image_pair.qry.image.arr))
+            cv2.imshow("Projected FOV", img)
+            cv2.waitKey(1)
+
+        # Get output from Kalman filter
+        orig_crs_str = fixed_camera.position.xy.crs
+        filter_output = self._kf.update(fixed_camera.position.to_array())
+        if filter_output is None:
+            self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
+        else:
+            filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
+            filtered_position.xy.to_crs(orig_crs_str)
+            self.publish(filtered_position)
+
+            if __debug__:
+                export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
+                if export_geojson != '':
+                    self._export_position(filtered_position.xy, fixed_camera.fov.fov,
+                                          export_geojson)
+
+        assert fixed_camera is not None
+        self._map_input_data_prev = self._map_input_data
+        self._fixed_camera_prev = fixed_camera
     # endregion
 
     # region Pose Estimation
@@ -1442,6 +1399,49 @@ class BaseNode(Node, ABC):
             image_pair=image_pair,
             input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
         )
+    # endregion
+
+    # region Shared Logic
+    def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
+        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown
+
+        Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
+        not worthwhile.
+
+        :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
+        :return: True if pitch is too high
+        """
+        assert_type(max_pitch, get_args(Union[int, float]))
+        if self._gimbal_set_attitude is not None:
+            # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
+            pitch = np.degrees(self._gimbal_set_attitude.pitch) + 90
+            if pitch > max_pitch:
+                self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
+                return True
+        else:
+            self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
+            return True
+
+        return False
+
+    def _export_position(self, position: GeoPoint, fov: GeoTrapezoid, filename: str) -> None:
+        """Exports the computed position and field of view (FOV) into a geojson file
+
+        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
+
+        :param position: Computed camera position or projected principal point for gimbal projection
+        :param: fov: Field of view of camera
+        :param filename: Name of file to write into
+        :return:
+        """
+        assert_type(position, GeoPoint)
+        assert_type(fov, GeoTrapezoid)
+        assert_type(filename, str)
+        try:
+            position._geoseries.append(fov._geoseries).to_file(filename)
+        except Exception as e:
+            self.get_logger().error(f'Could not write file {filename} because of exception:'
+                                    f'\n{e}\n{traceback.print_exc()}')
     # endregion
 
     # region PublicAPI

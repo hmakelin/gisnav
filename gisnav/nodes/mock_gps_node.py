@@ -14,6 +14,7 @@ class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     VEHICLE_GPS_POSITION_TOPIC_NAME = 'VehicleGpsPosition_PubSubTopic'
+    """Name of ROS topic for outgoing :class:`px4_msgs.msg.VehicleGpsPosition` messages"""
 
     MISC_MOCK_GPS_SELECTION = 1
     """GPS selection parameter for outgoing :class:`px4_msgs.msg.VehicleGpsPosition` messages"""

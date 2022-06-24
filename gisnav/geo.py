@@ -1,6 +1,7 @@
 """Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
 
+import math
 import numpy as np
 
 from abc import ABC
@@ -187,6 +188,7 @@ class GeoSquare(_GeoPolygon):
         ])
 
         return corners
+
 
 class GeoTrapezoid(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex isosceles) trapezoid

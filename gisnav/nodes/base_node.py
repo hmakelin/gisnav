@@ -174,6 +174,7 @@ class BaseNode(Node, ABC):
         :param package_share_dir: Package share directory file path
         """
         assert_type(name, str)
+        assert_type(package_share_dir, str)
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
         self.__declare_ros_params()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import cv2
 
-from typing import Optional, Union, Tuple, List, get_args
+from typing import Tuple, List
 from owslib.wms import WebMapService
 from owslib.util import ServiceException
 from gisnav.assertions import assert_type, assert_ndim

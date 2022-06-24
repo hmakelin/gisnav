@@ -182,21 +182,12 @@ class BaseNode(Node, ABC):
 
         self._package_share_dir = package_share_dir
 
-        # WMS client and requests in a separate process
-        self._wms_query = None  # Must check for None when using this
-        url = self.get_parameter('wms.url').get_parameter_value().string_value
-        version = self.get_parameter('wms.version').get_parameter_value().string_value
-        timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
-        assert_type(url, str)
-        assert_type(version, str)
-        assert_type(timeout, int)
-        self._wms_pool = Pool(self._WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
-                              initargs=(url, version, timeout))
+        self._wms_query = None
+        self._wms_pool = self._setup_wms_pool()
 
-        # Setup map update timer
         self._map_update_timer = self._setup_map_update_timer()
 
-        # Dict for storing all microRTPS bridge subscribers
+        # Setup PX4-ROS 2 bridge subscriptions from this configuration
         self._topics = {
             'VehicleAttitude_PubSubTopic': {
                 self._TOPICS_MSG_KEY: VehicleAttitude,
@@ -232,7 +223,7 @@ class BaseNode(Node, ABC):
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # Setup map matching pool
+        # Setup pose estimation pool
         pose_estimator_params_file = self.get_parameter('pose_estimator.params_file').get_parameter_value().string_value
         self._pose_estimator, self._pose_estimator_pool = self._setup_pose_estimation_pool(pose_estimator_params_file)
         self._pose_estimation_query = None  # Must check for None when using this
@@ -244,28 +235,24 @@ class BaseNode(Node, ABC):
         window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
         self._kf = SimpleFilter(window_length)
 
-        # Must check for None when using these
-        self._map_input_data = None
-        self._map_input_data_prev = None
-        self._fixed_camera_prev = None
-
-        # self._image_data = None  # Not currently used / needed
-        self._map_data = None
-
-        # Stored solution for the PnP problem (map matching and visual odometry separately)
-        self._pose_guess = None
-
-        self._time_sync = None  # For storing local and foreign (EKF2) timestamps
-
-        self._camera_data = None
-
-        # Properties that are mapped to microRTPS bridge topics, must check for None when using them
+        # PX4-ROS 2 bridge message stores
         #self._camera_info = None  # Not used, CameraInfo subscription is destroyed once self._camera_data is assigned
         self._vehicle_local_position = None
-        self._vehicle_global_position = None  # TODO: save directly as 'Position' class? Grab z_ground from local position?
+        self._vehicle_global_position = None
         self._vehicle_attitude = None
         self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
+
+        # Initialize remaining properties (does not include computed properties)
+        self._map_input_data = None
+        self._map_input_data_prev = None
+        self._fixed_camera_prev = None
+        # self._image_data = None  # Not currently used / needed
+        self._map_data = None
+        self._camera_data = None
+        self._pose_guess = None
+        self._time_sync = None
+
 
     # region Properties
     @property
@@ -761,6 +748,23 @@ class BaseNode(Node, ABC):
             ])
         except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
             self.get_logger().warn(str(e))
+
+    def _setup_wms_pool(self) -> Pool:
+        """Returns WMS pool
+
+        .. note::
+            Declare ROS parameters before calling this method
+        """
+        url = self.get_parameter('wms.url').get_parameter_value().string_value
+        version = self.get_parameter('wms.version').get_parameter_value().string_value
+        timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
+        assert_type(url, str)
+        assert_type(version, str)
+        assert_type(timeout, int)
+        pool = Pool(self._WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
+                              initargs=(url, version, timeout))
+
+        return pool
 
     def _setup_pose_estimation_pool(self, params_file: str) -> Tuple[type, Pool]:
         """Returns the pose estimator type along with an initialized pool

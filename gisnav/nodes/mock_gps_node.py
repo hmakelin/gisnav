@@ -60,6 +60,7 @@ class MockGPSNode(BaseNode):
         msg.heading = np.nan
         msg.heading_offset = np.nan
         msg.selected = mock_gps_selection
+
         self._vehicle_gps_position_publisher.publish(msg)
 
     def _declare_ros_params(self) -> None:

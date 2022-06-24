@@ -1,7 +1,7 @@
 """Extends :class:`.BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
-import rclpy
 import time
 import numpy as np
+import rclpy
 
 from px4_msgs.msg import VehicleGpsPosition
 

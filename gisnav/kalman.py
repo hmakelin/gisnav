@@ -1,4 +1,4 @@
-"""Kalman filter for producing smooth position and variance estimates"""
+"""Kalman filter for producing smoothed position estimates"""
 import numpy as np
 from typing import Optional, Tuple
 from pykalman import KalmanFilter
@@ -10,7 +10,7 @@ class SimpleFilter:
     """Simple Kalman filter implementation
 
     Implements 3D model with position and velocity amounting to a total of 6 state variables. Assumes only position is
-    observed while velocity is hidden.
+    observed.
     """
     _MIN_MEASUREMENTS = 20
     """Default minimum measurements before outputting an estimate"""
@@ -20,6 +20,7 @@ class SimpleFilter:
 
         :param window_length: Minimum number of measurements before providing a state estimate
         """
+        assert window_length > 0
         self._measurements = None
         self._initial_state_mean = None
         self._transition_matrix = np.array([
@@ -40,12 +41,12 @@ class SimpleFilter:
         self._previous_mean = None
         self._previous_covariance = None
 
-    def _init_initial_state(self, measurements: np.ndarray) -> None:
-        """Initializes initial state once enough measurements are available
+    def _init_initial_state(self, measurement: np.ndarray) -> None:
+        """Initializes initial state once measurements are available
 
         :param measurements: First available measurements in numpy array (oldest first)
         """
-        self._measurements = measurements
+        self._measurements = measurement
         self._initial_state_mean = np.array([
             self._measurements[0][0],   # x
             0,                          # x_vel
@@ -56,7 +57,7 @@ class SimpleFilter:
         ])
 
     def update(self, measurement: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Returns filtered position and standard deviation estimates, or None if not enough data is available yet
+        """Returns position and standard deviation estimates, or None if not enough data is available yet
 
         :param measurement: A new measurement (position observation)
         :return: Tuple of filtered measurement means and standard deviations, or None if output not yet available
@@ -70,11 +71,9 @@ class SimpleFilter:
             self._measurements = np.vstack((self._measurements, measurement))
             return None
         else:
-            # No need to maintain self._measurements, use online filtering (filter_update) instead
+            # No need to maintain self._measurements, use online filtering (filter_update)
             #self._measurements = self._measurements[len(self._measurements) - self._MIN_MEASUREMENTS:]
             #self._measurements = np.vstack((self._measurements, measurement))
-
-            assert len(self._measurements) > 0  # If window length for some reason not sensible
             if self._kf is None:
                 # Initialize KF
                 self._kf = KalmanFilter(
@@ -88,22 +87,17 @@ class SimpleFilter:
                 means, covariances = self._kf.filter(self._measurements)
                 mean, covariance = means[-1], covariances[-1]
             else:
-                # Online update
                 assert self._previous_mean is not None
                 assert self._previous_covariance is not None
                 mean, covariance = self._kf.filter_update(self._previous_mean, self._previous_covariance,
                                                           measurement.squeeze())
 
-            # Store latest mean & covariance for online filtering in the future
             assert mean is not None
             assert covariance is not None
             self._previous_mean = mean
             self._previous_covariance = covariance
 
-            # Create a new position instance with filtered values converted back to the original CRS
             xyz_mean = mean[0::2]  # x, y, z - skip velocities
             xyz_sd = np.sqrt(np.diagonal(covariance)[0::2])  # x, y, z
 
-            assert_shape(xyz_mean, (3,))
-            assert_shape(xyz_sd, (3,))
             return xyz_mean, xyz_sd

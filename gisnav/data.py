@@ -8,7 +8,6 @@ import math
 
 from xml.etree import ElementTree
 from typing import Optional
-from collections import namedtuple
 from dataclasses import dataclass, field
 from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation

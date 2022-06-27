@@ -151,7 +151,7 @@ class BaseNode(Node, ABC):
     ROS_D_POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTRPoseEstimator'
     """Default :class:`.PoseEstimator` to use for estimating pose camera pose against reference map"""
 
-    ROS_D_POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yml'
+    ROS_D_POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yaml'
     """Default parameter file with args for the default :class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer`"""
 
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
@@ -199,10 +199,6 @@ class BaseNode(Node, ABC):
                 self._TOPICS_MSG_KEY: VehicleGlobalPosition,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
-            'GimbalDeviceAttitudeStatus_PubSubTopic': {
-                self._TOPICS_MSG_KEY: GimbalDeviceAttitudeStatus,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
             'GimbalDeviceSetAttitude_PubSubTopic': {
                 self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
@@ -238,7 +234,6 @@ class BaseNode(Node, ABC):
         self._vehicle_local_position = None
         self._vehicle_global_position = None
         self._vehicle_attitude = None
-        self._gimbal_device_attitude_status = None
         self._gimbal_device_set_attitude = None
 
         # Initialize remaining properties (does not include computed properties)
@@ -469,16 +464,6 @@ class BaseNode(Node, ABC):
     def _vehicle_global_position(self, value: Optional[VehicleGlobalPosition]) -> None:
         assert_type(value, get_args(Optional[VehicleGlobalPosition]))
         self.__vehicle_global_position = value
-
-    @property
-    def _gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
-        """GimbalDeviceAttitudeStatus received via the PX4-ROS 2 bridge."""
-        return self.__gimbal_device_attitude_status
-
-    @_gimbal_device_attitude_status.setter
-    def _gimbal_device_attitude_status(self, value: Optional[GimbalDeviceAttitudeStatus]) -> None:
-        assert_type(value, get_args(Optional[GimbalDeviceAttitudeStatus]))
-        self.__gimbal_device_attitude_status = value
 
     @property
     def _gimbal_device_set_attitude(self) -> Optional[GimbalDeviceSetAttitude]:
@@ -963,14 +948,6 @@ class BaseNode(Node, ABC):
         :return:
         """
         self._vehicle_global_position = msg
-
-    def _gimbaldeviceattitudestatus_pubsubtopic_callback(self, msg: GimbalDeviceAttitudeStatus) -> None:
-        """Handles latest :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` message
-
-        :param msg: :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` message from the PX4-ROS 2 bridge
-        :return:
-        """
-        self._gimbal_device_attitude_status = msg
 
     def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
         """Handles latest :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message

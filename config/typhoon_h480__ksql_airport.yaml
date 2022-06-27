@@ -5,9 +5,9 @@ mock_gps_node:
       version: '1.1.1'
       layers: ['Imagery']
       styles: ['']
-      srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
-      request_timeout: 10
+      srs: 'EPSG:4326'
       image_format: 'image/jpeg'
+      request_timeout: 10
     misc:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
       max_pitch: 30  # 30  # Used by _should_match
@@ -22,8 +22,8 @@ mock_gps_node:
       max_map_radius: 1000
       update_map_area_threshold: 0.85
     pose_estimator:
-      #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
-      params_file: 'config/loftr_params.yml'
+      #params_file: 'config/superglue_params.yaml'  # For parsing args for matcher's static initializer method
+      params_file: 'config/loftr_params.yaml'
     debug:
       export_position: 'position.json'
       export_projection: 'projection.json'

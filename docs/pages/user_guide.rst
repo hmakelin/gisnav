@@ -210,38 +210,28 @@ Pose Estimators
 
 SuperGlue & LoFTR
 ____________________________________________________
-Two pose estimators, SuperGlue and SuperGlue inspired LoFTR are provided with LoFTR as the default pose estimator.
-These were seen as state-of-the-art image matching algorithms at the time the software was written but newer algorithms
-may provide more reliable matching. Note that SuperGlue has restrictive licensing requirements if you are planning to
-use it for your own project (see license file in the repository), while LoFTR has a permissive license.
+Two pose estimators, SuperGlue and SuperGlue-inspired LoFTR, are provided with LoFTR as the default pose estimator.
+These were seen as state-of-the-art image matching networks at the time GISNav was written. However, newer networks may
+provide better results.
+
+.. note::
+    SuperGlue has restrictive licensing requirements (see license file in the repository), while LoFTR has a permissive
+    license.
 
 .. warning::
     LoFTR uses SuperGlue for *optimal transport* so make sure you use the *dual-softmax* version instead or otherwise
     SuperGlue licensing terms apply.
 
-The initialization parameters for the pose estimators are currently passed via a configuration file, which :class:`.BaseNode`
-reads when it initializes the :class:`.PoseEstimator`. See the provided ``config/loftr_params.yml`` and
-``config/superglue_params.yml`` files for an example. These files can be provided along with other ROS parameters like
-in the example ``config/typhoon_h480__ksql_airport.yml`` file:
-
-.. code-block:: yaml
-
-    map_nav_node:
-      ros__parameters:
-        pose_estimator:
-          #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
-          params_file: 'config/loftr_params.yml'
 
 .. _Extend Pose Estimator:
 
 Extend PoseEstimator
 ____________________________________________________
-
 You must extend the :class:`.PoseEstimator` abstract base and write your own :meth:`.estimate_pose` method to implement
 your own pose estimator. If your pose estimator is keypoint-based, you may want to extend
 :class:`.KeypointPoseEstimator` and implement the :meth:`.find_matching_keypoints` method instead. The base classes
-implement the required static initializer and worker methods that are required to make them work with multithreading
-and multiprocessing.
+implement the required static initializer and worker methods that make them work with Python's
+:py:mod:`.multiprocessing` module.
 
 You can then either provide an instance of your class to your node directly:
 
@@ -326,6 +316,19 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
 
 Configuration
 ____________________________________________________
+The initialization parameters for the pose estimators are currently passed via a configuration file, which :class:`.BaseNode`
+reads when it initializes the :class:`.PoseEstimator`. See the provided ``config/loftr_params.yml`` and
+``config/superglue_params.yml`` files for an example. These files can be provided along with other ROS parameters like
+in the example ``config/typhoon_h480__ksql_airport.yml`` file:
+
+.. code-block:: yaml
+
+    map_nav_node:
+      ros__parameters:
+        pose_estimator:
+          #params_file: 'config/superglue_params.yml'  # For parsing args for matcher's static initializer method
+          params_file: 'config/loftr_params.yml'
+
 You would then need to create a configuration file ``config/my_custom_pose_estimator.yml`` that tells GISNav
 how to initialize your new pose estimator. The configuraiton file will inclue the full path and initialization
 arguments::

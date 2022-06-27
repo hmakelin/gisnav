@@ -80,6 +80,7 @@ PX4 Autopilot
 You can setup your own PX4-Autopilot by following these instructions.
 
 Open a new terminal window and type in the following command:
+
 .. code-block:: bash
 
     make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
@@ -88,6 +89,10 @@ Open a new terminal window and type in the following command:
 PX4-ROS 2 microRTPS bridge
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 You will need to setup the bridge with the following topic configuration:
+
+See the
+`uorb topic configuration guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages>`_ for
+more information.
 
 
 gscam
@@ -99,7 +104,12 @@ of PX4's User Guide, the ``typhoon_h480`` build target for Gazebo SITL supports 
 Open a new terminal window and source your ROS environment (ROS ``foxy`` in this example):
 
 .. note::
-    If you work with your workspace often, you may want to add the sourcing of the workspace into your ``~/.bashrc``.
+    If you work with your ROS 2 workspace often, you may want to source it in your ``~/.bashrc``:
+
+    .. code-block:: bash
+
+        echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+        echo "source ~/px4_ros_com_ros2/install/setup.bash" >> ~/.bashrc
 
 .. code-block:: bash
 
@@ -221,9 +231,10 @@ sources such as:
         * US coverage only
 
 .. note::
-    Commercial web-based map services are often tile-based (as opposed to WMS) because it is more efficient to serve
-    pre-computed tiles than to compute unique rasters for each individual requested bounding box. You will need a WMS
-    proxy if you decide to go with a tile-based endpoint.
+    Commercial web-based map services are often
+    `tile-based <https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames>`_ (as opposed to WMS) because it is more
+    efficient to serve pre-computed tiles than to compute unique rasters for each individual requested bounding box.
+    You will need a WMS proxy if you decide to go with a tile-based endpoint.
 
 
 .. warning::

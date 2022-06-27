@@ -32,7 +32,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory(package_name),
         'config',
-        'typhoon_h480__ksql_airport.yml'
+        'typhoon_h480__ksql_airport.yaml'
     )
 
     node = Node(

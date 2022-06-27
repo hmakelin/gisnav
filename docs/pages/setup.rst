@@ -213,6 +213,10 @@ domain sources such as:
 
         * US coverage only
 
+    * `Open Aerial Map <https://map.openaerialmap.org/>`_
+
+        * Various smaller maps for specific locations, you can also make your own for your area of interest
+
 .. note::
     Commercial web-based map services are often
     `tile-based <https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames>`_ (as opposed to WMS) because it is more

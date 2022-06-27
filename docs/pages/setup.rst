@@ -5,78 +5,25 @@ To use and develop with GISNav, you must setup your simulation environment, whic
 the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
 find instruction and links to guides to setup everything locally.
 
+.. ROS 2:
 
-PX4 Autopilot and ROS 2 & Gazebo
+ROS 2
 ===================================================
-
-You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
-
-
-.. _Docker:
-
-Option 1  *(recommended)*: Docker
----------------------------------------------------
-A complete dockerized simulation environment is provided in the TODO repository. Follow the Read Me instructions to
-get started with the dockerized environment. Clone and build the docker repo:
-
-.. code-block:: bash
-    :caption: Clone the dockerized simulation environment
-
-    cd $HOME && \
-        git clone https://gitlab.com/px4-ros2-map-nav/px4-ros2-map-nav-sim.git
-
-You will then need to build the environment by passing it the ``MAPPROXY_TILE_URL`` and ``NVIDIA_DRIVER_MAJOR_VERSION``
-arguments. See the `WMS Endpoint`_ section for instruction on how to get an URL for the ``MAPPROXY_TILE_URL`` argument
-if you do not have one yet. The example command uses ``nvidia-smi`` to find the major version installed on your system.
-
-.. code-block:: bash
-    :caption: Build it
-
-    cd px4-ros2-map-nav-sim && \
-        docker-compose build \
-            --build-arg MAPPROXY_TILE_URL="https://example.server.com/tiles/%(z)s/%(y)s/%(x)s" \
-            --build-arg NVIDIA_DRIVER_MAJOR_VERSION=$(nvidia-smi | grep -oP 'Driver Version: \K[\d{3}]+') \
-            .
-
-Once you have your docker container you can run and terminate your
-simulation environment by doing:
-
-.. code-block:: bash
-    :caption: Run Gazebo example simulation with typhoon_h480 build target and ksql_airport.world
-
-    docker-compose up -d
-
-.. note::
-    It may take a few minutes to build your Docker image. You should see the Gazebo and QGroundControl windows pop up
-    soon on your screen after your image has built and is run in a container. If you do not see them after a while, you
-    may need to configure your ``xhost``:
-
-    .. code-block:: bash
-
-        xhost TODO
-
-
-Finally, once you are done with your simulation, you can terminate it from your Terminal window:
-
-.. code-block:: bash
-    :caption: Terminate example simulation
-
-    docker-compose down
-
-
-Option 2: Build It Yourself
----------------------------------------------------
+TODO
 
 .. _QGroundControl:
 
 QGroundControl
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+===================================================
 `Download and install QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to
 get your ground control software up and running. You will need it to control your drone in the Gazebo simulation.
 
 
 PX4 Autopilot
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+===================================================
+
+You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
+
 You can setup your own PX4-Autopilot by following these instructions.
 
 Open a new terminal window and type in the following command:
@@ -87,16 +34,21 @@ Open a new terminal window and type in the following command:
 
 
 PX4-ROS 2 microRTPS bridge
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------------
 You will need to setup the bridge with the following topic configuration:
 
 See the
 `uorb topic configuration guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages>`_ for
 more information.
 
+Once you have the bridge setup, you can run the microRTPS agent locally with:
+```bash
+micrortps_agent -t UDP
+```
+
 
 gscam
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+===================================================
 As described in the `Video Streaming <https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ section
 of PX4's User Guide, the ``typhoon_h480`` build target for Gazebo SITL supports UDP video streaming. You can use
 ``gscam`` to pipe the video into ROS, from where it can be subscribed to by GISNav's :class:`.BaseNode`.
@@ -121,21 +73,25 @@ Then install ``gscam`` and its dependencies from the
 
 .. code-block:: bash
 
-    sudo apt-get install gstreamer1.0-tools libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev
-    apt install ros-foxy-gscam
+    sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl ros-foxy-gscam
 
 
 Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these ones:
 
 .. seealso::
-    See the `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_ ROS tutorial on how to create a camera calibration file if you do not want to use the example file
+    See the
+    `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_
+    ROS tutorial on how to create a camera calibration file if you do not want to use the example file
 
 .. code-block:: yaml
     :caption: gscam_params.yaml
 
     gscam_publisher:
       ros__parameters:
-        gscam_config: "gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600 ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert "
+        gscam_config: >
+          gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600 !
+          application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 !
+          rtph264depay ! h264parse ! avdec_h264 ! videoconvert
         preroll: False
         use_gst_timestamps: True
         frame_id: 'mono'
@@ -155,7 +111,7 @@ Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these o
     distortion_coefficients:
       rows: 1
       cols: 5
-      data: [-0.41527, 0.31874, -0.00197, 0.00071, 0]
+      data: [0, 0, 0, 0, 0]
     rectification_matrix:
       rows: 3
       cols: 3
@@ -163,13 +119,15 @@ Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these o
     projection_matrix:
       rows: 3
       cols: 4
-      data: [4827.94, 0, 1223.5, 0, 0, 4835.62, 1024.5, 0, 0, 0, 1, 0]
+      data: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
+
 
 And run ``gscam`` with your new configuration when the PX4 Gazebo SITL is running:
 
 .. code-block:: bash
 
-    ros2 run gscam gscam_main --ros-args --params-file gscam_params.yaml -p camera_info_url:=file://$PWD/camera_calibration.yaml
+    ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
+        -p camera_info_url:=file://$PWD/src/gisnav/test/assets//camera_calibration.yaml
 
 
 .. _`WMS endpoint`:

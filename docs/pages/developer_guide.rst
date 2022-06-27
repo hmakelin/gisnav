@@ -48,7 +48,7 @@ The attributes in the :class:`.Position` input to the :meth:`.publish` method ar
     * Latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_, although :class:`.GeoPoint` can provide the values in other CRS as well
     * Altitude above mean sea level (AMSL) and above ground is provided in meters.
     * Standard deviations are provided in meters in `ENU <https://en.wikipedia.org/wiki/Local_tangent_plane_coordinates>`_ frame `(x, y := longitude, latitude; z := altitude)`.
-    * Attitude quaternion is in (w, x, y, z) format (same as :class:`px4_msgs.VehicleAttitude` format).
+    * Attitude quaternion is in (x, y, z, w) format (SciPy format, :class:`px4_msgs.VehicleAttitude` has different format).
     * Timestamp is synchronized with the `PX4 EKF2 reference time <https://github.com/PX4/px4_msgs/blob/master/msg/Ekf2Timestamps.msg>`_.
 
 .. note::

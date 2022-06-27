@@ -11,7 +11,7 @@ well.
 ROS 2
 ===================================================
 You can install ROS 2 Foxy by following the
-`official instructions <https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html>`_
+`official instructions <https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html>`_.
 
 .. _QGroundControl:
 

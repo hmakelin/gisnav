@@ -202,8 +202,8 @@ If you want to run your own server or WMS proxy, you may want to consider e.g. t
     * `MapProxy <https://mapproxy.org/>`_ (proxy only but can cache tiles locally)
     * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
 
-If you do not want to use commercial (from primary sources such as Maxar or secondary sources like Esri ArcGIS, Google,
-etc.) high-resolution orthoimagery, you can load your own server with data from public domain sources such as:
+If you do not want to use commercial high-resolution orthoimagery (from primary sources such as Maxar or secondary
+sources like Esri ArcGIS, Google, etc.), you can load your own server with data from public domain sources such as:
 
     * `OSM-curated Aerial Imagery <https://wiki.openstreetmap.org/wiki/Aerial_imagery>`_
 

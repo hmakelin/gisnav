@@ -98,7 +98,7 @@ Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these o
         image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
 
 .. code-block:: yaml
-    :caption: camera_params.yaml
+    :caption: camera_calibration.yaml
 
     image_width: 640
     image_height: 360

@@ -203,7 +203,8 @@ If you want to run your own server or WMS proxy, you may want to consider e.g. t
     * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
 
 If you do not want to use commercial high-resolution orthoimagery (from primary sources such as Maxar or secondary
-sources like Esri ArcGIS, Google, etc.), you can load your own server with data from public domain sources such as:
+sources like Esri ArcGIS, Google, etc.), you can load your own server with data from public domain or openly licensed
+sources such as:
 
     * `OSM-curated Aerial Imagery <https://wiki.openstreetmap.org/wiki/Aerial_imagery>`_
 

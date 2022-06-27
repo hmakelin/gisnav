@@ -209,13 +209,21 @@ domain sources such as:
 
         * Large list of sources with various licensing terms, see terms of use for each service individually
 
+    * `Open Aerial Map <https://map.openaerialmap.org/>`_
+
+        * Various smaller maps for specific locations, you can also make your own for your area of interest
+
     * `US Geological Survey <https://www.usgs.gov/programs/national-geospatial-program/imagery>`_
 
         * US coverage only
 
-    * `Open Aerial Map <https://map.openaerialmap.org/>`_
+    * `UK Environment Agency <https://data.gov.uk/dataset/4921f8a1-d47e-458b-873b-2a489b1c8165/vertical-aerial-photography>`_
 
-        * Various smaller maps for specific locations, you can also make your own for your area of interest
+        * UK coverage only, ECW format
+
+    * `National Land Survey of Finland <https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/orthophotos>`_
+
+        * Finland coverage only, JPEG 2000 format
 
 .. note::
     Commercial web-based map services are often

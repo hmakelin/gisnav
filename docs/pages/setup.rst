@@ -2,8 +2,8 @@
 Setup
 **************************************************
 To use and develop with GISNav, you must setup your simulation environment, which includes setting up ROS 2, PX4 and
-the PX4-ROS bridge, and Gazebo. The quickest way is to use the pre-made `Docker`_ script. However, here you will also
-find instruction and links to guides to setup everything locally.
+the PX4-ROS bridge, Gazebo and a WMS endpoint. Here you will find instruction and links to guides to setup everything
+locally.
 
 .. ROS 2:
 
@@ -22,7 +22,7 @@ get your ground control software up and running. You will need it to control you
 PX4 Autopilot
 ===================================================
 
-You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`.
+You will need to setup the PX4 Autopilot with `ROS 2 and Gazebo <https://docs.px4.io/master/en/simulation/ros_interface.html>`_.
 
 You can setup your own PX4-Autopilot by following these instructions.
 
@@ -174,7 +174,7 @@ real-world use.
 
 If you want to run your own server or WMS proxy, you may want to consider e.g. these options:
 
-    * `MapProxy <https://mapproxy.org/>`_ (used by the GISNav `Docker`_ example, proxy only but can cache tiles locally)
+    * `MapProxy <https://mapproxy.org/>`_ (proxy only but can cache tiles locally)
     * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
 
 If you do not want to use commercial high-resolution data, you can load your own server with data from public domain

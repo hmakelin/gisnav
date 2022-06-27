@@ -39,23 +39,6 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
         def publish(self, position):
             self.get_logger().info(position)
 
-..
-  Use json below for language to avoid highlight syntax, technically this is not json
-
-.. code-block:: json
-    :caption: Sample output data printed to console
-
-    {    'alt_amsl': 125.0,
-         'alt_ground': 123.5,
-         'attitude': array([1, 0, 0, 0]),
-         'crs': 'epsg:4326',
-         'lat': 37.5,
-         'lon': -122.5,
-         'timestamp': 1655373141123,
-         'x_sd': 0.8,
-         'y_sd': 0.7,
-         'z_sd': 0.3}
-
 .. _Position Class:
 
 Position Class

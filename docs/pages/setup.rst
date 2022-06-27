@@ -40,8 +40,10 @@ Once you have your PX4 Autopilot setup, you can try out the Gazebo simulation:
 PX4-ROS 2 microRTPS bridge
 ---------------------------------------------------
 See the
-`uorb topic configuration guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages>`_ for
-information on how to configure the bridge topics. For the :class:`.MockGPSNode` example you must configure the bridge as follows:
+`uorb topic configuration guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages>`_ and
+`RTPS message IDL files <https://docs.px4.io/v1.12/en/middleware/micrortps_manual_code_generation.html#rtps-message-idl-files>`_
+sections of the PX4 User Guide for information on how to configure the bridge topics. For the :class:`.MockGPSNode`
+example you must configure the bridge as follows:
 
 * Send
 

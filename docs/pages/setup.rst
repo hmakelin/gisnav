@@ -55,6 +55,11 @@ of PX4's User Guide, the ``typhoon_h480`` build target for Gazebo SITL supports 
 
 Open a new terminal window and source your ROS environment (ROS ``foxy`` in this example):
 
+.. code-block:: bash
+
+    source /opt/ros/foxy/setup.bash
+    source install/setup.bash
+
 .. note::
     If you work with your ROS 2 workspace often, you may want to source it in your ``~/.bashrc``:
 
@@ -62,11 +67,6 @@ Open a new terminal window and source your ROS environment (ROS ``foxy`` in this
 
         echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
         echo "source ~/px4_ros_com_ros2/install/setup.bash" >> ~/.bashrc
-
-.. code-block:: bash
-
-    source /opt/ros/foxy/setup.bash
-    source install/setup.bash
 
 Then install ``gscam`` and its dependencies from the
 `ROS package index <https://index.ros.org/p/gscam/github-ros-drivers-gscam/>`_ for your ROS distribution :
@@ -76,15 +76,10 @@ Then install ``gscam`` and its dependencies from the
     sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl ros-foxy-gscam
 
 
-Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these ones:
-
-.. seealso::
-    See the
-    `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_
-    ROS tutorial on how to create a camera calibration file if you do not want to use the example file
+Create gscam parameter and camera calibration YAML files or use the provided examples:
 
 .. code-block:: yaml
-    :caption: gscam_params.yaml
+    :caption: test/assets/gscam_params.yaml
 
     gscam_publisher:
       ros__parameters:
@@ -98,7 +93,7 @@ Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these o
         image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
 
 .. code-block:: yaml
-    :caption: camera_calibration.yaml
+    :caption: test/assets/camera_calibration.yaml
 
     image_width: 640
     image_height: 360
@@ -121,8 +116,13 @@ Create a ``gscam_prams.yaml`` and ``camera_calibration.yaml`` files like these o
       cols: 4
       data: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
 
+.. seealso::
+    See the
+    `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_
+    ROS tutorial on how to create a camera calibration file if you do not want to use the example file
 
-And run ``gscam`` with your new configuration when the PX4 Gazebo SITL is running:
+
+And run ``gscam`` with your configuration when PX4 Gazebo SITL is also running:
 
 .. code-block:: bash
 

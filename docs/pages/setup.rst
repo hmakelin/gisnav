@@ -161,7 +161,8 @@ WMS Endpoint
 ===================================================
 The :class:`.BaseNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
 then be used as input for the pose estimation. The WMS client :class:`.WMSClient` uses OWSLib and runs in a dedicated
-thread, although it can also be configured to run in a dedicated process.
+process, although it can be quite easily changed to run in a separate thread to reduce serialization overhead (no ROS
+parameter option exists for this, however).
 
 The example configuration uses mapproxy, which is lightweight and can be configured to both cache tiles and proxy a tile
 based endpoint, which are common since they are more efficient, into a WMS endpoint. WMS endpiont is needed since the

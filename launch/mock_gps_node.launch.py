@@ -1,3 +1,4 @@
+"""Launches :class:`.MockGPSNode` with the typhoon_h480__ksql_airport parameters"""
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -37,8 +38,8 @@ def generate_launch_description():
 
     node = Node(
         package='gisnav',
-        name='map_nav_node',
-        executable='map_nav_node',
+        name='mock_gps_node',
+        executable='mock_gps_node',
         parameters=[config]
     )
     ld.add_action(node)

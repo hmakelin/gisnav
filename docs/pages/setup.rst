@@ -221,12 +221,12 @@ sources such as:
 
 
 .. warning::
-    Many commercial services explicitly prohibit the caching of map tiles in their licensing terms, especially if their
-    business model is based on billing API requests. This is mainly to prevent disintermediation in case their tiles
-    are redistributed to a large number of end users.
+    Many commercial services explicitly prohibit the caching of map tiles in their Terms of Use (ToU), especially if
+    their business model is based on billing API requests. This is mainly to prevent disintermediation in case their
+    tiles are redistributed to a large number of end users.
 
     While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you should
-    still make sure you understand the Terms of Use of the service you are using and that it fits your planned use case.
+    still make sure you understand the ToU of the service you are using and that it fits your planned use case.
 
 
 .. seealso::

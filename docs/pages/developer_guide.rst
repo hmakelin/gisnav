@@ -27,7 +27,7 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
 :meth:`.publish` method:
 
 .. code-block:: python
-    :caption: Example of custom node that prints the WGS 84 position and altitude estimates to console
+    :caption: Example of custom node that logs the position estimates
 
     from gisnav.nodes import BaseNode
 
@@ -37,7 +37,7 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
             self.super().__init__(name, share_dir)
 
         def publish(self, position):
-            self.get_logger().info(position)
+            self.get_logger().info(f'Estimated WGS 84 lat: {position.xy.lat}, lon: {position.xy.lon}.')
 
 .. _Position Class:
 

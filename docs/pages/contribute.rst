@@ -105,7 +105,7 @@ Taking the `Constraints`_ into account, development focus could for example be i
 
 * Better customization
 
-    * Make it possible to re-initialize the dynamically loaded classes (:class:`.PoseEstimator`s) at runtime to make it possible to swap in specialized neural nets for specific terrain
+    * Have a way to re-initialize the dynamically loaded classes (:class:`.PoseEstimator`) at runtime to make it possible to swap in specialized neural nets for specific terrain via a ROS service
 
 * Better maintainability
 

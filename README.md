@@ -14,7 +14,8 @@ Autopilot's [Mission mode](https://docs.px4.io/v1.12/en/flight_modes/mission.htm
 
 ## Prerequisites
 This example requires the following simulation setup:
-* [PX4 Ubuntu Development Environment](https://docs.px4.io/v1.12/en/dev_setup/dev_env_linux_ubuntu.html) with
+* [PX4 Ubuntu Development Environment](https://docs.px4.io/v1.12/en/dev_setup/dev_env_linux_ubuntu.html) with 
+[Fast DDS](https://docs.px4.io/v1.12/en/dev_setup/fast-dds-installation.html>) and 
 [PX4-ROS 2 bridge](https://docs.px4.io/v1.12/en/ros/ros2_comm.html) 
 [configured](https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages) for the following topics:
   * Send

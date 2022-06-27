@@ -65,7 +65,6 @@ The `Guiding Principles`_ impose constraints on GISNav, namely:
 * Emphasis on good flight conditions is a reasonable assumption for most commercial use cases
 * Open-source software (and hardware) with permissive licenses only
 * ROS is baked in
-* Mav
 
 Development Focus
 --------------------------------------------------

@@ -152,24 +152,28 @@ ____________________________________________________
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message to the
 PX4-ROS 2 bridge ``VehicleGpsPosition_PubSubTopic`` topic.
 
-For the :class:`.MockGPSNode` to work, you must configure your PX4 to use the new GPS. This can be either configured
+You can configure your PX4 to use the new GPS only to simulate loss of primary GPS. This can be either configured
 before flight in the file ``~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480``, or during
 flight by setting the `SENS_GPS_PRIME <https://docs.px4.io/master/en/advanced_config/parameter_reference.html#SENS_GPS_PRIME>`_ parameter with
-the `param <https://dev.px4.io/master/en/middleware/modules_command.html#param>`_ command::
+the `param <https://dev.px4.io/master/en/middleware/modules_command.html#param>`_ command:
 
 .. code-block::
     :caption: Use GISNav as primary GPS `(assumes GISNav mock GPS node publishes with ``selection=1``)`
 
     param set SENS_GPS_PRIME 1
 
+.. note::
+    If you disable primary GPS in the file before flight, you will not be able to takeoff in Mission mode since GISNav
+    cannot provide a mock GPS fix until the drone is already above the minimum configured flight altitude
+    (``misc.min_match_altitude`` ROS parameter).
+
 .. seealso::
-    See `SENS_GPS_MASK <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_MASK>` parameter
+    See `SENS_GPS_MASK <https://docs.px4.io/v1.12/en/advanced_config/parameter_reference.html#SENS_GPS_MASK>`_ parameter
     for configuring GPS blending in PX4
 
 
-You may also want to try configuring the PX4 GPS consistency gates to initially be more tolerant for your PX4 build
-target, e.g. in the ``/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480`` file used by the
-example in ``README.md``:
+You may also want to try configuring the PX4 GPS consistency gates to initially be more tolerant for your build
+target, e.g. in the ``6011_typhoon_h480`` file mentioned earlier in this section:
 
     * `EKF2_GPS_P_GATE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_P_GATE>`_
     * `EKF2_GPS_P_NOISE <https://dev.px4.io/master/en/advanced/parameter_reference.html#EKF2_GPS_P_NOISE>`_
@@ -262,21 +266,6 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
     If you can't estimate a pose with the given query and reference frames, you can return ``None`` from your
     :meth:`.estimate_pose`
 
-.. _Configuration:
-
-Configuration
-____________________________________________________
-After you have implemented your pose estimator, you need to tell :class:`.BaseNode` where to find its initialization
-arguments in your ROS YAML parameter file:
-
-.. code-block::
-    my_node:
-        ros__parameters:
-            pose_estimator:
-              params_file: 'config/my_node_params.yaml'
-
-See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for examples on how to format the file.
-
 .. _Keypoint-Based Pose Estimator:
 
 Keypoint-Based Pose Estimator
@@ -300,3 +289,19 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
             #mkp_ref = ...
             #return mkp_qry, mkp_ref
             raise NotImplementedError
+
+.. _Configuration:
+
+Configuration
+____________________________________________________
+After you have implemented your pose estimator, you need to tell :class:`.BaseNode` where to find its initialization
+arguments in your ROS YAML parameter file:
+
+.. code-block::
+    my_node:
+        ros__parameters:
+            pose_estimator:
+              params_file: 'config/my_node_params.yaml'
+
+See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for examples on how to format the file.
+

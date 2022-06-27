@@ -1438,7 +1438,8 @@ class BaseNode(Node, ABC):
         """Terminates the WMS and pose estimator pools
 
         .. note::
-            Call this method before destroying your node and shutting down for a clean exit.
+            Call this method after :meth:`.destroy_timers` and before destroying your node and shutting down for a
+            clean exit.
         """
         if self._pose_estimator_pool is not None:
             self.get_logger().info('Terminating pose estimator pool.')
@@ -1452,7 +1453,8 @@ class BaseNode(Node, ABC):
         """Destroys the map update timer
 
         .. note::
-            Call this method before destroying your node and shutting down for a clean exit.
+            Call this method before destroying your node and before :meth:`.terminate_pools` and shutting down for a
+            clean exit.
         """
         if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')

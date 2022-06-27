@@ -209,7 +209,7 @@ sources such as:
 
         * Large list of sources with various licensing terms, see terms of use for each service individually
 
-    * `Farm Service Agency Aerial Photography Imagery Products and Programs <https://data.nal.usda.gov/dataset/farm-service-agency-aerial-photography-imagery-products-and-programs>`_
+    * `US Geological Survey <https://www.usgs.gov/programs/national-geospatial-program/imagery>`_
 
         * US coverage only
 

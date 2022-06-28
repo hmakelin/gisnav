@@ -33,8 +33,8 @@ def main(args=None):
             pr.disable()
             s = io.StringIO()
             ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats()
-            print(s.getvalue())
+            ps.sort_stats('cumulative').print_stats(20)
+            #print(s.getvalue())
     finally:
         mock_gps_node.destroy_timers()
         mock_gps_node.terminate_pools()

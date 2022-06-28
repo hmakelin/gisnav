@@ -3,3 +3,4 @@ pydata-sphinx-theme
 autodocsumm==0.2.7
 myst_parser==0.16.1
 pygments==2.11.2  # make Sphinx highlighting work
+pytest

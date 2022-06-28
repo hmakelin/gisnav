@@ -151,7 +151,7 @@ class BaseNode(Node, ABC):
     ROS_D_POSE_ESTIMATOR_CLASS = 'gisnav.pose_estimators.loftr.LoFTRPoseEstimator'
     """Default :class:`.PoseEstimator` to use for estimating pose camera pose against reference map"""
 
-    ROS_D_POSE_ESTIMATOR_PARAMS_FILE = 'loftr_params.yaml'
+    ROS_D_POSE_ESTIMATOR_PARAMS_FILE = 'config/loftr_params.yaml'
     """Default parameter file with args for the default :class:`.PoseEstimator`'s :meth:`.PoseEstimator.initializer`"""
 
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
@@ -181,7 +181,8 @@ class BaseNode(Node, ABC):
         self._package_share_dir = package_share_dir
 
         self._wms_query = None
-        self._wms_pool = self._setup_wms_pool()
+        #self._wms_pool = self._setup_wms_pool()
+        self._wms_pool = None
 
         self._map_update_timer = self._setup_map_update_timer()
 
@@ -246,6 +247,12 @@ class BaseNode(Node, ABC):
         self._pose_guess = None
         self._time_sync = None
 
+    def __post_init__(self):
+        """Post-init configuration
+
+        Cannot do these in __init__ because need to mock some or all of the methods used here for unit tests
+        """
+        self._wms_pool = self._setup_wms_pool()
 
     # region Properties
     @property
@@ -316,13 +323,13 @@ class BaseNode(Node, ABC):
         self.__time_sync = value
 
     @property
-    def _wms_pool(self) -> Pool:
+    def _wms_pool(self) -> Optional[Pool]:
         """Web Map Service client for fetching map rasters."""
         return self.__wms_pool
 
     @_wms_pool.setter
-    def _wms_pool(self, value: Pool) -> None:
-        assert_type(value, Pool)
+    def _wms_pool(self, value: Optional[Pool]) -> None:
+        assert_type(value, get_args(Optional[Pool]))
         self.__wms_pool = value
 
     @property

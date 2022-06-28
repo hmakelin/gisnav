@@ -288,3 +288,10 @@ arguments in your ROS YAML parameter file:
 
 See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for examples on how to format the file.
 
+Testing
+====================================================
+You can run existing tests in the ``test`` folder with:
+
+.. code-block:: bash
+
+    launch_test test/test_mock_gps_node.py

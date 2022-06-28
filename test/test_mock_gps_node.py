@@ -32,7 +32,7 @@ def generate_test_description():
 
 
 class TestInit(unittest.TestCase):
-    """Tests :meth:`.MockGPSNode.__init__`"""
+    """Tests that :class:`.MockGPSNode` initializes correctly"""
 
     NODE_NAME = 'mock_gps_node'
     """This node name should match with node name in mock_gps_node.launch.py"""

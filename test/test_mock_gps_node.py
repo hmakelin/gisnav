@@ -50,6 +50,7 @@ class TestInit(unittest.TestCase):
     ]
     """Expected node subscribe topic names and message types"""
 
+    @staticmethod
     def mock_setup_wms_pool(self) -> multiprocessing.pool.Pool:
         """Returns a mock pool without attempting to connect to WMS endpoint"""
         return multiprocessing.pool.Pool()

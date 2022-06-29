@@ -169,6 +169,7 @@ target, e.g. in the ``6011_typhoon_h480`` file mentioned earlier in this section
     You can check that the messages are being published with:
 
     .. code-block::
+
         ros2 topic echo VehicleGpsPosition_PubSubTopic
 
 
@@ -281,6 +282,7 @@ After you have implemented your pose estimator, you need to tell :class:`.BaseNo
 arguments in your ROS YAML parameter file:
 
 .. code-block::
+
     my_node:
         ros__parameters:
             pose_estimator:
@@ -290,8 +292,23 @@ See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for example
 
 Testing
 ====================================================
-You can run existing tests in the ``test`` folder with:
+First you must install the dev dependencies for your workspace:
 
 .. code-block:: bash
 
-    launch_test test/test_mock_gps_node.py
+    python3 -m pip install -r requirements-dev.txt
+
+You can then run existing tests in the ``test`` folder with:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2
+    launch_test src/gisnav/test/test_mock_gps_node.py
+
+For code coverage you can use `coverage.py <https://coverage.readthedocs.io/en/6.4.1/>`_:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2
+    python3 -m coverage run src/gisnav/test/test_mock_gps_node.py
+    python3 -m coverage report

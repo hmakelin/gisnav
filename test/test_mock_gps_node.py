@@ -96,11 +96,15 @@ class TestInit(unittest.TestCase):
         assert names_and_namespaces is not None, f'Could not determine node name and namespace within timeout of ' \
                                                  f'{timeout_sec} seconds.'
 
-        name, namespace = names_and_namespaces[0]
+        found = False
+        for name, namespace in names_and_namespaces:
+            if name == self.NODE_NAME:
+                assert namespace == self.NODE_NAMESPACE, f'Node namespace "{namespace}" did not match expectation ' \
+                                                         f'"{self.NODE_NAMESPACE}".'
+                found = True
 
-        assert name == self.NODE_NAME, f'Node name "{name}" did not match expectation "{self.NODE_NAME}".'
-        assert namespace == self.NODE_NAMESPACE, f'Node namespace "{namespace}" did not match expectation ' \
-                                                 f'"{self.NODE_NAMESPACE}".'
+        assert found, f'Could not find expected name "{self.NODE_NAME}" in names and namespaces ' \
+                      f'{names_and_namespaces}.'
 
     def test_subscriber_names_and_types(self):
         """Tests that parent class :class:`.BaseNode` subscribes to the correct ROS topics"""

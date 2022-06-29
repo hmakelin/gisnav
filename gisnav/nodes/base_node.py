@@ -165,6 +165,36 @@ class BaseNode(Node, ABC):
         
     Set to '' to disable
     """
+
+    read_only = ParameterDescriptor(read_only=True)
+    _ROS_PARAMS = [
+        ('wms.url', ROS_D_WMS_URL, read_only),
+        ('wms.version', ROS_D_WMS_VERSION, read_only),
+        ('wms.layers', ROS_D_WMS_LAYERS),
+        ('wms.styles', ROS_D_WMS_STYLES),
+        ('wms.srs', ROS_D_WMS_SRS),
+        ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
+        ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
+        ('misc.variance_estimation_length', ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
+        ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
+        ('misc.blur_threshold', ROS_D_MISC_BLUR_THRESHOLD),
+        ('misc.blur_window_length', ROS_D_MISC_BLUR_WINDOW_LENGTH),
+        ('map_update.update_delay', ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
+        ('map_update.gimbal_projection', ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
+        ('map_update.max_map_radius', ROS_D_MAP_UPDATE_MAX_MAP_RADIUS),
+        ('map_update.update_map_area_threshold', ROS_D_MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
+        ('map_update.max_pitch', ROS_D_MAP_UPDATE_MAX_PITCH),
+        ('pose_estimator.class', ROS_D_POSE_ESTIMATOR_CLASS, read_only),
+        ('pose_estimator.params_file', ROS_D_POSE_ESTIMATOR_PARAMS_FILE, read_only),
+        ('debug.export_position', ROS_D_DEBUG_EXPORT_POSITION),
+        ('debug.export_projection', ROS_D_DEBUG_EXPORT_PROJECTION),
+    ]
+    """ROS parameter configuration to declare
+    
+    .. note::
+        Some parameters are declared read_only and cannot be changed at runtime because there is currently no way to 
+        reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
+    """
     # endregion
 
     def __init__(self, name: str, package_share_dir: str) -> None:
@@ -677,67 +707,16 @@ class BaseNode(Node, ABC):
 
     # region Initialization
     def __declare_ros_params(self) -> None:
-        """Declares ROS parameters
-
-        .. note::
-            Some parameters are declared read_only and cannot be changed at runtime because there is currently no
-            way to reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
-        """
-        read_only = ParameterDescriptor(read_only=True)
-        try:
-            namespace = 'wms'
-            self.declare_parameters(namespace, [
-                ('url', self.ROS_D_WMS_URL, read_only),
-                ('version', self.ROS_D_WMS_VERSION, read_only),
-                ('layers', self.ROS_D_WMS_LAYERS),
-                ('styles', self.ROS_D_WMS_STYLES),
-                ('srs', self.ROS_D_WMS_SRS),
-                ('request_timeout', self.ROS_D_WMS_REQUEST_TIMEOUT)
-            ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
-
-        try:
-            namespace = 'misc'
-            self.declare_parameters(namespace, [
-                ('max_pitch', self.ROS_D_MISC_MAX_PITCH),
-                ('variance_estimation_length', self.ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
-                ('min_match_altitude', self.ROS_D_MISC_MIN_MATCH_ALTITUDE),
-                ('blur_threshold', self.ROS_D_MISC_BLUR_THRESHOLD),
-                ('blur_window_length', self.ROS_D_MISC_BLUR_WINDOW_LENGTH),
-            ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
-
-        try:
-            namespace = 'map_update'
-            self.declare_parameters(namespace, [
-                ('update_delay', self.ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
-                ('gimbal_projection', self.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
-                ('max_map_radius', self.ROS_D_MAP_UPDATE_MAX_MAP_RADIUS),
-                ('update_map_area_threshold', self.ROS_D_MAP_UPDATE_UPDATE_MAP_AREA_THRESHOLD),
-                ('max_pitch', self.ROS_D_MAP_UPDATE_MAX_PITCH)
-            ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
-
-        try:
-            namespace = 'pose_estimator'
-            self.declare_parameters(namespace, [
-                ('class', self.ROS_D_POSE_ESTIMATOR_CLASS, read_only),
-                ('params_file', self.ROS_D_POSE_ESTIMATOR_PARAMS_FILE, read_only)
-            ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
-
-        try:
-            namespace = 'debug'
-            self.declare_parameters(namespace, [
-                ('export_position', self.ROS_D_DEBUG_EXPORT_POSITION),
-                ('export_projection', self.ROS_D_DEBUG_EXPORT_PROJECTION),
-            ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
+        """Declares ROS parameters"""
+        # Need to declare parameters one by one since declare_parameters will not declare remaining parameters if it
+        # raises a ParameterAlreadyDeclaredException
+        for param_tuple in self._ROS_PARAMS:
+            try:
+                self.declare_parameter(*param_tuple)
+                self.get_logger().debug(f'Using default value {param_tuple[1]} for ROS parameter {param_tuple[0]}')
+            except rclpy.exceptions.ParameterAlreadyDeclaredException as _:
+                # This means parameter is declared from YAML file
+                pass
 
     def _setup_wms_pool(self) -> Pool:
         """Returns WMS pool

@@ -312,5 +312,5 @@ to measure:
 .. code-block:: bash
 
     cd ~/px4_ros_com_ros2
-    python3 -m coverage run src/gisnav/test/test_mock_gps_node.py
+    python3 -m coverage run --source src/gisnav/gisnav src/gisnav/test/test_mock_gps_node.py
     python3 -m coverage report

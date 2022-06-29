@@ -147,7 +147,7 @@ class TestInit(unittest.TestCase):
                                                                       f'match expected default value ' \
                                                                       f'{self.node.ROS_D_MAP_UPDATE_MAX_PITCH}'
 
-        pose_estimator_params_file = self.node.get_parameter('pose_estimator.pose_estimator_params_file')\
+        pose_estimator_params_file = self.node.get_parameter('pose_estimator.params_file')\
             .get_parameter_value().string_value
         assert pose_estimator_params_file == self.node.ROS_D_POSE_ESTIMATOR_PARAMS_FILE, \
             f'Pose estimator parameter file name "{pose_estimator_params_file}" did not match expected default value ' \

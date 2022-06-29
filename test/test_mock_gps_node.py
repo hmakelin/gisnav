@@ -50,7 +50,7 @@ class TestInit(unittest.TestCase):
     ]
     """Expected node subscribe topic names and message types"""
 
-    MIN_MATCH_ALTITUDE = 70
+    MIN_MATCH_ALTITUDE = 80
     """Expected misc.min_match_altitude setting in ``test_typhoon_h480__ksql_airport.yaml`` file"""
 
     @staticmethod

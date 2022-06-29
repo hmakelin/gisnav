@@ -211,8 +211,7 @@ class BaseNode(Node, ABC):
         self._package_share_dir = package_share_dir
 
         self._wms_query = None
-        #self._wms_pool = self._setup_wms_pool()
-        self._wms_pool = None
+        self._wms_pool = None  # Lazy setup
 
         self._map_update_timer = self._setup_map_update_timer()
 
@@ -276,13 +275,6 @@ class BaseNode(Node, ABC):
         self._camera_data = None
         self._pose_guess = None
         self._time_sync = None
-
-    def __post_init__(self):
-        """Post-init configuration
-
-        Cannot do these in __init__ because need to mock some or all of the methods used here for unit tests
-        """
-        self._wms_pool = self._setup_wms_pool()
 
     # region Properties
     @property
@@ -597,7 +589,7 @@ class BaseNode(Node, ABC):
                 self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude AGL.')
                 return abs(self._vehicle_local_position.dist_bottom)
             elif self._vehicle_local_position.z_valid:
-                self.get_logger().warn('VehicleLocalPosition.dist_bottom was not valid, assuming '
+                self.get_logger().debug('VehicleLocalPosition.dist_bottom was not valid, assuming '
                                        'VehicleLocalPosition.z for altitude AGL.')
                 return abs(self._vehicle_local_position.z)
             else:
@@ -724,6 +716,7 @@ class BaseNode(Node, ABC):
         .. note::
             Declare ROS parameters before calling this method
         """
+        self.get_logger().info('Setting up WMS pool.')
         url = self.get_parameter('wms.url').get_parameter_value().string_value
         version = self.get_parameter('wms.version').get_parameter_value().string_value
         timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
@@ -1034,6 +1027,9 @@ class BaseNode(Node, ABC):
         if self._map_size_with_padding is None:
             self.get_logger().warn('Map size not yet available - skipping WMS request.')
             return
+
+        if self._wms_pool is None:
+            self._wms_pool = self._setup_wms_pool()
 
         # Build and send WMS request
         layers = self.get_parameter('wms.layers').get_parameter_value().string_array_value

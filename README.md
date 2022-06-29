@@ -114,7 +114,7 @@ micrortps_agent -t UDP
 Launch gscam to pipe the drone's video stream from Gazebo to ROS:
 ```bash
 ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
-    -p camera_info_url:=file://$PWD/src/gisnav//assets/camera_calibration.yaml
+    -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
 ```
 
 ## 8. Upload mission file via QGroundControl

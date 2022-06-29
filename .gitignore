@@ -14,3 +14,6 @@ log/
 
 # Built Sphinx documentation
 docs/_build/
+
+# coverage.py files
+.coverage*

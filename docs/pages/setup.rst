@@ -225,7 +225,7 @@ sources such as:
 
     * `National Land Survey of Finland <https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/orthophotos>`_
 
-        * Finland coverage only, JPEG 2000 format
+        * Finland coverage only, WMTS, JPEG 2000 format
 
 .. note::
     Commercial web-based map services are often

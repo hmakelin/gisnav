@@ -305,7 +305,9 @@ You can then run existing tests in the ``test`` folder with:
     cd ~/px4_ros_com_ros2
     launch_test src/gisnav/test/test_mock_gps_node.py
 
-For code coverage you can use `coverage.py <https://coverage.readthedocs.io/en/6.4.1/>`_:
+For code coverage you can use ``coverage.py``. See the
+`official instructions <https://coverage.readthedocs.io/en/6.4.1/source.html>`_ on how to configure what source files
+to measure:
 
 .. code-block:: bash
 

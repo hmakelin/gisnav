@@ -72,8 +72,8 @@ class SimpleFilter:
             return None
         else:
             # No need to maintain self._measurements, use online filtering (filter_update)
-            #self._measurements = self._measurements[len(self._measurements) - self._MIN_MEASUREMENTS:]
-            #self._measurements = np.vstack((self._measurements, measurement))
+            self._measurements = self._measurements[len(self._measurements) - self._MIN_MEASUREMENTS:]
+            self._measurements = np.vstack((self._measurements, measurement))
             if self._kf is None:
                 # Initialize KF
                 self._kf = KalmanFilter(
@@ -81,7 +81,7 @@ class SimpleFilter:
                     observation_matrices=self._observation_matrix,
                     initial_state_mean=self._initial_state_mean
                 )
-                self._kf = self._kf.em(self._measurements, n_iter=20)
+                self._kf = self._kf.em(self._measurements, n_iter=10)
 
                 # First pass
                 means, covariances = self._kf.filter(self._measurements)
@@ -89,6 +89,7 @@ class SimpleFilter:
             else:
                 assert self._previous_mean is not None
                 assert self._previous_covariance is not None
+                self._kf = self._kf.em(self._measurements, n_iter=5)
                 mean, covariance = self._kf.filter_update(self._previous_mean, self._previous_covariance,
                                                           measurement.squeeze())
 

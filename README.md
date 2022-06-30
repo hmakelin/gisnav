@@ -59,6 +59,12 @@ cd gisnav
 python3 -m pip install -r requirements.txt
 ```
 
+Also install your ROS dependencies for your workspace:
+```commandline
+mkdir -p ~/px4_ros_com_ros2
+rosdep install --from-paths src --ignore-src -r -y
+```
+
 ## 3. Setup LoFTR with weights
 Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the 
 [LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the `outdoor_ds.ckpt` from the .zip package and copy it into a 

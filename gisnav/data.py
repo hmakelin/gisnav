@@ -97,6 +97,7 @@ class Position:
         :param sds: Estimated standard deviations from Kalman filter
         :param original_position: The original position the means and sds were derived from
         :return: New :class:`.Position` instance with adjusted x, y and altitude values
+        :raise: :class:`.DataValueError` if cannot create valid position from inputs
         """
         sds[0:2] = sds[0:2] * original_position.xy.spherical_adjustment
         return Position(

@@ -1251,15 +1251,18 @@ class BaseNode(Node, ABC):
         if filter_output is None:
             self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
         else:
-            filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
-            filtered_position.xy.to_crs(orig_crs_str)
-            self.publish(filtered_position)
+            try:
+                filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
+                filtered_position.xy.to_crs(orig_crs_str)
+                self.publish(filtered_position)
 
-            if __debug__:
-                export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
-                if export_geojson != '':
-                    self._export_position(filtered_position.xy, fixed_camera.fov.fov,
-                                          export_geojson)
+                if __debug__:
+                    export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
+                    if export_geojson != '':
+                        self._export_position(filtered_position.xy, fixed_camera.fov.fov,
+                                              export_geojson)
+            except DataValueError as _:
+                self.get_logger().warn('Filtered position was invalid, skipping publishing this position.')
 
         assert fixed_camera is not None
         self._map_input_data_prev = self._map_input_data

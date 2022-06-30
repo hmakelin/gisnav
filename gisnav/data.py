@@ -389,6 +389,31 @@ class FOV:
     fov: Optional[GeoTrapezoid]
     c: GeoPoint
     c_pix: np.ndarray
+    scaling: float = field(init=False)
+
+    # TODO: how to estimate if fov_wgs84 is zero (cannot be projected because camera pitch too high)?
+    def _estimate_altitude_scaling(self) -> float:
+        """Estimates altitude scaling factor from field of view matched against known map
+
+        Altitude in t is in rotated and cropped map raster pixel coordinates. We can use fov_pix and fov_wgs84 to
+        find out the right scale in meters. Distance in pixels is computed from lower left and lower right corners
+        of the field of view (bottom of fov assumed more stable than top), while distance in meters is computed from
+        the corresponding WGS84 latitude and latitude coordinates.
+
+        :return: Altitude scaling factor
+        """
+        distance_in_pixels = GeoTrapezoid(self.fov_pix, crs='').length
+        distance_in_meters = self.fov.meter_length
+
+        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
+        altitude_scaling = abs(distance_in_meters / distance_in_pixels)
+
+        return altitude_scaling
+
+    def __post_init__(self):
+        """Set computed fields after initialization."""
+        # Data class is frozen so need to use object.__setattr__ to assign values
+        object.__setattr__(self, 'scaling', self._estimate_altitude_scaling())
 
 
 # noinspection PyClassHasNoInit
@@ -494,7 +519,8 @@ class FixedCamera:
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
         assert_type(self.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
         t_wgs84 = self.image_pair.ref.pix_to_wgs84 @ np.append(self.camera_position[0:2], 1)
-        t_wgs84[2] = -self.image_pair.ref.pix_to_wgs84[2][2] * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        #t_wgs84[2] = -self.image_pair.ref.pix_to_wgs84[2][2] * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
+        t_wgs84[2] = -self.fov.scaling * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
 
         # Check that we have all the values needed for a global position
         if not all([(isinstance(x, float) or np.isnan(x)) for x in t_wgs84.squeeze()]):

@@ -1070,8 +1070,9 @@ class BaseNode(Node, ABC):
         if self._map_data is not None:
             previous_map_data = self._map_data
             area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
-            ratio = min(bbox.intersection(previous_map_data.bbox).area / bbox.area,
-                        previous_map_data.bbox.intersection(previous_map_data.bbox).area / previous_map_data.bbox.area)
+            intersection1 = bbox.intersection(previous_map_data.bbox).area / bbox.area
+            intersection2 = previous_map_data.bbox.intersection(bbox).area / previous_map_data.bbox.area
+            ratio = min(intersection1, intersection2)
 
             if ratio > area_threshold:
                 return True

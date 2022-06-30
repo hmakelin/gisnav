@@ -55,6 +55,8 @@ Clone the GISNav repository into your ROS 2 workspace:
 ```bash
 mkdir -p ~/px4_ros_com_ros2/src && cd "$_"
 git clone https://github.com/hmakelin/gisnav.git
+cd gisnav
+python3 -m pip install -r requirements.txt
 ```
 
 ## 3. Setup LoFTR with weights

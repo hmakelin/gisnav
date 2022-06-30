@@ -954,7 +954,7 @@ class BaseNode(Node, ABC):
         # TODO: create MapData again by retrieving self._wms_query
         assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
         map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_))
-        self.get_logger().info(f'Map received for bbox: {map_data.bbox}.')
+        self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
         self._map_data = map_data
 
     def _wms_pool_worker_error_callback(self, e: BaseException) -> None:

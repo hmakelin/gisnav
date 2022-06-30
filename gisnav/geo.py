@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 import numpy as np
+import warnings
+warnings.filterwarnings(action='ignore', category=UserWarning, message='Geometry is in a geographic CRS.')
 
 from abc import ABC
 from geopandas import GeoSeries

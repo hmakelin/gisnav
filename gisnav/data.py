@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 import os
 import math
+import warnings
+warnings.filterwarnings(action='ignore', category=UserWarning, message='Gimbal lock detected.')
 
 from xml.etree import ElementTree
 from typing import Optional

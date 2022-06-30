@@ -74,5 +74,8 @@ class MockGPSNode(BaseNode):
             self.declare_parameters(namespace, [
                 ('mock_gps_selection', self.MISC_MOCK_GPS_SELECTION)
             ])
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as e:
-            self.get_logger().warn(str(e))
+            self.get_logger().debug(f'Using default value "{self.MISC_MOCK_GPS_SELECTION}" for ROS parameter '
+                                    f'"mock_gps_selection".')
+        except rclpy.exceptions.ParameterAlreadyDeclaredException as _:
+            # This means parameter is declared from YAML file
+            pass

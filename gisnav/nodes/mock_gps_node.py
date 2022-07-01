@@ -41,7 +41,7 @@ class MockGPSNode(BaseNode):
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
 
         msg = VehicleGpsPosition()
-        msg.timestamp = position.timestamp
+        msg.timestamp = self._synchronized_time  #position.timestamp
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan

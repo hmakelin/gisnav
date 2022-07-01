@@ -402,8 +402,12 @@ class FOV:
         the corresponding WGS84 latitude and latitude coordinates.
 
         :return: Altitude scaling factor
+        :raise: DataValueError if FOV is not a valid (convex isoscalar) trapezoid
         """
-        distance_in_pixels = GeoTrapezoid(self.fov_pix, crs='').length
+        try:
+            distance_in_pixels = GeoTrapezoid(self.fov_pix, crs='').length
+        except GeoValueError as _:
+            raise DataValueError('Could not create a valid FOV.')
         distance_in_meters = self.fov.meter_length
 
         # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
@@ -455,6 +459,9 @@ class FixedCamera:
             return fov
         except GeoValueError as _:
             # Not a valid field of view
+            return None
+        except DataValueError as _:
+            # Could not create a valid FOV
             return None
 
     def _estimate_attitude(self) -> np.ndarray:
@@ -556,7 +563,7 @@ class FixedCamera:
             raise DataValueError('H was not invertible')
         object.__setattr__(self, 'camera_position', -self.pose.r.T @ self.pose.t)
 
-        fov = self._estimate_fov()
+        fov = self._estimate_fov()  # Raises DataValueError if can't estimate valid FOV
         if fov is not None:
             object.__setattr__(self, 'fov', fov)  # Need to do before calling self._estimate_position
         else:

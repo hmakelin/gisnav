@@ -84,7 +84,7 @@ class BaseNode(Node, ABC):
         :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
 
-    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 20
+    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 5
     """Default observation series length for smoothing and estimating the variance of the position estimate"""
 
     ROS_D_MISC_MIN_MATCH_ALTITUDE = 80

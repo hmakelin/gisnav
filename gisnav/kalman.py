@@ -12,7 +12,7 @@ class SimpleFilter:
     Implements 3D model with position and velocity amounting to a total of 6 state variables. Assumes only position is
     observed.
     """
-    _MIN_MEASUREMENTS = 20
+    _MIN_MEASUREMENTS = 5
     """Default minimum measurements before outputting an estimate"""
 
     def __init__(self, window_length=_MIN_MEASUREMENTS):
@@ -37,7 +37,7 @@ class SimpleFilter:
             [0, 0, 0, 0, 1, 0],  # z
         ])
         self._kf = None  # Initialized when enough measurements are available
-        self._window_length = window_length
+        self._window_length = max(window_length, self._MIN_MEASUREMENTS)
         self._previous_mean = None
         self._previous_covariance = None
 
@@ -72,7 +72,7 @@ class SimpleFilter:
             return None
         else:
             # No need to maintain self._measurements, use online filtering (filter_update)
-            self._measurements = self._measurements[len(self._measurements) - self._MIN_MEASUREMENTS:]
+            self._measurements = self._measurements[len(self._measurements) - self._window_length:]
             self._measurements = np.vstack((self._measurements, measurement))
             if self._kf is None:
                 # Initialize KF

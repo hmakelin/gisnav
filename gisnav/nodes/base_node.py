@@ -507,6 +507,23 @@ class BaseNode(Node, ABC):
 
     # region Computed Properties
     @property
+    def _r_guess(self) -> Optional[np.ndarray]:
+        """Gimbal rotation matrix guess (based on :class:`px4_msgs.GimbalDeviceSetAttitude` message)
+
+        .. note::
+            Should be roughly same as rotation matrix stored in :py:attr:`._pose_guess`, even though it is derived via
+            a different route. If gimbal is not stabilized to its set position, the rotation matrix will be different.
+        """
+        if self._gimbal_set_attitude is None:
+            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
+            return None
+
+        assert_type(self._gimbal_set_attitude, Attitude)
+        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+
+        return gimbal_set_attitude.r
+
+    @property
     def _wms_results_pending(self) -> bool:
         """True if there are pending results"""
         return not self._wms_query.result.ready() if self._wms_query is not None else False
@@ -681,6 +698,7 @@ class BaseNode(Node, ABC):
         arguments to :meth:`._estimate`.
         """
         input_data = InputData(
+            r_guess=self._r_guess,  # TODO: handle None
             ground_elevation=self._ground_elevation_amsl  # TODO: handle None
         )
 
@@ -992,7 +1010,6 @@ class BaseNode(Node, ABC):
             return None
 
         translation = -gimbal_set_attitude.r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
-        mock_image_pair = self._mock_image_pair(origin)
 
         try:
             pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
@@ -1003,7 +1020,7 @@ class BaseNode(Node, ABC):
         altitude = self._altitude_agl
         if altitude is not None:
             try:
-                mock_fixed_camera = FixedCamera(pose=pose, image_pair=mock_image_pair,
+                mock_fixed_camera = FixedCamera(pose=pose, image_pair=self._mock_image_pair(origin),
                                                 ground_elevation=altitude, timestamp=self._synchronized_time)
             except DataValueError as _:
                 self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
@@ -1231,6 +1248,10 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
             return None
 
+        if not self._is_valid_estimate(fixed_camera, self._pose_estimation_query.input_data):
+            self.get_logger().warn('Estimate did not pass post-estimation validity check, skipping this frame.')
+            return None
+
         assert fixed_camera is not None
         # noinspection PyUnreachableCode
         if __debug__:
@@ -1364,6 +1385,30 @@ class BaseNode(Node, ABC):
             image_pair=image_pair,
             input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
         )
+
+    def _is_valid_estimate(self, fixed_camera: FixedCamera, input_data: InputData) -> bool:
+        """Returns True if the estimate is valid"""
+        if self._r_guess is None:
+            self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
+            return False
+
+        r_estimate = Rotation.from_matrix(fixed_camera.pose.r)
+        r_guess = Rotation.from_matrix(input_data.r_guess)
+
+        # Adjust for map rotation
+        camera_yaw = fixed_camera.image_pair.ref.rotation
+        camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
+        r_guess *= camera_yaw
+
+        magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
+
+        if magnitude > np.pi/8:  # TODO: make threshold configurable
+            self.get_logger().warn(f'Estimated rotation difference to expected was too high (magnitude {magnitude}).')
+            return False
+        else:
+            return True
+
+
     # endregion
 
     # region Shared Logic

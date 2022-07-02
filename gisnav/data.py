@@ -210,7 +210,7 @@ class MapData(_ImageHolder):
 class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
-    rotation: float
+    rotation: float                 # radians
     crop: Dim                       # Same value will also be found at image.dim
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
@@ -378,6 +378,9 @@ class Pose:
 @dataclass(frozen=True)
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing pose estimates"""
+    r_guess: Optional[np.ndarray]
+    """Camera expected attitude"""
+
     ground_elevation: Optional[float]
     """Assumed elevation of ground plane above mean sea level (AMSL)"""
 

@@ -76,6 +76,9 @@ class BaseNode(Node, ABC):
     ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
     """Default WMS client request image format"""
 
+    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
+    """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
+
     ROS_D_MISC_MAX_PITCH = 30
     """Default maximum camera pitch from nadir in degrees for attempting to estimate pose against reference map
 
@@ -174,6 +177,7 @@ class BaseNode(Node, ABC):
         ('wms.styles', ROS_D_WMS_STYLES),
         ('wms.srs', ROS_D_WMS_SRS),
         ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
+        ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
         ('misc.variance_estimation_length', ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
         ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
@@ -1402,8 +1406,12 @@ class BaseNode(Node, ABC):
 
         magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 
-        if magnitude > np.pi/8:  # TODO: make threshold configurable
-            self.get_logger().warn(f'Estimated rotation difference to expected was too high (magnitude {magnitude}).')
+        threshold = self.get_parameter('misc.attitude_deviation_threshold').get_parameter_value().integer_value
+        threshold = np.radians(threshold)
+
+        if magnitude > threshold:
+            self.get_logger().warn(f'Estimated rotation difference to expected was too high (magnitude '
+                                   f'{np.degrees(magnitude)}).')
             return False
         else:
             return True

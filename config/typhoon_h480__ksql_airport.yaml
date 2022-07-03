@@ -10,6 +10,7 @@ mock_gps_node:
       request_timeout: 10
     misc:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
+      attitude_deviation_threshold: 10  # degrees
       max_pitch: 30  # 30  # Used by _should_match
       variance_estimation_length: 5
       min_match_altitude: 80

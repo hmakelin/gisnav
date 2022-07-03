@@ -12,6 +12,7 @@ mock_gps_node:
       request_timeout: 10
     misc:
       mock_gps_selection: 1
+      attitude_deviation_threshold: 10
       #max_pitch: 30
       variance_estimation_length: 20
       #min_match_altitude: 80

@@ -76,7 +76,7 @@ class BaseNode(Node, ABC):
     ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
     """Default WMS client request image format"""
 
-    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
+    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 5
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
 
     ROS_D_MISC_MAX_PITCH = 30
@@ -87,7 +87,7 @@ class BaseNode(Node, ABC):
         :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
 
-    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 5
+    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 15
     """Default observation series length for smoothing and estimating the variance of the position estimate"""
 
     ROS_D_MISC_MIN_MATCH_ALTITUDE = 80

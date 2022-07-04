@@ -1279,7 +1279,8 @@ class BaseNode(Node, ABC):
             try:
                 filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
                 filtered_position.xy.to_crs(orig_crs_str)
-                self.publish(filtered_position)
+                fixed_camera.set_position(filtered_position)
+                self.publish(fixed_camera)
 
                 if __debug__:
                     export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value

@@ -6,7 +6,7 @@ import rclpy
 from px4_msgs.msg import VehicleGpsPosition
 
 from gisnav.nodes.base_node import BaseNode
-from gisnav.data import Position
+from gisnav.data import FixedCamera
 from gisnav.assertions import assert_type
 
 
@@ -31,12 +31,13 @@ class MockGPSNode(BaseNode):
                                                                      self.VEHICLE_GPS_POSITION_TOPIC_NAME,
                                                                      rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
 
-    def publish(self, position: Position) -> None:
-        """Publishes position as :class:`px4_msgs.msg.VehicleGpsPosition` message
+    def publish(self, fixed_camera: FixedCamera) -> None:
+        """Publishes drone position as a :class:`px4_msgs.msg.VehicleGpsPosition` message
 
-        :param position: Position to publish
+        :param fixed_camera: Estimated fixed camera
         """
-        assert_type(position, Position)
+        assert_type(fixed_camera, FixedCamera)
+        position = fixed_camera.position
 
         mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
 
@@ -61,7 +62,7 @@ class MockGPSNode(BaseNode):
         msg.vel_ned_valid = False
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
-        msg.heading = np.nan
+        msg.heading = position.attitude.yaw + fixed_camera.image_pair.ref.rotation # np.nan
         msg.heading_offset = np.nan
         msg.selected = mock_gps_selection
 

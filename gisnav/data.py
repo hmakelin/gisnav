@@ -434,13 +434,18 @@ class FixedCamera:
     """
     image_pair: ImagePair
     pose: Pose
+    timestamp: int
     ground_elevation: Optional[float]
     fov: FOV = field(init=False)
     position: Position = field(init=False)
     h: np.ndarray = field(init=False)
     inv_h: np.ndarray = field(init=False)
     camera_position: np.ndarray = field(init=False)
-    timestamp: int
+
+    def set_position(self, value: Position):
+        """Swaps in new position value (e.g. from Kalman filter)"""
+        assert_type(value, Position)
+        object.__setattr__(self, 'position', value)
 
     def _estimate_fov(self) -> Optional[FOV]:
         """Estimates field of view and principal point in both pixel and WGS84 coordinates

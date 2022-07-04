@@ -76,7 +76,7 @@ class BaseNode(Node, ABC):
     ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
     """Default WMS client request image format"""
 
-    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 5
+    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
 
     ROS_D_MISC_MAX_PITCH = 30
@@ -92,12 +92,6 @@ class BaseNode(Node, ABC):
 
     ROS_D_MISC_MIN_MATCH_ALTITUDE = 80
     """Default minimum ground altitude in meters under which matches against map will not be attempted"""
-
-    ROS_D_MISC_BLUR_THRESHOLD = 2
-    """Default threshold standard deviation for Laplacian image blur detector"""
-
-    ROS_D_MISC_BLUR_WINDOW_LENGTH = 20
-    """Default window length for rolling image blur filtering"""
 
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
     """Default delay in seconds for throttling WMS GetMap requests
@@ -181,8 +175,6 @@ class BaseNode(Node, ABC):
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
         ('misc.variance_estimation_length', ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
         ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
-        ('misc.blur_threshold', ROS_D_MISC_BLUR_THRESHOLD),
-        ('misc.blur_window_length', ROS_D_MISC_BLUR_WINDOW_LENGTH),
         ('map_update.update_delay', ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
         ('map_update.gimbal_projection', ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
         ('map_update.max_map_radius', ROS_D_MAP_UPDATE_MAX_MAP_RADIUS),
@@ -256,9 +248,6 @@ class BaseNode(Node, ABC):
         self._pose_estimator, self._pose_estimator_pool = self._setup_pose_estimation_pool(pose_estimator_params_file)
         self._pose_estimation_query = None  # Must check for None when using this
 
-        # Stored blur values for blur detection
-        self._blurs = None
-
         # Kalman filter (initialized once enough measurements available)
         window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
         self._kf = SimpleFilter(window_length)
@@ -300,16 +289,6 @@ class BaseNode(Node, ABC):
     def _kf(self, value: SimpleFilter) -> None:
         assert_type(value, SimpleFilter)
         self.__kf = value
-
-    @property
-    def _blurs(self) -> Optional[np.ndarray]:
-        """Array of image blur values for filtering images based on blur."""
-        return self.__blurs
-
-    @_blurs.setter
-    def _blurs(self, value: Optional[np.ndarray]) -> None:
-        assert_type(value, get_args(Optional[np.ndarray]))
-        self.__blurs = value
 
     @property
     def _pose_guess(self) -> Optional[Pose]:
@@ -1300,8 +1279,7 @@ class BaseNode(Node, ABC):
         """Determines whether :meth:`._estimate` should be called
 
         Match should be attempted if (1) a reference map has been retrieved, (2) there are no pending match results,
-        (3) camera pitch is not too high (e.g. facing horizon instead of nadir), (4) drone is not flying too low, and
-        (5) image is not too blurry.
+        (3) camera pitch is not too high (e.g. facing horizon instead of nadir), and (4) drone is not flying too low.
 
         :param img: Image from which to estimate pose
         :return: True if pose estimation be attempted
@@ -1329,47 +1307,7 @@ class BaseNode(Node, ABC):
                                    f'({min_alt}) or could not be determined. Skipping pose estimation.')
             return False
 
-        # Check condition (5) - is image too blurry?
-        blur = cv2.Laplacian(img, cv2.CV_64F).var()
-        self._push_blur(blur)
-        if self._image_too_blurry(blur):
-            self.get_logger().debug(f'Camera frame too blurry relative to others. Skipping pose estimation.')
-            return False
-
         return True
-
-    def _image_too_blurry(self, blur: float) -> bool:
-        """Returns True if image is deemed too blurry for matching
-
-        :param blur: Image blur value
-        :return: True if image is too blurry
-        """
-        blur_threshold = self.get_parameter('misc.blur_threshold').get_parameter_value().double_value
-        sd = np.std(self._blurs)
-        mn = np.mean(self._blurs)
-        threshold = mn - blur_threshold * sd
-        return blur < threshold
-
-    def _push_blur(self, blur: float) -> None:
-        """Pushes blur estimates to :py:attr:`._blurs` queue
-
-        Pops the oldest estimate from the queue if full
-
-        :param blur: Blur value
-        """
-        if self._blurs is None:
-            self._blurs = np.array([blur])
-        else:
-            window_length = self.get_parameter('misc.blur_window_length').get_parameter_value().integer_value
-            assert window_length > 0, f'Window length for storing blur should be >0 ({window_length} provided).'
-            obs_count = len(self._blurs)
-            assert 0 <= obs_count <= window_length
-            if obs_count == window_length:
-                # Pop oldest value
-                self._blurs = np.delete(self._blurs, 0, 0)
-
-            # Add latest value
-            self._blurs = np.append(self._blurs, blur)
 
     def _estimate(self, image_pair: ImagePair, input_data: InputData) -> None:
         """Instructs the pose estimator to estimate the pose between the image pair

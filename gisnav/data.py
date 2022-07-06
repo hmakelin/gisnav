@@ -46,23 +46,10 @@ class Position:
 
         :raise: :class:`.DataValueError` if r or t is invalid
         """
-        assert all([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd]) \
-               or not any([self.eph, self.epv, self.x_sd, self.y_sd, self.z_sd])
-
         assert self.z_ground is not None
 
         if self.z_ground < 0:
             raise DataValueError(f'Ground altitude was negative {self.z_ground}.')
-
-    @property
-    def eph(self) -> Optional[float]:
-        """Standard deviation of horizontal error in meters (for GNSS/GPS)"""
-        return max(self.x_sd, self.y_sd) if all([self.x_sd, self.y_sd]) else None
-
-    @property
-    def epv(self) -> Optional[float]:
-        """Standard deviation of vertical error in meters (for GNSS/GPS)"""
-        return self.z_sd if self.z_sd is not None else None
 
     @property
     def lat(self) -> float:

@@ -92,15 +92,6 @@ geo module
    :special-members: __init__
    :show-inheritance:
 
-kalman module
-=================================================
-.. automodule:: gisnav.kalman
-   :autosummary:
-   :members:
-   :undoc-members:
-   :special-members: __init__
-   :show-inheritance:
-
 assertions module
 =================================================
 .. automodule:: gisnav.assertions

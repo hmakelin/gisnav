@@ -644,9 +644,6 @@ class BaseNode(Node, ABC):
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
                 z_ground=self._altitude_agl,  # not None
                 z_amsl=self._vehicle_global_position.alt,
-                x_sd=None,
-                y_sd=None,
-                z_sd=None,
                 attitude=self._vehicle_attitude,  # TODO: is this correct?
                 timestamp=self._synchronized_time
             )

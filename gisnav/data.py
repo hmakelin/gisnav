@@ -27,8 +27,7 @@ TimePair = namedtuple('TimePair', 'local foreign')
 class Position:
     """Represents a 3D position with geographical xy-coordinates and an altitude expressed in meters
 
-    Ground altitude is required while altitude above mean sea level (AMSL) is optional. If position is e.g. output from
-    a Kalman filter, x_sd, y_sd and z_sd properties can also be provided.
+    Ground altitude is required while altitude above mean sea level (AMSL) is optional.
 
     .. note::
         (x, y, z) coordinates are in ENU frame
@@ -38,9 +37,6 @@ class Position:
     attitude: Attitude          # attitude in NED frame
     timestamp: int              # Reference timestamp of position
     z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known (positive)
-    x_sd: Optional[float]       # Standard deviation of error in x (latitude) dimension
-    y_sd: Optional[float]       # Standard deviation of error in y (longitude) dimension
-    z_sd: Optional[float]       # Standard deviation of error in z (altitude) dimension
 
     _KALMAN_FILTER_EPSG_CODE = 'epsg:3857'
     """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
@@ -518,9 +514,6 @@ class FixedCamera:
             xy=GeoPoint(lon, lat, crs),  # lon-lat order
             z_ground=alt,
             z_amsl=alt + ground_elevation if ground_elevation is not None else None,
-            x_sd=None,
-            y_sd=None,
-            z_sd=None,
             attitude=self._estimate_attitude(),
             timestamp=self.image_pair.qry.timestamp
         )

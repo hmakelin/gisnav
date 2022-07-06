@@ -28,7 +28,6 @@ from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from gisnav.assertions import assert_type, assert_len
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
-from gisnav.kalman import SimpleFilter
 
 
 class BaseNode(Node, ABC):
@@ -86,9 +85,6 @@ class BaseNode(Node, ABC):
         :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH` 
         :py:attr:`.ROS_D_MAP_UPDATE_GIMBAL_PROJECTION`
     """
-
-    ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH = 15
-    """Default observation series length for smoothing and estimating the variance of the position estimate"""
 
     ROS_D_MISC_MIN_MATCH_ALTITUDE = 80
     """Default minimum ground altitude in meters under which matches against map will not be attempted"""
@@ -173,7 +169,6 @@ class BaseNode(Node, ABC):
         ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
         ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
-        ('misc.variance_estimation_length', ROS_D_MISC_VARIANCE_ESTIMATION_LENGTH, read_only),
         ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
         ('map_update.update_delay', ROS_D_MAP_UPDATE_UPDATE_DELAY, read_only),
         ('map_update.gimbal_projection', ROS_D_MAP_UPDATE_GIMBAL_PROJECTION),
@@ -248,10 +243,6 @@ class BaseNode(Node, ABC):
         self._pose_estimator, self._pose_estimator_pool = self._setup_pose_estimation_pool(pose_estimator_params_file)
         self._pose_estimation_query = None  # Must check for None when using this
 
-        # Kalman filter (initialized once enough measurements available)
-        window_length = self.get_parameter('misc.variance_estimation_length').get_parameter_value().integer_value
-        self._kf = SimpleFilter(window_length)
-
         # PX4-ROS 2 bridge message stores
         #self._camera_info = None  # Not used, CameraInfo subscription is destroyed once self._camera_data is assigned
         self._vehicle_local_position = None
@@ -279,16 +270,6 @@ class BaseNode(Node, ABC):
     def _package_share_dir(self, value: str) -> None:
         assert_type(value, str)
         self.__package_share_dir = value
-
-    @property
-    def _kf(self) -> SimpleFilter:
-        """Kalman filter for improved position and variance estimation"""
-        return self.__kf
-
-    @_kf.setter
-    def _kf(self, value: SimpleFilter) -> None:
-        assert_type(value, SimpleFilter)
-        self.__kf = value
 
     @property
     def _pose_guess(self) -> Optional[Pose]:
@@ -1249,27 +1230,13 @@ class BaseNode(Node, ABC):
             cv2.imshow("Projected FOV", img)
             cv2.waitKey(1)
 
-        # Get output from Kalman filter
-        orig_crs_str = fixed_camera.position.xy.crs
-        filter_output = self._kf.filter(fixed_camera.position.to_array())
-        if filter_output is None:
-            self.get_logger().warn('Waiting to get more data to estimate position error, not publishing yet.')
-        else:
-            try:
-                filtered_position = Position.from_filtered_output(*filter_output, fixed_camera.position)
-                filtered_position.xy.to_crs(orig_crs_str)
-                fixed_camera.set_position(filtered_position)
-                self.publish(fixed_camera)
+            # Export GeoJSON
+            export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
+            if export_geojson != '':
+                self._export_position(fixed_camera.position.xy, fixed_camera.fov.fov, export_geojson)
 
-                if __debug__:
-                    export_geojson = self.get_parameter('debug.export_position').get_parameter_value().string_value
-                    if export_geojson != '':
-                        self._export_position(filtered_position.xy, fixed_camera.fov.fov,
-                                              export_geojson)
-            except DataValueError as _:
-                self.get_logger().warn('Filtered position was invalid, skipping publishing this position.')
+        self.publish(fixed_camera)
 
-        assert fixed_camera is not None
         self._map_input_data_prev = self._map_input_data
         self._fixed_camera_prev = fixed_camera
     # endregion
@@ -1352,8 +1319,14 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Estimated rotation difference to expected was too high (magnitude '
                                    f'{np.degrees(magnitude)}).')
             return False
-        else:
-            return True
+
+        roll = r_guess.as_euler('xyz', degrees=True)[0]
+        if roll > threshold/2:  # TODO: have separate configuble threshold?
+            self.get_logger().warn(f'Estimated roll difference to expected was too high (magnitude '
+                                   f'{roll}).')
+            return False
+
+        return True
 
 
     # endregion

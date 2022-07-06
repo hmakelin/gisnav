@@ -5,7 +5,6 @@ torch
 scipy>=1.4.0
 OWSLib==0.25.0
 pyyaml
-pykalman
 
 # Geospatial objects handling
 geopandas

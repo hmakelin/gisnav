@@ -86,32 +86,6 @@ class Position:
         return np.append(np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
                          np.array(self.z_ground)).reshape(1, 3)
 
-    @staticmethod
-    def from_filtered_output(means: np.ndarray, sds: np.ndarray, original_position: Position) -> Position:
-        """Creates a Position from :class:`.SimpleFilter` output
-
-        .. note::
-            Assumes these are smoothed from output given by :meth:`.to_array`
-
-        :param means: Estimated means from Kalman filter
-        :param sds: Estimated standard deviations from Kalman filter
-        :param original_position: The original position the means and sds were derived from
-        :return: New :class:`.Position` instance with adjusted x, y and altitude values
-        :raise: :class:`.DataValueError` if cannot create valid position from inputs
-        """
-        sds[0:2] = sds[0:2] * original_position.xy.spherical_adjustment
-        return Position(
-            xy=GeoPoint(*means[0:2], Position._KALMAN_FILTER_EPSG_CODE),
-            z_ground=means[2],
-            z_amsl=original_position.z_amsl + (means[2] - original_position.z_ground) \
-                if original_position.z_amsl is not None else None,
-            x_sd=sds[0],
-            y_sd=sds[1],
-            z_sd=sds[2],
-            attitude=original_position.attitude,
-            timestamp=original_position.timestamp
-        )
-
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

@@ -12,7 +12,6 @@ mock_gps_node:
       mock_gps_selection: 1 # declared by MockGPSNode, not by base class
       attitude_deviation_threshold: 10 # degrees
       max_pitch: 30  # 30  # Used by _should_match
-      variance_estimation_length: 15
       min_match_altitude: 80
     map_update:
       update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True

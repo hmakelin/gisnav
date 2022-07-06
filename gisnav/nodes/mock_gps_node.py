@@ -50,8 +50,8 @@ class MockGPSNode(BaseNode):
         msg.lon = int(position.lon * 1e7)
         msg.alt = int(position.z_amsl * 1e3)
         msg.alt_ellipsoid = msg.alt
-        msg.eph = position.eph
-        msg.epv = position.epv
+        msg.eph = 10.0 #position.eph
+        msg.epv = 3.0 #position.epv
         msg.hdop = 0.0
         msg.vdop = 0.0
         msg.vel_m_s = np.nan

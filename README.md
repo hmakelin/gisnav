@@ -114,7 +114,7 @@ param set SENS_GPS_MASK 2
 > 
 > The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its 
 > default configuration seems to be more accurate in estimating vertical position than horizontal position, so the 
-> example has lower tolerances for vertical position error.
+> example has lower tolerance for vertical position error.
 > 
 > *_camera yaw rotation speed may be less of an issue if a rotation agnostic neural network is used (not the case by 
 > default)_

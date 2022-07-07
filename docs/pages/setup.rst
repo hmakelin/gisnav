@@ -152,7 +152,7 @@ And run ``gscam`` with your configuration when PX4 Gazebo SITL is also running:
 .. code-block:: bash
 
     ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
-        -p camera_info_url:=file://$PWD/src/gisnav/test/assets//camera_calibration.yaml
+        -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
 
 You can also try `gscam2 <https://github.com/clydemcqueen/gscam2>`_:
 
@@ -162,7 +162,7 @@ You can also try `gscam2 <https://github.com/clydemcqueen/gscam2>`_:
     git clone https://github.com/clydemcqueen/gscam2 src
     colcon build --packages-select gscam2
     ros2 run gscam2 gscam_main --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
-        -p camera_info_url:=file://$PWD/src/gisnav/test/assets//camera_calibration.yaml
+        -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
 
 
 .. _`WMS endpoint`:

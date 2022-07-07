@@ -45,7 +45,7 @@ python3 -m pip install -r requirements.txt
 ```
 
 Install ROS dependencies and build the GISNav package:
-```commandline
+```bash
 cd ~/px4_ros_com_ros2
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-select gisnav
@@ -91,7 +91,7 @@ make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 You should then adjust the following parameters to make PX4 work with GISNav, either via the PX4 shell, via 
 QGroundControl, or in the `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480` file before 
 making the build target:
-```commandline
+```
 param set NAV_ACC_RAD 20.0
 param set MPC_YAWRAUTO_MAX 10.0
 
@@ -170,14 +170,15 @@ position of the drone instead. You should also see a visualization of the estima
 
 By default PX4 is blending the primary GPS and the (secondary) mock GPS position estimate. You can then try disabling 
 the primary GPS from your PX4 shell:
-```commandline
+```
 param set SENS_GPS_PRIME 1
 ```
 
 The Typhoon H480 drone should now continue to complete its mission *GNSS-free* with GISNav substituting for GPS.
 
 You can check if PX4 is receiving the mock GPS position estimates by typing the following in the PX4 shell:
-```commandline
+```
+```
 listener vehicle_gps_position
 ```
 

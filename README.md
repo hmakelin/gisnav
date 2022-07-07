@@ -1,16 +1,16 @@
 # Introduction
 > **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated
-> with [PX4](https://px4.io/) in a software-in-the-loop (SITL) simulation environment.
+> with PX4 in a software-in-the-loop (SITL) simulation environment.
 
-GISNav is a [ROS 2](https://docs.ros.org/) package that enables map-based visual navigation for airborne drones.
+GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones.
 
 GISNav provides an *accurate* **global** position for an airborne drone by visually comparing frames from the drone's 
 nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying 
-[GIS](https://en.wikipedia.org/wiki/Geographic_information_system) system.
+GIS system.
 
 # Mock GPS Example
 The below steps demonstrate how GISNav's example `MockGPSNode` ROS 2 node extension enables GNSS-free flight with PX4 
-Autopilot's [Mission mode](https://docs.px4.io/v1.12/en/flight_modes/mission.html).
+Autopilot's [Mission mode](https://docs.px4.io/v1.12/en/flight_modes/mission.html) in a Gazebo SITL simulation.
 
 ## Prerequisites
 This example requires the following simulation setup:
@@ -27,59 +27,44 @@ This example requires the following simulation setup:
     * ``VehicleGpsPosition``
 * A [WMS](https://en.wikipedia.org/wiki/Web_Map_Service) endpoint for high-resolution aerial or satellite imagery with 
 coverage over the flight area (San Carlos KSQL airport in CA, USA)
-* ROS 2 [``gscam`` package](https://index.ros.org/r/gscam/) installed
-* *Strongly recommended:* NVIDIA GPU and [CUDA](https://developer.nvidia.com/cuda-toolkit).
+* ROS 2 [gscam](https://index.ros.org/r/gscam/) or [gscam2](https://github.com/clydemcqueen/gscam2) 
+package installed
+* *Strongly recommended:* NVIDIA GPU and CUDA
 
-## 1. Source ROS 2 workspace
-Build your ROS 2 workspace if you have not yet done so:
+
+## Setup GISNav
+Clone the GISNav repository into your 
+[PX4-ROS 2 workspace](https://docs.px4.io/main/en/ros/ros2_comm.html#build-ros-2-workspace) and install Python 
+dependencies:
 ```bash
 cd ~/px4_ros_com_ros2
-./src/px4_ros_com/scripts/build_ros2_workspace.bash
-```
-
-Otherwise, you can source your workspace instead:
-```bash
-cd ~/px4_ros_com_ros2
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
-```
-
-If you work with the ROS 2 workspace often, consider also sourcing it in your `~/.bashrc`:
-```bash
-echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
-echo "source ~/px4_ros_com_ros2/install/setup.bash" >> ~/.bashrc
-```
-
-## 2. Setup GISNav
-Clone the GISNav repository into your ROS 2 workspace:
-```bash
-mkdir -p ~/px4_ros_com_ros2/src && cd "$_"
+mkdir src && cd "$_"
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
 python3 -m pip install -r requirements.txt
 ```
 
-Also install your ROS dependencies for your workspace:
+Install ROS dependencies and build the GISNav package:
 ```commandline
-mkdir -p ~/px4_ros_com_ros2
+cd ~/px4_ros_com_ros2
 rosdep install --from-paths src --ignore-src -r -y
+colcon build --packages-select gisnav
 ```
 
-## 3. Setup LoFTR with weights
-Download the LoFTR submodule and the **dual-softmax** (_ds suffix) outdoor weights as described in the 
+## Setup LoFTR network with weights
+Download the LoFTR submodule:
+```bash
+cd ~/px4_ros_com_ros2/src/gisnav && git submodule update LoFTR
+```
+
+Download the **dual-softmax** (_ds suffix) outdoor weights as described in the 
 [LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the `outdoor_ds.ckpt` from the .zip package and copy it into a 
 new `weights` folder:
 ```bash
-cd ~/px4_ros_com_ros2/src/gisnav && \
-    git submodule update LoFTR
-
-# Download outdoor_ds.ckpt as described above
-# ...
-
 mkdir weights && cp ~/Downloads/outdoor_ds.ckpt ./weights
 ```
 
-## 4. Configure WMS endpoint
+## Configure WMS endpoint
 Configure the WMS ROS parameters in the `config/typhoon_h480__ksql_airport.yml` file. You must have a WMS endpoint for 
 high resolution aerial or satellite imagery:
 ```yaml
@@ -95,71 +80,115 @@ mock_gps_node:
       request_timeout: 10
 ```
 
-## 5. Run GISNav
-Run the included ``mock_gps_node`` ROS 2 node with the example configuration:
+## Run Gazebo simulation
+You should run the `px4_sitl_rtps gazebo_typhoon_h480__ksql_airport` 
+[build target](https://docs.px4.io/v1.12/en/dev_setup/building_px4.html#px4-make-build-targets):
 ```bash
-cd ~/px4_ros_com_ros2
-ros2 run gisnav mock_gps_node --ros-args --log-level info \
-    --params-file src/gisnav/config/typhoon_h480__ksql_airport.yaml
-```
-
-You should see GISNav start printing log messages into your console. It will not yet estimate your position because the 
-Gazebo simulation is not running (see next step).
-
-## 6. Run Gazebo simulation
-Depending on how your PX4 is setup, you would run commands such as these to start the Gazebo simulation:
-```bash
-cd PX4-Autopilot
+cd ~/PX4-Autopilot
 make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 ```
 
-## 7. Launch microRTPS agent and gscam
+You should then adjust the following parameters to make PX4 work with GISNav, either via the PX4 shell, via 
+QGroundControl, or in the `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480` file before 
+making the build target:
+```commandline
+param set NAV_ACC_RAD 20.0
+param set MPC_YAWRAUTO_MAX 10.0
+
+param set-default COM_POS_FS_DELAY 5
+
+param set EKF2_GPS_P_NOISE 10
+param set EKF2_GPS_V_NOISE 3
+
+param set SENS_GPS_MASK 2
+```
+
+> **NOTE:**  This is a sample configuration that seems to work, but you may experiment with the parameters. 
+> 
+> It is important to make the waypoint turns softer and/or to reduce the yaw rate especially if the camera has some 
+> pitch (is not completely nadir-facing) to ensure the field of view does not move or rotate* too quickly for GISNav. 
+> Otherwise GISNav may lose track of position for long enough for the position delay failsafe to trigger before GISNav 
+> can find the drone again. Increasing the position failsafe delay helps if your GPU is a bit slower or GISNav for some 
+> reason cannot produce a position estimate for a number of subsequent frames for one reason or another. However as a 
+> failsafe parameter it should not be made unreasonably large.
+> 
+> The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its 
+> default configuration seems to be more accurate in estimating vertical position than horizontal position, so the 
+> example has lower tolerances for vertical position error.
+> 
+> *_camera yaw rotation speed may be less of an issue if a rotation agnostic neural network is used (not the case by 
+> default)_
+
+
+## Run microRTPS agent and gscam
 Let GISNav receive telemetry from PX4:
 ```bash
 micrortps_agent -t UDP
 ```
 
-Launch gscam to pipe the drone's video stream from Gazebo to ROS:
+Launch `gscam` or `gscam2` to pipe the drone's video stream from Gazebo to ROS.
+
+gscam:
 ```bash
+cd ~/px4_ros_com_ros2
 ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
     -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
 ```
 
-## 8. Upload mission file via QGroundControl
+gscam2:
+```bash
+cd ~/px4_ros_com_ros2
+ros2 run gscam2 gscam_main --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
+    -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
+```
+
+
+## Upload mission file via QGroundControl
 Start QGroundControl (installed into `~/Applications` in this example):
 ```bash
 ~/Applications/QGroundControl.AppImage
 ```
 
-Then upload the example mission plan ``test/assets/ksql_airport.plan`` via QGroundControl and start the mission.
+Use QGroundControl to upload the sample `test/assets/ksql_airport.plan` flight plan or make your own. Ensure that your 
+your flight plan sets the gimbal to face nadir (90 degree pitch). Start the mission and proceed to the next step.
 
-## 9. Disable primary GPS
+
+## Run GISNav mock GPS node
+Run the example `mock_gps_node` ROS 2 node with your modified example configuration:
+```bash
+cd ~/px4_ros_com_ros2
+ros2 run gisnav mock_gps_node --ros-args --log-level info \
+    --params-file src/gisnav/config/typhoon_h480__ksql_airport.yaml
+```
+You should see GISNav start printing log messages into your console.
+
+
+## Disable primary GPS
 Wait until the drone has risen above the minimum altitude defined in the ``config/typhoon_h480__ksql_airport.yml`` 
-file. You will see that GISNav will stop logging warning messages related the altitude and start estimating the 
-position of the drone instead.
+file. You will see that GISNav will stop logging warning messages related to the altitude and start estimating the 
+position of the drone instead. You should also see a visualization of the estimated field of view pop up.
 
-After GISNav has started outputting info messages with the drone's position, try disabling the primary GPS from your 
-PX4 console:
+By default PX4 is blending the primary GPS and the (secondary) mock GPS position estimate. You can then try disabling 
+the primary GPS from your PX4 shell:
 ```commandline
-pxh> param set SENS_GPS_PRIME 1
+param set SENS_GPS_PRIME 1
 ```
 
 The Typhoon H480 drone should now continue to complete its mission *GNSS-free* with GISNav substituting for GPS.
 
-
-# Generating Documentation
-You can use Sphinx to generate the GISNav documentation which will appear in the `docs/_build` folder.
-
-Source the ROS workspace in your shell (ROS `foxy` in this example):
-```bash
-source /opt/ros/foxy/setup.bash
-source install/setup.bash
+You can check if PX4 is receiving the mock GPS position estimates by typing the following in the PX4 shell:
+```commandline
+listener vehicle_gps_position
 ```
 
-Change to `gisnav` parent directory and install Sphinx:
+If the printed GPS message has `selection: 1`, your PX4 is receiving the mock GPS node output as expected.
+
+# Generating Documentation
+You can use Sphinx to generate the GISNav documentation which will appear in the `docs/_build` folder:
+
 ```bash
 cd ~/px4_ros_com_ros2/src/gisnav
-pip3 install -r requirements-dev.txt
+python3 -m pip install -r requirements.txt
 ```
 
 Then change to `docs/` folder and generate the HTML documentation:

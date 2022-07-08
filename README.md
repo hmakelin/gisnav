@@ -92,15 +92,15 @@ You should then adjust the following parameters to make PX4 work with GISNav, ei
 QGroundControl, or in the `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480` file before 
 making the build target:
 ```
-param set NAV_ACC_RAD 20.0
-param set MPC_YAWRAUTO_MAX 10.0
+param set-default NAV_ACC_RAD 20.0
+param set-default MPC_YAWRAUTO_MAX 10.0
 
 param set-default COM_POS_FS_DELAY 5
 
-param set EKF2_GPS_P_NOISE 10
-param set EKF2_GPS_V_NOISE 3
+param set-default EKF2_GPS_P_NOISE 10
+param set-default EKF2_GPS_V_NOISE 3
 
-param set SENS_GPS_MASK 2
+param set-default SENS_GPS_MASK 2
 ```
 
 > **NOTE:**  This is a sample configuration that seems to work, but you may experiment with the parameters. 

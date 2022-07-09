@@ -1,6 +1,8 @@
+<iframe src="https://drive.google.com/file/d/1-6VDNKXwRwHDTQPzUdp6XXqtTbfBSZpS/preview" width="640" height="480" allow="autoplay"></iframe>
+
 # Introduction
 > **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated
-> with PX4 in a software-in-the-loop (SITL) simulation environment.
+> in a software-in-the-loop (SITL) simulation environment.
 
 GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones.
 

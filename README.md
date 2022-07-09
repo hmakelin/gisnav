@@ -180,7 +180,6 @@ The Typhoon H480 drone should now continue to complete its mission *GNSS-free* w
 
 You can check if PX4 is receiving the mock GPS position estimates by typing the following in the PX4 shell:
 ```
-```
 listener vehicle_gps_position
 ```
 

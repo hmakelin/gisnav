@@ -36,7 +36,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_data.package_name]),
         ('share/' + package_data.package_name, ['package.xml']),
-        # Need to download weights separately, here in LoFTR/weights folder
+        # Need to download weights separately, here in weights folder
         (os.path.join('share', package_data.package_name, 'weights'), glob('weights/*.ckpt')),
         (os.path.join('share', package_data.package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_data.package_name, 'launch'), glob('launch/*.launch*')),

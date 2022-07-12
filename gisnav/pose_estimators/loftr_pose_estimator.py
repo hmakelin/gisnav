@@ -21,7 +21,7 @@ class LoFTRPoseEstimator(KeypointPoseEstimator):
         CPU = 'cpu'
         CUDA = 'cuda'
 
-    WEIGHTS_PATH = 'LoFTR/weights/outdoor_ds.ckpt'
+    WEIGHTS_PATH = 'weights/outdoor_ds.ckpt'
     """Path to model weights - for LoFTR these need to be downloaded separately (see LoFTR README.md)"""
 
     CONFIDENCE_THRESHOLD = 0.7

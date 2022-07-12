@@ -17,3 +17,6 @@ docs/_build/
 
 # coverage.py files
 .coverage*
+
+# Optional weights folder (LoFTR)
+weights/

@@ -1,6 +1,11 @@
 **************************************************
 Developer Guide
 **************************************************
+
+.. warning::
+    GISNav is untested and has only been demonstrated in a software-in-the-loop (SITL) simulation environment.
+    Do not use this software for real drone flights.
+
 This section provides instruction on how you can integrate GISNav with your own project as well as configure and extend
 its functionality to match your use case.
 
@@ -132,6 +137,10 @@ Once you have `extended BaseNode <Extend BaseNode>`_, you can spin it up in the 
 
 Example Integration (MockGPSNode)
 ____________________________________________________
+.. warning::
+    The configurations presented in this section are intended for simulation use only. Do not attempt these on a real
+    flight.
+
 The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message to the
 PX4-ROS 2 bridge ``VehicleGpsPosition_PubSubTopic`` topic.
 

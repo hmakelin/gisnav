@@ -4,7 +4,7 @@
 > **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated
 > in a software-in-the-loop (SITL) simulation environment.
 
-GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones.
+GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones **in a simulation environment**.
 
 GISNav provides an *accurate* **global** position for an airborne drone by visually comparing frames from the drone's 
 nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying 
@@ -93,6 +93,8 @@ make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 You should then adjust the following parameters to make PX4 work with GISNav, either via the PX4 shell, via 
 QGroundControl, or in the `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480` file before 
 making the build target:
+
+> **THIS CONFIGURATION IS INTENDED FOR SIMULATION USE ONLY**
 ```
 param set-default NAV_ACC_RAD 20.0
 param set-default MPC_YAWRAUTO_MAX 10.0
@@ -166,6 +168,8 @@ You should see GISNav start printing log messages into your console.
 
 
 ## Disable primary GPS
+> **WARNING:** Do not attempt this on a real flight - simulation use only.
+
 Wait until the drone has risen above the minimum altitude defined in the ``config/typhoon_h480__ksql_airport.yml`` 
 file. You will see that GISNav will stop logging warning messages related to the altitude and start estimating the 
 position of the drone instead. You should also see a visualization of the estimated field of view pop up.

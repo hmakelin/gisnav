@@ -24,12 +24,12 @@ sample class is provided for demonstration and to help you get started with your
 
 Extend BaseNode
 ____________________________________________________
-The :class:`.BaseNode` abstract base class extends :class:`rclpy.node.Node` by providing a new :meth:`.publish` method.
-The method provides you a :class:`.Position` instance to make integration to other systems (e.g. via a ROS publisher)
-convenient.
+The :class:`.BaseNode` abstract base class extends :class:`rclpy.node.Node` by providing a new
+:meth:`.BaseNode.publish` method. The method provides you a :class:`.Position` instance to make integration to other
+systems (e.g. via a ROS publisher) convenient.
 
-To integrate GISNav with your solution, you must implement the :class:`.BaseNode` class by writing your own
-:meth:`.publish` method:
+To integrate GISNav with your project, you must implement the :class:`.BaseNode` class by writing your own
+:meth:`.BaseNode.publish` method:
 
 .. code-block:: python
     :caption: Example of custom node that logs the position estimates
@@ -48,7 +48,7 @@ To integrate GISNav with your solution, you must implement the :class:`.BaseNode
 
 Position Class
 ____________________________________________________
-The attributes in the :class:`.Position` input to the :meth:`.publish` method are in the following formats:
+The attributes in the :class:`.Position` input to the :meth:`.BaseNode.publish` method are in the following formats:
 
     * Latitude and longitude are provided in `WGS 84 <https://epsg.io/4326>`_, although :class:`.GeoPoint` can provide the values in other CRS as well
     * Altitude above mean sea level (AMSL) and above ground is provided in meters.
@@ -228,8 +228,8 @@ provide better results.
 
 Extend PoseEstimator
 ____________________________________________________
-You must extend the :class:`.PoseEstimator` abstract base and write your own :meth:`.estimate_pose` method to implement
-your own pose estimator. If your pose estimator is keypoint-based, you may want to extend
+You must extend the :class:`.PoseEstimator` abstract base and write your own :meth:`.PoseEstimator.estimate_pose`
+method to implement your own pose estimator. If your pose estimator is keypoint-based, you may want to extend
 :class:`.KeypointPoseEstimator` and implement the :meth:`.find_matching_keypoints` method instead. The base classes
 implement the required static initializer and worker methods that make them work with Python's
 :class:`.multiprocessing.pool.Pool` and :class:`.multiprocessing.pool.ThreadPool` APIs.
@@ -257,7 +257,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 
 .. note::
     If you can't estimate a pose with the given query and reference frames, you can return ``None`` from your
-    :meth:`.estimate_pose`
+    :meth:`.PoseEstimator.estimate_pose`
 
 .. _Keypoint-Based Pose Estimator:
 

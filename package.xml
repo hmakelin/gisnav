@@ -3,7 +3,7 @@
 <package format="3">
   <name>gisnav</name>
   <version>0.60.0</version>
-  <description>Estimates airborne drone position by matching video to map retrieved from OGC WMS endpoint.</description>
+  <description>Estimates airborne drone position by matching video to map retrieved from OGC WMS endpoint in PX4 SITL.</description>
   <author email="hmakelin@protonmail.com">Harri Makelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
   <license>MIT</license>

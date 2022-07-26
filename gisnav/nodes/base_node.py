@@ -926,9 +926,7 @@ class BaseNode(Node, ABC):
         :param result: Results from the asynchronous call
         :return:
         """
-        #assert_len(result, 1)
-        map_ = result #[0]
-        # TODO: handle None
+        map_ = result
         assert_type(map_, np.ndarray)  # TODO: move this to assertions, do not hard code 4*float here and in WMSClient
         # TODO: create MapData again by retrieving self._wms_query
         assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet

@@ -927,9 +927,9 @@ class BaseNode(Node, ABC):
         :return:
         """
         map_ = result
-        assert_type(map_, np.ndarray)  # TODO: move this to assertions, do not hard code 4*float here and in WMSClient
-        # TODO: create MapData again by retrieving self._wms_query
-        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
+        assert_type(map_, np.ndarray)
+        # Should already have received camera info so _map_size_with_padding should not be None
+        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'
         map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_))
         self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
         self._map_data = map_data

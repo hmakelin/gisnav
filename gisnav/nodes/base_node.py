@@ -1321,7 +1321,7 @@ class BaseNode(Node, ABC):
             return False
 
         roll = r_guess.as_euler('xyz', degrees=True)[0]
-        if roll > threshold/2:  # TODO: have separate configuble threshold?
+        if roll > threshold/2:  # TODO: have separate configurable threshold
             self.get_logger().warn(f'Estimated roll difference to expected was too high (magnitude '
                                    f'{roll}).')
             return False

@@ -369,7 +369,8 @@ class FOV:
             raise DataValueError('Could not create a valid FOV.')
         distance_in_meters = self.fov.meter_length
 
-        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
+        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon
+        #  should use bottom side of FOV instead of entire perimeter
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
         return altitude_scaling

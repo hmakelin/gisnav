@@ -659,8 +659,8 @@ class BaseNode(Node, ABC):
         arguments to :meth:`._estimate`.
         """
         input_data = InputData(
-            r_guess=self._r_guess,  # TODO: handle None
-            ground_elevation=self._ground_elevation_amsl  # TODO: handle None
+            r_guess=self._r_guess,
+            ground_elevation=self._ground_elevation_amsl
         )
 
         # Get cropped and rotated map
@@ -1294,8 +1294,13 @@ class BaseNode(Node, ABC):
         )
 
     def _is_valid_estimate(self, fixed_camera: FixedCamera, input_data: InputData) -> bool:
-        """Returns True if the estimate is valid"""
-        if self._r_guess is None:
+        """Returns True if the estimate is valid
+
+        Compares computed estimate to guess based on set gimbal device attitude. This will reject estimates made when
+        the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
+        estimates.
+        """
+        if input_data._r_guess is None:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
             return False
 

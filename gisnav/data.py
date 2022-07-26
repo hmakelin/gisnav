@@ -253,8 +253,8 @@ class ContextualMapData(_ImageHolder):
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))  # TODO: correct order of unpack?
-        object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
+        object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))
+        object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())
 
 
 # noinspection PyClassHasNoInit

@@ -210,7 +210,6 @@ class ContextualMapData(_ImageHolder):
 
         pix_to_wgs84_[2][2] = -vertical_scaling * pix_to_wgs84_[2][2]
 
-        # TODO: call it 'affine' instead?
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
 
     def _rotate_and_crop_map(self) -> np.ndarray:

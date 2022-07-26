@@ -640,11 +640,12 @@ class BaseNode(Node, ABC):
 
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
+            assert hasattr(self._vehicle_attitude, 'q')
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
                 z_ground=self._altitude_agl,  # not None
                 z_amsl=self._vehicle_global_position.alt,
-                attitude=Attitude(*self._vehicle_attitude[1:4].append(self._vehicle_attitude[0])),
+                attitude=Attitude(np.append(self._vehicle_attitude.q[1:4], self._vehicle_attitude.q[0])),
                 timestamp=self._synchronized_time
             )
             return position
@@ -1298,7 +1299,7 @@ class BaseNode(Node, ABC):
         the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
         estimates.
         """
-        if input_data._r_guess is None:
+        if input_data.r_guess is None:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
             return False
 

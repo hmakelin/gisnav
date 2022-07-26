@@ -1169,7 +1169,7 @@ class BaseNode(Node, ABC):
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoSquare(origin.xy, radius)
-        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
+        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))
         return map_data
     # endregion
 

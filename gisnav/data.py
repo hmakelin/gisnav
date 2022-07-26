@@ -464,7 +464,7 @@ class FixedCamera:
         src_fov_and_c = np.vstack((src_fov, principal_point_src))
 
         assert_shape(h_mat, (3, 3))
-        assert_ndim(src_fov, 3)  # TODO: this is currently not assumed to be squeezed
+        assert_ndim(src_fov, 3)
         dst_fov_and_c = cv2.perspectiveTransform(src_fov_and_c, h_mat)
 
         dst_fov, principal_point_dst = np.vsplit(dst_fov_and_c, [-1])

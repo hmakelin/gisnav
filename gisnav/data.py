@@ -168,7 +168,7 @@ class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
     rotation: float                 # radians
-    crop: Dim                       # Same value will also be found at image.dim
+    crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
 
@@ -219,11 +219,11 @@ class ContextualMapData(_ImageHolder):
 
         :return: Rotated and cropped map raster
         """
-        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)  # TODO: Use k, dim etc?
+        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)
         degrees = math.degrees(self.rotation)
         r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
-        map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
+        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])
+        map_cropped = self._crop_center(map_rotated, self.crop)
         #if visualize:
             #cv2.imshow('padded', self.map_data.image.arr)
             #cv2.waitKey(1)

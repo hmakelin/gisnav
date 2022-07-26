@@ -75,4 +75,4 @@ html_theme_options = {
 # Make version number accessible in .rst files
 #rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
 version = package_data.version
-release = version  # TODO: assign this during build
+release = version

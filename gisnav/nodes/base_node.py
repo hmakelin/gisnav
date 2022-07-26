@@ -640,11 +640,12 @@ class BaseNode(Node, ABC):
 
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
+            assert hasattr(self._vehicle_attitude, 'q')
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
                 z_ground=self._altitude_agl,  # not None
                 z_amsl=self._vehicle_global_position.alt,
-                attitude=self._vehicle_attitude,  # TODO: is this correct?
+                attitude=Attitude(np.append(self._vehicle_attitude.q[1:4], self._vehicle_attitude.q[0])),
                 timestamp=self._synchronized_time
             )
             return position
@@ -659,8 +660,8 @@ class BaseNode(Node, ABC):
         arguments to :meth:`._estimate`.
         """
         input_data = InputData(
-            r_guess=self._r_guess,  # TODO: handle None
-            ground_elevation=self._ground_elevation_amsl  # TODO: handle None
+            r_guess=self._r_guess,
+            ground_elevation=self._ground_elevation_amsl
         )
 
         # Get cropped and rotated map
@@ -926,12 +927,10 @@ class BaseNode(Node, ABC):
         :param result: Results from the asynchronous call
         :return:
         """
-        #assert_len(result, 1)
-        map_ = result #[0]
-        # TODO: handle None
-        assert_type(map_, np.ndarray)  # TODO: move this to assertions, do not hard code 4*float here and in WMSClient
-        # TODO: create MapData again by retrieving self._wms_query
-        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'  # TODO: handle none/no size yet
+        map_ = result
+        assert_type(map_, np.ndarray)
+        # Should already have received camera info so _map_size_with_padding should not be None
+        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'
         map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_))
         self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
         self._map_data = map_data
@@ -1171,7 +1170,7 @@ class BaseNode(Node, ABC):
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoSquare(origin.xy, radius)
-        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))  # TODO: handle no dim yet
+        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))
         return map_data
     # endregion
 
@@ -1290,12 +1289,17 @@ class BaseNode(Node, ABC):
                 error_callback=self._pose_estimation_worker_error_callback
             ),
             image_pair=image_pair,
-            input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
+            input_data=input_data
         )
 
     def _is_valid_estimate(self, fixed_camera: FixedCamera, input_data: InputData) -> bool:
-        """Returns True if the estimate is valid"""
-        if self._r_guess is None:
+        """Returns True if the estimate is valid
+
+        Compares computed estimate to guess based on set gimbal device attitude. This will reject estimates made when
+        the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
+        estimates.
+        """
+        if input_data.r_guess is None:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
             return False
 
@@ -1318,7 +1322,7 @@ class BaseNode(Node, ABC):
             return False
 
         roll = r_guess.as_euler('xyz', degrees=True)[0]
-        if roll > threshold/2:  # TODO: have separate configuble threshold?
+        if roll > threshold/2:  # TODO: have separate configurable threshold
             self.get_logger().warn(f'Estimated roll difference to expected was too high (magnitude '
                                    f'{roll}).')
             return False

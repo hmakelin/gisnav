@@ -168,7 +168,7 @@ class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
     rotation: float                 # radians
-    crop: Dim                       # Same value will also be found at image.dim
+    crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
 
@@ -210,7 +210,6 @@ class ContextualMapData(_ImageHolder):
 
         pix_to_wgs84_[2][2] = -vertical_scaling * pix_to_wgs84_[2][2]
 
-        # TODO: call it 'affine' instead?
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
 
     def _rotate_and_crop_map(self) -> np.ndarray:
@@ -220,11 +219,11 @@ class ContextualMapData(_ImageHolder):
 
         :return: Rotated and cropped map raster
         """
-        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)  # TODO: Use k, dim etc?
+        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)
         degrees = math.degrees(self.rotation)
         r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])  # TODO: use .dim?
-        map_cropped = self._crop_center(map_rotated, self.crop)  # TODO: just pass img_dim when initializing ContextualMapData?
+        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])
+        map_cropped = self._crop_center(map_rotated, self.crop)
         #if visualize:
             #cv2.imshow('padded', self.map_data.image.arr)
             #cv2.waitKey(1)
@@ -254,8 +253,8 @@ class ContextualMapData(_ImageHolder):
 
     def __post_init__(self):
         """Set computed fields after initialization."""
-        object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))  # TODO: correct order of unpack?
-        object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())  # TODO: correct order of unpack?
+        object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))
+        object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())
 
 
 # noinspection PyClassHasNoInit
@@ -370,7 +369,8 @@ class FOV:
             raise DataValueError('Could not create a valid FOV.')
         distance_in_meters = self.fov.meter_length
 
-        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon, should just use bottom of FOV
+        # TODO: this is vulnerable to the top of the FOV 'escaping' into the horizon
+        #  should use bottom side of FOV instead of entire perimeter
         altitude_scaling = abs(distance_in_meters / distance_in_pixels)
 
         return altitude_scaling
@@ -465,7 +465,7 @@ class FixedCamera:
         src_fov_and_c = np.vstack((src_fov, principal_point_src))
 
         assert_shape(h_mat, (3, 3))
-        assert_ndim(src_fov, 3)  # TODO: this is currently not assumed to be squeezed
+        assert_ndim(src_fov, 3)
         dst_fov_and_c = cv2.perspectiveTransform(src_fov_and_c, h_mat)
 
         dst_fov, principal_point_dst = np.vsplit(dst_fov_and_c, [-1])

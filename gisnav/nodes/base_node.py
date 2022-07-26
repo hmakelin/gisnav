@@ -1288,7 +1288,7 @@ class BaseNode(Node, ABC):
                 error_callback=self._pose_estimation_worker_error_callback
             ),
             image_pair=image_pair,
-            input_data=input_data  # TODO: no longer passed to matching, this is "context", not input
+            input_data=input_data
         )
 
     def _is_valid_estimate(self, fixed_camera: FixedCamera, input_data: InputData) -> bool:

@@ -1,4 +1,4 @@
-<iframe src="https://drive.google.com/file/d/1-6VDNKXwRwHDTQPzUdp6XXqtTbfBSZpS/preview" width="640" height="480" allow="autoplay"></iframe>
+[![Watch the GISNav demo video](https://img.youtube.com/vi/JAK2DPZC33w/0.jpg)](https://youtu.be/JAK2DPZC33w)
 
 # Introduction
 > **WARNING:** Do not use this software for real drone flights. This software is untested and has only been demonstrated

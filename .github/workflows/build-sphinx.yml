@@ -1,0 +1,64 @@
+name: Build Sphinx Documentation
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+  # Allows running manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    container: px4io/px4-dev-ros2-foxy
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install node
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+
+      - name: Create colcon workspace
+        run: mkdir -p colcon_ws/src
+
+      - name: Setup PX4-ROS 2 bridge
+        uses: actions/checkout@v3
+        with:
+          repository: PX4/px4_ros_com
+          path: colcon_ws/src/px4_ros_com
+
+      - name: Checkout PX4 messages
+        uses: actions/checkout@v3
+        with:
+          repository: PX4/px4_msgs
+          path: colcon_ws/src/px4_msgs
+
+      - name: Build colcon workspace
+        run: |
+          cd colcon_ws/src/px4_ros_com/scripts
+          ./build_ros2_workspace.bash
+
+      - name: Checkout GISNav
+        uses: actions/checkout@v3
+        with:
+          path: colcon_ws/src/gisnav
+
+      - name: Install GISNav
+        run: |
+          cd colcon_ws/src/gisnav
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          cd ../..
+          colcon build --packages-select gisnav
+
+      - name: Build Sphinx docs
+        run: |
+          cd colcon_ws
+          source /opt/ros/foxy/setup.bash
+          source install/setup.bash
+          export PATH=$(dirname $(find / -iname sphinx-build -print -quit)):$PATH
+          cd src/gisnav/docs/ && make html

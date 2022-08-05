@@ -46,10 +46,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: colcon_ws/src/gisnav
+          submodules: 'true'
 
       - name: Install GISNav
         run: |
           cd colcon_ws/src/gisnav
+          git submodule update --init
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           cd ../..

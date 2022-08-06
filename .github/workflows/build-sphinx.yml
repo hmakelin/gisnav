@@ -68,7 +68,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: colcon_ws/src/gisnav/docs/_build/html
+          path: 'colcon_ws/src/gisnav/docs/_build/html/'
 
   deploy:
     needs: build
@@ -84,6 +84,8 @@ jobs:
 
     runs-on: ubuntu-20.04
     steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@main

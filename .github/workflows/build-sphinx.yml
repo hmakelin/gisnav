@@ -64,6 +64,7 @@ jobs:
           source install/setup.bash
           export PATH=$(dirname $(find / -iname sphinx-build -print -quit)):$PATH
           cd src/gisnav/docs/ && make html
+          cd _build/html && touch .nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v1
@@ -78,6 +79,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     permissions:
       contents: read

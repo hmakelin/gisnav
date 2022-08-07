@@ -65,6 +65,12 @@ jobs:
           export PATH=$(dirname $(find / -iname sphinx-build -print -quit)):$PATH
           cd src/gisnav/docs/ && make html
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v1
+
+      - name: Make Upload Pages Artifact step work with containers
+        run: mkdir -p ${{runner.temp}}
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v1
         with:
@@ -84,8 +90,6 @@ jobs:
 
     runs-on: ubuntu-20.04
     steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v1
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@main

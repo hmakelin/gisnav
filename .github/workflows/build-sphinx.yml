@@ -12,7 +12,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
-    container: px4io/px4-dev-ros2-foxy
+    container:
+      image: px4io/px4-dev-ros2-foxy
+      volumes:
+        - /home/runner/work/_temp:/__w/_temp
     defaults:
       run:
         shell: bash
@@ -68,9 +71,6 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v1
-
-      - name: Make Upload Pages Artifact step work with containers
-        run: mkdir -p ${{runner.temp}}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v1

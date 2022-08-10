@@ -61,9 +61,12 @@ cd ~/px4_ros_com_ros2/src/gisnav && git submodule update LoFTR
 
 Download the **dual-softmax** (_ds suffix) outdoor weights as described in the 
 [LoFTR repo](https://github.com/zju3dv/LoFTR). Extract the `outdoor_ds.ckpt` from the .zip package and copy it into a 
-new `weights` folder:
+new `weights` folder. You can use `gdown` to do everything from the command line:
 ```bash
-mkdir weights && cp ~/Downloads/outdoor_ds.ckpt ./weights
+pip install gdown
+cd ~/px4_ros_com_ros2/src/gisnav
+mkdir weights && cd "$_"
+gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
 ```
 
 ## Configure WMS endpoint

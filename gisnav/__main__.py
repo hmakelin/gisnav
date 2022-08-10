@@ -22,6 +22,8 @@ def main(args=None):
         pr.enable()
     else:
         pr = None
+
+    mock_gps_node = None
     try:
         rclpy.init(args=args)
         mock_gps_node = MockGPSNode('mock_gps_node', get_package_share_directory(package_name))
@@ -36,9 +38,10 @@ def main(args=None):
             ps.print_stats(40)
             print(s.getvalue())
     finally:
-        mock_gps_node.destroy_timers()
-        mock_gps_node.terminate_pools()
-        mock_gps_node.destroy_node()
+        if mock_gps_node is not None:
+            mock_gps_node.destroy_timers()
+            mock_gps_node.terminate_pools()
+            mock_gps_node.destroy_node()
         rclpy.shutdown()
 
 

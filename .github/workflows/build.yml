@@ -48,14 +48,32 @@ jobs:
           path: colcon_ws/src/gisnav
           submodules: 'true'
 
+      - name: Get LoFTR weights
+        run: |
+          pip install gdown
+          cd colcon_ws/src/gisnav
+          mkdir weights && cd "$_"
+          gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
+
       - name: Install GISNav
         run: |
-          cd colcon_ws/src/gisnav
+          cd colcon_ws
+          rosdep update
+          rosdep install --from-paths src --ignore-src -y --rosdistro=foxy
+          cd src/gisnav
           git submodule update --init
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           cd ../..
           colcon build --packages-select gisnav
+
+      - name: Run ROS 2 integration tests
+        run: |
+          cd colcon_ws
+          source /opt/ros/foxy/setup.bash
+          source install/setup.bash
+          python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/test/test_mock_gps_node.py
+          python3 -m coverage report
 
       - name: Build Sphinx docs
         run: |

@@ -41,7 +41,7 @@ class LoFTRPoseEstimator(KeypointPoseEstimator):
         self._model = LoFTR(config=default_cfg)
         weights_path = os.path.join(get_package_share_directory('gisnav'), self.WEIGHTS_PATH)  # TODO: provide as arg to constructor, do not hard-code path here
         self._model.load_state_dict(torch.load(weights_path)['state_dict'])
-        self._model = self._model.eval().cuda()
+        self._model = self._model.eval().to(self._device)
 
     def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \
             -> Optional[Tuple[np.ndarray, np.ndarray]]:

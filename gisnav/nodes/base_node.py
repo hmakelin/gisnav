@@ -641,6 +641,10 @@ class BaseNode(Node, ABC):
 
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
+            if self._vehicle_attitude is None:
+                self.get_logger().debug('Vehicle attitude not yet available, cannot determin vehicle Position.')
+                return None
+
             assert hasattr(self._vehicle_attitude, 'q')
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order

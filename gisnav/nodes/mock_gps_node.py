@@ -43,7 +43,7 @@ class MockGPSNode(BaseNode):
 
         msg = SensorGps()
         msg.timestamp = self._synchronized_time  #position.timestamp
-        msg.timestamp_sample = msg.timestamp
+        #msg.timestamp_sample = msg.timestamp
         msg.device_id = self._generate_device_id()
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
@@ -56,8 +56,8 @@ class MockGPSNode(BaseNode):
         msg.epv = 3.0 #position.epv
         msg.hdop = 0.0
         msg.vdop = 0.0
-        msg.noise_per_ms = np.nan
-        msg.automatic_gain_control = np.nan
+        msg.noise_per_ms = 0
+        msg.automatic_gain_control = 0
         msg.jamming_state = 0
         msg.jamming_indicator = 0
         msg.vel_m_s = np.nan
@@ -67,14 +67,14 @@ class MockGPSNode(BaseNode):
         msg.cog_rad = np.nan
         msg.vel_ned_valid = False
         msg.timestamp_time_relative = 0
-        msg.time_utc_usec = time.time() * 1e6
+        msg.time_utc_usec = int(time.time() * 1e6)
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.heading = position.attitude.yaw + fixed_camera.image_pair.ref.rotation # np.nan
         msg.heading_offset = np.nan
-        msg.heading_accuracy = np.nan
-        msg.rtcm_injection_rate = np.nan
-        msg.selected_rtcm_instance = np.nan
+        #msg.heading_accuracy = np.nan
+        #msg.rtcm_injection_rate = np.nan
+        #msg.selected_rtcm_instance = np.nan
 
         self._sensor_gps_publisher.publish(msg)
 

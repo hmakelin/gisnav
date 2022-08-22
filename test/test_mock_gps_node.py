@@ -41,12 +41,12 @@ class TestInit(unittest.TestCase):
     """Expected node namespace"""
 
     SUBSCRIBER_NAMES_AND_TYPES = [
-        ('/GimbalDeviceSetAttitude_PubSubTopic', ['px4_msgs/msg/GimbalDeviceSetAttitude']),
-        ('/VehicleAttitude_PubSubTopic', ['px4_msgs/msg/VehicleAttitude']),
-        ('/VehicleGlobalPosition_PubSubTopic', ['px4_msgs/msg/VehicleGlobalPosition']),
-        ('/VehicleLocalPosition_PubSubTopic', ['px4_msgs/msg/VehicleLocalPosition']),
-        ('/camera_info', ['sensor_msgs/msg/CameraInfo']),
-        ('/image_raw', ['sensor_msgs/msg/Image'])
+        ('/fmu/gimbal_device_set_attitude/out', ['px4_msgs/msg/GimbalDeviceSetAttitude']),
+        ('/fmu/vehicle_attitude/out', ['px4_msgs/msg/VehicleAttitude']),
+        ('/fmu/vehicle_global_position/out', ['px4_msgs/msg/VehicleGlobalPosition']),
+        ('/fmu/vehicle_local_position/out', ['px4_msgs/msg/VehicleLocalPosition']),
+        ('/camera/camera_info', ['sensor_msgs/msg/CameraInfo']),
+        ('/camera/image_raw', ['sensor_msgs/msg/Image'])
     ]
     """Expected node subscribe topic names and message types"""
 

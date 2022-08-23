@@ -5,15 +5,6 @@ from setuptools import setup
 from gisnav.data import PackageData
 pdata = PackageData.parse_package_data(os.path.abspath('package.xml'))
 
-# Read requirements file
-requirements_file = os.path.abspath('requirements.txt')
-install_requires = []
-if os.path.isfile(requirements_file):
-    with open(requirements_file) as f:
-        install_requires = f.read().splitlines()
-else:
-    raise FileNotFoundError(f'Could not find requirements file at {requirements_file}.')
-
 # Setup packages depending on what submodules have been downloaded
 packages_ = [
     pdata.package_name,
@@ -57,7 +48,6 @@ setup(
         (os.path.join('share', pdata.package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', pdata.package_name, 'launch'), glob('launch/*.launch*')),
     ],
-    install_requires=install_requires,
     zip_safe=True,
     author=pdata.author,
     author_email=pdata.author_email,

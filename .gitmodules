@@ -1,6 +1,6 @@
 [submodule "SuperGluePretrainedNetwork"]
-	path = SuperGluePretrainedNetwork
+	path = gisnav/pose_estimators/third_party/SuperGluePretrainedNetwork
 	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git
 [submodule "LoFTR"]
-	path = LoFTR
+	path = gisnav/pose_estimators/third_party/LoFTR
 	url = https://github.com/zju3dv/LoFTR.git

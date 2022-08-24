@@ -14,7 +14,8 @@ packages_ = [
 package_dir_ = {}
 package_data_ = {}
 
-if os.path.isdir('gisnav/pose_estimators/third_party/LoFTR'):
+loftr_dir = 'gisnav/pose_estimators/third_party/LoFTR'
+if os.path.isdir(loftr_dir) and len(os.listdir(loftr_dir)) != 0:
     packages_.extend([
         'LoFTR.loftr',
         'LoFTR.loftr.backbone',
@@ -23,7 +24,8 @@ if os.path.isdir('gisnav/pose_estimators/third_party/LoFTR'):
     ])
     package_dir_.update({'LoFTR': 'gisnav/pose_estimators/third_party/LoFTR/src'})
 
-if os.path.isdir('gisnav/pose_estimators/third_party/SuperGluePretrainedNetwork'):
+superglue_dir = 'gisnav/pose_estimators/third_party/SuperGluePretrainedNetwork'
+if os.path.isdir(superglue_dir) and len(os.listdir(superglue_dir)) != 0:
     packages_.extend([
         'SuperGluePretrainedNetwork.models',
     ])

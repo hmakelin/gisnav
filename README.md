@@ -86,17 +86,6 @@ If the printed GPS message has a `device_id` other than 0, your PX4 is receiving
 See the [latest developer documentation][8] for information on how to setup a local environment for GISNav development, 
 for code examples and API documentation, and for contribution guidelines.
 
-You can also generate the GISNav documentation yourself with Sphinx:
-
-```bash
-cd ~/colcon_ws/src/gisnav
-python3 -m pip install -r requirements-dev.txt
-cd docs
-make html
-```
-
-The HTML documentation will then appear in the `_build/` folder.
-
 [8]: https://hmakelin.github.io/gisnav
 
 # License

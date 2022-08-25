@@ -1,169 +1,267 @@
 **************************************************
 Setup
 **************************************************
-To use and develop with GISNav, you must setup your simulation environment, which includes setting up ROS 2, PX4 and
-the PX4-ROS bridge, Gazebo and a WMS endpoint. Here you will find instruction and links to guides to setup everything
-locally. These instructions assume you are running Ubuntu Linux, although other Linux distributions will likely work as
-well.
+This page provides instruction on how to setup a local GISNav development and SITL simulation environment.
 
-.. _ROS 2:
+`Dockerized environments <https://github.com/hmakelin/gisnav-docker>`_ are also available. Take a look at the
+Dockerfiles to see how everything is set up. These instructions should closely mirror what is included in the
+Dockerfiles with only minor differences.
 
-ROS 2
+Prerequisites
 ===================================================
-You can install ROS 2 Foxy by following the
-`official instructions <https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html>`_.
 
-.. _QGroundControl:
+* These instructions assume you are running **Ubuntu 20.04 (Focal Fossa)**, although with small changes other releases
+  might also work.
 
-Source ROS workspace
----------------------------------------------------
-To make the ROS commands used in the sections below work, open a new terminal window and source your ROS environment
-(ROS ``foxy`` in this example):
-
-.. code-block:: bash
-
-    source /opt/ros/foxy/setup.bash
-    source install/setup.bash
-
-.. note::
-    If you work with your ROS 2 workspace often, you may want to source it in your ``~/.bashrc``:
-
-    .. code-block:: bash
-
-        echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
-        echo "source ~/px4_ros_com_ros2/install/setup.bash" >> ~/.bashrc
-
-QGroundControl
-===================================================
-`Download and install QGroundControl <https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_ to
-get your ground control software up and running. You will need it to control your drone in the Gazebo simulation.
-
+* It is strongly recommended that you have an **NVIDIA GPU and CUDA** installed. You can inspect your NVIDIA driver and
+  CUDA versions with the ``nvidia-smi`` command line utility. If you don't have it installed, follow the `NVIDIA CUDA
+  Installation Guide for Linux <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_.
 
 PX4 Autopilot
 ===================================================
+PX4 **v1.13** is the only autopilot that is currently supported by GISNav.
 
-You will need to setup the
-`PX4 Autopilot Ubuntu Development Environment <https://docs.px4.io/master/en/simulation/ros_interface.html>`_ with
-`Fast DDS <https://docs.px4.io/v1.12/en/dev_setup/fast-dds-installation.html>`_ and
-`PX4-ROS 2 bridge <https://docs.px4.io/v1.12/en/ros/ros2_comm.html>`_.
+Follow the PX4 instructions to setup your `Ubuntu Development Environment
+<https://docs.px4.io/master/en/simulation/ros_interface.html>`_ with `Fast DDS
+<https://docs.px4.io/master/en/dev_setup/fast-dds-installation.html>`_.
 
-Once you have your PX4 Autopilot setup, you can try out the Gazebo simulation:
+Once you have installed PX4 Autopilot, you can try out the Gazebo simulation to make sure everything is working
+correctly. The following command should pop out a Gazebo window with a Typhoon H480 drone sitting somewhere in the
+vicinity of San Carlos (KSQL) airport:
 
 .. code-block:: bash
 
     cd ~/PX4-Autopilot
     make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 
-PX4-ROS 2 microRTPS bridge
----------------------------------------------------
-See the
-`uorb topic configuration guide <https://docs.px4.io/v1.12/en/middleware/micrortps.html#supported-uorb-messages>`_ and
-`RTPS message IDL files <https://docs.px4.io/v1.12/en/middleware/micrortps_manual_code_generation.html#rtps-message-idl-files>`_
-sections of the PX4 User Guide for information on how to configure the bridge topics. For the :class:`.MockGPSNode`
-example you must configure the bridge as follows:
+.. note::
+    The initial build may take several minutes.
 
-* Send
+Mock GPS Node Demo Configuration
+___________________________________________________
+If you are planning to use :class:`.MockGPSNode`, you should adjust the following PX4 parameters to make GISNav work
+better either through the PX4 shell, through QGroundControl, or in the
+``~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480`` file before making the build:
 
-    * VehicleGlobalPosition
-    * VehicleLocalPosition
-    * VehicleAttitude
-    * GimbalDeviceSetAttitude
+.. warning::
+    This configuration is intended for simulation use only
 
-* Receive
+.. code-block::
 
-    * VehicleGpsPosition
+    param set-default NAV_ACC_RAD 20.0
+    param set-default MPC_YAWRAUTO_MAX 10.0
 
-Once you have the bridge configured, you can run the microRTPS agent locally with:
+    param set-default COM_POS_FS_DELAY 5
+
+    param set-default EKF2_GPS_P_NOISE 10
+    param set-default EKF2_GPS_V_NOISE 3
+
+    param set-default SENS_GPS_MASK 2
+
+.. note::
+    This is a sample configuration that seems to work, but you may want to experiment with the parameters.
+
+    It is important to make the waypoint turns softer and/or to reduce the yaw rate especially if the camera has some
+    pitch (is not completely nadir-facing) to ensure the field of view does not move or rotate* too quickly for GISNav.
+    Otherwise GISNav may lose track of position for long enough for the position delay failsafe to trigger before GISNav
+    can find the drone again. Increasing the position failsafe delay helps if your GPU is a bit slower or GISNav for some
+    reason cannot produce a position estimate for a number of subsequent frames for one reason or another. However as a
+    failsafe parameter it should not be made unreasonably large.
+
+    The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its
+    default configuration seems to be more accurate in estimating vertical position than horizontal position, so the
+    example has lower tolerance for vertical position error.
+
+    `*camera yaw rotation speed may be less of an issue if a rotation agnostic neural network is used (not the case by
+    default)`
+
+.. _ROS 2 Workspace:
+
+ROS 2 Workspace
+===================================================
+GISNav requires ROS 2 to communicate with PX4 Autopilot and is therefore structured as a ROS 2 package.
+
+Follow the `PX4 instructions to setup ROS 2 and the PX4-ROS 2 bridge
+<https://docs.px4.io/main/en/ros/ros2_comm.html#installation-setup>`_.
+
+Once you have your ROS 2 workspace set up, consider automatically sourcing it in your ``~/.bashrc`` to avoid
+manual repetition:
+
+.. code-block:: bash
+
+    echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+    echo "source ~/px4_ros_com_ros2/install/setup.bash" >> ~/.bashrc
+
+.. note::
+    The PX4 tutorial uses ``px4_ros_com_ros2`` for the workspace name, while the ``gisnav-docker`` container image uses
+    ``colcon_ws``.
+
+.. _PX4-ROS 2 Bridge:
+
+PX4-ROS 2 Bridge
+===================================================
+The default configuration of the PX4-ROS 2 bridge is not sufficient for GISNav. The bridge must be reconfigured and
+the ``micrortps_agent`` re-generated.
+
+To reconfigure the bridge, see the `ROS 2 Offboard Control Example
+<https://docs.px4.io/main/en/ros/ros2_offboard_control.html#ros-2-offboard-control-example>`_ on how to edit the
+``urtps_bridge_topics.yaml`` file in the ``PX4-Autopilot/msg/tools`` and ``px4_ros_com_ros2/src/px4_ros_com/templates``
+folders. You must configure the following send and receive flags for the following topics:
+
+.. list-table:: ``urtps_bridge_topics.yaml``
+   :header-rows: 1
+
+   * - PX4-Autopilot/msg/tools
+     - px4_ros_com_ros2/src/px4_ros_com/templates
+   * - .. code-block:: yaml
+
+            - msg: vehicle_local_position
+              send: true
+              ...
+            - msg: vehicle_global_position
+              send: true
+              ...
+            - msg: vehicle_attitude
+              send: true
+              ...
+            - msg: gimbal_device_set_attitude
+              send: true
+              ...
+            - msg: sensor_gps
+              receive: true
+     - .. code-block:: yaml
+
+            - msg: VehicleLocalPosition
+              send: true
+              ...
+            - msg: VehicleGlobalPosition
+              send: true
+              ...
+            - msg: VehicleAttitude
+              send: true
+              ...
+            - msg: GimbalDeviceSetAttitude
+              send: true
+              ...
+            - msg: SensorGps
+              receive: true
+
+.. note::
+    * The ``SensorGps`` topic is used by :class:`.MockGPSNode` and is optional if you are only using :class:`.BaseNode`.
+      Remember to add any other topics here that you might be using if you are extending :class:`.BaseNode`.
+    * The `Dockerfile for the SITL image
+      <https://github.com/hmakelin/gisnav-docker/blob/master/docker/px4-sitl/Dockerfile>`_ uses the
+      `configure_urtps_bridge_topics.py
+      <https://github.com/hmakelin/gisnav-docker/blob/master/scripts/configure_urtps_bridge_topics.py>`_
+      script to automatically configure the above topics before building the PX4 SITL target.
+
+PX4-ROS 2 Bridge Troubleshooting
+___________________________________________________
+
+Ensure you have your new workspace sourced before moving on to next steps:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2
+    source /opt/ros/foxy/setup.bash
+    source install/setup.bash
+
+You can check whether your new configuration works by running ``micrortps_agent`` and inspecting the console output:
 
 .. code-block:: bash
 
     micrortps_agent -t UDP
 
-With the simulation running, you can check that the required topics are coming through the bridge with:
+If your new topics are not listed, you can try cleaning both the ``px4_ros_com_ros2`` workspace and your PX4 build
+before rebuilding again:
 
 .. code-block:: bash
+    :caption: Clean ROS 2 workspace
 
-    ros2 topic echo VehicleGlobalPosition_PubSubTopic
+    cd ~/px4_ros_com_ros2/scripts
+    ./clean_all.bash
+
+.. code-block:: bash
+    :caption: Clean PX4 build
+
+    cd ~/PX4-Autopilot
+    make clean
 
 .. note::
-    The PX4-ROS 2 bridge adds a ``_PubSubTopic`` suffix to topics that are generated by the RTPS agent.
+    *Unverified*:
+    When GISNav is running, it will try to exit cleanly when ``Ctrl+C`` is pressed. However, if the combination is
+    mashed quickly in succession the clean exit may fail and leave some subscriptions hanging. In this case you may
+    want to restart ``micrortps_agent``.
 
 gscam
 ===================================================
-As described in the `Video Streaming <https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ section
-of PX4's User Guide, the ``typhoon_h480`` build target for Gazebo SITL supports UDP video streaming. You can use
-``gscam`` to pipe the video into ROS, from where it can be subscribed to by GISNav's :class:`.BaseNode`.
 
-Then install ``gscam`` and its dependencies from the
-`ROS package index <https://index.ros.org/p/gscam/github-ros-drivers-gscam/>`_ for your ROS distribution :
+The ``typhoon_h480`` build target for Gazebo SITL supports UDP `video streaming
+<https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ . Here we will use ``gscam`` to publish the
+UDP video stream to ROS 2 to make it accessible to GISNav:
+
+Install ``gscam`` and dependencies:
 
 .. code-block:: bash
 
     sudo apt-get install -y gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl ros-foxy-gscam
 
-Create gscam parameter and camera calibration YAML files or use the provided examples:
-
-.. code-block:: yaml
-    :caption: test/assets/gscam_params.yaml
-
-    gscam_publisher:
-      ros__parameters:
-        gscam_config: >
-          gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600 !
-          application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 !
-          rtph264depay ! h264parse ! avdec_h264 ! videoconvert
-        preroll: False
-        use_gst_timestamps: True
-        frame_id: 'mono'
-        image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
-
-.. code-block:: yaml
-    :caption: test/assets/camera_calibration.yaml
-
-    image_width: 640
-    image_height: 360
-    camera_name: cgo3
-    camera_matrix:
-      rows: 3
-      cols: 3
-      data: [205.46963709898583, 0, 320, 0, 205.46963709898583, 180, 0, 0, 1]
-    distortion_model: plumb_bob
-    distortion_coefficients:
-      rows: 1
-      cols: 5
-      data: [0, 0, 0, 0, 0]
-    rectification_matrix:
-      rows: 3
-      cols: 3
-      data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
-    projection_matrix:
-      rows: 3
-      cols: 4
-      data: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]
-
-.. seealso::
-    See the
-    `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_
-    ROS tutorial on how to create a camera calibration file if you do not want to use the example file
-
-
-And run ``gscam`` with your configuration when PX4 Gazebo SITL is also running:
-
-.. code-block:: bash
-
-    ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
-        -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
-
-You can also try `gscam2 <https://github.com/clydemcqueen/gscam2>`_:
+The GISNav repository includes a sample camera configuration that we will use. Run ``gscam`` in a dedicated bash shell
+with the provided configuration files:
 
 .. code-block:: bash
 
     cd ~/px4_ros_com_ros2
-    git clone https://github.com/clydemcqueen/gscam2 src
-    colcon build --packages-select gscam2
-    ros2 run gscam2 gscam_main --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
+    ros2 run gscam gscam_node --ros-args --params-file src/gisnav/test/assets/gscam_params.yaml \
         -p camera_info_url:=file://$PWD/src/gisnav/test/assets/camera_calibration.yaml
 
+.. seealso::
+    See
+    `How to Calibrate a Monocular Camera <https://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration>`_
+    on how to create a custom camera calibration file if you do not want to use the provided example
+
+gscam Troubleshooting
+___________________________________________________
+
+.. note::
+    *Unverified*:
+    When GISNav is running, it will try to exit cleanly when ``Ctrl+C`` is pressed. However, if the combination is
+    mashed quickly in succession the clean exit may fail and leave some subscriptions hanging. In this case you may
+    want to restart ``gscam``.
+
+.. _QGroundControl:
+
+QGroundControl
+===================================================
+QGroundControl is a PX4-compatible ground control station software with a graphical user interface. It is needed
+for controlling the drone in the SITL (software-in-the-loop) simulation.
+
+Install QGroundControl by following the `official instructions
+<https://docs.qgroundcontrol.com/master/en/getting_started/quick_start.html>`_.
+
+You can then run QGroundControl from the directory where you installed it, for example:
+
+.. code-block:: bash
+
+    ~/Applications/QGroundControl.AppImage
+
+QGroundControl Troubleshooting
+___________________________________________________
+
+You may need to change the file permissions and/or extract it before running it:
+
+.. code-block:: bash
+    :caption: Change file permissions
+
+    cd ~/Applications
+    chmod +x QGroundControl.AppImage
+    ./QGroundControl.AppImage
+
+.. code-block:: bash
+    :caption: Extract and run
+
+    cd ~/Applications
+    ./QGroundControl.AppImage --appimage-extract-and-run
 
 .. _`WMS endpoint`:
 
@@ -256,4 +354,53 @@ sources such as:
 .. seealso::
     You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is
     understood by your chosen GIS server.
+
+GISNav
+===================================================
+Install GISNav in your `ROS 2 Workspace`_:
+
+.. code-block:: bash:
+
+    cd ~/px4_ros_com_ros2
+    mkdir -p src && cd "$_"
+    git clone https://github.com/hmakelin/gisnav.git
+    cd gisnav
+    pip3 install -r requirements.txt
+    pip3 install -r requirements-dev.txt
+
+Download the LoFTR submodule and weights:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2/src/gisnav
+    git submodule update LoFTR
+    pip3 install gdown
+    mkdir weights && cd "$_"
+    gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
+
+.. note::
+    The example downloads the dual-softmax (_ds suffix) outdoor weights which are permissively licensed (does not use
+    SuperGlue)
+
+Build the GISNav package:
+
+.. code-block:: bash:
+
+    cd ~/px4_ros_com_ros2
+    colcon build --packages-select gisnav
+
+Once GISNav is installed, you can run the included :class:`.MockGPSNode` either directly with ``ros2 run``:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2
+    ros2 run gisnav mock_gps_node --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport.yaml
+
+Or using the provided launch file:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2
+    ros2 launch gisnav mock_gps_node.launch.py
 

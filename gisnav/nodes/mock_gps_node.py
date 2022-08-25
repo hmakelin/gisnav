@@ -16,9 +16,6 @@ class MockGPSNode(BaseNode):
     SENSOR_GPS_TOPIC_NAME = '/fmu/sensor_gps/in'
     """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages"""
 
-    MISC_MOCK_GPS_SELECTION = 1
-    """GPS selection parameter for outgoing :class:`px4_msgs.msg.VehicleGpsPosition` messages"""
-
     def __init__(self, name: str, package_share_dir: str):
         """Class initializer
 
@@ -26,7 +23,6 @@ class MockGPSNode(BaseNode):
         :param package_share_dir: Package share directory
         """
         super().__init__(name, package_share_dir)
-        self._declare_ros_params()
         self._sensor_gps_publisher = self.create_publisher(SensorGps,
                                                            self.SENSOR_GPS_TOPIC_NAME,
                                                            rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
@@ -38,8 +34,6 @@ class MockGPSNode(BaseNode):
         """
         assert_type(fixed_camera, FixedCamera)
         position = fixed_camera.position
-
-        #mock_gps_selection = self.get_parameter('misc.mock_gps_selection').get_parameter_value().integer_value
 
         msg = SensorGps()
         msg.timestamp = self._synchronized_time  #position.timestamp
@@ -89,16 +83,3 @@ class MockGPSNode(BaseNode):
         # = 10101111 00000001 00001 000
         # = 11469064
         return 11469064
-
-    def _declare_ros_params(self) -> None:
-        """Declares ROS parameters"""
-        try:
-            namespace = 'misc'
-            self.declare_parameters(namespace, [
-                ('mock_gps_selection', self.MISC_MOCK_GPS_SELECTION)
-            ])
-            self.get_logger().debug(f'Using default value "{self.MISC_MOCK_GPS_SELECTION}" for ROS parameter '
-                                    f'"mock_gps_selection".')
-        except rclpy.exceptions.ParameterAlreadyDeclaredException as _:
-            # This means parameter is declared from YAML file
-            pass

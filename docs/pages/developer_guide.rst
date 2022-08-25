@@ -6,8 +6,8 @@ Developer Guide
     GISNav is untested and has only been demonstrated in a software-in-the-loop (SITL) simulation environment.
     Do not use this software for real drone flights.
 
-This section provides instruction on how you can integrate GISNav with your own project as well as configure and extend
-its functionality to match your use case.
+This section provides instruction on how you can integrate GISNav with your project as well as configure and extend
+it to match your use case.
 
 You should start from `Extend BaseNode`_ and only move on to the other sections if your project needs more specific
 configuration.
@@ -141,8 +141,8 @@ ____________________________________________________
     The configurations presented in this section are intended for simulation use only. Do not attempt these on a real
     flight.
 
-The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock GPS message to the
-PX4-ROS 2 bridge ``VehicleGpsPosition_PubSubTopic`` topic.
+The :class:`.MockGPSNode` extends the :class:`.BaseNode` abstract base class to publish a mock
+:class:`px4_msgs.SensorGps` message to the PX4-ROS 2 bridge ``/fmu/sensor_gps/in`` topic.
 
 You can configure your PX4 to use the new GPS only to simulate loss of primary GPS. This can be either configured
 before flight in the file ``~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480``, or during
@@ -323,3 +323,19 @@ to measure:
     cd ~/px4_ros_com_ros2
     python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/test/test_mock_gps_node.py
     python3 -m coverage report
+
+
+Documentation
+====================================================
+
+If you have the development environment setup, you can generate this GISNav documentation yourself with Sphinx:
+
+.. code-block:: bash
+
+    cd ~/colcon_ws/src/gisnav
+    python3 -m pip install -r requirements-dev.txt
+    cd docs
+    make html
+
+
+The HTML documentation will then appear in the ``_build/`` folder.

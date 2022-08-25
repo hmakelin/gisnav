@@ -1,13 +1,13 @@
 #####################################
-GISNav Documentation
+GISNav Developer Documentation
 #####################################
-Welcome to GISNav's documentation!
+Welcome to GISNav's developer documentation!
 
 This site contains the following pages:
 
     * `Get Started <pages/get_started.html>`_
 
-        A demo to get you get you started with the :class:`.MockGPSNode` example
+        A quick demonstration of GNSS-free visual navigation with GISNav's :class:`.MockGPSNode`
 
     * `Setup <pages/setup.html>`_
 

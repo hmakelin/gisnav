@@ -207,28 +207,29 @@ class BaseNode(Node, ABC):
         self._map_update_timer = self._setup_map_update_timer()
 
         # Setup PX4-ROS 2 bridge subscriptions from this configuration
+        # See also how these topic names are parsed in _create_subscriber in case of breaking changes
         self._topics = {
-            'VehicleAttitude_PubSubTopic': {
+            '/fmu/vehicle_attitude/out': {
                 self._TOPICS_MSG_KEY: VehicleAttitude,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
-            'VehicleLocalPosition_PubSubTopic': {
+            '/fmu/vehicle_local_position/out': {
                 self._TOPICS_MSG_KEY: VehicleLocalPosition,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
-            'VehicleGlobalPosition_PubSubTopic': {
+            '/fmu/vehicle_global_position/out': {
                 self._TOPICS_MSG_KEY: VehicleGlobalPosition,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
-            'GimbalDeviceSetAttitude_PubSubTopic': {
+            '/fmu/gimbal_device_set_attitude/out': {
                 self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
-            'camera_info': {
+            '/camera/camera_info': {
                 self._TOPICS_MSG_KEY: CameraInfo,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value
             },
-            'image_raw': {
+            '/camera/image_raw': {
                 self._TOPICS_MSG_KEY: Image,
                 self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
             },
@@ -640,6 +641,10 @@ class BaseNode(Node, ABC):
 
             # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
+            if self._vehicle_attitude is None:
+                self.get_logger().debug('Vehicle attitude not yet available, cannot determin vehicle Position.')
+                return None
+
             assert hasattr(self._vehicle_attitude, 'q')
             position = Position(
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
@@ -807,7 +812,7 @@ class BaseNode(Node, ABC):
         :param qos: Subscription quality of service profile
         :return: The subscriber instance
         """
-        callback_name = f'_{topic_name.lower()}_callback'
+        callback_name = f'_{topic_name.split("/")[2].lower()}_callback'  # TODO make topic name parsing less brittle
         callback = getattr(self, callback_name, None)
         assert callback is not None, f'Missing callback implementation for {callback_name}.'
         return self.create_subscription(class_, topic_name, callback, qos)
@@ -880,7 +885,7 @@ class BaseNode(Node, ABC):
                                        'subscription.')
                 camera_info_topic.destroy()
 
-    def _vehiclelocalposition_pubsubtopic_callback(self, msg: VehicleLocalPosition) -> None:
+    def _vehicle_local_position_callback(self, msg: VehicleLocalPosition) -> None:
         """Handles latest :class:`px4_msgs.msg.VehicleLocalPosition` message
 
         Uses the EKF2 system time in the message to synchronize local system time.
@@ -892,7 +897,7 @@ class BaseNode(Node, ABC):
         self._vehicle_local_position = msg
         self._sync_timestamps(self._vehicle_local_position.timestamp)
 
-    def _vehicleattitude_pubsubtopic_callback(self, msg: VehicleAttitude) -> None:
+    def _vehicle_attitude_callback(self, msg: VehicleAttitude) -> None:
         """Handles latest :class:`px4_msgs.msg.VehicleAttitude` message
 
         :param msg: :class:`px4_msgs.msg.VehicleAttitude` message from the PX4-ROS 2 bridge
@@ -900,7 +905,7 @@ class BaseNode(Node, ABC):
         """
         self._vehicle_attitude = msg
 
-    def _vehicleglobalposition_pubsubtopic_callback(self, msg: VehicleGlobalPosition) -> None:
+    def _vehicle_global_position_callback(self, msg: VehicleGlobalPosition) -> None:
         """Handles latest :class:`px4_msgs.msg.VehicleGlobalPosition` message
 
         :param msg: :class:`px4_msgs.msg.VehicleGlobalPosition` message from the PX4-ROS 2 bridge
@@ -908,7 +913,7 @@ class BaseNode(Node, ABC):
         """
         self._vehicle_global_position = msg
 
-    def _gimbaldevicesetattitude_pubsubtopic_callback(self, msg: GimbalDeviceSetAttitude) -> None:
+    def _gimbal_device_set_attitude_callback(self, msg: GimbalDeviceSetAttitude) -> None:
         """Handles latest :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message
 
         :param msg: :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message from the PX4-ROS 2 bridge

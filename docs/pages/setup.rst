@@ -65,8 +65,8 @@ better either through the PX4 shell, through QGroundControl, or in the
     pitch (is not completely nadir-facing) to ensure the field of view does not move or rotate* too quickly for GISNav.
     Otherwise GISNav may lose track of position for long enough for the position delay failsafe to trigger before GISNav
     can find the drone again. Increasing the position failsafe delay helps if your GPU is a bit slower or GISNav for some
-    reason cannot produce a position estimate for a number of subsequent frames for one reason or another. However as a
-    failsafe parameter it should not be made unreasonably large.
+    reason cannot produce a position estimate for a number of subsequent frames. However as a failsafe parameter it
+    should not be made unreasonably large.
 
     The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its
     default configuration seems to be more accurate in estimating vertical position than horizontal position, so the
@@ -267,80 +267,36 @@ You may need to change the file permissions and/or extract it before running it:
 
 WMS Endpoint
 ===================================================
-The :class:`.BaseNode` class relies on a WMS to get map rasters for the estimated location of the vehicle, which will
-then be used as input for the pose estimation. The WMS client :class:`.WMSClient` uses OWSLib and runs in a dedicated
-process, although it can be quite easily changed to run in a separate thread to reduce serialization overhead (no ROS
-parameter option exists for this, however).
+The :class:`.BaseNode` class gets map rasters for the estimated location of the vehicle from a WMS endpoint. The WMS
+client :class:`.WMSClient` uses runs in a dedicated process, although it can be quite easily changed to run in a
+separate thread to reduce serialization overhead (no ROS oparameter option currently exists for this, however).
 
-The example configuration uses mapproxy, which is lightweight and can be configured to both cache tiles and proxy a tile
-based endpoint, which are common since they are more efficient, into a WMS endpoint. WMS endpiont is needed since the
-GetMap request allows specifying a specific bounding box instead of a premade tile.
-
-If your solution is Internet-connected, you can use any WMS endpoint. Otherwise you may choose to run your own mapproxy,
-GeoServer or similar server onboard.
-
-You can configure the WMS client via the ROS parameter server, or provide a YAML file when spinning up your node:
+Configure the WMS client via the ROS parameter server, or provide a YAML file when spinning up your node:
 
 .. code-block:: yaml
-    :caption: Example YAML configuration of wms ROS parameters
+    :caption: Example YAML configuration of WMS ROS parameters
 
     my_node:
       ros__parameters:
         wms:
-          url: 'http://localhost:8080/wms'
+          url: 'http://localhost:80/?map=/etc/mapserver/wms.map'
           version: '1.1.1'
           layers: ['Imagery']
           srs: 'EPSG:4326'  # don't change this setting, internal logic may often implicitly assume EPSG:4326
           request_timeout: 10
           image_format: 'image/jpeg'
 
-.. note::
-    The ``wms.url``, ``wms.version`` and ``wms.timeout`` ROS parameters are read-only because currently there is no
-    implementation in :class:`.BaseNode` for re-initializing the underlying :class:`.WMSClient` instance with new
-    parameters.
-
-
-Own GIS Server
-----------------------------------------------------
-The benefit of running your own GIS server is that you can embed it onboard the drone and not rely on an internet
-connection. Accessing map tiles or rasters over the internet may be fine for simulation but most likely not for
-real-world use.
-
-If you want to run your own server or WMS proxy, you may want to consider e.g. these options:
-
-    * `MapProxy <https://mapproxy.org/>`_ (proxy only but can cache tiles locally)
-    * `GeoServer <https://geoserver.org/>`_ (full-fledged `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
-
-If you do not want to use commercial high-resolution orthoimagery (from primary sources such as Maxar or secondary
-sources like Esri ArcGIS, Google, etc.), you can load your own server with data from public domain or openly licensed
-sources such as:
-
-    * `OSM-curated Aerial Imagery <https://wiki.openstreetmap.org/wiki/Aerial_imagery>`_
-
-        * Large list of sources with various licensing terms, see terms of use for each service individually
-
-    * `Open Aerial Map <https://map.openaerialmap.org/>`_
-
-        * Various smaller maps for specific locations, you can also make your own for your area of interest
-
-    * `US Geological Survey <https://www.usgs.gov/programs/national-geospatial-program/imagery>`_
-
-        * US coverage only
-
-    * `UK Environment Agency <https://data.gov.uk/dataset/4921f8a1-d47e-458b-873b-2a489b1c8165/vertical-aerial-photography>`_
-
-        * UK coverage only, ECW format
-
-    * `National Land Survey of Finland <https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/orthophotos>`_
-
-        * Finland coverage only, WMTS, JPEG 2000 format
+WMS Proxy
+___________________________________________________
+If you already have a third party high-resolution aerial or satellite imagery endpoint available, you only need to
+proxy it through a WMS service. Follow the `gisnav-docker README.md <https://github.com/hmakelin/gisnav-docker>`_ to set
+up a WNS MapProxy using the provided Docker image.
 
 .. note::
     Commercial web-based map services are often
     `tile-based <https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames>`_ (as opposed to WMS) because it is more
     efficient to serve pre-computed tiles than to compute unique rasters for each individual requested bounding box.
     You will need a WMS proxy if you decide to go with a tile-based endpoint.
-
 
 .. warning::
     Many commercial services explicitly prohibit the caching of map tiles in their Terms of Use (ToU), especially if
@@ -350,13 +306,117 @@ sources such as:
     While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you should
     still make sure you understand the ToU of the service you are using and that it fits your planned use case.
 
+Self-hosted WMS Server
+___________________________________________________
+The benefit of a self-hosted WMS service is that you can embed it onboard the drone and not rely on an internet
+connection.
 
-.. seealso::
-    You may want to learn `GDAL <https://gdal.org/>`_ to process your downloaded geospatial products to a format that is
-    understood by your chosen GIS server.
+If you want to run your own WMS server, you may want to consider e.g. these options:
+
+    * `MapServer <https://mapserver.org/>`_
+
+    * `GeoServer <https://geoserver.org/>`_ (full-fledged
+      `OGC-compliant <https://en.wikipedia.org/wiki/Open_Geospatial_Consortium>`_ GIS server)
+
+    * `Mapnik <https://mapnik.org/>`_ and `MapProxy <https://mapproxy.org/>`_
+
+If you do not want to use commercial (=not free) high-resolution imagery, various national agencies often provide
+country-specific aerial imagery in the public domain or with public-domain-like licensing terms. You should look for
+imagery available in `GDAL <https://gdal.org>`_ supported formats with coverage for your area.
+
+.. note::
+    You can even create your own maps for the flight area using the same drone and camera you are going to be
+    navigating with and host them on your own GIS server.
+
+MapServer with preloaded maps for :class:`.MockGPSNode` demo
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Here we provide an example on how to host your own maps using MapServer. If you are fine with using maps for the
+:class:`.MockGPSNode` demo only, then you can simply use the `gisnav-docker
+<https://github.com/hmakelin/gisnav-docker>`_ repository. Otherwise see the instructions below.
+
+To follow these instructions you will need:
+
+* An AWS account and AWS CLI, **or alternatively**, an `EarthExplorer <https://earthexplorer.usgs.gov/>`_ account
+* `GDAL <https://gdal.org>`_
+
+For the :class:`.MockGPSNode` demo, you can use `NAIP
+<https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip>`_
+imagery and the `MapServer docker image <https://hub.docker.com/r/camptocamp/mapserver>`_ from Docker Hub. You can
+download the GeoTIFF imagery from EarthExplorer, or from the Esri-maintained `AWS S3 Requester Pays bucket
+<https://registry.opendata.aws/naip/>`_ if you already have AWS CLI set up:
+
+.. warning::
+    This is a **Requester Pays** bucket and the files can be very large so download only what you need.
+
+.. code-block:: bash
+    :caption: Example: Downloading a NAIP imagery product from the AWS S3 bucket
+
+    cd ~/gisnav-docker
+    mkdir -p tmp/
+    aws s3 cp \
+      --request-payer requester \
+      s3://naip-source/ca/2020/60cm/rgbir_cog/37122/m_3712230_se_10_060_20200524.tif \
+      mapfiles/
+
+.. note::
+    * The USDA FSA NAIP imagery is licensed under public domain with attribution requested. However, you must create an
+      EROS account to download the rasters from EarthExplorer, or use secondary sources such as the AWS S3 bucket
+      mentioned above. The data is not redistributed in the `gisnav-docker <https://github.com/hmakelin/gisnav-docker>`_
+      repository to keep its size manageable.
+    * You do not need an account to browse for product IDs with EarthExplorer. An account is needed if you want to
+      download products.
+
+Use GDAL to make a ``naip.vrt`` VRT file out of your downloaded GeoTIFFs:
+
+.. code-block:: bash
+
+    cd mapfiles/
+    gdalbuildvrt naip.vrt *.tif
+
+Once you have your .tif and .vrt files, you can run a ``mapserver`` container:
+
+.. code-block:: bash
+
+    cd ~/gisnav-docker
+    export CONTAINER_NAME=gisnav-mapserver
+    export MAPSERVER_PATH=/etc/mapserver
+    docker run \
+      --name $CONTAINER_NAME \
+      -p 80:80 \
+      -v $PWD/mapfiles/:$MASERVER_PATH/:ro \
+      camptocamp/mapserver
+
+Test your MapServer WMS service by opening the capabilities XML in your browser:
+
+.. code-block:: bash
+
+    firefox "http://localhost:80/?map=/etc/mapserver/wms.map&service=WMS&request=GetCapabilities"
+
+Docker commit the MapServer container with preloaded maps
+--------------------------------------------------------------
+To upload the image preloaded with maps to Docker Hub, first commit the container to an image:
+
+.. code-block:: bash
+
+    export CONTAINER_ID=$(docker ps -q -f name=$CONTAINER_NAME)
+    export IMAGE_NAME=gisnav-mapserver
+    docker commit $CONTAINER_ID $IMAGE_NAME
+
+Then push the image to Docker Hub:
+
+.. note::
+    Replace ``hmakelin``  with your own user account name, and ``latest`` with your own tag
+
+.. code-block:: bash
+
+    export DOCKER_HUB_USER=hmakelin
+    export tag=latest
+    docker image tag $IMAGE_NAME $DOCKER_HUB_USER/$IMAGE_NAME:$tag
+    docker image push $DOCKER_HUB_USER/$IMAGE_NAME
 
 GISNav
 ===================================================
+
 Install GISNav in your `ROS 2 Workspace`_:
 
 .. code-block:: bash:

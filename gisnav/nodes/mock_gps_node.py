@@ -64,7 +64,7 @@ class MockGPSNode(BaseNode):
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
-        msg.heading = position.attitude.yaw + fixed_camera.image_pair.ref.rotation # np.nan
+        msg.heading = position.attitude.yaw
         msg.heading_offset = np.nan
         #msg.heading_accuracy = np.nan
         #msg.rtcm_injection_rate = np.nan

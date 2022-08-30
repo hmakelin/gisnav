@@ -79,12 +79,13 @@ class Attitude:
     pitch: float = field(init=False)
     yaw: float = field(init=False)
     r: float = field(init=False)
+    extrinsic: bool = False
 
     def __post_init__(self):
         """Post-initialization validity checks"""
         assert_len(self.q, 4)
         rotation = Rotation.from_quat(self.q)
-        roll, pitch, yaw = tuple(rotation.as_euler('xyz'))
+        roll, pitch, yaw = tuple(rotation.as_euler('xyz' if self.extrinsic else 'XYZ'))
         object.__setattr__(self, 'roll', roll)
         object.__setattr__(self, 'pitch', pitch)
         object.__setattr__(self, 'yaw', yaw)
@@ -99,7 +100,7 @@ class Attitude:
         r = Rotation.from_quat(self.q) * Rotation.from_quat(nadir_pitch)
         q = r.as_quat()
         q = np.array([q[1], -q[0], q[2], -q[3]])  # NED to ESD
-        att = Attitude(q)
+        att = Attitude(q, self.extrinsic)
         return att
 
 
@@ -171,6 +172,7 @@ class ContextualMapData(_ImageHolder):
     crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
+    mock_data: bool = False
 
     def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates
@@ -438,7 +440,7 @@ class FixedCamera:
         assert not np.isnan(rT).any()
         gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
 
-        gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body
+        #gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([0, 1, 0]))  # camera body
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
@@ -446,7 +448,7 @@ class FixedCamera:
         rotvec = gimbal_estimated_attitude.as_rotvec()
         gimbal_estimated_attitude = Rotation.from_rotvec([-rotvec[1], rotvec[0], rotvec[2]])
 
-        return Attitude(gimbal_estimated_attitude.as_quat())
+        return Attitude(gimbal_estimated_attitude.as_quat(), extrinsic=self.image_pair.ref.mock_data)
 
     @staticmethod
     def _get_fov_and_c(img_arr_shape: Tuple[int, int], h_mat: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

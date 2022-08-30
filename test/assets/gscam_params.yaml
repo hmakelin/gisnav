@@ -1,7 +1,7 @@
 gscam_publisher:
   ros__parameters:
     gscam_config: >
-      gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5600 !
+      gst-launch-1.0 udpsrc uri=udp://127.0.0.1:5601 !
       application/x-rtp,media=video,clock-rate=90000,encoding-name=H264 !
       rtph264depay ! h264parse ! avdec_h264 ! videoconvert
     preroll: False

@@ -782,6 +782,8 @@ class BaseNode(Node, ABC):
             if projected_center is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
+        else:
+            projected_center = None
 
         assert self._vehicle_position.z_ground is not None
         map_radius = self._get_dynamic_map_radius(self._vehicle_position.z_ground)

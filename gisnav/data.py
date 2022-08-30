@@ -437,6 +437,7 @@ class FixedCamera:
         rT = self.pose.r.T
         assert not np.isnan(rT).any()
         gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
+
         gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([1, 0, 0]))  # camera body
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame

@@ -172,7 +172,7 @@ class ContextualMapData(_ImageHolder):
     crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
-    mock_data: bool = False
+    mock_data: bool = False         # Indicates that this was used for field of view guess (mock map data)
 
     def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates

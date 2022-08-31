@@ -22,5 +22,5 @@ mock_gps_node:
       #params_file: 'config/superglue_params.yaml'  # For parsing args for matcher's static initializer method
       params_file: 'config/loftr_params.yaml'
     debug:
-      export_position: 'position.json'
-      export_projection: 'projection.json'
+      export_position: ''
+      export_projection: ''

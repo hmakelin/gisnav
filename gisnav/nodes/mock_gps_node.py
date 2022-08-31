@@ -38,7 +38,9 @@ class MockGPSNode(BaseNode):
         msg = SensorGps()
         msg.timestamp = self._synchronized_time  #position.timestamp
         #msg.timestamp_sample = msg.timestamp
-        msg.device_id = self._generate_device_id()
+        msg.timestamp_sample = 0
+        #msg.device_id = self._generate_device_id()
+        msg.device_id = 0
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan

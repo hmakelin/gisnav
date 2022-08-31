@@ -69,7 +69,7 @@ failure gps off
 
 The drone should now continue to complete its mission *GNSS-free* with GISNav substituting for GPS.
 
-You can check if PX4 is receiving the mock GPS position estimates by typing the following in the PX4 shell:
+You can check if PX4 is receiving the mock GPS position estimates by typing the following in the MAVLink shell:
 
 ```
 listener sensor_gps

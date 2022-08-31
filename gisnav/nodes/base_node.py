@@ -9,6 +9,7 @@ import time
 import importlib
 import os
 import yaml
+import torch
 
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool

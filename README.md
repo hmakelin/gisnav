@@ -75,7 +75,8 @@ You can check if PX4 is receiving the mock GPS position estimates by typing the 
 listener sensor_gps
 ```
 
-If the printed GPS message has a `device_id` other than 0, your PX4 is receiving the mock GPS node output as expected.
+If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output 
+as expected.
 
 [6]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 

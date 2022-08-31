@@ -721,7 +721,11 @@ class BaseNode(Node, ABC):
         :return: Tuple containing the class type and the initialized pose estimation pool
         """
         # Use 'spawn', see: https://pytorch.org/docs/stable/notes/multiprocessing.html#cuda-in-multiprocessing
-        torch.multiprocessing.set_start_method('spawn')
+        try:
+            torch.multiprocessing.set_start_method('spawn')
+        except RuntimeError as _:
+            # context has already been set
+            pass
         pose_estimator_params = self._load_config(params_file)
         module_name, class_name = pose_estimator_params.get('class_name', '').rsplit('.', 1)
         pose_estimator = self._import_class(class_name, module_name)

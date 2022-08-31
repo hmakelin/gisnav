@@ -38,7 +38,9 @@ class MockGPSNode(BaseNode):
         msg = SensorGps()
         msg.timestamp = self._synchronized_time  #position.timestamp
         #msg.timestamp_sample = msg.timestamp
-        msg.device_id = self._generate_device_id()
+        msg.timestamp_sample = 0
+        #msg.device_id = self._generate_device_id()
+        msg.device_id = 0
         msg.fix_type = 3
         msg.s_variance_m_s = np.nan
         msg.c_variance_rad = np.nan
@@ -64,7 +66,7 @@ class MockGPSNode(BaseNode):
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
-        msg.heading = position.attitude.yaw + fixed_camera.image_pair.ref.rotation # np.nan
+        msg.heading = position.attitude.yaw
         msg.heading_offset = np.nan
         #msg.heading_accuracy = np.nan
         #msg.rtcm_injection_rate = np.nan

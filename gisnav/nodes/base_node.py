@@ -557,7 +557,7 @@ class BaseNode(Node, ABC):
 
         gimbal_set_attitude_ned = vehicle_yaw * gimbal_set_attitude_frd
 
-        return Attitude(gimbal_set_attitude_ned.as_quat())
+        return Attitude(gimbal_set_attitude_ned.as_quat(), extrinsic=True)
 
     @property
     def _altitude_agl(self) -> Optional[float]:
@@ -650,7 +650,7 @@ class BaseNode(Node, ABC):
                 xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
                 z_ground=self._altitude_agl,  # not None
                 z_amsl=self._vehicle_global_position.alt,
-                attitude=Attitude(np.append(self._vehicle_attitude.q[1:4], self._vehicle_attitude.q[0])),
+                attitude=Attitude(np.append(self._vehicle_attitude.q[1:4], self._vehicle_attitude.q[0]), extrinsic=True),
                 timestamp=self._synchronized_time
             )
             return position
@@ -782,6 +782,8 @@ class BaseNode(Node, ABC):
             if projected_center is None:
                 self.get_logger().warn('Could not project field of view center. Using vehicle position for map center '
                                        'instead.')
+        else:
+            projected_center = None
 
         assert self._vehicle_position.z_ground is not None
         map_radius = self._get_dynamic_map_radius(self._vehicle_position.z_ground)
@@ -1131,7 +1133,8 @@ class BaseNode(Node, ABC):
         if image_data is None or map_data is None:
             self.get_logger().warn('Missing required inputs for generating mock image PAIR.')
             return None
-        contextual_map_data = ContextualMapData(rotation=0, crop=image_data.image.dim, map_data=map_data)
+        contextual_map_data = ContextualMapData(rotation=0, crop=image_data.image.dim, map_data=map_data,
+                                                mock_data=True)
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair
 

@@ -1,4 +1,4 @@
-[![Watch the GISNav demo video](https://img.youtube.com/vi/JAK2DPZC33w/0.jpg)](https://youtu.be/JAK2DPZC33w)
+https://user-images.githubusercontent.com/22712178/187892021-ba6cca5a-1b1d-4972-859a-173f2f8b7918.mp4
 
 # Introduction
 

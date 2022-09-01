@@ -1,4 +1,4 @@
-[![Watch the GISNav demo video](https://img.youtube.com/vi/JAK2DPZC33w/0.jpg)](https://youtu.be/JAK2DPZC33w)
+https://user-images.githubusercontent.com/22712178/187892021-ba6cca5a-1b1d-4972-859a-173f2f8b7918.mp4
 
 # Introduction
 
@@ -32,12 +32,10 @@ docker-compose build --build-arg WITH_GISNAV px4-sitl
 
 > **Note** The build for the `px4-sitl` image takes a long time, especially if you are building it for the first time.
 
-Once the `px4-sitl` image has been built, run a `mapserver` service in the background and a `px4-sitl` service in the 
-foreground (you will need to type in some commands into the PX4 shell later):
+Once the `px4-sitl` image has been built, run the `mapserver` and `px4-sitl` services:
 
 ```bash
-docker-compose up -d mapserver
-docker-compose up px4-sitl
+docker-compose up -d mapserver px4-sitl
 ```
 
 > **Note**: 
@@ -62,7 +60,8 @@ Docker container, and then start the mission.
 > **Warning** Do not attempt this on a real flight - simulation use only.
 
 Wait until the drone has risen to its final mission altitude. You should see a visualization of the GISNav-estimated 
-field of view projected on the ground appear. You can then try disabling GPS from your PX4 shell:
+field of view projected on the ground appear. You can then try disabling GPS from the *nsh* console running on the drone
+through your [MAVLink Shell][6] *(accessible e.g. through QGroundControl > Analyze Tools > MAVLink Console)*:
 
 ```
 failure gps off
@@ -70,20 +69,23 @@ failure gps off
 
 The drone should now continue to complete its mission *GNSS-free* with GISNav substituting for GPS.
 
-You can check if PX4 is receiving the mock GPS position estimates by typing the following in the PX4 shell:
+You can check if PX4 is receiving the mock GPS position estimates by typing the following in the MAVLink shell:
 
 ```
 listener sensor_gps
 ```
 
-If the printed GPS message has a `device_id` other than 0, your PX4 is receiving the mock GPS node output as expected.
+If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output 
+as expected.
+
+[6]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 
 # Documentation
 
-See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development, 
+See the [latest developer documentation][7] for information on how to setup a local environment for GISNav development, 
 for code examples and API documentation, and for contribution guidelines.
 
-[6]: https://hmakelin.github.io/gisnav
+[7]: https://hmakelin.github.io/gisnav
 
 # License
 

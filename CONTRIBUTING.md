@@ -5,7 +5,7 @@ commits and pull requests (PRs). Please see below for guidance and suggestions o
 
 ## Issues and improvement suggestions
 
-Please take a look at the [open issues][1] to see if someone has already raised a similar issue or suggestion on which  
+Please take a look at the [open issues][1] to see if someone has already raised a similar issue or suggestion on which 
 you could add your own comments. If not, use the provided templates to submit a new one.
 
 [1]: https://github.com/hmakelin/gisnav/issues

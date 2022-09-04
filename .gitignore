@@ -20,3 +20,6 @@ docs/_build/
 
 # Optional weights folder (LoFTR)
 weights/
+
+# SITL test log output
+test/sitl/output/

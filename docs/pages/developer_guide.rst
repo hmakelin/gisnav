@@ -301,6 +301,8 @@ See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for example
 
 Testing
 ====================================================
+Unit & ROS 2 integration tests
+____________________________________________________
 First you must install the dev dependencies for your workspace:
 
 .. code-block:: bash
@@ -324,6 +326,14 @@ to measure:
     python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/test/test_mock_gps_node.py
     python3 -m coverage report
 
+SITL tests
+____________________________________________________
+SITL tests are under the ``test/sitl`` folder. They are simple Python scripts:
+
+.. code-block:: bash
+
+    cd ~/px4_ros_com_ros2/src/gisnav/test/sitl
+    python sitl_test_mock_gps_node.py
 
 Documentation
 ====================================================

@@ -47,13 +47,13 @@ class BaseNode(Node, ABC):
     _MATCHER_PROCESS_COUNT = 1  # should be 1
 
     # region ROS Parameter Defaults
-    ROS_D_WMS_URL = 'http://localhost:8080/wms'
+    ROS_D_WMS_URL = 'http://localhost:80/wms'
     """Default WMS server endpoint URL"""
 
-    ROS_D_WMS_VERSION = '1.1.1'
+    ROS_D_WMS_VERSION = '1.3.0'
     """Default WMS server version"""
 
-    ROS_D_WMS_LAYERS = ['Imagery']
+    ROS_D_WMS_LAYERS = ['imagery']
     """Default WMS request layers parameter
 
     .. note::

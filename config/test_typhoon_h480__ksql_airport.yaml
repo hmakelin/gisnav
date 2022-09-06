@@ -3,9 +3,9 @@
 mock_gps_node:
   ros__parameters:
     wms:
-      url: 'http://localhost:8080/wms'
+      url: 'http://localhost:80/wms'
       #version: '1.1.1'
-      layers: ['Imagery']
+      layers: ['imagery']
       styles: ['']
       srs: 'EPSG:4326'
       image_format: 'image/jpeg'

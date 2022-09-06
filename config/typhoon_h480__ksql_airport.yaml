@@ -1,9 +1,9 @@
 mock_gps_node:
   ros__parameters:
     wms:
-      url: 'http://localhost:80/?map=/etc/mapserver/wms.map'
+      url: 'http://localhost:80/wms'
       version: '1.3.0'
-      layers: ['naip-natural-color-raster']
+      layers: ['imagery']
       styles: ['']
       srs: 'EPSG:4326'
       image_format: 'image/jpeg'

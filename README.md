@@ -27,7 +27,7 @@ You will need to have [NVIDIA Container Toolkit][2] for Docker installed.
 ```bash
 git clone https://github.com/hmakelin/gisnav-docker.git
 cd gisnav-docker
-docker-compose build --build-arg WITH_GISNAV px4-sitl
+docker-compose build px4-sitl
 ```
 
 > **Note** The build for the `px4-sitl` image takes a long time, especially if you are building it for the first time.

@@ -4,11 +4,12 @@ from __future__ import annotations
 import numpy as np
 import cv2
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from owslib.wms import WebMapService
 from owslib.util import ServiceException
 
 from gisnav.assertions import assert_type, assert_ndim
+from gisnav.data import MapData, Img
 
 
 class WMSClient:
@@ -62,9 +63,13 @@ class WMSClient:
             globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR] = WMSClient(url, version_, timeout_)
 
     @staticmethod
-    def worker(layers: List[str], styles: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str, image_format: str) \
-            -> np.ndarray:
-        """Requests one or more map layers from the WMS server
+    def worker(layers: List[str], styles: List[str], bbox: Tuple[float], map_size: Tuple[int, int], srs_str: str,
+               image_format: str, elevation_layers: Optional[List[str]] = None) \
+            -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        """Requests one or more map imagery and optional height raster layers from the WMS server
+        
+        TODO: Currently no support for separate arguments for imagery and height layers. Assumes height layer is 
+        available at same styles and CRS as imagery layer.
 
         :param layers: List of requested map layers
         :param styles: Optional styles of same length as layers, use empty strings for default styles
@@ -72,7 +77,8 @@ class WMSClient:
         :param map_size: Map size tuple (height, width)
         :param srs_str: WMS server SRS
         :param image_format: WMS server requested image format
-        :return: Requested layers stacked into a numpy array raster
+        :param elevation_layers: Optional layers for height raster
+        :return: Tuple of imagery and height (Optional) rasters
         """
         assert WMSClient.WMS_CLIENT_GLOBAL_VAR in globals()
         wms_client: WMSClient = globals()[WMSClient.WMS_CLIENT_GLOBAL_VAR]
@@ -89,4 +95,21 @@ class WMSClient:
         map_ = cv2.imdecode(map_, cv2.IMREAD_UNCHANGED)
         assert_type(map_, np.ndarray)
         assert_ndim(map_, 3)
-        return map_
+
+        elevation = None
+        if elevation_layers is not None:
+            try:
+                elevation = wms_client._wms.getmap(layers=elevation_layers, styles=styles, srs=srs_str, bbox=bbox,
+                                                   size=map_size, format=image_format,
+                                                   transparent=False)
+            except ServiceException as _:
+                # TODO: handle exception for height layer
+                pass
+
+        if elevation is not None:
+            elevation = np.frombuffer(elevation.read(), np.uint8)  # TODO: handle values above 255?
+            elevation = cv2.imdecode(elevation, cv2.IMREAD_GRAYSCALE)
+            assert_type(elevation, np.ndarray)
+            assert_ndim(elevation, 2)  # Grayscale, no color channels
+
+        return map_, elevation

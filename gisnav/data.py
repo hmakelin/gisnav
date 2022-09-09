@@ -160,7 +160,14 @@ class CameraData:
 @dataclass(frozen=True)
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
-    bbox: GeoBBox
+    bbox: GeoSquare
+    elevation: Optional[Img] = None  # Optional elevation raster
+
+    def __post_init__(self):
+        """Post-initialization validity check."""
+        if self.elevation is not None:
+            assert self.elevation.arr.shape[0:2], self.image.arr.shape[0:2]
+            assert_ndim(self.elevation.arr, 2) # Grayscale image expected
 
 
 # noinspection PyClassHasNoInit
@@ -168,11 +175,13 @@ class MapData(_ImageHolder):
 class ContextualMapData(_ImageHolder):
     """Contains the rotated and cropped map image for _match estimation"""
     image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
+    elevation: Optional[Img] = field(init=None) # Rotated elevation raster (optional) in meters
     rotation: float                 # radians
     crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData               # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
     mock_data: bool = False         # Indicates that this was used for field of view guess (mock map data)
+    altitude_scaling: Optional[float] = None # altitude scaling (elevation raster meters -> camera pixels)
 
     def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates
@@ -214,17 +223,19 @@ class ContextualMapData(_ImageHolder):
 
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
 
-    def _rotate_and_crop_map(self) -> np.ndarray:
+    def _rotate_and_crop_map(self, elevation: bool = False) -> np.ndarray:
         """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
 
         Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map.
 
+        :param elevation: Set True to do rotation on elevation raster instead
         :return: Rotated and cropped map raster
         """
-        cx, cy = tuple(np.array(self.map_data.image.arr.shape[0:2]) / 2)
+        image = self.map_data.image if not elevation else self.map_data.elevation
+        cx, cy = tuple(np.array(image.arr.shape[0:2]) / 2)
         degrees = math.degrees(self.rotation)
         r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-        map_rotated = cv2.warpAffine(self.map_data.image.arr, r, self.map_data.image.arr.shape[1::-1])
+        map_rotated = cv2.warpAffine(image.arr, r, image.arr.shape[1::-1])
         map_cropped = self._crop_center(map_rotated, self.crop)
         #if visualize:
             #cv2.imshow('padded', self.map_data.image.arr)
@@ -256,6 +267,10 @@ class ContextualMapData(_ImageHolder):
     def __post_init__(self):
         """Set computed fields after initialization."""
         object.__setattr__(self, 'image', Img(self._rotate_and_crop_map()))
+        if self.map_data.elevation is not None:
+            object.__setattr__(self, 'elevation', Img(self._rotate_and_crop_map(True)))
+        else:
+            object.__setattr__(self, 'elevation', None)
         object.__setattr__(self, 'pix_to_wgs84', self._pix_to_wgs84())
 
 

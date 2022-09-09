@@ -26,7 +26,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
     InputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
-from gisnav.assertions import assert_type, assert_len
+from gisnav.assertions import assert_type, assert_len, assert_ndim, assert_shape
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
 
@@ -59,6 +59,14 @@ class BaseNode(Node, ABC):
     .. note::
         The combined layers should cover the flight area of the vehicle at high resolution. Typically this list would 
         have just one layer for high resolution aerial or satellite imagery.
+    """
+
+    ROS_D_WMS_ELEVATION_LAYERS = []
+    """Default WMS request elevation layers parameter
+
+    .. note::
+        This is an optional elevation layer that makes the pose estimation more accurate especially when flying at low 
+        altitude. It is assumed to be grayscale.
     """
 
     ROS_D_WMS_STYLES = ['']
@@ -473,6 +481,16 @@ class BaseNode(Node, ABC):
 
     # region Computed Properties
     @property
+    def _altitude_scaling(self) -> Optional[float]:
+        """Returns camera focal length divided by camera altitude in meters."""
+        if self._camera_data is not None and self._altitude_agl is not None:
+            return self._camera_data.fx / self._altitude_agl
+        else:
+            self.get_logger().warn('Could not estimate elevation scale because camera focal length and/or vehicle '
+                                   'altitude is unknown.')
+            return None
+
+    @property
     def _r_guess(self) -> Optional[np.ndarray]:
         """Gimbal rotation matrix guess (based on :class:`px4_msgs.GimbalDeviceSetAttitude` message)
 
@@ -679,7 +697,8 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
             return
 
-        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim)
+        contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim,
+            altitude_scaling=self._altitude_scaling)
         return input_data, contextual_map_data
     # endregion
 
@@ -932,7 +951,7 @@ class BaseNode(Node, ABC):
     # endregion
 
     #region WMSWorkerCallbacks
-    def _wms_pool_worker_callback(self, result: List[MapData]) -> None:
+    def _wms_pool_worker_callback(self, result: Tuple[np.ndarray, Optional[np.ndarray]]) -> None:
         """Handles result from :meth:`gisnav.wms.worker`.
 
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
@@ -941,11 +960,17 @@ class BaseNode(Node, ABC):
         :param result: Results from the asynchronous call
         :return:
         """
-        map_ = result
+        map_, elevation = result
         assert_type(map_, np.ndarray)
+        if elevation is not None:
+            assert_ndim(elevation, 2)
+            assert_shape(elevation, map_.shape[0:2])
+
         # Should already have received camera info so _map_size_with_padding should not be None
         assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'
-        map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_))
+
+        elevation = Img(elevation) if elevation is not None else None
+        map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_), elevation=elevation)
         self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
         self._map_data = map_data
 
@@ -1024,6 +1049,7 @@ class BaseNode(Node, ABC):
 
         # Build and send WMS request
         layers = self.get_parameter('wms.layers').get_parameter_value().string_array_value
+        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
         styles = self.get_parameter('wms.styles').get_parameter_value().string_array_value
         srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
         image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value
@@ -1036,10 +1062,13 @@ class BaseNode(Node, ABC):
                                                                           f'results were not yet ready.'
         self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
                                f'{image_format}.')
+        args = [layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format]
+        if len(elevation_layers) > 0:
+            args.append(elevation_layers)
         self._wms_query = AsyncWMSQuery(
             result=self._wms_pool.apply_async(
                 WMSClient.worker,
-                (layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format),
+                tuple(args),
                 callback=self._wms_pool_worker_callback,
                 error_callback=self._wms_pool_worker_error_callback
             ),
@@ -1296,10 +1325,18 @@ class BaseNode(Node, ABC):
         """
         assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
         pose_guess = None if self._pose_guess is None else tuple(self._pose_guess)
+
+        # Scale elevation raster from meters to camera native pixels
+        elevation = image_pair.ref.elevation.arr if image_pair.ref.elevation is not None else None
+        if elevation is not None:
+            elevation = elevation * image_pair.ref.altitude_scaling if image_pair.ref.altitude_scaling is not None \
+                else None
+
         self._pose_estimation_query = AsyncPoseQuery(
             result=self._pose_estimator_pool.apply_async(
                 self._pose_estimator.worker,
-                (image_pair.qry.image.arr, image_pair.ref.image.arr, image_pair.qry.camera_data.k, pose_guess),
+                (image_pair.qry.image.arr, image_pair.ref.image.arr, image_pair.qry.camera_data.k, pose_guess,
+                 elevation),
                 callback=self._pose_estimation_worker_callback,
                 error_callback=self._pose_estimation_worker_error_callback
             ),

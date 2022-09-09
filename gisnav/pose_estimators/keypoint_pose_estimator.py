@@ -42,7 +42,9 @@ class KeypointPoseEstimator(PoseEstimator):
         pass
 
     def estimate_pose(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
-                      guess: Optional[Tuple[np.ndarray, np.ndarray]]) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+                      guess: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                      elevation_reference: Optional[np.ndarray] = None) \
+            -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns pose between given query and reference images, or None if no pose could not be estimated
 
         Uses :class:`._find_matching_keypoints` to estimate matching keypoints before estimating pose.
@@ -51,15 +53,27 @@ class KeypointPoseEstimator(PoseEstimator):
         :param reference: The second (reference) image for pose estimation
         :param k: Camera intrinsics matrix (3, 3)
         :param guess: Optional initial guess for camera pose
+        :param elevation_reference: Optional elevation raster (same size resolution as reference image, grayscale)
         :return: Pose tuple consisting of a rotation (3, 3) and translation (3, 1) np.ndarrays
         """
+        if elevation_reference is not None:
+            assert elevation_reference.shape[0:2] == reference.shape[0:2]
         matched_keypoints = self._find_matching_keypoints(query, reference)
         if matched_keypoints is None or len(matched_keypoints[0]) < self._min_matches:
             return None  # Not enough matching keypoints found
 
         mkp1, mkp2 = matched_keypoints
-        padding = np.array([[0]] * len(mkp1))
-        mkp2_3d = np.hstack((mkp2, padding))  # Set world z-coordinates to zero
+
+        if elevation_reference is None:
+            # Set world z values to zero (assume planar ground surface and estimate homography)
+            z_values = np.array([[0]] * len(mkp1))
+        else:
+            # Z values are assumed to be in camera native coordinates (not in meters)
+            x, y = np.transpose(np.floor(mkp2).astype(int))  # do floor first before converting to int
+            z_values = elevation_reference[y, x].reshape(-1, 1)  # y axis first
+
+        mkp2_3d = np.hstack((mkp2, z_values))
+
         dist_coeffs = np.zeros((4, 1))
         use_guess = guess is not None
         r, t = guess if use_guess else (None, None)

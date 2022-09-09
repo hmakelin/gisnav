@@ -247,7 +247,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
             # TODO: implement initializer
             raise NotImplementedError
 
-        def estimate_pose(query, reference, k, guess):
+        def estimate_pose(query, reference, k, guess = None, elevation_ref = None):
             """Returns pose between query and reference images"""
             # Do your pose estimation magic here
             #r = ...  # np.ndarray of shape (3, 3)
@@ -271,7 +271,7 @@ If you want to create a :class:`.KeypointPoseEstimator`, you can also start with
 
     class MyPoseEstimator(KeypointPoseEstimator):
 
-        def __init__(self, ):
+        def __init__(self):
             # TODO: implement initializer
             raise NotImplementedError
 

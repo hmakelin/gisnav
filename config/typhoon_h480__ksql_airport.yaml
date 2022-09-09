@@ -4,6 +4,7 @@ mock_gps_node:
       url: 'http://localhost:80/wms'
       version: '1.3.0'
       layers: ['imagery']
+      elevation_layers: ['osm-buildings']
       styles: ['']
       srs: 'EPSG:4326'
       image_format: 'image/jpeg'
@@ -11,7 +12,7 @@ mock_gps_node:
     misc:
       attitude_deviation_threshold: 10 # degrees
       max_pitch: 30  # 30  # Used by _should_match
-      min_match_altitude: 80
+      min_match_altitude: 50
     map_update:
       update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
       gimbal_projection: True

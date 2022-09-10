@@ -23,7 +23,6 @@ weights/
 
 # SITL test log output (but leave one sample flight log)
 test/sitl/output/
-!test/sitl/output/gisnav-sitl-test-log_2022-09-04T10-31-20Z.ulog
 
 # Jupyter Notebook checkpoints
 test/sitl/ulog_analysis/.ipynb_checkpoints/

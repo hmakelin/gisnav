@@ -12,3 +12,7 @@ coverage
 
 # SITL tests
 mavsdk
+
+# .ulog analysis
+jupyter
+git+https://github.com/dronecrew/px4tools.git

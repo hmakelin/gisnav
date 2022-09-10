@@ -345,7 +345,8 @@ You must first start ``jupyter-notebook``:
     cd ~/px4_ros_com_ros2/src/gisnav/test/sitl/ulog_analysis
     jupyter-notebook
 
-The notebook documents the analysis and displays the results.
+The notebook documents the analysis and displays the results. Download the example ULog file from Google Drive `here
+<https://drive.google.com/drive/folders/1SmcOV11IJG4qL7Of77mpNICeiLP_9fH7?usp=sharing>`_.
 
 Documentation
 ====================================================

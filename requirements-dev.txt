@@ -15,4 +15,4 @@ mavsdk
 
 # .ulog analysis
 jupyter
-px4tools
+git+https://github.com/dronecrew/px4tools.git

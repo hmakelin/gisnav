@@ -12,3 +12,7 @@ coverage
 
 # SITL tests
 mavsdk
+
+# .ulog analysis
+jupyter
+px4tools

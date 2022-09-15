@@ -1,0 +1,3 @@
+# Ignore Jupyter notebooks because embedded images and other metadata inflate number of lines of code, making GitHub
+# misreport repository language as "Jupyter Notebook"
+*.ipynb linguist-documentation

@@ -8,6 +8,7 @@ pdata = PackageData.parse_package_data(os.path.abspath('package.xml'))
 # Setup packages depending on what submodules have been downloaded
 packages_ = [
     pdata.package_name,
+    pdata.package_name + '.autopilots',
     pdata.package_name + '.pose_estimators',
     pdata.package_name + '.nodes'
 ]

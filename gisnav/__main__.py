@@ -40,6 +40,7 @@ def main(args=None):
     finally:
         if mock_gps_node is not None:
             mock_gps_node.destroy_timers()
+            mock_gps_node.unsubscribe_topics()
             mock_gps_node.terminate_pools()
             mock_gps_node.destroy_node()
         rclpy.shutdown()

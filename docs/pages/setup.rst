@@ -17,6 +17,8 @@ Prerequisites
   CUDA versions with the ``nvidia-smi`` command line utility. If you don't have it installed, follow the `NVIDIA CUDA
   Installation Guide for Linux <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_.
 
+.. _PX4 Autopilot:
+
 PX4 Autopilot
 ===================================================
 PX4 **v1.13** is the only autopilot that is currently supported by GISNav.
@@ -78,7 +80,7 @@ better either through the PX4 shell, through QGroundControl, or in the
 .. _ROS 2 Workspace:
 
 ROS 2 Workspace
-===================================================
+___________________________________________________
 GISNav requires ROS 2 to communicate with PX4 Autopilot and is therefore structured as a ROS 2 package.
 
 Follow the `PX4 instructions to setup ROS 2 and the PX4-ROS 2 bridge
@@ -99,7 +101,7 @@ manual repetition:
 .. _PX4-ROS 2 Bridge:
 
 PX4-ROS 2 Bridge
-===================================================
+___________________________________________________
 The default configuration of the PX4-ROS 2 bridge is not sufficient for GISNav. The bridge must be reconfigured and
 the ``micrortps_agent`` re-generated.
 
@@ -156,7 +158,7 @@ folders. You must configure the following send and receive flags for the followi
       script to automatically configure the above topics before building the PX4 SITL target.
 
 PX4-ROS 2 Bridge Troubleshooting
-___________________________________________________
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Ensure you have your new workspace sourced before moving on to next steps:
 
@@ -194,7 +196,7 @@ before rebuilding again:
     want to restart ``micrortps_agent``.
 
 gscam
-===================================================
+___________________________________________________
 
 The ``typhoon_h480`` build target for Gazebo SITL supports UDP `video streaming
 <https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ . Here we will use ``gscam`` to publish the
@@ -221,13 +223,25 @@ with the provided configuration files:
     on how to create a custom camera calibration file if you do not want to use the provided example
 
 gscam Troubleshooting
-___________________________________________________
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. note::
     *Unverified*:
     When GISNav is running, it will try to exit cleanly when ``Ctrl+C`` is pressed. However, if the combination is
     mashed quickly in succession the clean exit may fail and leave some subscriptions hanging. In this case you may
     want to restart ``gscam``.
+
+.. _ArduPilot:
+
+ArduPilot
+===================================================
+ArduPilot is supported as an alternative to `PX4 Autopilot`_. The following tutorials should get you started with an
+ArduPilot SITL simulation environment:
+
+* `Setting up SITL on Linux <https://ardupilot.org/dev/docs/setting-up-sitl-on-linux.html>`_
+* `Using Gazebo simulator with SITL <https://ardupilot.org/dev/docs/using-gazebo-simulator-with-sitl.html>`_
+* `Connecting with ROS <https://ardupilot.org/dev/docs/ros-connecting.html>`_
+
 
 .. _QGroundControl:
 

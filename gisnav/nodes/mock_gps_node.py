@@ -36,7 +36,7 @@ class MockGPSNode(BaseNode):
         position = fixed_camera.position
 
         msg = SensorGps()
-        msg.timestamp = self._synchronized_time  #position.timestamp
+        msg.timestamp = self._bridge.synchronized_time  #position.timestamp
         #msg.timestamp_sample = msg.timestamp
         msg.timestamp_sample = 0
         #msg.device_id = self._generate_device_id()

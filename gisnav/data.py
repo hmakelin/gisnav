@@ -1,4 +1,23 @@
-"""Module containing immutable dataclasses to protect atomicity of related information (object-based 'contexts')"""
+"""Module containing immutable dataclasses to protect atomicity of related information (object-based 'contexts')
+
+The classes here may return a :class:`.DataValueError` upon instantiation to prevent invalid data structures from
+being instantiated. Example usage that handles the exception:
+
+.. code-block:: python
+
+    try:
+        position = Position(
+            xy=self._bridge.global_position,
+            z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
+            z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
+            attitude=self._bridge.attitude,
+            timestamp=self._bridge.synchronized_time
+        )
+        return position
+    except DataValueError as dve:
+        self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
+        return None
+"""
 from __future__ import annotations  # Python version 3.7+
 
 import cv2

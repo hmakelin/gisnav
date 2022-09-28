@@ -5,7 +5,6 @@ import traceback
 import math
 import numpy as np
 import cv2
-import time
 import importlib
 import os
 import yaml
@@ -14,37 +13,32 @@ import torch
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool
 #from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
-from typing import Optional, Union, Tuple, get_args, List
+from typing import Optional, Union, Tuple, get_args, Callable
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
-from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
-    GimbalDeviceSetAttitude
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import Image
 
-from gisnav.data import Dim, TimePair, ImageData, MapData, CameraData, Attitude, DataValueError, \
-    InputData, ImagePair, AsyncPoseQuery, AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
+from gisnav.data import Dim, ImageData, MapData, Attitude, DataValueError, InputData, ImagePair, AsyncPoseQuery, \
+    AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from gisnav.assertions import assert_type, assert_len, assert_ndim, assert_shape
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
+from gisnav.autopilots.autopilot import Autopilot
 
 
 class BaseNode(Node, ABC):
     """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
-    # Encoding of input video (input to CvBridge)
-    # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
-    _IMAGE_ENCODING = 'bgr8'
-
-    # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
-    _TOPICS_MSG_KEY = 'message'
-    _TOPICS_SUBSCRIBER_KEY = 'subscriber'
-    _TOPICS_QOS_KEY = 'qos'
 
     # Process counts for multiprocessing pools
     _WMS_PROCESS_COUNT = 1      # should be 1
     _MATCHER_PROCESS_COUNT = 1  # should be 1
+
+    # Encoding of input video (input to CvBridge)
+    # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
+    _IMAGE_ENCODING = 'bgr8'
 
     # region ROS Parameter Defaults
     ROS_D_WMS_URL = 'http://localhost:80/wms'
@@ -83,6 +77,18 @@ class BaseNode(Node, ABC):
 
     ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
     """Default WMS client request image format"""
+
+    ROS_D_MISC_AUTOPILOT = 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
+    """Default autopilot adapter"""
+
+    ROS_D_MISC_IMAGE_TOPIC = '/camera/image_raw'
+    """Default ROS image topic name"""
+
+    ROS_D_MISC_CAMERA_INFO_TOPIC = '/camera/camera_info'
+    """Default ROS camera info topic name"""
+
+    ROS_D_MISC_STATIC_NADIR_FACING_CAMERA = False
+    """Default setting for whether matching should be attempted if camera pitch is unknown"""
 
     ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
@@ -176,6 +182,10 @@ class BaseNode(Node, ABC):
         ('wms.styles', ROS_D_WMS_STYLES),
         ('wms.srs', ROS_D_WMS_SRS),
         ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
+        ('misc.autopilot', ROS_D_MISC_AUTOPILOT, read_only),
+        ('misc.camera_info_topic', ROS_D_MISC_CAMERA_INFO_TOPIC, read_only),
+        ('misc.image_topic', ROS_D_MISC_IMAGE_TOPIC, read_only),
+        ('misc.attempt_matching_when_camera_pitch_unknown', ROS_D_MISC_STATIC_NADIR_FACING_CAMERA, read_only),
         ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
         ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
@@ -193,7 +203,8 @@ class BaseNode(Node, ABC):
     
     .. note::
         Some parameters are declared read_only and cannot be changed at runtime because there is currently no way to 
-        reinitialize the WMS client, pose estimator, Kalman filter, nor WMS map update timer.
+        reinitialize the WMS client, pose estimator, Kalman filter, WMS map update timer, nor the autopilot or ROS 
+        subscriptions.
     """
     # endregion
 
@@ -215,50 +226,23 @@ class BaseNode(Node, ABC):
 
         self._map_update_timer = self._setup_map_update_timer()
 
-        # Setup PX4-ROS 2 bridge subscriptions from this configuration
-        # See also how these topic names are parsed in _create_subscriber in case of breaking changes
-        self._topics = {
-            '/fmu/vehicle_attitude/out': {
-                self._TOPICS_MSG_KEY: VehicleAttitude,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
-            '/fmu/vehicle_local_position/out': {
-                self._TOPICS_MSG_KEY: VehicleLocalPosition,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
-            '/fmu/vehicle_global_position/out': {
-                self._TOPICS_MSG_KEY: VehicleGlobalPosition,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
-            '/fmu/gimbal_device_set_attitude/out': {
-                self._TOPICS_MSG_KEY: GimbalDeviceSetAttitude,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
-            '/camera/camera_info': {
-                self._TOPICS_MSG_KEY: CameraInfo,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value
-            },
-            '/camera/image_raw': {
-                self._TOPICS_MSG_KEY: Image,
-                self._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
-            },
-        }
-        self._setup_subscribers()
-
-        # Converts image_raw to cv2 compatible image
-        self._cv_bridge = CvBridge()
-
         # Setup pose estimation pool
         pose_estimator_params_file = self.get_parameter('pose_estimator.params_file').get_parameter_value().string_value
         self._pose_estimator, self._pose_estimator_pool = self._setup_pose_estimation_pool(pose_estimator_params_file)
         self._pose_estimation_query = None  # Must check for None when using this
 
-        # PX4-ROS 2 bridge message stores
-        #self._camera_info = None  # Not used, CameraInfo subscription is destroyed once self._camera_data is assigned
-        self._vehicle_local_position = None
-        self._vehicle_global_position = None
-        self._vehicle_attitude = None
-        self._gimbal_device_set_attitude = None
+        # Autopilot bridge
+        ap = self.get_parameter('misc.autopilot').get_parameter_value().string_value or self.ROS_D_MISC_AUTOPILOT
+        ap: Autopilot = self._load_autopilot(ap)
+        image_topic = self.get_parameter('misc.image_topic').get_parameter_value().string_value \
+                      or self.ROS_D_MISC_IMAGE_TOPIC
+        camera_info_topic = self.get_parameter('misc.camera_info_topic').get_parameter_value().string_value \
+                      or self.ROS_D_MISC_CAMERA_INFO_TOPIC
+        # TODO: implement passing init args, kwargs
+        self._bridge = ap(self, camera_info_topic, image_topic, self._image_raw_callback)
+
+        # Converts image_raw to cv2 compatible image
+        self._cv_bridge = CvBridge()
 
         # Initialize remaining properties (does not include computed properties)
         self._map_input_data = None
@@ -266,9 +250,7 @@ class BaseNode(Node, ABC):
         self._fixed_camera_prev = None
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
-        self._camera_data = None
         self._pose_guess = None
-        self._time_sync = None
 
     # region Properties
     @property
@@ -303,20 +285,6 @@ class BaseNode(Node, ABC):
     def _pose_estimator(self, value: Optional[PoseEstimator]) -> None:
         assert issubclass(value, get_args(Optional[PoseEstimator]))
         self.__pose_estimator = value
-
-    @property
-    def _time_sync(self) -> Optional[TimePair]:
-        """A :class:`gisnav.data.TimePair` with local and foreign (EKF2) timestamps in microseconds
-
-        The pair will contain the local system time and the EKF2 time received via the PX4-ROS 2 bridge. The pair can
-        then at any time be used to locally estimate the EKF2 system time.
-        """
-        return self.__time_sync
-
-    @_time_sync.setter
-    def _time_sync(self, value: Optional[TimePair]) -> None:
-        assert_type(value, get_args(Optional[TimePair]))
-        self.__time_sync = value
 
     @property
     def _wms_pool(self) -> Optional[Pool]:
@@ -389,16 +357,6 @@ class BaseNode(Node, ABC):
         self.__pose_estimation_query = value
 
     @property
-    def _topics(self) -> dict:
-        """Dictionary that stores all rclpy publishers and subscribers."""
-        return self.__topics
-
-    @_topics.setter
-    def _topics(self, value: dict) -> None:
-        assert_type(value, dict)
-        self.__topics = value
-
-    @property
     def _cv_bridge(self) -> CvBridge:
         """CvBridge that decodes incoming PX4-ROS 2 bridge images to cv2 images."""
         return self.__cv_bridge
@@ -429,62 +387,22 @@ class BaseNode(Node, ABC):
         self.__fixed_camera_prev = value
 
     @property
-    def _camera_data(self) -> Optional[CameraData]:
-        """CameraInfo received via the PX4-ROS 2 bridge."""
-        return self.__camera_data
+    def _autopilot(self) -> Autopilot:
+        """Autopilot bridge adapter"""
+        return self.__autopilot
 
-    @_camera_data.setter
-    def _camera_data(self, value: Optional[CameraData]) -> None:
-        assert_type(value, get_args(Optional[CameraData]))
-        self.__camera_data = value
-
-    @property
-    def _vehicle_local_position(self) -> Optional[VehicleLocalPosition]:
-        """VehicleLocalPosition received via the PX4-ROS 2 bridge."""
-        return self.__vehicle_local_position
-
-    @_vehicle_local_position.setter
-    def _vehicle_local_position(self, value: Optional[VehicleLocalPosition]) -> None:
-        assert_type(value, get_args(Optional[VehicleLocalPosition]))
-        self.__vehicle_local_position = value
-
-    @property
-    def _vehicle_attitude(self) -> Optional[VehicleAttitude]:
-        """VehicleAttitude received via the PX4-ROS 2 bridge."""
-        return self.__vehicle_attitude
-
-    @_vehicle_attitude.setter
-    def _vehicle_attitude(self, value: Optional[VehicleAttitude]) -> None:
-        assert_type(value, get_args(Optional[VehicleAttitude]))
-        self.__vehicle_attitude = value
-
-    @property
-    def _vehicle_global_position(self) -> Optional[VehicleGlobalPosition]:
-        """VehicleGlobalPosition received via the PX4-ROS 2 bridge."""
-        return self.__vehicle_global_position
-
-    @_vehicle_global_position.setter
-    def _vehicle_global_position(self, value: Optional[VehicleGlobalPosition]) -> None:
-        assert_type(value, get_args(Optional[VehicleGlobalPosition]))
-        self.__vehicle_global_position = value
-
-    @property
-    def _gimbal_device_set_attitude(self) -> Optional[GimbalDeviceSetAttitude]:
-        """GimbalDeviceSetAttitude received via the PX4-ROS 2 bridge."""
-        return self.__gimbal_device_set_attitude
-
-    @_gimbal_device_set_attitude.setter
-    def _gimbal_device_set_attitude(self, value: Optional[GimbalDeviceSetAttitude]) -> None:
-        assert_type(value, get_args(Optional[GimbalDeviceSetAttitude]))
-        self.__gimbal_device_set_attitude = value
+    @_autopilot.setter
+    def _autopilot(self, value: Autopilot) -> None:
+        assert_type(value, Autopilot)
+        self.__autopilot = value
     # endregion
 
     # region Computed Properties
     @property
     def _altitude_scaling(self) -> Optional[float]:
         """Returns camera focal length divided by camera altitude in meters."""
-        if self._camera_data is not None and self._altitude_agl is not None:
-            return self._camera_data.fx / self._altitude_agl
+        if self._bridge.camera_data is not None and self._bridge.altitude_agl is not None:
+            return self._bridge.camera_data.fx / self._bridge.altitude_agl
         else:
             self.get_logger().warn('Could not estimate elevation scale because camera focal length and/or vehicle '
                                    'altitude is unknown.')
@@ -498,12 +416,12 @@ class BaseNode(Node, ABC):
             Should be roughly same as rotation matrix stored in :py:attr:`._pose_guess`, even though it is derived via
             a different route. If gimbal is not stabilized to its set position, the rotation matrix will be different.
         """
-        if self._gimbal_set_attitude is None:
-            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
+        if self._bridge.gimbal_set_attitude is None:
+            self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
             return None
 
-        assert_type(self._gimbal_set_attitude, Attitude)
-        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+        assert_type(self._bridge.gimbal_set_attitude, Attitude)
+        gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
 
         return gimbal_set_attitude.r
 
@@ -511,24 +429,6 @@ class BaseNode(Node, ABC):
     def _wms_results_pending(self) -> bool:
         """True if there are pending results"""
         return not self._wms_query.result.ready() if self._wms_query is not None else False
-
-    @property
-    def _synchronized_time(self) -> Optional[int]:
-        """Estimated EKF2 system reference time in microseconds or None if not available
-
-        .. seealso:
-            :py:attr:`._time_sync` and :meth:`._sync_timestamps`
-        """
-        if self._time_sync is None:
-            self.get_logger().warn('Could not estimate EKF2 timestamp.')
-            return None
-        else:
-            now_usec = time.time() * 1e6
-            assert now_usec > self._time_sync.local, f'Current timestamp {now_usec} was unexpectedly smaller than '\
-                                                     f'timestamp stored earlier for synchronization '\
-                                                     f'{self._time_sync.local}.'
-            ekf2_timestamp_usec = int(self._time_sync.foreign + (now_usec - self._time_sync.local))
-            return ekf2_timestamp_usec
 
     @property
     def _is_gimbal_projection_enabled(self) -> bool:
@@ -552,74 +452,6 @@ class BaseNode(Node, ABC):
             return False
 
     @property
-    def _gimbal_set_attitude(self) -> Optional[Attitude]:
-        """Gimbal set attitude in NED frame or None if not available
-
-        Gimbal set attitude is given in FRD frame. Combines it with vehicle yaw from VehicleAttitude to construct a
-        gimbal set attitude in NED frame.
-
-        .. note::
-            This is only the set attitude, actual gimbal attitude may differ if gimbal has not yet stabilized.
-        """
-        if self._vehicle_attitude is None or self._gimbal_device_set_attitude is None:
-            self.get_logger().debug('Vehicle or gimbal set attitude not yet available.')
-            return None
-
-        yaw_mask = np.array([1, 0, 0, 1])  # Gimbal roll & pitch is stabilized so we only need vehicle yaw (heading)
-        vehicle_yaw = self._vehicle_attitude.q * yaw_mask
-
-        gimbal_set_attitude_frd = self._gimbal_device_set_attitude.q
-
-        # SciPy expects (x, y, z, w) while PX4 messages are (w, x, y, z)
-        vehicle_yaw = Rotation.from_quat(np.append(vehicle_yaw[1:], vehicle_yaw[0]))
-        gimbal_set_attitude_frd = Rotation.from_quat(np.append(gimbal_set_attitude_frd[1:], gimbal_set_attitude_frd[0]))
-
-        gimbal_set_attitude_ned = vehicle_yaw * gimbal_set_attitude_frd
-
-        return Attitude(gimbal_set_attitude_ned.as_quat(), extrinsic=True)
-
-    @property
-    def _altitude_agl(self) -> Optional[float]:
-        """Altitude above ground level in meters, or None if not available
-
-        This property tries to use the 'dist_bottom' value from class:`px4_msgs.VehicleLocalPosition` first, and 'z'
-        second. If neither are valid, the property value is 'None'.
-        """
-        if self._vehicle_local_position is not None:
-            if self._vehicle_local_position.dist_bottom_valid:
-                self.get_logger().debug('Using VehicleLocalPosition.dist_bottom for altitude AGL.')
-                return abs(self._vehicle_local_position.dist_bottom)
-            elif self._vehicle_local_position.z_valid:
-                self.get_logger().debug('VehicleLocalPosition.dist_bottom was not valid, assuming '
-                                       'VehicleLocalPosition.z for altitude AGL.')
-                return abs(self._vehicle_local_position.z)
-            else:
-                return None
-        else:
-            self.get_logger().warn('Altitude AGL not yet available.')
-            return None
-
-    @property
-    def _ground_elevation_amsl(self) -> Optional[float]:
-        """Ground elevation in meters above mean sea level (AMSL) or None if information is not available
-
-        It is assumed to be same as :class:`px4_msgs.VehicleLocalPosition` reference altitude.
-
-        .. seealso::
-            :py:attr:`._altitude_agl`
-        """
-        if self._vehicle_local_position is not None:
-            if hasattr(self._vehicle_local_position, 'ref_alt') and \
-                    isinstance(self._vehicle_local_position.ref_alt, float):
-                return self._vehicle_local_position.ref_alt
-            else:
-                self.get_logger().error('Vehicle local position did not contain a valid ref_alt value.')
-        else:
-            self.get_logger().warn('Vehicle local position not available, local position ref_alt unknown.')
-
-        return None
-
-    @property
     def _map_size_with_padding(self) -> Optional[Tuple[int, int]]:
         """Padded map size tuple (height, width) or None if the information is not available.
 
@@ -629,7 +461,7 @@ class BaseNode(Node, ABC):
         black corners would appear unless padding is used. Retrieved maps therefore have to be squares with the side
         lengths matching the diagonal of the camera frames so that scale is preserved and no black corners appear in
         the map rasters after rotation. The height and width will both be equal to the diagonal of the declared
-        (:py:attr:`._camera_data`) camera frame dimensions.
+        (:py:attr:`._bridge.camera_data`) camera frame dimensions.
         """
         if self._img_dim is None:
             self.get_logger().warn(f'Dimensions not available - returning None as map size.')
@@ -641,8 +473,8 @@ class BaseNode(Node, ABC):
     @property
     def _img_dim(self) -> Optional[Dim]:
         """Image resolution from latest :class:`px4_msgs.msg.CameraInfo` message, None if not available"""
-        if self._camera_data is not None:
-            return self._camera_data.dim
+        if self._bridge.camera_data is not None:
+            return self._bridge.camera_data.dim
         else:
             self.get_logger().warn('Camera data was not available, returning None as declared image size.')
             return None
@@ -650,29 +482,30 @@ class BaseNode(Node, ABC):
     @property
     def _vehicle_position(self) -> Optional[Position]:
         """Vehicle position guess in WGS84 coordinates and altitude in meters above ground, None if not available"""
-        if self._vehicle_global_position is not None:
-            assert hasattr(self._vehicle_global_position, 'lat') and hasattr(self._vehicle_global_position, 'lon') and \
-                   hasattr(self._vehicle_global_position, 'alt')
-            if self._altitude_agl is None:
+        if self._bridge.global_position is not None:
+            assert_type(self._bridge.global_position, get_args(Optional[GeoPoint]))
+            if self._bridge.altitude_agl is None:
                 # TODO: AMSL altitude can be used for map update requests, this should not be a strict requirement
                 self.get_logger().warn('Could not get ground altitude, no reliable position guess for map update.')
                 return None
 
-            # TODO: make sure timestamp difference between altitude_agl (local position) and lon lat alt (global) is not too high
             crs = 'epsg:4326'
-            if self._vehicle_attitude is None:
-                self.get_logger().debug('Vehicle attitude not yet available, cannot determin vehicle Position.')
+            if self._bridge.attitude is None:
+                self.get_logger().warn('Vehicle attitude not yet available, cannot determine vehicle Position.')
                 return None
 
-            assert hasattr(self._vehicle_attitude, 'q')
-            position = Position(
-                xy=GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs),  # lon-lat order
-                z_ground=self._altitude_agl,  # not None
-                z_amsl=self._vehicle_global_position.alt,
-                attitude=Attitude(np.append(self._vehicle_attitude.q[1:4], self._vehicle_attitude.q[0]), extrinsic=True),
-                timestamp=self._synchronized_time
-            )
-            return position
+            try:
+                position = Position(
+                    xy=self._bridge.global_position,
+                    z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
+                    z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
+                    attitude=self._bridge.attitude,
+                    timestamp=self._bridge.synchronized_time
+                )
+                return position
+            except DataValueError as dve:
+                self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
+                return None
         else:
             return None
 
@@ -685,17 +518,23 @@ class BaseNode(Node, ABC):
         """
         input_data = InputData(
             r_guess=self._r_guess,
-            ground_elevation=self._ground_elevation_amsl
+            ground_elevation=self._bridge.ground_elevation_amsl
         )
 
         # Get cropped and rotated map
-        if self._gimbal_set_attitude is not None:
-            camera_yaw = self._gimbal_set_attitude.yaw
+        if self._bridge.gimbal_set_attitude is not None:
+            camera_yaw = self._bridge.gimbal_set_attitude.yaw
             assert_type(camera_yaw, float)
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
         else:
-            self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
-            return
+            static_camera = self.get_parameter('misc.static_nadir_facing_camera').get_parameter_value().bool_value
+            if not static_camera:
+                self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
+                return
+            else:
+                self.get_logger().debug(f'Assuming zero yaw relative to vehicle body for static nadir-facing camera.')
+                assert self._bridge.attitude is not None and hasattr(self._bridge.attitude, 'yaw')
+                camera_yaw = self._bridge.attitude.yaw
 
         contextual_map_data = ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self._img_dim,
             altitude_scaling=self._altitude_scaling)
@@ -821,30 +660,6 @@ class BaseNode(Node, ABC):
             self.get_logger().debug('Needed map not different enough to request new map yet, '
                                     'or previous results are not ready.')
 
-    def _setup_subscribers(self) -> None:
-        """Creates and stores subscribers for microRTPS bridge topics"""
-        for topic_name, d in self._topics.items():
-            class_ = d.get(self._TOPICS_MSG_KEY, None)
-            assert class_ is not None, f'Message definition not provided for {topic_name}.'
-            qos = d.get(self._TOPICS_QOS_KEY, rclpy.qos.QoSPresetProfiles.SYSTEM_DEFAULT.value)
-            self._topics.update({topic_name: {self._TOPICS_SUBSCRIBER_KEY: self._create_subscriber(topic_name, class_,
-                                                                                                   qos)}})
-        self.get_logger().info(f'Subscribers setup complete:\n{self._topics}.')
-
-    def _create_subscriber(self, topic_name: str, class_: type, qos: rclpy.qos.QoSProfile) \
-            -> rclpy.subscription.Subscription:
-        """Returns an rclpy subscription
-
-        :param topic_name: Name of the microRTPS topic
-        :param class_: Message definition class type (e.g. px4_msgs.msg.VehicleLocalPosition)
-        :param qos: Subscription quality of service profile
-        :return: The subscriber instance
-        """
-        callback_name = f'_{topic_name.split("/")[2].lower()}_callback'  # TODO make topic name parsing less brittle
-        callback = getattr(self, callback_name, None)
-        assert callback is not None, f'Missing callback implementation for {callback_name}.'
-        return self.create_subscription(class_, topic_name, callback, qos)
-
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported
 
@@ -858,96 +673,17 @@ class BaseNode(Node, ABC):
         imported_class = getattr(sys.modules[module_name], class_name, None)
         assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
         return imported_class
-    # endregion
 
-    # region microRTPSBridgeCallbacks
-    def _image_raw_callback(self, msg: Image) -> None:
-        """Handles latest :class:`px4_msgs.msg.Image` message
+    def _load_autopilot(self, autopilot: str) -> Callable:
+        """Returns :class:`.Autopilot` instance from provided class path
 
-        :param msg: The :class:`px4_msgs.msg.Image` message from the PX4-ROS 2 bridge
+        :param autopilot: Full path of :class:`.Autopilot` adapter class
+        :return: Initialized :class:`.Autopilot` instance
         """
-        # Estimate EKF2 timestamp first to get best estimate
-        if self._synchronized_time is None:
-            self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
-            return None
-
-        assert_type(msg, Image)
-        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
-
-        # Check that image dimensions match declared dimensions
-        if self._img_dim is not None:
-            cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match '\
-                                                  f'declared image shape {self._img_dim}.'
-
-        if self._camera_data is None:
-            self.get_logger().warn('Camera data not yet available, skipping frame.')
-            return None
-
-        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id, timestamp=self._synchronized_time,
-                               camera_data=self._camera_data)
-
-        if self._should_estimate(image_data.image.arr):
-            assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
-            assert self._map_data is not None
-            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
-
-            inputs, contextual_map_data = self._estimation_inputs
-            self._map_input_data = inputs
-            image_pair = ImagePair(image_data, contextual_map_data)
-            self._estimate(image_pair, inputs)
-
-    def _camera_info_callback(self, msg: CameraInfo) -> None:
-        """Handles latest :class:`px4_msgs.msg.CameraInfo` message
-
-        :param msg: :class:`px4_msgs.msg.CameraInfo` message from the PX4-ROS 2 bridge
-        """
-        if not all(hasattr(msg, attr) for attr in ['k', 'height', 'width']):
-            self.get_logger().warn(f'CameraInfo did not contain intrinsics or resolution information: {msg}.')
-            return None
-        else:
-            self._camera_data = CameraData(k=msg.k.reshape((3, 3)), dim=Dim(msg.height, msg.width))
-            camera_info_topic = self._topics.get('camera_info', {}).get(self._TOPICS_SUBSCRIBER_KEY, None)
-            if camera_info_topic is not None:
-                self.get_logger().warn('CameraInfo received. Assuming CameraInfo is static, destroying the '
-                                       'subscription.')
-                camera_info_topic.destroy()
-
-    def _vehicle_local_position_callback(self, msg: VehicleLocalPosition) -> None:
-        """Handles latest :class:`px4_msgs.msg.VehicleLocalPosition` message
-
-        Uses the EKF2 system time in the message to synchronize local system time.
-
-        :param msg: :class:`px4_msgs.msg.VehicleLocalPosition` message from the PX4-ROS 2 bridge
-        :return:
-        """
-        assert_type(msg.timestamp, int)
-        self._vehicle_local_position = msg
-        self._sync_timestamps(self._vehicle_local_position.timestamp)
-
-    def _vehicle_attitude_callback(self, msg: VehicleAttitude) -> None:
-        """Handles latest :class:`px4_msgs.msg.VehicleAttitude` message
-
-        :param msg: :class:`px4_msgs.msg.VehicleAttitude` message from the PX4-ROS 2 bridge
-        :return:
-        """
-        self._vehicle_attitude = msg
-
-    def _vehicle_global_position_callback(self, msg: VehicleGlobalPosition) -> None:
-        """Handles latest :class:`px4_msgs.msg.VehicleGlobalPosition` message
-
-        :param msg: :class:`px4_msgs.msg.VehicleGlobalPosition` message from the PX4-ROS 2 bridge
-        :return:
-        """
-        self._vehicle_global_position = msg
-
-    def _gimbal_device_set_attitude_callback(self, msg: GimbalDeviceSetAttitude) -> None:
-        """Handles latest :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message
-
-        :param msg: :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message from the PX4-ROS 2 bridge
-        :return:
-        """
-        self._gimbal_device_set_attitude = msg
+        assert_type(autopilot, str)
+        module_name, class_name = autopilot.rsplit('.', 1)
+        class_ = self._import_class(class_name, module_name)
+        return class_
     # endregion
 
     #region WMSWorkerCallbacks
@@ -987,6 +723,42 @@ class BaseNode(Node, ABC):
         self.get_logger().error(f'Something went wrong with WMS process:\n{e},\n{traceback.print_exc()}.')
     #endregion
 
+    def _image_raw_callback(self, msg: Image) -> None:
+        """Handles latest :class:`px4_msgs.msg.Image` message
+
+        :param msg: The :class:`px4_msgs.msg.Image` message from the PX4-ROS 2 bridge
+        """
+        # Estimate EKF2 timestamp first to get best estimate
+        if self._bridge.synchronized_time is None:
+            self.get_logger().warn('Image frame received but could not estimate EKF2 system time, skipping frame.')
+            return None
+
+        assert_type(msg, Image)
+        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
+
+        # Check that image dimensions match declared dimensions
+        if self._img_dim is not None:
+            cv_img_shape = cv_image.shape[0:2]
+            assert cv_img_shape == self._img_dim, f'Converted cv_image shape {cv_img_shape} did not match '\
+                                                  f'declared image shape {self._img_dim}.'
+
+        if self._bridge.camera_data is None:
+            self.get_logger().warn('Camera data not yet available, skipping frame.')
+            return None
+
+        image_data = ImageData(image=Img(cv_image), frame_id=msg.header.frame_id,
+                               timestamp=self._bridge.synchronized_time, camera_data=self._bridge.camera_data)
+
+        if self._should_estimate(image_data.image.arr):
+            assert self._pose_estimation_query is None or self._pose_estimation_query.result.ready()
+            assert self._map_data is not None
+            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
+
+            inputs, contextual_map_data = self._estimation_inputs
+            self._map_input_data = inputs
+            image_pair = ImagePair(image_data, contextual_map_data)
+            self._estimate(image_pair, inputs)
+
     # region Map Updates
     def _guess_fov_center(self, origin: Position) -> Optional[GeoPoint]:
         """Guesses WGS84 coordinates of camera field of view (FOV) projected on ground from given origin
@@ -997,18 +769,19 @@ class BaseNode(Node, ABC):
         :param origin: Camera position
         :return: Center of the projected FOV, or None if not available
         """
-        if self._gimbal_set_attitude is None:
+        if self._bridge.gimbal_set_attitude is None:
             self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
             return None
 
-        assert_type(self._gimbal_set_attitude, Attitude)
-        gimbal_set_attitude = self._gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+        assert_type(self._bridge.gimbal_set_attitude, Attitude)
+        gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
 
-        if self._camera_data is None:
+        if self._bridge.camera_data is None:
             self.get_logger().warn('Camera data not available, could not create a mock pose to generate a FOV guess.')
             return None
 
-        translation = -gimbal_set_attitude.r @ np.array([self._camera_data.cx, self._camera_data.cy, -self._camera_data.fx])
+        translation = -gimbal_set_attitude.r @ np.array([self._bridge.camera_data.cx, self._bridge.camera_data.cy,
+                                                         -self._bridge.camera_data.fx])
 
         try:
             pose = Pose(gimbal_set_attitude.r, translation.reshape((3, 1)))
@@ -1016,11 +789,11 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Pose input values: {gimbal_set_attitude.r}, {translation} were invalid: {e}.')
             return None
 
-        altitude = self._altitude_agl
-        if altitude is not None:
+        if self._bridge.altitude_agl is not None:
             try:
                 mock_fixed_camera = FixedCamera(pose=pose, image_pair=self._mock_image_pair(origin),
-                                                ground_elevation=altitude, timestamp=self._synchronized_time)
+                                                ground_elevation=self._bridge.altitude_agl,
+                                                timestamp=self._bridge.synchronized_time)
             except DataValueError as _:
                 self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
                 return None
@@ -1135,8 +908,8 @@ class BaseNode(Node, ABC):
         assert_type(altitude, get_args(Union[int, float]))
         max_map_radius = self.get_parameter('map_update.max_map_radius').get_parameter_value().integer_value
 
-        if self._camera_data is not None:
-            hfov = 2 * math.atan(self._camera_data.dim.width / (2 * self._camera_data.fx))
+        if self._bridge.camera_data is not None:
+            hfov = 2 * math.atan(self._bridge.camera_data.dim.width / (2 * self._bridge.camera_data.fx))
             map_radius = 1.5*hfov*altitude  # Arbitrary padding of 50%
         else:
             # Update map before CameraInfo has been received
@@ -1181,14 +954,14 @@ class BaseNode(Node, ABC):
         .. seealso:
             :meth:`._mock_map_data` and :meth:`._mock_image_pair`
         """
-        if self._img_dim is None or self._synchronized_time is None or self._camera_data is None:
+        if self._img_dim is None or self._bridge.synchronized_time is None or self._bridge.camera_data is None:
             self.get_logger().warn('Missing required inputs for generating mock image DATA.')
             return None
 
         image_data = ImageData(image=Img(np.zeros(self._img_dim)),
                                frame_id='mock_image_data',  # TODO
-                               timestamp=self._synchronized_time,
-                               camera_data=self._camera_data)
+                               timestamp=self._bridge.synchronized_time,
+                               camera_data=self._bridge.camera_data)
         return image_data
 
     def _mock_map_data(self, origin: Position) -> Optional[MapData]:
@@ -1204,12 +977,12 @@ class BaseNode(Node, ABC):
         :return: Mock map data with mock images but with real expected bbox, or None if not available
         """
         assert_type(origin, Position)
-        if self._camera_data is None or self._map_size_with_padding is None:
+        if self._bridge.camera_data is None or self._map_size_with_padding is None:
             self.get_logger().warn('Missing required inputs for generating mock MAP DATA.')
             return None
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = (self._map_size_with_padding[0]/2) / self._camera_data.fx
+        scaling = (self._map_size_with_padding[0]/2) / self._bridge.camera_data.fx
         radius = scaling * origin.z_ground
 
         assert_type(origin.xy, GeoPoint)
@@ -1309,9 +1082,9 @@ class BaseNode(Node, ABC):
 
         # Check condition (4) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        if not isinstance(min_alt, int) or self._altitude_agl is None or self._altitude_agl < min_alt:
-            self.get_logger().warn(f'Altitude {self._altitude_agl} was lower than minimum threshold for matching '
-                                   f'({min_alt}) or could not be determined. Skipping pose estimation.')
+        if not isinstance(min_alt, int) or self._bridge.altitude_agl is None or self._bridge.altitude_agl < min_alt:
+            self.get_logger().warn(f'Altitude {self._bridge.altitude_agl} was lower than minimum threshold for '
+                                   f'matching ({min_alt}) or could not be determined. Skipping pose estimation.')
             return False
 
         return True
@@ -1351,6 +1124,11 @@ class BaseNode(Node, ABC):
         the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
         estimates.
         """
+        static_camera = self.get_parameter('misc.static_nadir_facing_camera').get_parameter_value().bool_value
+        if static_camera:
+            # TODO: assume nadir facing static camera and do validity check
+            return True
+
         if input_data.r_guess is None:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
             return False
@@ -1359,6 +1137,7 @@ class BaseNode(Node, ABC):
         r_guess = Rotation.from_matrix(input_data.r_guess)
 
         # Adjust for map rotation
+        # TODO handle static_camera (assert r_guess is None, or use _pose_guess?)
         camera_yaw = fixed_camera.image_pair.ref.rotation
         camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
         r_guess *= camera_yaw
@@ -1395,15 +1174,19 @@ class BaseNode(Node, ABC):
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        if self._gimbal_set_attitude is not None:
+        if self._bridge.gimbal_set_attitude is not None:
             # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
-            pitch = np.degrees(self._gimbal_set_attitude.pitch) + 90
+            pitch = np.degrees(self._bridge.gimbal_set_attitude.pitch) + 90
             if pitch > max_pitch:
                 self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
                 return True
         else:
-            self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
-            return True
+            static_camera = self.get_parameter('misc.static_nadir_facing_camera')\
+                                   .get_parameter_value().bool_value \
+                               or self.ROS_D_MISC_STATIC_NADIR_FACING_CAMERA
+            if not static_camera:
+                self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
+                return True
 
         return False
 
@@ -1463,19 +1246,12 @@ class BaseNode(Node, ABC):
         if self._map_update_timer is not None:
             self.get_logger().info('Destroying map update timer.')
             self._map_update_timer.destroy()
-    # endregion
 
-    def _sync_timestamps(self, ekf2_timestamp_usec: int) -> None:
-        """Synchronizes local timestamp with PX4 EKF2's reference time
+    def unsubscribe_topics(self) -> None:
+        """Unsubscribes from all ROS topics
 
-        This synchronization is triggered in the :meth:`._vehicle_local_position_callback` and therefore expected to be
-        done at high frequency.
-
-        .. seealso:
-            :py:attr:`._time_sync` and :py:attr:`._synchronized_time`
-
-        :param ekf2_timestamp_usec: Time since PX4 EKF2 system start in microseconds
+        .. note::
+            Call this method when before destroying your node for a clean exit.
         """
-        assert_type(ekf2_timestamp_usec, int)
-        now_usec = time.time() * 1e6
-        self._time_sync = TimePair(now_usec, ekf2_timestamp_usec)
+        self._bridge.unsubscribe_all()
+    # endregion

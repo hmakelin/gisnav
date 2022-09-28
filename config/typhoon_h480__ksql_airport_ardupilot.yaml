@@ -10,15 +10,16 @@ mock_gps_node:
       image_format: 'image/jpeg'
       request_timeout: 10
     misc:
-      autopilot: 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
+      autopilot: 'gisnav.autopilots.ardupilot_mavros.ArduPilotMAVROS'
       image_topic: '/camera/image_raw'
       camera_info_topic: '/camera/camera_info'
       attitude_deviation_threshold: 10 # degrees
       max_pitch: 30  # 30  # Used by _should_match
       min_match_altitude: 50
+      static_nadir_facing_camera: True  # set to True for ArduPilot (until gimbal is implemented)
     map_update:
       update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
-      gimbal_projection: True
+      gimbal_projection: False  # set to False for ArduPilot (until gimbal is implemented)
       max_pitch: 30  # Applies if gimbal_projection: True, used by _should_update_map
       max_map_radius: 1000
       update_map_area_threshold: 0.85

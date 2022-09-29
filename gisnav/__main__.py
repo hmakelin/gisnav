@@ -2,6 +2,7 @@ import io
 import cProfile
 import pstats
 import rclpy
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -26,7 +27,8 @@ def main(args=None):
     mock_gps_node = None
     try:
         rclpy.init(args=args)
-        mock_gps_node = MockGPSNode('mock_gps_node', get_package_share_directory(package_name))
+        mock_gps_node = MockGPSNode('mock_gps_node', get_package_share_directory(package_name),
+                                    px4_micrortps='--mavros' not in sys.argv)
         rclpy.spin(mock_gps_node)
     except KeyboardInterrupt as e:
         print(f'Keyboard interrupt received:\n{e}')

@@ -406,28 +406,6 @@ Test your MapServer WMS service by opening the capabilities XML in your browser:
 
     firefox "http://localhost:80/?map=/etc/mapserver/wms.map&service=WMS&request=GetCapabilities"
 
-Docker commit the MapServer container with preloaded maps
---------------------------------------------------------------
-To upload the image preloaded with maps to Docker Hub, first commit the container to an image:
-
-.. code-block:: bash
-
-    export CONTAINER_ID=$(docker ps -q -f name=$CONTAINER_NAME)
-    export IMAGE_NAME=gisnav-mapserver
-    docker commit $CONTAINER_ID $IMAGE_NAME
-
-Then push the image to Docker Hub:
-
-.. note::
-    Replace ``hmakelin``  with your own user account name, and ``latest`` with your own tag
-
-.. code-block:: bash
-
-    export DOCKER_HUB_USER=hmakelin
-    export tag=latest
-    docker image tag $IMAGE_NAME $DOCKER_HUB_USER/$IMAGE_NAME:$tag
-    docker image push $DOCKER_HUB_USER/$IMAGE_NAME
-
 GISNav
 ===================================================
 
@@ -466,10 +444,18 @@ Build the GISNav package:
 Once GISNav is installed, you can run the included :class:`.MockGPSNode` either directly with ``ros2 run``:
 
 .. code-block:: bash
+    :caption: Run GISNav with PX4 microRTPS bridge
 
     cd ~/px4_ros_com_ros2
     ros2 run gisnav mock_gps_node --ros-args --log-level info \
         --params-file src/gisnav/config/typhoon_h480__ksql_airport.yaml
+
+.. code-block:: bash
+    :caption: Run GISNav with ArduPilot MAVROS
+
+    cd ~/px4_ros_com_ros2
+    ros2 run gisnav mock_gps_node --mavros --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport_ardupilot.yaml
 
 Or using the provided launch file:
 

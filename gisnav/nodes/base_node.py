@@ -499,6 +499,7 @@ class BaseNode(Node, ABC):
                     xy=self._bridge.global_position,
                     z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
                     z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
+                    z_ellipsoid=self._bridge.altitude_ellipsoid,  # Potentially None (no check above)
                     attitude=self._bridge.attitude,
                     timestamp=self._bridge.synchronized_time
                 )
@@ -518,7 +519,8 @@ class BaseNode(Node, ABC):
         """
         input_data = InputData(
             r_guess=self._r_guess,
-            ground_elevation=self._bridge.ground_elevation_amsl
+            ground_elevation=self._bridge.ground_elevation_amsl,
+            ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
         )
 
         # Get cropped and rotated map
@@ -792,7 +794,8 @@ class BaseNode(Node, ABC):
         if self._bridge.altitude_agl is not None:
             try:
                 mock_fixed_camera = FixedCamera(pose=pose, image_pair=self._mock_image_pair(origin),
-                                                ground_elevation=self._bridge.altitude_agl,
+                                                ground_elevation=self._bridge.altitude_agl,  # TODO: ground_elevation_amsl?
+                                                ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
                                                 timestamp=self._bridge.synchronized_time)
             except DataValueError as _:
                 self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
@@ -1018,9 +1021,11 @@ class BaseNode(Node, ABC):
             return None
 
         try:
-            fixed_camera = FixedCamera(pose=pose, image_pair=self._pose_estimation_query.image_pair,
-                                       ground_elevation=self._pose_estimation_query.input_data.ground_elevation,
-                                       timestamp=self._pose_estimation_query.image_pair.qry.timestamp)
+            image_pair = self._pose_estimation_query.image_pair
+            input_data = self._pose_estimation_query.input_data
+            fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation,
+                                       ground_elevation_ellipsoid=input_data.ground_elevation_ellipsoid,
+                                       timestamp=image_pair.qry.timestamp)
         except DataValueError as _:
             self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
             return None

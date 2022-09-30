@@ -51,7 +51,6 @@ class MockGPSNode(BaseNode):
         """
         assert_type(fixed_camera, FixedCamera)
         msg = self._generate_sensor_gps(fixed_camera) if self._px4_micrortps else self._generate_gps_input(fixed_camera)
-        self.get_logger().error(f'publishing {msg}')
         self._gps_publisher.publish(msg)
 
     def _generate_gps_input(self, fixed_camera: FixedCamera) -> GPSINPUT:
@@ -69,14 +68,14 @@ class MockGPSNode(BaseNode):
 
         msg = GPSINPUT()
         msg.header = header
-        msg.gps_id = 1
+        msg.gps_id = 0
         msg.ignore_flags = 0
         msg.time_week = gps_time.week_number
         msg.time_week_ms = int(gps_time.time_of_week * 1e3)
         msg.fix_type = 3  # 3D position
         msg.lat = int(position.lat * 1e7)
         msg.lon = int(position.lon * 1e7)
-        msg.alt = float(position.z_amsl * 1e3)
+        msg.alt = float(position.z_ellipsoid)
         msg.horiz_accuracy = 10.0  # position.eph
         msg.vert_accuracy = 3.0  # position.epv
         msg.speed_accuracy = np.nan
@@ -86,7 +85,7 @@ class MockGPSNode(BaseNode):
         msg.ve = np.nan
         msg.vd = np.nan
         msg.satellites_visible = np.iinfo(np.uint8).max
-        msg.yaw = int(np.degrees(position.attitude.yaw) * 100)
+        msg.yaw = int(np.degrees(position.attitude.yaw % (2 * np.pi)) * 100)
 
         return msg
 
@@ -106,7 +105,7 @@ class MockGPSNode(BaseNode):
         msg.lat = int(position.lat * 1e7)
         msg.lon = int(position.lon * 1e7)
         msg.alt = int(position.z_amsl * 1e3)
-        msg.alt_ellipsoid = msg.alt
+        msg.alt_ellipsoid = int(position.z_ellipsoid * 1e3)
         msg.eph = 10.0  # position.eph
         msg.epv = 3.0  # position.epv
         msg.hdop = 0.0

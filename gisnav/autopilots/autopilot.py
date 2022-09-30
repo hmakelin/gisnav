@@ -160,7 +160,7 @@ class Autopilot(ABC):
         """Vehicle altitude in meters above ground level (AGL) or None if not available
 
         .. seealso::
-            :py:attr:`.altitude_amsl`
+            :py:attr:`.altitude_amsl`, :py:attr:`.altitude_ellipsoid`
         """
         pass
 
@@ -170,7 +170,17 @@ class Autopilot(ABC):
         """Vehicle altitude in meters above mean sea level (AMSL) or None if not available
 
         .. seealso::
-            :py:attr:`.altitude_amsl`
+            :py:attr:`.altitude_agl`, :py:attr:`.altitude_ellipsoid`
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def altitude_ellipsoid(self) -> Optional[float]:
+        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
+
+        .. seealso::
+            :py:attr:`.altitude_amsl`, :py:attr:`.altitude_agl`
         """
         pass
 
@@ -178,6 +188,12 @@ class Autopilot(ABC):
     @abstractmethod
     def ground_elevation_amsl(self) -> Optional[float]:
         """Ground elevation in meters above mean sea level (AMSL) or None if information is not available"""
+        pass
+
+    @property
+    @abstractmethod
+    def ground_elevation_ellipsoid(self) -> Optional[float]:
+        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
         pass
 
     @property

@@ -4,6 +4,7 @@ import time
 import numpy as np
 from typing import Optional, Callable, get_args
 
+from pygeodesy.geoids import GeoidPGM
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, Image
 from geometry_msgs.msg import PoseStamped
@@ -50,6 +51,9 @@ class ArduPilotMAVROS(Autopilot):
         :param image_callback: Callback function for camera image
         """
         super().__init__(node, camera_info_topic, image_topic, image_callback)
+
+        # TODO: copy to shared folder and use relative path
+        self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
         self._local_position_pose = None
         self._global_position_global = None
@@ -103,6 +107,27 @@ class ArduPilotMAVROS(Autopilot):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
+
+    @property
+    def _egm96(self) -> GeoidPGM:
+        """Geoid for converting MAVROS global position WGS 84 altitude to AMSL altitude
+
+        .. code-block: bash
+            :caption: geographiclib needed
+
+            sudo apt install geographiclib-tools
+            sudo geographiclib-get-geoids egm96-5
+
+        .. seealso::
+            `Avoiding Pitfalls Related to Ellipsoid Height and Height Above Mean Sea Level
+            <https://wiki.ros.org/mavros#mavros.2FPlugins.Avoiding_Pitfalls_Related_to_Ellipsoid_Height_and_Height_Above_Mean_Sea_Level>`_
+        """
+        return self.__egm96
+
+    @_egm96.setter
+    def _egm96(self, value: GeoidPGM) -> None:
+        assert_type(value, GeoidPGM)
+        self.__egm96 = value
     # endregion
 
     # region Private
@@ -199,7 +224,11 @@ class ArduPilotMAVROS(Autopilot):
 
     @property
     def attitude(self) -> Optional[Attitude]:
-        """Vehicle attitude in NED frame as an :class:`.Attitude` instance"""
+        """Vehicle attitude in NED frame as an :class:`.Attitude` instance
+
+        .. note::
+            MAVROS local position plugin returns orientation in ENU frame, it is converted to NED here
+        """
         if self._local_position_pose is not None \
                 and hasattr(self._local_position_pose, 'pose') \
                 and hasattr(self._local_position_pose.pose, 'orientation') \
@@ -207,10 +236,16 @@ class ArduPilotMAVROS(Autopilot):
                 and hasattr(self._local_position_pose.pose.orientation, 'y') \
                 and hasattr(self._local_position_pose.pose.orientation, 'z') \
                 and hasattr(self._local_position_pose.pose.orientation, 'w'):
-            return Attitude(np.array([self._local_position_pose.pose.orientation.x,
-                                      self._local_position_pose.pose.orientation.y,
-                                      self._local_position_pose.pose.orientation.z,
-                                      self._local_position_pose.pose.orientation.w]), extrinsic=True)
+
+            attitude_ned_q = np.array([self._local_position_pose.pose.orientation.y,
+                                       self._local_position_pose.pose.orientation.x,
+                                       -self._local_position_pose.pose.orientation.z,
+                                       self._local_position_pose.pose.orientation.w])
+
+            # Convert ENU->NED + re-center yaw
+            attitude_ned = Rotation.from_quat(attitude_ned_q) * Rotation.from_rotvec(np.array([0, 0, np.pi / 2]))
+
+            return Attitude(attitude_ned.as_quat(), extrinsic=True)
         else:
             return None
 
@@ -246,15 +281,19 @@ class ArduPilotMAVROS(Autopilot):
 
     @property
     def altitude_amsl(self) -> Optional[float]:
-        """Vehicle altitude in meters above mean sea level (AMSL) or None if not available
+        """Vehicle altitude in meters above mean sea level (AMSL) or None if not available"""
+        if self._global_position_global is not None and hasattr(self._global_position_global, 'altitude') and \
+                self.global_position is not None:
+            return self._global_position_global.altitude - self._egm96.height(self.global_position.lat,
+                                                                              self.global_position.lon)
+        else:
+            return None
 
-        .. note::
-            Assumes MAVROS global position altitude above ellipsoid :~ altitude AMSL
-
-        .. seealso::
-            :py:attr:`.altitude_amsl`
-        """
-        if self._global_position_global is not None and hasattr(self._global_position_global, 'altitude'):
+    @property
+    def altitude_ellipsoid(self) -> Optional[float]:
+        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available"""
+        if self._global_position_global is not None and hasattr(self._global_position_global, 'altitude') and \
+                self.global_position is not None:
             return self._global_position_global.altitude
         else:
             return None
@@ -272,6 +311,15 @@ class ArduPilotMAVROS(Autopilot):
         """
         if self.altitude_amsl is not None and self.altitude_agl is not None:
             return self.altitude_amsl - self.altitude_agl
+        else:
+            return None
+
+    # TODO: move to base class?
+    @property
+    def ground_elevation_ellipsoid(self) -> Optional[float]:
+        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
+        if self.altitude_ellipsoid is not None and self.altitude_agl is not None:
+            return self.altitude_ellipsoid - self.altitude_agl
         else:
             return None
 

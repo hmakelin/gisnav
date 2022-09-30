@@ -263,11 +263,12 @@ class PX4microRTPS(Autopilot):
             elif self._vehicle_local_position.z_valid:
                 return abs(self._vehicle_local_position.z)
 
-        if self._vehicle_global_position is not None \
-                and hasattr(self._vehicle_global_position, 'terrain_alt') \
-                and hasattr(self._vehicle_global_position, 'terrain_alt_valid') \
-                and self._vehicle_global_position.terrain_alt_valid:
-            return self._vehicle_global_position.terrain_alt
+        # TODO: remove this section?
+        #if self._vehicle_global_position is not None \
+        #        and hasattr(self._vehicle_global_position, 'terrain_alt') \
+        #        and hasattr(self._vehicle_global_position, 'terrain_alt_valid') \
+        #        and self._vehicle_global_position.terrain_alt_valid:
+        #    return self._vehicle_global_position.terrain_alt
 
         return None
 
@@ -284,6 +285,18 @@ class PX4microRTPS(Autopilot):
             return None
 
     @property
+    def altitude_ellipsoid(self) -> Optional[float]:
+        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
+
+        .. seealso::
+            :py:attr:`.altitude_amsl`
+        """
+        if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'alt_ellipsoid'):
+            return self._vehicle_global_position.alt_ellipsoid
+        else:
+            return None
+
+    @property
     def ground_elevation_amsl(self) -> Optional[float]:
         """Ground elevation in meters above mean sea level (AMSL) or None if information is not available
 
@@ -296,6 +309,15 @@ class PX4microRTPS(Autopilot):
         """
         if self._vehicle_local_position is not None and hasattr(self._vehicle_local_position, 'ref_alt'):
             return self._vehicle_local_position.ref_alt
+        else:
+            return None
+
+    # TODO: move to base class?
+    @property
+    def ground_elevation_ellipsoid(self) -> Optional[float]:
+        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
+        if self.altitude_ellipsoid is not None and self.altitude_agl is not None:
+            return self.altitude_ellipsoid - self.altitude_agl
         else:
             return None
 

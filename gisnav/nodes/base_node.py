@@ -1131,21 +1131,21 @@ class BaseNode(Node, ABC):
         """
         static_camera = self.get_parameter('misc.static_nadir_facing_camera').get_parameter_value().bool_value
         if static_camera:
-            # TODO: assume nadir facing static camera and do validity check
-            return True
+            # TODO: take vehicle pitch into account (if camera fixed to vehicle body, locked or no gimbal)
+            r_guess = Rotation.from_quat(Attitude(Rotation.from_rotvec([0, -np.pi/2, 0]).as_quat()).to_esd().q)
 
-        if input_data.r_guess is None:
+        if input_data.r_guess is None and not static_camera:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
             return False
 
-        r_estimate = Rotation.from_matrix(fixed_camera.pose.r)
-        r_guess = Rotation.from_matrix(input_data.r_guess)
+        if not static_camera:
+            r_guess = Rotation.from_matrix(input_data.r_guess)
+            # Adjust for map rotation
+            camera_yaw = fixed_camera.image_pair.ref.rotation
+            camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
+            r_guess *= camera_yaw
 
-        # Adjust for map rotation
-        # TODO handle static_camera (assert r_guess is None, or use _pose_guess?)
-        camera_yaw = fixed_camera.image_pair.ref.rotation
-        camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
-        r_guess *= camera_yaw
+        r_estimate = Rotation.from_matrix(fixed_camera.pose.r)
 
         magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 

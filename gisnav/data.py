@@ -127,6 +127,10 @@ class Attitude:
         att = Attitude(q, self.extrinsic)
         return att
 
+    def as_rotation(self) -> Rotation:
+        """Attitude aa :class:`scipy.spatial.transform.Rotation` instance"""
+        return Rotation.from_quat(self.q)
+
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
@@ -377,6 +381,9 @@ class InputData:
     """InputData of vehicle state and other variables needed for postprocessing pose estimates"""
     r_guess: Optional[np.ndarray]
     """Camera expected attitude"""
+
+    attitude: Optional[Attitude]
+    """Vehicle attitude"""
 
     ground_elevation: Optional[float]
     """Assumed elevation of ground plane above mean sea level (AMSL) in meters"""

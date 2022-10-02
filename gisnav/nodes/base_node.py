@@ -87,8 +87,8 @@ class BaseNode(Node, ABC):
     ROS_D_MISC_CAMERA_INFO_TOPIC = '/camera/camera_info'
     """Default ROS camera info topic name"""
 
-    ROS_D_MISC_STATIC_NADIR_FACING_CAMERA = False
-    """Default setting for whether matching should be attempted if camera pitch is unknown"""
+    ROS_D_STATIC_CAMERA = False
+    """Default value for static camera flag (true for static camera facing down from vehicle body)"""
 
     ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
@@ -185,7 +185,7 @@ class BaseNode(Node, ABC):
         ('misc.autopilot', ROS_D_MISC_AUTOPILOT, read_only),
         ('misc.camera_info_topic', ROS_D_MISC_CAMERA_INFO_TOPIC, read_only),
         ('misc.image_topic', ROS_D_MISC_IMAGE_TOPIC, read_only),
-        ('misc.attempt_matching_when_camera_pitch_unknown', ROS_D_MISC_STATIC_NADIR_FACING_CAMERA, read_only),
+        ('misc.static_camera', ROS_D_STATIC_CAMERA, read_only),
         ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
         ('misc.min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
@@ -519,6 +519,7 @@ class BaseNode(Node, ABC):
         """
         input_data = InputData(
             r_guess=self._r_guess,
+            attitude=self._bridge.attitude,
             ground_elevation=self._bridge.ground_elevation_amsl,
             ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
         )
@@ -529,7 +530,7 @@ class BaseNode(Node, ABC):
             assert_type(camera_yaw, float)
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
         else:
-            static_camera = self.get_parameter('misc.static_nadir_facing_camera').get_parameter_value().bool_value
+            static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
             if not static_camera:
                 self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
                 return
@@ -1129,10 +1130,10 @@ class BaseNode(Node, ABC):
         the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
         estimates.
         """
-        static_camera = self.get_parameter('misc.static_nadir_facing_camera').get_parameter_value().bool_value
+        static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
         if static_camera:
-            # TODO: take vehicle pitch into account (if camera fixed to vehicle body, locked or no gimbal)
-            r_guess = Rotation.from_quat(Attitude(Rotation.from_rotvec([0, -np.pi/2, 0]).as_quat()).to_esd().q)
+            # TODO add vehicle body roll & pitch
+            r_guess = Attitude(Rotation.from_rotvec([0, -np.pi/2, 0]).as_quat()).to_esd().as_rotation()
 
         if input_data.r_guess is None and not static_camera:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
@@ -1186,9 +1187,7 @@ class BaseNode(Node, ABC):
                 self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
                 return True
         else:
-            static_camera = self.get_parameter('misc.static_nadir_facing_camera')\
-                                   .get_parameter_value().bool_value \
-                               or self.ROS_D_MISC_STATIC_NADIR_FACING_CAMERA
+            static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
             if not static_camera:
                 self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
                 return True

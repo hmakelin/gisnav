@@ -54,12 +54,17 @@ class MockGPSNode(BaseNode):
         self._gps_publisher.publish(msg)
 
     def _generate_gps_input(self, fixed_camera: FixedCamera) -> GPSINPUT:
-        """Generates a :class:`.GPSINPUT` message to send over MAVROS"""
+        """Generates a :class:`.GPSINPUT` message to send over MAVROS
+
+        .. seealso:
+            `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
+        """
         position = fixed_camera.position
         gps_time = GPSTime.from_datetime(datetime.now())
 
-        sec = int(np.floor(self._bridge.synchronized_time / 1e6))
-        nanosec = int((self._bridge.synchronized_time - (sec * 1e6)) * 1e3)
+        ns = time.time_ns()
+        sec = int(ns / 1e9)
+        nanosec = int(ns - (1e9 * sec))
         header = Header()
         time_ = Time()
         time_.sec = sec
@@ -69,7 +74,7 @@ class MockGPSNode(BaseNode):
         msg = GPSINPUT()
         msg.header = header
         msg.gps_id = 0
-        msg.ignore_flags = 0
+        msg.ignore_flags = 56  # vel_horiz + vel_vert + speed_accuracy
         msg.time_week = gps_time.week_number
         msg.time_week_ms = int(gps_time.time_of_week * 1e3)
         msg.fix_type = 3  # 3D position

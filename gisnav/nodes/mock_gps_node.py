@@ -70,6 +70,7 @@ class MockGPSNode(BaseNode):
         time_.sec = sec
         time_.nanosec = nanosec
         header.stamp = time_
+        header.frame_id = 'base_link'
 
         msg = GPSINPUT()
         msg.header = header
@@ -86,9 +87,9 @@ class MockGPSNode(BaseNode):
         msg.speed_accuracy = np.nan
         msg.hdop = 0.0
         msg.vdop = 0.0
-        msg.vn = np.nan
-        msg.ve = np.nan
-        msg.vd = np.nan
+        msg.vn = np.nan  # should be in ignore_flags
+        msg.ve = np.nan  # should be in ignore_flags
+        msg.vd = np.nan  # should be in ignore_flags
         msg.satellites_visible = np.iinfo(np.uint8).max
         msg.yaw = int(np.degrees(position.attitude.yaw % (2 * np.pi)) * 100)
 

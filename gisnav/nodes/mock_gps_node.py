@@ -60,7 +60,7 @@ class MockGPSNode(BaseNode):
         :param fixed_camera: Estimated fixed camera
         """
         assert_type(fixed_camera, FixedCamera)
-        msg = self._generate_sensor_gps(fixed_camera) if self._px4_micrortps else self._generate_gps_input_v2(fixed_camera)
+        msg = self._generate_sensor_gps(fixed_camera) if self._px4_micrortps else self._generate_gps_input(fixed_camera)
         #self._gps_publisher.publish(msg)
 
         if self._px4_micrortps:
@@ -110,7 +110,7 @@ class MockGPSNode(BaseNode):
 
     #    return msg
 
-    def _generate_gps_input_v2(self, fixed_camera: FixedCamera) -> dict:
+    def _generate_gps_input(self, fixed_camera: FixedCamera) -> dict:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
 
         .. seealso:
@@ -128,7 +128,7 @@ class MockGPSNode(BaseNode):
         msg['fix_type'] = 3  # 3D position
         msg['lat'] = int(position.lat * 1e7)
         msg['lon'] = int(position.lon * 1e7)
-        msg['alt'] = float(position.z_ellipsoid)
+        msg['alt'] = position.z_amsl  # float(position.z_ellipsoid)  # ArduPilot Gazebo SITL expects AMSL
         msg['horiz_accuracy'] = 10.0  # position.eph
         msg['vert_accuracy'] = 3.0  # position.epv
         msg['speed_accuracy'] = np.nan

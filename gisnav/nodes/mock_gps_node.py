@@ -117,7 +117,6 @@ class MockGPSNode(BaseNode):
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
         """
         position = fixed_camera.position
-        gps_time = GPSTime.from_datetime(datetime.now())  # TODO: use usec here, not now
 
         msg = {}
 
@@ -125,8 +124,10 @@ class MockGPSNode(BaseNode):
         msg['usec'] = int(time.time_ns() / 1e3) - (self._bridge.synchronized_time - fixed_camera.timestamp)
         msg['gps_id'] = 0
         msg['ignore_flags'] = 56  # vel_horiz + vel_vert + speed_accuracy
+
+        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(msg['usec'] / 1e6))
         msg['time_week'] = gps_time.week_number
-        msg['time_week_ms'] = int(gps_time.time_of_week * 1e3)
+        msg['time_week_ms'] = int(gps_time.time_of_week * 1e3)  # TODO this implementation accurate only up to 1 second
         msg['fix_type'] = 3  # 3D position
         msg['lat'] = int(position.lat * 1e7)
         msg['lon'] = int(position.lon * 1e7)

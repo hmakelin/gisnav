@@ -416,14 +416,24 @@ class BaseNode(Node, ABC):
             Should be roughly same as rotation matrix stored in :py:attr:`._pose_guess`, even though it is derived via
             a different route. If gimbal is not stabilized to its set position, the rotation matrix will be different.
         """
+        static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
         if self._bridge.gimbal_set_attitude is None:
-            self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
-            return None
-
-        assert_type(self._bridge.gimbal_set_attitude, Attitude)
-        gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
-
-        return gimbal_set_attitude.r
+            if not static_camera:
+                self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
+                return None
+            else:
+                if self._bridge.attitude is not None:
+                    attitude = self._bridge.attitude.as_rotation()
+                    attitude *= Rotation.from_euler('XYZ', [0, -np.pi/2, 0])
+                    return Attitude(attitude.as_quat()).to_esd().r
+                else:
+                    self.get_logger().warn('Vehicle attitude not available, will not provide pose guess for static '
+                                           'camera.')
+                    return None
+        else:
+            assert_type(self._bridge.gimbal_set_attitude, Attitude)
+            gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+            return gimbal_set_attitude.r
 
     @property
     def _wms_results_pending(self) -> bool:
@@ -524,8 +534,10 @@ class BaseNode(Node, ABC):
             ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
         )
 
+        static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
+
         # Get cropped and rotated map
-        if self._bridge.gimbal_set_attitude is not None:
+        if self._bridge.gimbal_set_attitude is not None and not static_camera:
             camera_yaw = self._bridge.gimbal_set_attitude.yaw
             assert_type(camera_yaw, float)
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
@@ -772,12 +784,26 @@ class BaseNode(Node, ABC):
         :param origin: Camera position
         :return: Center of the projected FOV, or None if not available
         """
-        if self._bridge.gimbal_set_attitude is None:
-            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
-            return None
+        static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
 
-        assert_type(self._bridge.gimbal_set_attitude, Attitude)
-        gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+        if self._bridge.gimbal_set_attitude is None:
+            if not static_camera:
+                self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
+                return None
+            else:
+                if self._bridge.attitude is not None:
+                    attitude = self._bridge.attitude.as_rotation()
+                    attitude *= Rotation.from_euler('XYZ', [0, -np.pi/2, 0])
+                    gimbal_set_attitude = Attitude(attitude.as_quat()).to_esd().r
+                else:
+                    self.get_logger().warn('Vehicle attitude not available, will not provide pose guess for static '
+                                           'camera.')
+                    return None
+        else:
+            assert_type(self._bridge.gimbal_set_attitude, Attitude)
+            gimbal_set_attitude = self._bridge.gimbal_set_attitude.to_esd()  # Need coordinates in image frame, not NED
+
+        assert gimbal_set_attitude is not None
 
         if self._bridge.camera_data is None:
             self.get_logger().warn('Camera data not available, could not create a mock pose to generate a FOV guess.')
@@ -1132,7 +1158,7 @@ class BaseNode(Node, ABC):
         """
         static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
         if static_camera:
-            # TODO add vehicle body roll & pitch
+            # TODO add vehicle body roll & pitch from input data
             r_guess = Attitude(Rotation.from_rotvec([0, -np.pi/2, 0]).as_quat()).to_esd().as_rotation()
 
         if input_data.r_guess is None and not static_camera:
@@ -1176,21 +1202,33 @@ class BaseNode(Node, ABC):
         Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
         not worthwhile.
 
+        .. note::
+            Uses actual vehicle attitude (instead of gimbal set attitude) if static_camera ROS param is True
+
         :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        if self._bridge.gimbal_set_attitude is not None:
+        static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
+        pitch = None
+        if self._bridge.gimbal_set_attitude is not None and not static_camera:
             # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
             pitch = np.degrees(self._bridge.gimbal_set_attitude.pitch) + 90
-            if pitch > max_pitch:
-                self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
-                return True
         else:
-            static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
             if not static_camera:
                 self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
                 return True
+            else:
+                if self._bridge.attitude is None:
+                    self.get_logger().warn('Vehicle attitude was not available, assuming static camera pitch too high.')
+                    return True
+                else:
+                    pitch = self._bridge.attitude.pitch
+
+        assert pitch is not None
+        if pitch > max_pitch:
+            self.get_logger().warn(f'Camera pitch {pitch} is above limit {max_pitch}.')
+            return True
 
         return False
 

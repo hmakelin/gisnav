@@ -117,10 +117,12 @@ class MockGPSNode(BaseNode):
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
         """
         position = fixed_camera.position
-        gps_time = GPSTime.from_datetime(datetime.now())
+        gps_time = GPSTime.from_datetime(datetime.now())  # TODO: use usec here, not now
 
         msg = {}
-        msg['usec'] = int(time.time() * 1e3)
+
+        # Adjust UTC epoch timestamp for estimation delay
+        msg['usec'] = int(time.time_ns() / 1e3) - (self._bridge.synchronized_time - fixed_camera.timestamp)
         msg['gps_id'] = 0
         msg['ignore_flags'] = 56  # vel_horiz + vel_vert + speed_accuracy
         msg['time_week'] = gps_time.week_number
@@ -131,14 +133,18 @@ class MockGPSNode(BaseNode):
         msg['alt'] = position.z_amsl  # float(position.z_ellipsoid)  # ArduPilot Gazebo SITL expects AMSL
         msg['horiz_accuracy'] = 10.0  # position.eph
         msg['vert_accuracy'] = 3.0  # position.epv
-        msg['speed_accuracy'] = np.nan
+        msg['speed_accuracy'] = np.nan # should be in ignore_flags
         msg['hdop'] = 0.0
         msg['vdop'] = 0.0
         msg['vn'] = np.nan  # should be in ignore_flags
         msg['ve'] = np.nan  # should be in ignore_flags
         msg['vd'] = np.nan  # should be in ignore_flags
         msg['satellites_visible'] = np.iinfo(np.uint8).max
-        msg['yaw'] = int(np.degrees(position.attitude.yaw % (2 * np.pi)) * 100)
+
+        # TODO check yaw sign (NED or ENU?)
+        yaw = int(np.degrees(position.attitude.yaw % (2 * np.pi)) * 100)
+        yaw = 36000 if yaw == 0 else yaw  # MAVLink definition 0 := not available
+        msg['yaw'] = yaw
 
         return msg
 

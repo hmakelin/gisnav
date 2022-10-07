@@ -1158,8 +1158,17 @@ class BaseNode(Node, ABC):
         """
         static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
         if static_camera:
-            # TODO add vehicle body roll & pitch from input data
-            r_guess = Attitude(Rotation.from_rotvec([0, -np.pi/2, 0]).as_quat()).to_esd().as_rotation()
+            vehicle_attitude = self._bridge.attitude
+            if vehicle_attitude is None:
+                self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check'
+                                       'for static camera.')
+                return False
+
+            # Add vehicle roll & pitch (yaw handled separately through map rotation)
+            #r_guess = Attitude(Rotation.from_rotvec([vehicle_attitude.roll, vehicle_attitude.pitch - np.pi/2, 0])
+            #                   .as_quat()).to_esd().as_rotation()
+            r_guess = Attitude(Rotation.from_euler('XYZ', [vehicle_attitude.roll, vehicle_attitude.pitch - np.pi / 2,
+                                                           0]).as_quat()).to_esd().as_rotation()
 
         if input_data.r_guess is None and not static_camera:
             self.get_logger().warn('Gimbal attitude was not available, cannot do post-estimation validity check.')
@@ -1184,11 +1193,11 @@ class BaseNode(Node, ABC):
                                    f'{np.degrees(magnitude)}).')
             return False
 
-        roll = r_guess.as_euler('xyz', degrees=True)[0]
-        if roll > threshold/2:  # TODO: have separate configurable threshold
-            self.get_logger().warn(f'Estimated roll difference to expected was too high (magnitude '
-                                   f'{roll}).')
-            return False
+        #roll = r_guess.as_euler('xyz', degrees=True)[0]
+        #if roll > threshold/2:  # TODO: have separate configurable threshold
+        #    self.get_logger().warn(f'Estimated roll difference to expected was too high (magnitude '
+        #                           f'{roll}).')
+        #    return False
 
         return True
 

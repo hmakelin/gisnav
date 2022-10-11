@@ -558,8 +558,10 @@ class FixedCamera:
             # Not a valid position estimate
             return None
 
+
         lon, lat = t_wgs84.squeeze()[1::-1]
         alt = t_wgs84[2]
+
         position = Position(
             xy=GeoPoint(lon, lat, crs),  # lon-lat order
             z_ground=alt,

@@ -923,7 +923,7 @@ class BaseNode(Node, ABC):
         use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
         if use_gimbal_projection:
             max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-            if self._camera_pitch_too_high(max_pitch):
+            if self._camera_roll_or_pitch_too_high(max_pitch):
                 self.get_logger().warn(f'Camera pitch not available or above maximum {max_pitch}. Will not update map.')
                 return False
 
@@ -1091,7 +1091,8 @@ class BaseNode(Node, ABC):
         """Determines whether :meth:`._estimate` should be called
 
         Match should be attempted if (1) a reference map has been retrieved, (2) there are no pending match results,
-        (3) camera pitch is not too high (e.g. facing horizon instead of nadir), and (4) drone is not flying too low.
+        (3) camera roll or pitch is not too high (e.g. facing horizon instead of nadir), and (4) drone is not flying
+        too low.
 
         :param img: Image from which to estimate pose
         :return: True if pose estimation be attempted
@@ -1106,10 +1107,11 @@ class BaseNode(Node, ABC):
             self.get_logger().debug(f'Previous pose estimation results pending. Skipping pose estimation.')
             return False
 
-        # Check condition (3) - whether camera pitch is too large
+        # Check condition (3) - whether camera roll/pitch is too large
         max_pitch = self.get_parameter('misc.max_pitch').get_parameter_value().integer_value
-        if self._camera_pitch_too_high(max_pitch):
-            self.get_logger().warn(f'Camera pitch not available or above limit {max_pitch}. Skipping pose estimation.')
+        if self._camera_roll_or_pitch_too_high(max_pitch):
+            self.get_logger().warn(f'Camera roll or pitch not available or above limit {max_pitch}. Skipping pose '
+                                   f'estimation.')
             return False
 
         # Check condition (4) - whether vehicle altitude is too low
@@ -1205,11 +1207,11 @@ class BaseNode(Node, ABC):
     # endregion
 
     # region Shared Logic
-    def _camera_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
-        """Returns True if (set) camera pitch exceeds given limit OR camera pitch is unknown
+    def _camera_roll_or_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
+        """Returns True if (set) camera roll or pitch exceeds given limit OR camera pitch is unknown
 
-        Used to determine whether camera pitch setting is too high up from nadir to make matching against a map
-        not worthwhile.
+        Used to determine whether camera roll or pitch is too high up from nadir to make matching against a map
+        not worthwhile. Checks roll for static camera, but assumes zero roll for 2-axis gimbal (static_camera: False).
 
         .. note::
             Uses actual vehicle attitude (instead of gimbal set attitude) if static_camera ROS param is True
@@ -1221,6 +1223,7 @@ class BaseNode(Node, ABC):
         static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
         pitch = None
         if self._bridge.gimbal_set_attitude is not None and not static_camera:
+            # TODO: do not assume zero roll here - camera attitude handling needs refactoring
             # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
             pitch = np.degrees(self._bridge.gimbal_set_attitude.pitch) + 90
         else:
@@ -1232,7 +1235,7 @@ class BaseNode(Node, ABC):
                     self.get_logger().warn('Vehicle attitude was not available, assuming static camera pitch too high.')
                     return True
                 else:
-                    pitch = self._bridge.attitude.pitch
+                    pitch = max(self._bridge.attitude.pitch, self._bridge.attitude.roll)
 
         assert pitch is not None
         if pitch > max_pitch:

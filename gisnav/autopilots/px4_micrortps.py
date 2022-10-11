@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, Image
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude
+from pygeodesy.geoids import GeoidPGM
 
 from gisnav.assertions import assert_type
 from gisnav.data import TimePair, Attitude
@@ -58,6 +59,8 @@ class PX4microRTPS(Autopilot):
         self._gimbal_device_set_attitude = None
         self._gimbal_attitude = None
         self._time_sync = None
+
+        self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
     # region Properties
     @property
@@ -113,6 +116,30 @@ class PX4microRTPS(Autopilot):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
+
+    @property
+    def _egm96(self) -> GeoidPGM:
+        """Geoid for getting alt_ellipsoid from alt (AMSL) altitude
+
+        It looks like the PX4 SITL simulation VehcileGlobalPosition provides an invalid alt_ellipsoid so this is used
+        to calculate it from alt (AMSL) instead.
+
+        .. code-block: bash
+            :caption: geographiclib needed
+
+            sudo apt install geographiclib-tools
+            sudo geographiclib-get-geoids egm96-5
+
+        .. seealso::
+            `Avoiding Pitfalls Related to Ellipsoid Height and Height Above Mean Sea Level
+            <https://wiki.ros.org/mavros#mavros.2FPlugins.Avoiding_Pitfalls_Related_to_Ellipsoid_Height_and_Height_Above_Mean_Sea_Level>`_
+        """
+        return self.__egm96
+
+    @_egm96.setter
+    def _egm96(self, value: GeoidPGM) -> None:
+        assert_type(value, GeoidPGM)
+        self.__egm96 = value
     # endregion
 
     # region Private
@@ -288,11 +315,21 @@ class PX4microRTPS(Autopilot):
     def altitude_ellipsoid(self) -> Optional[float]:
         """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
 
+        .. note::
+            Looks like the PX4 SITL returns an invalid alt_ellipsoid in the VehicleGlobalPosition message:
+            ``alt_ellipsoid: -1844674428928.0``. Ellipsoid altitude is therefore calculated from altitude AMSL using
+            egm96 geoid instead.
+
         .. seealso::
             :py:attr:`.altitude_amsl`
         """
-        if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'alt_ellipsoid'):
-            return self._vehicle_global_position.alt_ellipsoid
+        # alt_ellipsoid invalid -- commented out
+        #if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'alt_ellipsoid'):
+        #    return self._vehicle_global_position.alt_ellipsoid
+        #else:
+        #    return None
+        if self.altitude_amsl is not None and self.global_position is not None:
+            return self.altitude_amsl + self._egm96.height(self.global_position.lat, self.global_position.lon)
         else:
             return None
 

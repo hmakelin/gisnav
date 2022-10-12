@@ -283,7 +283,7 @@ for a custom autopilot setup. Example implementations are provided for PX4 over 
 the ``misc.autopilot`` ROS parameter and loaded when the :class:`.BaseNode` is initialized.
 
 .. note::
-    Currently when using :class:`.ArduPilotMAVROS` you need to set the ``misc.static_nadir_facing_camera`` ROS
+    Currently when using :class:`.ArduPilotMAVROS` you need to set the ``misc.static_camera`` ROS
     parameter to ``True`` and the ``map_update.gimbal_projection`` ROS parameter to ``False``, because
     :meth:`.ArduPilotMAVROS.gimbal_attitude` and :meth:`.ArduPilotMAVROS.gimbal_set_attitude` are not implemented.
     See the ``config/typhoon_h480__ksql_airport_ardupilot.yaml`` file for an example.

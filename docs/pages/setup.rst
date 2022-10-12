@@ -21,7 +21,8 @@ Prerequisites
 
 PX4 Autopilot
 ===================================================
-PX4 **v1.13** is the only autopilot that is currently supported by GISNav.
+PX4 **v1.13** is currently supported by GISNav. Earlier versions might work, but the :class:`.MockGPSNode` demo requires
+v1.13.
 
 Follow the PX4 instructions to setup your `Ubuntu Development Environment
 <https://docs.px4.io/master/en/simulation/ros_interface.html>`_ with `Fast DDS
@@ -242,6 +243,21 @@ ArduPilot SITL simulation environment:
 * `Using Gazebo simulator with SITL <https://ardupilot.org/dev/docs/using-gazebo-simulator-with-sitl.html>`_
 * `Connecting with ROS <https://ardupilot.org/dev/docs/ros-connecting.html>`_
 
+As of ``gisnav`` v0.61, :class:`.MockGPSNode` can be used in the ArduPilot SITL simulation included in the
+`gisnav-docker <https://github.com/hmakelin/gisnav-docker>`_ image. The included ``gazebo-iris`` model only has a static
+camera. Because the camera is not stabilized, it likely won't be reliable enough to act as a full replacement for GPS in
+ArduPilot's mission mode, while loitering will work. Use the following command to start the ``mock_gps_node`` with the
+ArduPilot bridge:
+
+.. code-block:: bash
+
+    ros2 run gisnav mock_gps_node --mavros --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport_ardupilot.yaml
+
+
+.. note::
+    You may have to enable virtual joystick from QGroundControl settings and have it centered to maintain altitude in
+    ArduPilot's Loiter mode in the SITL simulation.
 
 .. _QGroundControl:
 

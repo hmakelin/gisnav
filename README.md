@@ -27,23 +27,20 @@ You will need to have [NVIDIA Container Toolkit][2] for Docker installed.
 ```bash
 git clone https://github.com/hmakelin/gisnav-docker.git
 cd gisnav-docker
-docker-compose build px4-sitl
+docker-compose build sitl
 ```
 
-> **Note** The build for the `px4-sitl` image takes a long time, especially if you are building it for the first time.
+> **Note** The build for the `sitl` image takes a long time.
 
-Once the `px4-sitl` image has been built, run the `mapserver` and `px4-sitl` services:
+Once the `sitl` image has been built, run the `mapserver` and `px4-sitl` services:
 
 ```bash
-docker-compose up -d mapserver px4-sitl
+docker-compose up -d mapserver sitl
 ```
 
 > **Note**: 
-> * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
->   time until it starts serving the WMS endpoint.
-> * The `px4-sitl` container should pop up [Gazebo][4] and [QGroundControl][5] automatically once ran. The Gazebo 
->   window may take several minutes to appear, while QGroundControl should appear in a few seconds after running the 
->   container.
+> The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
+> time until it starts serving the WMS endpoint.
 
 [4]: https://gazebosim.org/home
 

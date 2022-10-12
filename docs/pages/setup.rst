@@ -17,9 +17,12 @@ Prerequisites
   CUDA versions with the ``nvidia-smi`` command line utility. If you don't have it installed, follow the `NVIDIA CUDA
   Installation Guide for Linux <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_.
 
+.. _PX4 Autopilot:
+
 PX4 Autopilot
 ===================================================
-PX4 **v1.13** is the only autopilot that is currently supported by GISNav.
+PX4 **v1.13** is currently supported by GISNav. Earlier versions might work, but the :class:`.MockGPSNode` demo requires
+v1.13.
 
 Follow the PX4 instructions to setup your `Ubuntu Development Environment
 <https://docs.px4.io/master/en/simulation/ros_interface.html>`_ with `Fast DDS
@@ -78,7 +81,7 @@ better either through the PX4 shell, through QGroundControl, or in the
 .. _ROS 2 Workspace:
 
 ROS 2 Workspace
-===================================================
+___________________________________________________
 GISNav requires ROS 2 to communicate with PX4 Autopilot and is therefore structured as a ROS 2 package.
 
 Follow the `PX4 instructions to setup ROS 2 and the PX4-ROS 2 bridge
@@ -99,7 +102,7 @@ manual repetition:
 .. _PX4-ROS 2 Bridge:
 
 PX4-ROS 2 Bridge
-===================================================
+___________________________________________________
 The default configuration of the PX4-ROS 2 bridge is not sufficient for GISNav. The bridge must be reconfigured and
 the ``micrortps_agent`` re-generated.
 
@@ -156,7 +159,7 @@ folders. You must configure the following send and receive flags for the followi
       script to automatically configure the above topics before building the PX4 SITL target.
 
 PX4-ROS 2 Bridge Troubleshooting
-___________________________________________________
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Ensure you have your new workspace sourced before moving on to next steps:
 
@@ -194,7 +197,7 @@ before rebuilding again:
     want to restart ``micrortps_agent``.
 
 gscam
-===================================================
+___________________________________________________
 
 The ``typhoon_h480`` build target for Gazebo SITL supports UDP `video streaming
 <https://docs.px4.io/master/en/simulation/gazebo.html#video-streaming>`_ . Here we will use ``gscam`` to publish the
@@ -221,13 +224,40 @@ with the provided configuration files:
     on how to create a custom camera calibration file if you do not want to use the provided example
 
 gscam Troubleshooting
-___________________________________________________
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. note::
     *Unverified*:
     When GISNav is running, it will try to exit cleanly when ``Ctrl+C`` is pressed. However, if the combination is
     mashed quickly in succession the clean exit may fail and leave some subscriptions hanging. In this case you may
     want to restart ``gscam``.
+
+.. _ArduPilot:
+
+ArduPilot
+===================================================
+ArduPilot is supported as an alternative to `PX4 Autopilot`_. The following tutorials should get you started with an
+ArduPilot SITL simulation environment:
+
+* `Setting up SITL on Linux <https://ardupilot.org/dev/docs/setting-up-sitl-on-linux.html>`_
+* `Using Gazebo simulator with SITL <https://ardupilot.org/dev/docs/using-gazebo-simulator-with-sitl.html>`_
+* `Connecting with ROS <https://ardupilot.org/dev/docs/ros-connecting.html>`_
+
+As of ``gisnav`` v0.61, :class:`.MockGPSNode` can be used in the ArduPilot SITL simulation included in the
+`gisnav-docker <https://github.com/hmakelin/gisnav-docker>`_ image. The included ``gazebo-iris`` model only has a static
+camera. Because the camera is not stabilized, it likely won't be reliable enough to act as a full replacement for GPS in
+ArduPilot's mission mode, while loitering will work. Use the following command to start the ``mock_gps_node`` with the
+ArduPilot bridge:
+
+.. code-block:: bash
+
+    ros2 run gisnav mock_gps_node --mavros --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport_ardupilot.yaml
+
+
+.. note::
+    You may have to enable virtual joystick from QGroundControl settings and have it centered to maintain altitude in
+    ArduPilot's Loiter mode in the SITL simulation.
 
 .. _QGroundControl:
 
@@ -392,28 +422,6 @@ Test your MapServer WMS service by opening the capabilities XML in your browser:
 
     firefox "http://localhost:80/?map=/etc/mapserver/wms.map&service=WMS&request=GetCapabilities"
 
-Docker commit the MapServer container with preloaded maps
---------------------------------------------------------------
-To upload the image preloaded with maps to Docker Hub, first commit the container to an image:
-
-.. code-block:: bash
-
-    export CONTAINER_ID=$(docker ps -q -f name=$CONTAINER_NAME)
-    export IMAGE_NAME=gisnav-mapserver
-    docker commit $CONTAINER_ID $IMAGE_NAME
-
-Then push the image to Docker Hub:
-
-.. note::
-    Replace ``hmakelin``  with your own user account name, and ``latest`` with your own tag
-
-.. code-block:: bash
-
-    export DOCKER_HUB_USER=hmakelin
-    export tag=latest
-    docker image tag $IMAGE_NAME $DOCKER_HUB_USER/$IMAGE_NAME:$tag
-    docker image push $DOCKER_HUB_USER/$IMAGE_NAME
-
 GISNav
 ===================================================
 
@@ -452,10 +460,18 @@ Build the GISNav package:
 Once GISNav is installed, you can run the included :class:`.MockGPSNode` either directly with ``ros2 run``:
 
 .. code-block:: bash
+    :caption: Run GISNav with PX4 microRTPS bridge
 
     cd ~/px4_ros_com_ros2
     ros2 run gisnav mock_gps_node --ros-args --log-level info \
         --params-file src/gisnav/config/typhoon_h480__ksql_airport.yaml
+
+.. code-block:: bash
+    :caption: Run GISNav with ArduPilot MAVROS
+
+    cd ~/px4_ros_com_ros2
+    ros2 run gisnav mock_gps_node --mavros --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport_ardupilot.yaml
 
 Or using the provided launch file:
 

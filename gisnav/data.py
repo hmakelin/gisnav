@@ -1,4 +1,23 @@
-"""Module containing immutable dataclasses to protect atomicity of related information (object-based 'contexts')"""
+"""Module containing immutable dataclasses to protect atomicity of related information (object-based 'contexts')
+
+The classes here may return a :class:`.DataValueError` upon instantiation to prevent invalid data structures from
+being instantiated. Example usage that handles the exception:
+
+.. code-block:: python
+
+    try:
+        position = Position(
+            xy=self._bridge.global_position,
+            z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
+            z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
+            attitude=self._bridge.attitude,
+            timestamp=self._bridge.synchronized_time
+        )
+        return position
+    except DataValueError as dve:
+        self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
+        return None
+"""
 from __future__ import annotations  # Python version 3.7+
 
 import cv2
@@ -36,7 +55,8 @@ class Position:
     z_ground: float             # altitude above ground plane in meters (positive)
     attitude: Attitude          # attitude in NED frame
     timestamp: int              # Reference timestamp of position
-    z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known (positive)
+    z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known
+    z_ellipsoid: Optional[float]# altitude above WGS84 ellipsoid in meters if known
 
     _KALMAN_FILTER_EPSG_CODE = 'epsg:3857'
     """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
@@ -50,6 +70,10 @@ class Position:
 
         if self.z_ground < 0:
             raise DataValueError(f'Ground altitude was negative {self.z_ground}.')
+
+        if self.z_amsl is not None and self.z_ellipsoid is None or \
+                self.z_ellipsoid is not None and self.z_amsl is None:
+            raise DataValueError(f'Please provide both z_amsl and z_ellipsoid.')
 
     @property
     def lat(self) -> float:
@@ -102,6 +126,10 @@ class Attitude:
         q = np.array([q[1], -q[0], q[2], -q[3]])  # NED to ESD
         att = Attitude(q, self.extrinsic)
         return att
+
+    def as_rotation(self) -> Rotation:
+        """Attitude aa :class:`scipy.spatial.transform.Rotation` instance"""
+        return Rotation.from_quat(self.q)
 
 
 # noinspection PyClassHasNoInit
@@ -354,9 +382,23 @@ class InputData:
     r_guess: Optional[np.ndarray]
     """Camera expected attitude"""
 
-    ground_elevation: Optional[float]
-    """Assumed elevation of ground plane above mean sea level (AMSL)"""
+    attitude: Optional[Attitude]
+    """Vehicle attitude"""
 
+    ground_elevation: Optional[float]
+    """Assumed elevation of ground plane above mean sea level (AMSL) in meters"""
+
+    ground_elevation_ellipsoid: Optional[float]
+    """Assumed elevation of ground plane above WGS 84 ellipsoid in meters"""
+
+    def __post_init__(self):
+        """Post-initialization computed fields and validity checks
+
+        :raise: DataValueError if a valid data class could not be initialized
+        """
+        if self.ground_elevation is not None and self.ground_elevation_ellipsoid is None or \
+            self.ground_elevation_ellipsoid is not None and self.ground_elevation is None:
+                raise DataValueError('Please provide ground elevation both AMSL and above WGS 84 ellipsoid.')
 
 # noinspection PyClassHasNoInit
 @dataclass
@@ -409,7 +451,8 @@ class FixedCamera:
     image_pair: ImagePair
     pose: Pose
     timestamp: int
-    ground_elevation: Optional[float]
+    ground_elevation: Optional[float]  # Terrain altitude AMSL in meters
+    ground_elevation_ellipsoid: Optional[float]  # Terrain altitude above WGS 84 ellipsoid in meters
     fov: FOV = field(init=False)
     position: Position = field(init=False)
     h: np.ndarray = field(init=False)
@@ -493,11 +536,13 @@ class FixedCamera:
 
         return dst_fov, principal_point_dst
 
-    def _estimate_position(self, ground_elevation: Optional[float], crs: str = 'epsg:4326') -> Optional[Position]:
+    def _estimate_position(self, ground_elevation: Optional[float], ground_elevation_ellipsoid: Optional[float],
+                           crs: str = 'epsg:4326') -> Optional[Position]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
-        :param ground_elevation: Optional ground elevation (needed to estimate altitude from sea level)
+        :param ground_elevation: Optional ground elevation above AMSL in meters
+        :param ground_elevation_ellipsoid: Optional ground elevation above WGS 84 ellipsoid in meters
         :param crs: CRS to use for the Position
         :return: Camera position
         """
@@ -513,12 +558,15 @@ class FixedCamera:
             # Not a valid position estimate
             return None
 
+
         lon, lat = t_wgs84.squeeze()[1::-1]
         alt = t_wgs84[2]
+
         position = Position(
             xy=GeoPoint(lon, lat, crs),  # lon-lat order
             z_ground=alt,
             z_amsl=alt + ground_elevation if ground_elevation is not None else None,
+            z_ellipsoid=alt + ground_elevation_ellipsoid if ground_elevation_ellipsoid is not None else None,
             attitude=self._estimate_attitude(),
             timestamp=self.image_pair.qry.timestamp
         )
@@ -531,6 +579,10 @@ class FixedCamera:
         :raise: DataValueError if a valid FixedCamera could not be initialized
         """
         img = self.image_pair.qry
+        if self.ground_elevation is not None and self.ground_elevation_ellipsoid is None or \
+            self.ground_elevation_ellipsoid is not None and self.ground_elevation is None:
+                raise DataValueError('Please provide ground elevation both AMSL and above WGS 84 ellipsoid.')
+
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         try:
             object.__setattr__(self, 'inv_h', np.linalg.inv(self.h))
@@ -545,7 +597,7 @@ class FixedCamera:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
         try:
-            position = self._estimate_position(self.ground_elevation)
+            position = self._estimate_position(self.ground_elevation, self.ground_elevation_ellipsoid)
             if position is not None:
                 object.__setattr__(self, 'position', position)
             else:

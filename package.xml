@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>gisnav</name>
-  <version>0.60.1</version>
+  <version>0.61.0</version>
   <description>Estimates airborne drone global position by matching video to map retrieved from onboard GIS server.</description>
   <author email="hmakelin@protonmail.com">Harri Makelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
@@ -18,6 +18,7 @@
   <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>px4_msgs</exec_depend>
   <exec_depend>ros2launch</exec_depend>

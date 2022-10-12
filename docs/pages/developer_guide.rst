@@ -62,32 +62,6 @@ The attributes in the :class:`.Position` input to the :meth:`.BaseNode.publish` 
 For more information on the dimensions and units, please see the source code for :meth:`.Position`. The x and y
 coordinates (in ENU frame) are provided as a :class:`.GeoPoint`, which is a wrapper for :class:`geopandas.GeoSeries`.
 
-.. _ROS 2 Topic Configuration:
-
-ROS 2 Topic Configuration
-____________________________________________________
-To compute the position and attitude estimates, the :class:`.BaseNode` class automatically subscribes to the following
-required telemetry and video input ROS topics:
-
-    #. :class:`px4_msgs.VehicleGlobalPosition` messages via ``VehicleGlobalPosition_PubSubTopic``
-    #. :class:`px4_msgs.VehicleLocalPosition` messages via ``VehicleLocalPosition_PubSubTopic``
-    #. :class:`px4_msgs.VehicleAttitude` messages via ``VehicleAttitude_PubSubTopic``
-    #. :class:`px4_msgs.GimbalDeviceSetAttitude` messages via ``GimbalDeviceSetAttitude_PubSubTopic``
-    #. :class:`px4_msgs.Image` messages via ``image_raw``
-    #. :class:`px4_msgs.CameraInfo` messages via ``camera_info``
-
-.. note::
-    In the Mock GPS Example, ``gscam`` is used to stream the UDP stream to the ``image_raw`` and ``camera_info`` ROS
-    topics. They are not broadcast via the PX4-ROS 2 bridge.
-
-You may need to add more subscribe and publish topics if you decide to implement your own node. You may need to edit
-the ``uorb_rtps_message_ids.yaml`` file as described in the
-`supported UORB messages <https://docs.px4.io/master/en/middleware/micrortps.html#supported-uorb-messages>`_ section of
-the PX4 User Guide.
-
-.. seealso::
-    `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for more information on the PX4-ROS 2 bridge
-
 Modify ROS Parameters
 ____________________________________________________
 ROS parameter server is used to manage the configuration of the :class:`.BaseNode` instance at runtime. An example
@@ -298,6 +272,47 @@ arguments in your ROS YAML parameter file:
               params_file: 'config/my_node_params.yaml'
 
 See the provided ``loftr_params.yaml`` and ``superglue_params.yaml`` for examples on how to format the file.
+
+.. _Autopilots:
+
+Autopilots
+____________________________________________________
+The :py:mod:`.gisnav.autopilots` module has a :class:`.Autopilot` base class that you can extend to implement support
+for a custom autopilot setup. Example implementations are provided for PX4 over microRTPS bridge
+(:class:`.PX4microRTPS`) and ArduPilot over MAVROS (:class:`.ArduPilotMAVROS`). The autopilot adapter configured in
+the ``misc.autopilot`` ROS parameter and loaded when the :class:`.BaseNode` is initialized.
+
+.. note::
+    Currently when using :class:`.ArduPilotMAVROS` you need to set the ``misc.static_camera`` ROS
+    parameter to ``True`` and the ``map_update.gimbal_projection`` ROS parameter to ``False``, because
+    :meth:`.ArduPilotMAVROS.gimbal_attitude` and :meth:`.ArduPilotMAVROS.gimbal_set_attitude` are not implemented.
+    See the ``config/typhoon_h480__ksql_airport_ardupilot.yaml`` file for an example.
+
+.. _ROS 2 Topic Configuration:
+
+ROS 2 Topic Configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+As an example, the :class:`.PX4microRTPS` adapter automatically subscribes to the following
+required telemetry and video input ROS topics:
+
+    #. :class:`px4_msgs.VehicleGlobalPosition` messages via ``VehicleGlobalPosition_PubSubTopic``
+    #. :class:`px4_msgs.VehicleLocalPosition` messages via ``VehicleLocalPosition_PubSubTopic``
+    #. :class:`px4_msgs.VehicleAttitude` messages via ``VehicleAttitude_PubSubTopic``
+    #. :class:`px4_msgs.GimbalDeviceSetAttitude` messages via ``GimbalDeviceSetAttitude_PubSubTopic``
+    #. :class:`px4_msgs.Image` messages via ``image_raw``
+    #. :class:`px4_msgs.CameraInfo` messages via ``camera_info``
+
+.. note::
+    In the Mock GPS Example, ``gscam`` is used to stream the UDP stream to the ``image_raw`` and ``camera_info`` ROS
+    topics. They are not broadcast via the PX4-ROS 2 bridge.
+
+You may need to add more subscribe and publish topics if you decide to implement your own node. You may need to edit
+the ``uorb_rtps_message_ids.yaml`` file as described in the
+`supported UORB messages <https://docs.px4.io/master/en/middleware/micrortps.html#supported-uorb-messages>`_ section of
+the PX4 User Guide.
+
+.. seealso::
+    `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for more information on the PX4-ROS 2 bridge
 
 Testing
 ====================================================

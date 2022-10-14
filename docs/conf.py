@@ -29,7 +29,7 @@ sys.path.append(os.path.abspath(superglue_dir))
 # -- Project information -----------------------------------------------------
 
 project = package_data.package_name
-copyright = f'2021, {package_data.author}'
+copyright = f'2022, {package_data.author}'
 author = package_data.author
 
 # -- General configuration ---------------------------------------------------

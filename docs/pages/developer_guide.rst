@@ -6,6 +6,10 @@ Developer Guide
     GISNav is untested and has only been demonstrated in a software-in-the-loop (SITL) simulation environment.
     Do not use this software for real drone flights.
 
+.. note::
+    GISNav is under active development and stability of the API is not guaranteed. Use a specific commit or version tag
+    to mitigate the impact of breaking changes.
+
 This section provides instruction on how you can integrate GISNav with your project as well as configure and extend
 it to match your use case.
 

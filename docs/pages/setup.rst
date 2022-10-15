@@ -298,8 +298,8 @@ You may need to change the file permissions and/or extract it before running it:
 WMS Endpoint
 ===================================================
 The :class:`.BaseNode` class gets map rasters for the estimated location of the vehicle from a WMS endpoint. The WMS
-client :class:`.WMSClient` uses runs in a dedicated process, although it can be quite easily changed to run in a
-separate thread to reduce serialization overhead (no ROS oparameter option currently exists for this, however).
+client :class:`.WMSClient` runs in a dedicated process, although it can be quite easily changed to run in a
+separate thread to reduce serialization overhead (no ROS parameter option currently exists for this, however).
 
 Configure the WMS client via the ROS parameter server, or provide a YAML file when spinning up your node:
 
@@ -320,7 +320,7 @@ WMS Proxy
 ___________________________________________________
 If you already have a third party high-resolution aerial or satellite imagery endpoint available, you only need to
 proxy it through a WMS service. Follow the `gisnav-docker README.md <https://github.com/hmakelin/gisnav-docker>`_ to set
-up a WNS MapProxy using the provided Docker image.
+up a WMS MapProxy using the provided Docker image.
 
 .. note::
     Commercial web-based map services are often

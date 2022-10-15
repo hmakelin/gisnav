@@ -12,8 +12,6 @@ mock_gps_node:
       request_timeout: 10
     misc:
       autopilot: 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
-      image_topic: '/camera/image_raw'
-      camera_info_topic: '/camera/camera_info'
       mock_gps_selection: 1
       attitude_deviation_threshold: 10
       #max_pitch: 30

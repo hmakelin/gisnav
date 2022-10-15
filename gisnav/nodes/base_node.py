@@ -81,12 +81,6 @@ class BaseNode(Node, ABC):
     ROS_D_MISC_AUTOPILOT = 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
     """Default autopilot adapter"""
 
-    ROS_D_MISC_IMAGE_TOPIC = '/camera/image_raw'
-    """Default ROS image topic name"""
-
-    ROS_D_MISC_CAMERA_INFO_TOPIC = '/camera/camera_info'
-    """Default ROS camera info topic name"""
-
     ROS_D_STATIC_CAMERA = False
     """Default value for static camera flag (true for static camera facing down from vehicle body)"""
 
@@ -183,8 +177,6 @@ class BaseNode(Node, ABC):
         ('wms.srs', ROS_D_WMS_SRS),
         ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
         ('misc.autopilot', ROS_D_MISC_AUTOPILOT, read_only),
-        ('misc.camera_info_topic', ROS_D_MISC_CAMERA_INFO_TOPIC, read_only),
-        ('misc.image_topic', ROS_D_MISC_IMAGE_TOPIC, read_only),
         ('misc.static_camera', ROS_D_STATIC_CAMERA, read_only),
         ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
         ('misc.max_pitch', ROS_D_MISC_MAX_PITCH),
@@ -234,12 +226,8 @@ class BaseNode(Node, ABC):
         # Autopilot bridge
         ap = self.get_parameter('misc.autopilot').get_parameter_value().string_value or self.ROS_D_MISC_AUTOPILOT
         ap: Autopilot = self._load_autopilot(ap)
-        image_topic = self.get_parameter('misc.image_topic').get_parameter_value().string_value \
-                      or self.ROS_D_MISC_IMAGE_TOPIC
-        camera_info_topic = self.get_parameter('misc.camera_info_topic').get_parameter_value().string_value \
-                      or self.ROS_D_MISC_CAMERA_INFO_TOPIC
         # TODO: implement passing init args, kwargs
-        self._bridge = ap(self, camera_info_topic, image_topic, self._image_raw_callback)
+        self._bridge = ap(self, self._image_raw_callback)
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()

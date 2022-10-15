@@ -24,13 +24,16 @@ class Autopilot(ABC):
     TELEMETRY_EXPIRATION_LIMIT = 1e6
     """Expiration period in usec for vehicle state (if telemetry data is older than this it should not be used)"""
 
-    def __init__(self, node: rclpy.node.Node, camera_info_topic: str, image_topic: str,
-                 on_image_callback: Callable[[ImageData], None]) -> None:
+    CAMERA_INFO_TOPIC = 'camera/camera_info'
+    """ROS camera info (:class:`.sensor_msgs.msg.CameraInfo`) topic to subscribe to"""
+
+    IMAGE_RAW_TOPIC = 'camera/image_raw'
+    """ROS image raw (:class:`.sensor_msgs.msg.Image`) topic to subscribe to"""
+
+    def __init__(self, node: rclpy.node.Node, on_image_callback: Callable[[ImageData], None]) -> None:
         """Initializes autopilot adapter
 
         :param node: Parent node that handles the ROS subscriptions
-        :param camera_info_topic: ROS camera info topic to subscribe to
-        :param image_topic: ROS topic for :class:`.sensor_msgs.msg.Image`
         :param on_image_callback: Callback function for camera image
         """
         self._node = node
@@ -38,13 +41,11 @@ class Autopilot(ABC):
 
         # Subscribe to camera data topic
         self.camera_data = None
-        self._camera_info_topic = camera_info_topic
-        self._subscribe(self._camera_info_topic, CameraInfo, self._camera_info_callback,
+        self._subscribe(self.CAMERA_INFO_TOPIC, CameraInfo, self._camera_info_callback,
                         rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
 
         # Image topic callback gets access to base node through provided on_image_callback
-        self._image_topic = image_topic
-        self._subscribe(self._image_topic, Image, on_image_callback, rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
+        self._subscribe(self.IMAGE_RAW_TOPIC, Image, on_image_callback, rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
 
     @property
     def _node(self) -> rclpy.node.Node:
@@ -75,26 +76,6 @@ class Autopilot(ABC):
     def camera_data(self, value: Optional[CameraData]) -> None:
         assert_type(value, get_args(Optional[CameraData]))
         self.__camera_data = value
-
-    @property
-    def _camera_info_topic(self) -> str:
-        """CameraInfo ROS topic name."""
-        return self.__camera_info_topic
-
-    @_camera_info_topic.setter
-    def _camera_info_topic(self, value: str) -> None:
-        assert_type(value, str)
-        self.__camera_info_topic = value
-
-    @property
-    def _image_topic(self) -> str:
-        """Image ROS topic name."""
-        return self.__image_topic
-
-    @_image_topic.setter
-    def _image_topic(self, value: str) -> None:
-        assert_type(value, str)
-        self.__image_topic = value
 
     def _subscribe(self, topic_name: str, class_: type, callback: Callable, qos: rclpy.qos.QoSProfile) -> None:
         """Subscribes to ROS topic
@@ -137,10 +118,10 @@ class Autopilot(ABC):
             return None
         else:
             self.camera_data = CameraData(k=msg.k.reshape((3, 3)), dim=Dim(msg.height, msg.width))
-            camera_info_topic = self._topics.get(self._camera_info_topic, {}).get(self._TOPICS_SUBSCRIBER_KEY, None)
-            if camera_info_topic is not None:
+            camera_info_sub = self._topics.get(self.CAMERA_INFO_TOPIC, {}).get(self._TOPICS_SUBSCRIBER_KEY, None)
+            if camera_info_sub is not None:
                 # Assume camera info is static, destroy subscription
-                camera_info_topic.destroy()
+                camera_info_sub.destroy()
 
     @property
     @abstractmethod

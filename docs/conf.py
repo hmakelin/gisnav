@@ -69,7 +69,16 @@ html_theme_options = {
         "image_light": "img/logo.png",
         "image_dark": "img/logo_inverted.png",
     },
-    "collapse_navigation": True
+    "collapse_navigation": True,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/hmakelin/gisnav",
+            "icon": "fab fa-github",
+            "type": "fontawesome",
+        }
+    ],
+    "icon_links_label": "Quick Links",
 }
 
 # Make version number accessible in .rst files

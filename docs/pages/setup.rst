@@ -72,7 +72,8 @@ better either through the PX4 shell, through QGroundControl, or in the
     should not be made unreasonably large.
 
     The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its
-    default configuration seems to be more accurate in estimating vertical position than horizontal position, so the
+    default configuration `seems to be more accurate in estimating vertical position than horizontal position
+    <https://github.com/hmakelin/gisnav/blob/master/test/sitl/ulog_analysis/variance_estimation.ipynb>`_, so the
     example has lower tolerance for vertical position error.
 
     `*camera yaw rotation speed may be less of an issue if a rotation agnostic neural network is used (not the case by

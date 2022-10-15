@@ -6,6 +6,10 @@ Developer Guide
     GISNav is untested and has only been demonstrated in a software-in-the-loop (SITL) simulation environment.
     Do not use this software for real drone flights.
 
+.. note::
+    GISNav is under active development and stability of the API is not guaranteed. Use a specific commit or version tag
+    to mitigate the impact of breaking changes.
+
 This section provides instruction on how you can integrate GISNav with your project as well as configure and extend
 it to match your use case.
 
@@ -313,6 +317,17 @@ the PX4 User Guide.
 
 .. seealso::
     `PX4-ROS 2 bridge <https://docs.px4.io/master/en/ros/ros2_comm.html>`_ for more information on the PX4-ROS 2 bridge
+
+Remap ROS 2 Topics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+By default, the :class:`.CameraInfo` and :class:`px4_msgs.Image` messages are expected at ``camera/camera_info`` and
+``camera/image_raw`` topics, respectively. The topics can be remapped:
+
+.. code-block:: bash
+
+    ros2 run gisnav mock_gps_node --mavros --ros-args --log-level info \
+        --params-file src/gisnav/config/typhoon_h480__ksql_airport_ardupilot.yaml \
+         -r camera/camera_info:=camera_info -r camera/image_raw:=image_raw
 
 Testing
 ====================================================

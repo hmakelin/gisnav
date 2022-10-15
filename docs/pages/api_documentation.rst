@@ -8,6 +8,10 @@ will only be interested in the :class:`.BaseNode` and :class:`.PoseEstimator` cl
 
 .. _GISNav ROS 2 package: https://gitlab.com/px4-ros2-map-nav/python_px4_ros2_map_nav
 
+.. note::
+    GISNav is under active development and stability of the API is not guaranteed. Use a specific commit or version tag
+    to mitigate the impact of breaking changes.
+
 Indices and Tables
 =================================================
 Use the search in the sidebar or these indices to find what you are looking for.

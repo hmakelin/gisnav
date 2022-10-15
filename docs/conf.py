@@ -29,7 +29,7 @@ sys.path.append(os.path.abspath(superglue_dir))
 # -- Project information -----------------------------------------------------
 
 project = package_data.package_name
-copyright = f'2021, {package_data.author}'
+copyright = f'2022, {package_data.author}'
 author = package_data.author
 
 # -- General configuration ---------------------------------------------------
@@ -69,7 +69,16 @@ html_theme_options = {
         "image_light": "img/logo.png",
         "image_dark": "img/logo_inverted.png",
     },
-    "collapse_navigation": True
+    "collapse_navigation": True,
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/hmakelin/gisnav",
+            "icon": "fab fa-github",
+            "type": "fontawesome",
+        }
+    ],
+    "icon_links_label": "Quick Links",
 }
 
 # Make version number accessible in .rst files

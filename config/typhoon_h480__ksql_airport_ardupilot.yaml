@@ -11,8 +11,6 @@ mock_gps_node:
       request_timeout: 10
     misc:
       autopilot: 'gisnav.autopilots.ardupilot_mavros.ArduPilotMAVROS'
-      image_topic: '/camera/image_raw'
-      camera_info_topic: '/camera/camera_info'
       attitude_deviation_threshold: 10 # degrees
       max_pitch: 50  # 30  # Make bigger with static_camera: True  # Used by _should_match
       min_match_altitude: 50

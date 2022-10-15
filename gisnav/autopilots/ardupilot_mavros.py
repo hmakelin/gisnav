@@ -41,16 +41,13 @@ class ArduPilotMAVROS(Autopilot):
     }
     """ROS topics to subscribe"""
 
-    def __init__(self, node: rclpy.node.Node, camera_info_topic: str, image_topic: str,
-                 image_callback: Callable[[Image], None]) -> None:
+    def __init__(self, node: rclpy.node.Node, image_callback: Callable[[Image], None]) -> None:
         """Initialize class
 
         :param node: Parent node that handles the ROS subscriptions
-        :param camera_info_topic: ROS camera info topic to subscribe to
-        :param image_topic: ROS camera image (raw) topic to subscribe to
         :param image_callback: Callback function for camera image
         """
-        super().__init__(node, camera_info_topic, image_topic, image_callback)
+        super().__init__(node, image_callback)
 
         # TODO: copy to shared folder and use relative path
         self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)

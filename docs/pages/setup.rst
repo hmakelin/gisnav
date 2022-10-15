@@ -382,7 +382,7 @@ download the GeoTIFF imagery from EarthExplorer, or from the Esri-maintained `AW
     :caption: Example: Downloading a NAIP imagery product from the AWS S3 bucket
 
     cd ~/gisnav-docker
-    mkdir -p tmp/
+    mkdir -p mapfiles/
     aws s3 cp \
       --request-payer requester \
       s3://naip-source/ca/2020/60cm/rgbir_cog/37122/m_3712230_se_10_060_20200524.tif \

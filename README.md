@@ -32,7 +32,7 @@ docker-compose build sitl
 
 > **Note** The build for the `sitl` image takes a long time.
 
-Once the `sitl` image has been built, run the `mapserver` and `px4-sitl` services:
+Once the `sitl` image has been built, run the `mapserver` and `sitl` services:
 
 ```bash
 docker-compose up -d mapserver sitl

@@ -5,15 +5,22 @@ import rclpy
 from abc import ABC, abstractmethod
 from typing import Optional, Callable, get_args
 
+from pygeodesy.geoids import GeoidPGM
+
 from sensor_msgs.msg import Image, CameraInfo
 
-from gisnav.data import Attitude, CameraData, ImageData, Dim
+from gisnav.data import Attitude, CameraData, ImageData, Dim, Altitude, Snapshot, Position
 from gisnav.geo import GeoPoint
 from gisnav.assertions import assert_type
 
 
 class Autopilot(ABC):
-    """Abstract base class definining autopilot bridge interface"""
+    """Abstract base class definining autopilot bridge interface
+
+    .. note::
+        * Different altitudes against WGS 84 ellipsoid altitudes are defined in this parent class and based on a
+          correction to the corresponding AMSL altitude
+    """
 
     # Keys for topics dictionary that map microRTPS bridge topics to subscribers and message definitions
     _TOPICS_MSG_KEY = 'message'
@@ -47,9 +54,12 @@ class Autopilot(ABC):
         # Image topic callback gets access to base node through provided on_image_callback
         self._subscribe(self.IMAGE_RAW_TOPIC, Image, on_image_callback, rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
 
+        # TODO: make configurable / use shared folder home path instead
+        self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
+
     @property
     def _node(self) -> rclpy.node.Node:
-        """ROS node that handles the subscriptions (and holds a handle to this adapter)"""
+        """Parent :class:`.BaseNode` that handles the subscriptions (and holds a handle to this adapter)"""
         return self.__node
 
     @_node.setter
@@ -66,6 +76,27 @@ class Autopilot(ABC):
     def _topics(self, value: dict) -> None:
         assert_type(value, dict)
         self.__topics = value
+
+    @property
+    def _egm96(self) -> GeoidPGM:
+        """Geoid for getting ellipsoid altitudes from alt (AMSL) altitude
+
+        .. code-block: bash
+            :caption: geographiclib needed
+
+            sudo apt install geographiclib-tools
+            sudo geographiclib-get-geoids egm96-5
+
+        .. seealso::
+            `Avoiding Pitfalls Related to Ellipsoid Height and Height Above Mean Sea Level
+            <https://wiki.ros.org/mavros#mavros.2FPlugins.Avoiding_Pitfalls_Related_to_Ellipsoid_Height_and_Height_Above_Mean_Sea_Level>`_
+        """
+        return self.__egm96
+
+    @_egm96.setter
+    def _egm96(self, value: GeoidPGM) -> None:
+        assert_type(value, GeoidPGM)
+        self.__egm96 = value
 
     @property
     def camera_data(self) -> Optional[CameraData]:
@@ -137,13 +168,33 @@ class Autopilot(ABC):
 
     @property
     @abstractmethod
-    def altitude_agl(self) -> Optional[float]:
+    def altitude_home(self) -> Optional[float]:
+        """Vehicle altitude in meters above home (starting) position or None if not available
+
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+        """
+        pass
+
+    def altitude_agl(self, terrain_altitude_amsl: Optional[float]) -> Optional[float]:
         """Vehicle altitude in meters above ground level (AGL) or None if not available
 
         .. seealso::
-            :py:attr:`.altitude_amsl`, :py:attr:`.altitude_ellipsoid`
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`
+
+        :param terrain_altitude_amsl: Terrain altitude AMSL at current location according to DEM (optional)
+        :return: Vehicle altitude in meters above ground level (AGL)
         """
-        pass
+        if self.altitude_amsl is not None:
+            if terrain_altitude_amsl is not None:
+                return self.altitude_amsl - terrain_altitude_amsl
+            elif self.home_altitude_amsl is not None:
+                # TODO: assumes home is at ground level and that ground is flat --> not strictly true
+                return self.altitude_amsl - self.home_altitude_amsl
+            else:
+                return None
+        else:
+            return None
 
     @property
     @abstractmethod
@@ -151,31 +202,48 @@ class Autopilot(ABC):
         """Vehicle altitude in meters above mean sea level (AMSL) or None if not available
 
         .. seealso::
-            :py:attr:`.altitude_agl`, :py:attr:`.altitude_ellipsoid`
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
         """
         pass
 
     @property
-    @abstractmethod
     def altitude_ellipsoid(self) -> Optional[float]:
         """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
 
+        .. note::
+            Looks like at least PX4 SITL :class:`VehicleGlobalPosition` message has an invalid alt_ellipsoid value:
+            ``alt_ellipsoid: -1844674428928.0``. Ellipsoid altitude is therefore calculated from altitude AMSL using
+            egm96 geoid instead, which should apply regardless of what autopilot is used.
+
         .. seealso::
-            :py:attr:`.altitude_amsl`, :py:attr:`.altitude_agl`
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+        """
+        if self.altitude_amsl is not None and self.global_position is not None:
+            return self.altitude_amsl + self._egm96.height(self.global_position.lat, self.global_position.lon)
+        else:
+            return None
+
+    @property
+    @abstractmethod
+    def home_altitude_amsl(self) -> Optional[float]:
+        """Home (starting position) altitude in meters above mean sea level (AMSL) or None if not available
+
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
         """
         pass
 
     @property
-    @abstractmethod
-    def ground_elevation_amsl(self) -> Optional[float]:
-        """Ground elevation in meters above mean sea level (AMSL) or None if information is not available"""
-        pass
+    def home_altitude_ellipsoid(self) -> Optional[float]:
+        """Home (starting position) altitude in meters above WGS 84 ellipsoid or None if not available
 
-    @property
-    @abstractmethod
-    def ground_elevation_ellipsoid(self) -> Optional[float]:
-        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
-        pass
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+        """
+        if self.home_altitude_amsl is not None and self.global_position is not None:
+            return self.home_altitude_amsl + self._egm96.height(self.global_position.lat, self.global_position.lon)
+        else:
+            return None
 
     @property
     @abstractmethod
@@ -204,3 +272,41 @@ class Autopilot(ABC):
         """Vehicle global position as a :class:`.GeoPoint`"""
         pass
 
+    @property
+    @abstractmethod
+    def local_frame_origin(self) -> Optional[Position]:
+        """Vehicle local frame origin as a :class:`.Position`"""
+        pass
+
+    @property
+    def snapshot(self) -> Snapshot:
+        """Snapshot of all other properties for convenience"""
+        global_position = self.global_position
+        terrain_altitude_amsl = self._node._terrain_altitude_amsl_at_position(global_position)
+        home_altitude_amsl = self.home_altitude_amsl
+        return Snapshot(
+            synchronized_time=self.synchronized_time,
+            attitude=self.attitude,
+            gimbal_attitude=self.gimbal_attitude,
+            gimbal_set_attitude=self.gimbal_set_attitude,
+            global_position=global_position,
+            local_frame_origin=self.local_frame_origin,
+            altitude=Altitude(
+                amsl=self.altitude_amsl,
+                agl=self.altitude_agl,
+                ellipsoid=self.altitude_ellipsoid,
+                home=self.altitude_home
+            ),
+            terrain_altitude=Altitude(
+                amsl=terrain_altitude_amsl,
+                agl=0,
+                ellipsoid=terrain_altitude_amsl + self._egm96.height(global_position.lat, global_position.lon) if terrain_altitude_amsl is not None else None,
+                home=terrain_altitude_amsl - home_altitude_amsl if terrain_altitude_amsl is not None and home_altitude_amsl is not None else None,
+            ),
+            home_altitude=Altitude(
+                amsl=home_altitude_amsl,
+                agl=home_altitude_amsl - terrain_altitude_amsl if terrain_altitude_amsl is not None else None,
+                ellipsoid=self.home_altitude_ellipsoid,
+                home=0
+            ),
+        )

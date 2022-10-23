@@ -4,15 +4,14 @@ import time
 import numpy as np
 from typing import Optional, Callable, get_args
 
-from pygeodesy.geoids import GeoidPGM
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, Image
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import NavSatFix
-from mavros_msgs.msg import MountControl
+from mavros_msgs.msg import MountControl, HomePosition
 
 from gisnav.assertions import assert_type
-from gisnav.data import TimePair, Attitude
+from gisnav.data import TimePair, Attitude, Position, Altitude
 from gisnav.geo import GeoPoint
 
 from gisnav.autopilots.autopilot import Autopilot
@@ -34,6 +33,10 @@ class ArduPilotMAVROS(Autopilot):
             Autopilot._TOPICS_MSG_KEY: NavSatFix,
             Autopilot._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
         },
+        '/mavros/home_position/home': {
+            Autopilot._TOPICS_MSG_KEY: HomePosition,
+            Autopilot._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
+        },
         '/mavros/mount_control/command': {
             Autopilot._TOPICS_MSG_KEY: MountControl,
             Autopilot._TOPICS_QOS_KEY: rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value
@@ -49,12 +52,10 @@ class ArduPilotMAVROS(Autopilot):
         """
         super().__init__(node, image_callback)
 
-        # TODO: copy to shared folder and use relative path
-        self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
-
         self._local_position_pose = None
         self._global_position_global = None
         self._mount_control_command = None
+        self._home_position_home = None
 
         self._time_sync = None
 
@@ -82,6 +83,16 @@ class ArduPilotMAVROS(Autopilot):
         self.__global_position_global = value
 
     @property
+    def _home_position_home(self) -> Optional[HomePosition]:
+        """Home position received via MAVROS."""
+        return self.__home_position_home
+
+    @_home_position_home.setter
+    def _home_position_home(self, value: Optional[HomePosition]) -> None:
+        assert_type(value, get_args(Optional[HomePosition]))
+        self.__home_position_home = value
+
+    @property
     def _mount_control_command(self) -> Optional[MountControl]:
         """Mount control command received via MAVROS."""
         return self.__mount_control_command
@@ -104,27 +115,6 @@ class ArduPilotMAVROS(Autopilot):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
-
-    @property
-    def _egm96(self) -> GeoidPGM:
-        """Geoid for converting MAVROS global position WGS 84 altitude to AMSL altitude
-
-        .. code-block: bash
-            :caption: geographiclib needed
-
-            sudo apt install geographiclib-tools
-            sudo geographiclib-get-geoids egm96-5
-
-        .. seealso::
-            `Avoiding Pitfalls Related to Ellipsoid Height and Height Above Mean Sea Level
-            <https://wiki.ros.org/mavros#mavros.2FPlugins.Avoiding_Pitfalls_Related_to_Ellipsoid_Height_and_Height_Above_Mean_Sea_Level>`_
-        """
-        return self.__egm96
-
-    @_egm96.setter
-    def _egm96(self, value: GeoidPGM) -> None:
-        assert_type(value, GeoidPGM)
-        self.__egm96 = value
     # endregion
 
     # region Private
@@ -183,6 +173,14 @@ class ArduPilotMAVROS(Autopilot):
         :return:
         """
         self._mount_control_command = msg
+
+    def _home_position_home_callback(self, msg: HomePosition) -> None:
+        """Handles latest :class:`mavros_msgs.msg.HomePosition` message
+
+        :param msg: :class:`mavros_msgs.msg.HomePosition` via MAVROS
+        :return:
+        """
+        self._home_position_home = msg
 
     def _is_expired(self, message) -> bool:
         """Returns True if the given message is older than :py:attr:`._TELEMETRY_EXPIRATION_LIMIT`
@@ -263,20 +261,6 @@ class ArduPilotMAVROS(Autopilot):
         return None
 
     @property
-    def altitude_agl(self) -> Optional[float]:
-        """Vehicle altitude in meters above ground level (AGL) or None if not available
-
-        .. note::
-            Assumes local position reference altitude is ground level
-        """
-        if self._local_position_pose is not None and hasattr(self._local_position_pose, 'pose') and \
-                hasattr(self._local_position_pose.pose, 'position') and \
-                hasattr(self._local_position_pose.pose.position, 'z'):
-            return self._local_position_pose.pose.position.z
-
-        return None
-
-    @property
     def altitude_amsl(self) -> Optional[float]:
         """Vehicle altitude in meters above mean sea level (AMSL) or None if not available"""
         if self._global_position_global is not None and hasattr(self._global_position_global, 'altitude') and \
@@ -288,35 +272,14 @@ class ArduPilotMAVROS(Autopilot):
 
     @property
     def altitude_ellipsoid(self) -> Optional[float]:
-        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available"""
+        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
+
+        .. note::
+            Overrides parent implementation, which should also work
+        """
         if self._global_position_global is not None and hasattr(self._global_position_global, 'altitude') and \
                 self.global_position is not None:
             return self._global_position_global.altitude
-        else:
-            return None
-
-    @property
-    def ground_elevation_amsl(self) -> Optional[float]:
-        """Ground elevation in meters above mean sea level (AMSL) or None if information is not available
-
-        .. note::
-            Ground elevation assumed to be same as local position reference altitude.
-            TODO: use DEM raster
-
-        .. seealso::
-            :py:attr:`.altitude_agl`
-        """
-        if self.altitude_amsl is not None and self.altitude_agl is not None:
-            return self.altitude_amsl - self.altitude_agl
-        else:
-            return None
-
-    # TODO: move to base class?
-    @property
-    def ground_elevation_ellipsoid(self) -> Optional[float]:
-        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
-        if self.altitude_ellipsoid is not None and self.altitude_agl is not None:
-            return self.altitude_ellipsoid - self.altitude_agl
         else:
             return None
 
@@ -327,5 +290,67 @@ class ArduPilotMAVROS(Autopilot):
                 and hasattr(self._global_position_global, 'longitude'):
             return GeoPoint(self._global_position_global.longitude, self._global_position_global.latitude,
                             crs='epsg:4326')
+        else:
+            return None
+
+    @property
+    def altitude_home(self) -> Optional[float]:
+        """Vehicle altitude in meters above home (starting) position or None if not available
+
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+        """
+        if self._local_position_pose is not None and hasattr(self._local_position_pose, 'position') and \
+                hasattr(self._local_position_pose.position, 'z'):
+            return self._local_position_pose.position.z
+        else:
+            return None
+
+    @property
+    def home_altitude_amsl(self) -> Optional[float]:
+        """Home (starting position) altitude in meters above mean sea level (AMSL) or None if not available
+
+        .. note::
+            Uses :class:`.VehicleGlobaLPosition` ``ref_alt`` attribute to determine Home altitude
+
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+        """
+        if self._home_position_home is not None and \
+                hasattr(self._home_position_home, 'geo') and \
+                hasattr(self._home_position_home.geo, 'altitude'):
+            return self._home_position_home.geo.altitude - self._egm96.height(self.global_position.lat,
+                                                                              self.global_position.lon)
+        else:
+            return None
+
+    @property
+    def local_frame_origin(self) -> Optional[Position]:
+        """Vehicle local frame origin as a :class:`.Position`
+
+        .. warning::
+            Assumes local frame origin is on ground (starting location)
+        """
+        if self._home_position_home is not None and \
+                hasattr(self._home_position_home, 'geo') and \
+                hasattr(self._home_position_home.geo, 'latitude') and \
+                hasattr(self._home_position_home.geo, 'longitude') and \
+                hasattr(self._home_position_home.geo, 'altitude'):
+            home_altitude_amsl = self.home_altitude_amsl
+
+            altitude = Altitude(
+                agl=0,  # local frame origin assumed on ground level
+                amsl=home_altitude_amsl,
+                ellipsoid=self._home_position_home.geo.altitude,
+                home=0
+            )
+            position = Position(
+                xy=GeoPoint(self._home_position_home.geo.longitude, self._home_position_home.geo.latitude,
+                            crs='epsg:4326'),
+                altitude=altitude,
+                attitude=None,
+                timestamp=None
+            )
+            return position
         else:
             return None

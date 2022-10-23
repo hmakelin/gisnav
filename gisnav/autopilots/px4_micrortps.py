@@ -8,10 +8,9 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, Image
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceAttitudeStatus, \
     GimbalDeviceSetAttitude
-from pygeodesy.geoids import GeoidPGM
 
 from gisnav.assertions import assert_type
-from gisnav.data import TimePair, Attitude
+from gisnav.data import TimePair, Attitude, Altitude, Position
 from gisnav.geo import GeoPoint
 
 from gisnav.autopilots.autopilot import Autopilot
@@ -56,8 +55,6 @@ class PX4microRTPS(Autopilot):
         self._gimbal_device_set_attitude = None
         self._gimbal_attitude = None
         self._time_sync = None
-
-        self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
     # region Properties
     @property
@@ -113,30 +110,6 @@ class PX4microRTPS(Autopilot):
     def _time_sync(self, value: Optional[TimePair]) -> None:
         assert_type(value, get_args(Optional[TimePair]))
         self.__time_sync = value
-
-    @property
-    def _egm96(self) -> GeoidPGM:
-        """Geoid for getting alt_ellipsoid from alt (AMSL) altitude
-
-        It looks like the PX4 SITL simulation VehcileGlobalPosition provides an invalid alt_ellipsoid so this is used
-        to calculate it from alt (AMSL) instead.
-
-        .. code-block: bash
-            :caption: geographiclib needed
-
-            sudo apt install geographiclib-tools
-            sudo geographiclib-get-geoids egm96-5
-
-        .. seealso::
-            `Avoiding Pitfalls Related to Ellipsoid Height and Height Above Mean Sea Level
-            <https://wiki.ros.org/mavros#mavros.2FPlugins.Avoiding_Pitfalls_Related_to_Ellipsoid_Height_and_Height_Above_Mean_Sea_Level>`_
-        """
-        return self.__egm96
-
-    @_egm96.setter
-    def _egm96(self, value: GeoidPGM) -> None:
-        assert_type(value, GeoidPGM)
-        self.__egm96 = value
     # endregion
 
     # region Private
@@ -275,33 +248,26 @@ class PX4microRTPS(Autopilot):
         return Attitude(gimbal_set_attitude_ned.as_quat(), extrinsic=True)
 
     @property
-    def altitude_agl(self) -> Optional[float]:
-        """Vehicle altitude in meters above ground level (AGL) or None if not available
+    def altitude_home(self) -> Optional[float]:
+        """Vehicle altitude in meters above home (starting) position or None if not available
 
-        Tries to get distance to ground from :class:`.VehicleLocalPosition` ``dist_bottom`` and ``z`` attributes, and
-        :class:`.VehicleGlobalPosition` ``terrain_alt`` attribute.
+        .. seealso::
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
         """
-        if self._vehicle_local_position is not None:
-            if self._vehicle_local_position.dist_bottom_valid:
-                return abs(self._vehicle_local_position.dist_bottom)
-            elif self._vehicle_local_position.z_valid:
-                return abs(self._vehicle_local_position.z)
-
-        # TODO: remove this section?
-        #if self._vehicle_global_position is not None \
-        #        and hasattr(self._vehicle_global_position, 'terrain_alt') \
-        #        and hasattr(self._vehicle_global_position, 'terrain_alt_valid') \
-        #        and self._vehicle_global_position.terrain_alt_valid:
-        #    return self._vehicle_global_position.terrain_alt
-
-        return None
+        # Check for existence of z attribute even if z_valid is True, just in case
+        if self._vehicle_local_position is not None \
+            and hasattr(self._vehicle_local_position, 'z_valid') \
+            and hasattr(self._vehicle_local_position, 'z') \
+            and self._vehicle_local_position.z_valid:
+            # TODO Harmonized conventions: In this case assumption has been that up is positive altitude --> '-'
+            return -self._vehicle_local_position.z
 
     @property
     def altitude_amsl(self) -> Optional[float]:
         """Vehicle altitude in meters above mean sea level (AMSL) or None if not available
 
         .. seealso::
-            :py:attr:`.altitude_amsl`
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
         """
         if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'alt'):
             return self._vehicle_global_position.alt
@@ -309,49 +275,17 @@ class PX4microRTPS(Autopilot):
             return None
 
     @property
-    def altitude_ellipsoid(self) -> Optional[float]:
-        """Vehicle altitude in meters above WGS 84 ellipsoid or None if not available
+    def home_altitude_amsl(self) -> Optional[float]:
+        """Home (starting position) altitude in meters above mean sea level (AMSL) or None if not available
 
         .. note::
-            Looks like the PX4 SITL returns an invalid alt_ellipsoid in the VehicleGlobalPosition message:
-            ``alt_ellipsoid: -1844674428928.0``. Ellipsoid altitude is therefore calculated from altitude AMSL using
-            egm96 geoid instead.
+            Uses :class:`.VehicleGlobaLPosition` ``ref_alt`` attribute to determine Home altitude
 
         .. seealso::
-            :py:attr:`.altitude_amsl`
-        """
-        # alt_ellipsoid invalid -- commented out
-        #if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'alt_ellipsoid'):
-        #    return self._vehicle_global_position.alt_ellipsoid
-        #else:
-        #    return None
-        if self.altitude_amsl is not None and self.global_position is not None:
-            return self.altitude_amsl + self._egm96.height(self.global_position.lat, self.global_position.lon)
-        else:
-            return None
-
-    @property
-    def ground_elevation_amsl(self) -> Optional[float]:
-        """Ground elevation in meters above mean sea level (AMSL) or None if information is not available
-
-        .. note::
-            Ground elevation assumed to be same as :class:`px4_msgs.VehicleLocalPosition` reference altitude.
-            TODO: use DEM raster
-
-        .. seealso::
-            :py:attr:`.altitude_agl`
+            `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
         """
         if self._vehicle_local_position is not None and hasattr(self._vehicle_local_position, 'ref_alt'):
             return self._vehicle_local_position.ref_alt
-        else:
-            return None
-
-    # TODO: move to base class?
-    @property
-    def ground_elevation_ellipsoid(self) -> Optional[float]:
-        """Ground elevation in meters above WGS 84 ellipsoid or None if information is not available"""
-        if self.altitude_ellipsoid is not None and self.altitude_agl is not None:
-            return self.altitude_ellipsoid - self.altitude_agl
         else:
             return None
 
@@ -361,5 +295,36 @@ class PX4microRTPS(Autopilot):
         if self._vehicle_global_position is not None and hasattr(self._vehicle_global_position, 'lat') \
                 and hasattr(self._vehicle_global_position, 'lon'):
             return GeoPoint(self._vehicle_global_position.lon, self._vehicle_global_position.lat, crs='epsg:4326')
+        else:
+            return None
+
+    @property
+    def local_frame_origin(self) -> Optional[Position]:
+        """Returns vehicle local frame origin as a :class:`.Position`
+
+        .. warning::
+            Assumes local frame origin is on ground (starting location)
+        """
+        if self._vehicle_local_position is not None \
+                and self.global_position is not None \
+                and hasattr(self._vehicle_local_position, 'ref_lat') \
+                and hasattr(self._vehicle_local_position, 'ref_lon') \
+                and hasattr(self._vehicle_local_position, 'ref_lon'):
+
+            # TODO: self.home_altitude is redundant
+            altitude = Altitude(
+                agl=0,  # local frame origin assumed on ground level
+                amsl=self._vehicle_local_position.ref_alt,
+                ellipsoid=self._vehicle_local_position.ref_alt + self._egm96.height(self.global_position.lat,
+                                                                                    self.global_position.lon),
+                home=0
+            )
+            position = Position(
+                xy=GeoPoint(self._vehicle_local_position.ref_lon, self._vehicle_local_position.ref_lat, crs='epsg:4326'),
+                altitude=altitude,
+                attitude=None,
+                timestamp=None
+            )
+            return position
         else:
             return None

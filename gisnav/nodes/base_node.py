@@ -21,7 +21,7 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
 
 from gisnav.data import Dim, ImageData, MapData, Attitude, DataValueError, InputData, ImagePair, AsyncPoseQuery, \
-    AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position
+    AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position, Altitude
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from gisnav.assertions import assert_type, assert_len, assert_ndim, assert_shape
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
@@ -39,6 +39,9 @@ class BaseNode(Node, ABC):
     # Encoding of input video (input to CvBridge)
     # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
     _IMAGE_ENCODING = 'bgr8'
+
+    # Altitude in meters used for DEM request to get local origin elevation
+    _DEM_REQUEST_ALTITUDE = 100
 
     # region ROS Parameter Defaults
     ROS_D_WMS_URL = 'http://localhost:80/wms'
@@ -239,6 +242,7 @@ class BaseNode(Node, ABC):
         # self._image_data = None  # Not currently used / needed
         self._map_data = None
         self._pose_guess = None
+        self._origin_dem_altitude = None
 
     # region Properties
     @property
@@ -383,14 +387,25 @@ class BaseNode(Node, ABC):
     def _autopilot(self, value: Autopilot) -> None:
         assert_type(value, Autopilot)
         self.__autopilot = value
+
+    @property
+    def _origin_dem_altitude(self) -> Optional[float]:
+        """Elevation layer (DEM) altitude at local frame origin"""
+        return self.__origin_dem_altitude
+
+    @_origin_dem_altitude.setter
+    def _origin_dem_altitude(self, value: Optional[float]) -> None:
+        assert_type(value, get_args(Optional[float]))
+        self.__origin_dem_altitude = value
     # endregion
 
     # region Computed Properties
     @property
     def _altitude_scaling(self) -> Optional[float]:
         """Returns camera focal length divided by camera altitude in meters."""
-        if self._bridge.camera_data is not None and self._bridge.altitude_agl is not None:
-            return self._bridge.camera_data.fx / self._bridge.altitude_agl
+        alt_agl = self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position))
+        if self._bridge.camera_data is not None and alt_agl is not None:
+            return self._bridge.camera_data.fx / alt_agl
         else:
             self.get_logger().warn('Could not estimate elevation scale because camera focal length and/or vehicle '
                                    'altitude is unknown.')
@@ -482,10 +497,6 @@ class BaseNode(Node, ABC):
         """Vehicle position guess in WGS84 coordinates and altitude in meters above ground, None if not available"""
         if self._bridge.global_position is not None:
             assert_type(self._bridge.global_position, get_args(Optional[GeoPoint]))
-            if self._bridge.altitude_agl is None:
-                # TODO: AMSL altitude can be used for map update requests, this should not be a strict requirement
-                self.get_logger().warn('Could not get ground altitude, no reliable position guess for map update.')
-                return None
 
             crs = 'epsg:4326'
             if self._bridge.attitude is None:
@@ -495,9 +506,12 @@ class BaseNode(Node, ABC):
             try:
                 position = Position(
                     xy=self._bridge.global_position,
-                    z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
-                    z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
-                    z_ellipsoid=self._bridge.altitude_ellipsoid,  # Potentially None (no check above)
+                    altitude=Altitude(
+                        agl=self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position)),
+                        amsl=self._bridge.altitude_amsl,
+                        ellipsoid=self._bridge.altitude_ellipsoid,
+                        home=self._bridge.altitude_home
+                    ),
                     attitude=self._bridge.attitude,
                     timestamp=self._bridge.synchronized_time
                 )
@@ -517,9 +531,7 @@ class BaseNode(Node, ABC):
         """
         input_data = InputData(
             r_guess=self._r_guess,
-            attitude=self._bridge.attitude,
-            ground_elevation=self._bridge.ground_elevation_amsl,
-            ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
+            snapshot=self._bridge.snapshot
         )
 
         static_camera = self.get_parameter('misc.static_camera').get_parameter_value().bool_value
@@ -633,6 +645,8 @@ class BaseNode(Node, ABC):
     def _map_update_timer_callback(self) -> None:
         """Attempts to update the stored map at regular intervals
 
+        Also gets DEM for local frame origin if needed (see :meth:`._should_request_dem_
+
         Calls :meth:`._update_map` if the center and altitude coordinates for the new map raster are available and the
         :meth:`._should_update_map` check passes.
 
@@ -640,6 +654,12 @@ class BaseNode(Node, ABC):
         :py:attr:`._is_gimbal_projection_enabled`, the center of the projected camera field of view is used instead of
         vehicle position to ensure the field of view is best contained in the new map raster.
         """
+        if self._should_request_dem_for_local_frame_origin():
+            assert self._vehicle_position is not None
+            map_radius = self._get_dynamic_map_radius(self._DEM_REQUEST_ALTITUDE)
+            map_candidate = GeoSquare(self._vehicle_position.xy, map_radius)
+            self._wms_query = self._request_new_map(map_candidate)
+
         if self._vehicle_position is None:
             self.get_logger().warn(f'Could not determine vehicle approximate global position and therefore cannot '
                                    f'update map.')
@@ -653,12 +673,19 @@ class BaseNode(Node, ABC):
         else:
             projected_center = None
 
-        assert self._vehicle_position.z_ground is not None
-        map_radius = self._get_dynamic_map_radius(self._vehicle_position.z_ground)
+        map_update_altitude = self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position))
+        if map_update_altitude is None:
+            self.get_logger().warn('Cannot determine altitude AGL, skipping map update.')
+            return None
+        if map_update_altitude <= 0:
+            self.get_logger().warn(f'Map update altitude {map_update_altitude} should be > 0, skipping map update.')
+            return None
+        map_radius = self._get_dynamic_map_radius(map_update_altitude)
         map_candidate = GeoSquare(projected_center if projected_center is not None else self._vehicle_position.xy,
                                   map_radius)
+
         if self._should_request_new_map(map_candidate):
-            self._request_new_map(map_candidate)
+            self._wms_query = self._request_new_map(map_candidate)
         else:
             self.get_logger().debug('Needed map not different enough to request new map yet, '
                                     'or previous results are not ready.')
@@ -696,6 +723,9 @@ class BaseNode(Node, ABC):
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
         :class:`~data.MapData`.
 
+        .. note::
+            The result could be either from a regular map update request, or it could be a DEM for local frame origin
+
         :param result: Results from the asynchronous call
         :return:
         """
@@ -711,7 +741,19 @@ class BaseNode(Node, ABC):
         elevation = Img(elevation) if elevation is not None else None
         map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_), elevation=elevation)
         self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
+
         self._map_data = map_data
+
+        # TODO: assumes that this local_frame_origin is the starting location, same that was used for the request
+        #  --> not strictly true even if it works for the simulation
+        # DO AFTER MAP DATA IS SET - terrain_altitude_at_position needs it
+        if self._origin_dem_altitude is None and self._elevation_enabled():
+            # TODO: assumes that local frame origin is withing this map, not necessarily true since same callback is used
+            #  --> Have separate WMS callback for local origin DEM ref request
+            local_frame_origin = self._bridge.local_frame_origin
+            if local_frame_origin is not None:
+                self._origin_dem_altitude = self._terrain_altitude_at_position(local_frame_origin.xy)
+
 
     def _wms_pool_worker_error_callback(self, e: BaseException) -> None:
         """Handles errors from WMS pool worker.
@@ -763,6 +805,65 @@ class BaseNode(Node, ABC):
             self._estimate(image_pair, inputs)
 
     # region Map Updates
+    def _elevation_enabled(self) -> bool:
+        """Returns True if DEM is in use
+
+        :param: True if elevation_layers ROS 2 param is set
+        """
+        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
+        return elevation_layers and not (len(elevation_layers) == 1 and not elevation_layers[0])
+
+    def _terrain_altitude_at_position(self, position: Optional[GeoPoint]) -> Optional[float]:
+        """Raw terrain altitude from DEM if available, or None if not available
+
+        :param position: Position to query
+        :return: Raw altitude in DEM coordinate frame and units
+        """
+        if self._elevation_enabled() and self._map_data is not None and position is not None:
+            elevation = self._map_data.elevation.arr
+            bbox = self._map_data.bbox
+            polygon = bbox._geoseries[0]
+            # position = self._bridge.global_position
+            point = position._geoseries[0]
+
+            if polygon.contains(point):
+                h, w = elevation.shape[0:2]
+                assert h, w == self._img_dim
+                left, bottom, right, top = bbox.bounds
+                x = w * (position.lon - left) / (right - left)
+                y = h * (position.lat - bottom) / (top - bottom)
+                try:
+                    dem_elevation = elevation[int(np.floor(y)), int(np.floor(x))]
+                except IndexError as _:
+                    # TODO: might be able to handle this
+                    self.get_logger().warn('Position seems to be outside current elevation raster, cannot compute '
+                                           'terrain altitude.')
+                    return None
+
+                return float(dem_elevation)
+            else:
+                # Should not happen
+                self.get_logger().warn('Did not have elevation raster for current location or local frame origin '
+                                       'altitude was unknwon, cannot compute terrain altitude.')
+                return None
+
+        return None
+
+    def _terrain_altitude_amsl_at_position(self, position: Optional[GeoPoint]):
+        """Terrain altitude in meters AMSL accroding to DEM if available, or None if not available
+
+        :param position: Position to query
+        :return: Terrain altitude AMSL in meters at position
+        """
+        dem_elevation = self._terrain_altitude_at_position(position)
+        local_frame_origin = self._bridge.local_frame_origin
+        if dem_elevation is not None and self._origin_dem_altitude is not None and local_frame_origin is not None:
+            elevation_relative = dem_elevation - self._origin_dem_altitude
+            elevation_amsl = elevation_relative + local_frame_origin.altitude.amsl
+            return float(elevation_amsl)
+
+        return None
+
     def _guess_fov_center(self, origin: Position) -> Optional[GeoPoint]:
         """Guesses WGS84 coordinates of camera field of view (FOV) projected on ground from given origin
 
@@ -806,17 +907,12 @@ class BaseNode(Node, ABC):
             self.get_logger().warn(f'Pose input values: {gimbal_set_attitude.r}, {translation} were invalid: {e}.')
             return None
 
-        if self._bridge.altitude_agl is not None:
-            try:
-                mock_fixed_camera = FixedCamera(pose=pose, image_pair=self._mock_image_pair(origin),
-                                                ground_elevation=self._bridge.altitude_agl,  # TODO: ground_elevation_amsl?
-                                                ground_elevation_ellipsoid=self._bridge.ground_elevation_ellipsoid,
-                                                timestamp=self._bridge.synchronized_time)
-            except DataValueError as _:
-                self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
-                return None
-        else:
-            self.get_logger().warn(f'Could not create a valid mock projection of FOV because AGL altitude unknown.')
+        try:
+            mock_fixed_camera = FixedCamera(pose=pose, image_pair=self._mock_image_pair(origin),
+                                            snapshot=self._bridge.snapshot,
+                                            timestamp=self._bridge.synchronized_time)
+        except DataValueError as _:
+            self.get_logger().warn(f'Could not create a valid mock projection of FOV.')
             return None
 
         if __debug__:
@@ -826,7 +922,7 @@ class BaseNode(Node, ABC):
 
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
-    def _request_new_map(self, bbox: GeoSquare) -> None:
+    def _request_new_map(self, bbox: GeoSquare) -> AsyncWMSQuery:
         """Instructs the WMS client to request a new map from the WMS server
 
         :param bbox: Bounding box of map requested map
@@ -856,7 +952,8 @@ class BaseNode(Node, ABC):
         args = [layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format]
         if len(elevation_layers) > 0:
             args.append(elevation_layers)
-        self._wms_query = AsyncWMSQuery(
+
+        return AsyncWMSQuery(
             result=self._wms_pool.apply_async(
                 WMSClient.worker,
                 tuple(args),
@@ -916,6 +1013,31 @@ class BaseNode(Node, ABC):
                 return False
 
         return True
+
+    def _should_request_dem_for_local_frame_origin(self) -> bool:
+        """Returns True if a new map should be requested to determine elevation value for local frame origin
+
+        DEM value for local frame origin is needed if elevation layer is used in order to determine absolute altitude
+        of altitude estimates (GISNav estimates altitude against DEM, or assumes altitude at 0 if no DEM is provided).
+
+        :return: True if new map should be requested
+        """
+        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
+        if not elevation_layers or (len(elevation_layers) == 1 and not elevation_layers[0]):
+            return False
+
+        if self._origin_dem_altitude is not None:
+            return False
+
+        if self._bridge.local_frame_origin is None:
+            return False
+
+        if self._wms_results_pending:
+            self.get_logger().warn(f'Should request DEM to determine local frame origin altitude but WMS pool has '
+                                   f'results pending.')
+            return False
+
+        return False
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude to be used for new map requests
@@ -1001,7 +1123,14 @@ class BaseNode(Node, ABC):
 
         # Scaling factor of image pixels := terrain_altitude
         scaling = (self._map_size_with_padding[0]/2) / self._bridge.camera_data.fx
-        radius = scaling * origin.z_ground
+        altitude = self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position))
+        if altitude is None:
+            self.get_logger().warn('Cannot determine altitude AGL, skipping mock map data.')
+            return
+        if altitude < 0:
+            self.get_logger().warn(f'Altitude AGL {altitude} was negative, skipping mock map data.')
+            return
+        radius = scaling * altitude
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoSquare(origin.xy, radius)
@@ -1027,10 +1156,24 @@ class BaseNode(Node, ABC):
         if result is not None:
             try:
                 pose = Pose(*result)
-                self._pose_guess = pose
+
+                if self._pose_estimation_query.image_pair.ref.elevation is not None:
+                    # Compute DEM value at estimated position
+                    # This is in camera intrinsic (pixel) units with origin at whatever the DEM uses
+                    # For example, the USGS DEM uses NAVD 88
+                    x, y = -pose.t.squeeze()[0:2]
+                    x, y = int(x), int(y)
+                    elevation = self._pose_estimation_query.image_pair.ref.elevation.arr[y, x]
+                    pose = Pose(pose.r, pose.t - elevation)
             except DataValueError as _:
                 self.get_logger().warn(f'Estimated pose was not valid, skipping this frame.')
                 return None
+            except IndexError as __:
+                # TODO: might be able to handle this
+                self.get_logger().warn(f'Estimated pose was not valid, skipping this frame.')
+                return None
+
+            self._pose_guess = pose
         else:
             self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
             return None
@@ -1038,8 +1181,7 @@ class BaseNode(Node, ABC):
         try:
             image_pair = self._pose_estimation_query.image_pair
             input_data = self._pose_estimation_query.input_data
-            fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, ground_elevation=input_data.ground_elevation,
-                                       ground_elevation_ellipsoid=input_data.ground_elevation_ellipsoid,
+            fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, snapshot=input_data.snapshot,
                                        timestamp=image_pair.qry.timestamp)
         except DataValueError as _:
             self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
@@ -1104,9 +1246,13 @@ class BaseNode(Node, ABC):
 
         # Check condition (4) - whether vehicle altitude is too low
         min_alt = self.get_parameter('misc.min_match_altitude').get_parameter_value().integer_value
-        if not isinstance(min_alt, int) or self._bridge.altitude_agl is None or self._bridge.altitude_agl < min_alt:
-            self.get_logger().warn(f'Altitude {self._bridge.altitude_agl} was lower than minimum threshold for '
-                                   f'matching ({min_alt}) or could not be determined. Skipping pose estimation.')
+        altitude = self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position))
+        if altitude is None:
+            self.get_logger().warn('Cannot determine altitude AGL, skipping map update.')
+            return None
+        if not isinstance(min_alt, int) or altitude is None or altitude < min_alt:
+            self.get_logger().warn(f'Assumed altitude {altitude} was lower than minimum threshold for matching '
+                                   f'({min_alt}) or could not be determined. Skipping pose estimation.')
             return False
 
         return True

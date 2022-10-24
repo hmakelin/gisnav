@@ -72,7 +72,8 @@ better either through the PX4 shell, through QGroundControl, or in the
     should not be made unreasonably large.
 
     The other parameters are mainly to increase tolerance for variation in the GPS position estimate. GISNav in its
-    default configuration seems to be more accurate in estimating vertical position than horizontal position, so the
+    default configuration `seems to be more accurate in estimating vertical position than horizontal position
+    <https://github.com/hmakelin/gisnav/blob/master/test/sitl/ulog_analysis/variance_estimation.ipynb>`_, so the
     example has lower tolerance for vertical position error.
 
     `*camera yaw rotation speed may be less of an issue if a rotation agnostic neural network is used (not the case by
@@ -298,8 +299,8 @@ You may need to change the file permissions and/or extract it before running it:
 WMS Endpoint
 ===================================================
 The :class:`.BaseNode` class gets map rasters for the estimated location of the vehicle from a WMS endpoint. The WMS
-client :class:`.WMSClient` uses runs in a dedicated process, although it can be quite easily changed to run in a
-separate thread to reduce serialization overhead (no ROS oparameter option currently exists for this, however).
+client :class:`.WMSClient` runs in a dedicated process, although it can be quite easily changed to run in a
+separate thread to reduce serialization overhead (no ROS parameter option currently exists for this, however).
 
 Configure the WMS client via the ROS parameter server, or provide a YAML file when spinning up your node:
 
@@ -320,7 +321,7 @@ WMS Proxy
 ___________________________________________________
 If you already have a third party high-resolution aerial or satellite imagery endpoint available, you only need to
 proxy it through a WMS service. Follow the `gisnav-docker README.md <https://github.com/hmakelin/gisnav-docker>`_ to set
-up a WNS MapProxy using the provided Docker image.
+up a WMS MapProxy using the provided Docker image.
 
 .. note::
     Commercial web-based map services are often
@@ -382,7 +383,7 @@ download the GeoTIFF imagery from EarthExplorer, or from the Esri-maintained `AW
     :caption: Example: Downloading a NAIP imagery product from the AWS S3 bucket
 
     cd ~/gisnav-docker
-    mkdir -p tmp/
+    mkdir -p mapfiles/
     aws s3 cp \
       --request-payer requester \
       s3://naip-source/ca/2020/60cm/rgbir_cog/37122/m_3712230_se_10_060_20200524.tif \

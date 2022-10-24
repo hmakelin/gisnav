@@ -7,11 +7,7 @@ being instantiated. Example usage that handles the exception:
 
     try:
         position = Position(
-            xy=self._bridge.global_position,
-            z_ground=self._bridge.altitude_agl,  # should not be None (see check above)
-            z_amsl=self._bridge.altitude_amsl,  # Potentially None (no check above)
-            attitude=self._bridge.attitude,
-            timestamp=self._bridge.synchronized_time
+            ...
         )
         return position
     except DataValueError as dve:
@@ -46,34 +42,16 @@ TimePair = namedtuple('TimePair', 'local foreign')
 class Position:
     """Represents a 3D position with geographical xy-coordinates and an altitude expressed in meters
 
-    Ground altitude is required while altitude above mean sea level (AMSL) is optional.
-
     .. note::
         (x, y, z) coordinates are in ENU frame
     """
-    xy: GeoPoint                # XY coordinates (e.g. longitude & latitude in WGS84)
-    z_ground: float             # altitude above ground plane in meters (positive)
-    attitude: Attitude          # attitude in NED frame
-    timestamp: int              # Reference timestamp of position
-    z_amsl: Optional[float]     # altitude above mean sea level (AMSL) in meters if known
-    z_ellipsoid: Optional[float]# altitude above WGS84 ellipsoid in meters if known
+    xy: GeoPoint                    # XY coordinates (e.g. longitude & latitude in WGS84)
+    altitude: Altitude
+    attitude: Optional[Attitude]    # attitude in NED frame
+    timestamp: Optional[int]        # Reference timestamp of position
 
     _KALMAN_FILTER_EPSG_CODE = 'epsg:3857'
     """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
-
-    def __post_init__(self):
-        """Set computed fields after initialization
-
-        :raise: :class:`.DataValueError` if r or t is invalid
-        """
-        assert self.z_ground is not None
-
-        if self.z_ground < 0:
-            raise DataValueError(f'Ground altitude was negative {self.z_ground}.')
-
-        if self.z_amsl is not None and self.z_ellipsoid is None or \
-                self.z_ellipsoid is not None and self.z_amsl is None:
-            raise DataValueError(f'Please provide both z_amsl and z_ellipsoid.')
 
     @property
     def lat(self) -> float:
@@ -84,14 +62,6 @@ class Position:
     def lon(self) -> float:
         """Convenience property to get longitude in WGS 84"""
         return self.xy.lon
-
-    def to_array(self) -> np.ndarray:
-        """Returns position (x, y, z) coordinates in (adjusted EPSG:3857 for xy) meters as numpy array
-
-        Intended to be used to convert the position into an array that can be passed onto :class:`.SimpleFilter`.
-        """
-        return np.append(np.array(self.xy.to_crs(self._KALMAN_FILTER_EPSG_CODE).coords),
-                         np.array(self.z_ground)).reshape(1, 3)
 
 
 # noinspection PyClassHasNoInit
@@ -377,28 +347,57 @@ class Pose:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
+class Snapshot:
+    """Snapshot of vehicle and environment state"""
+    synchronized_time: Optional[int]
+    attitude: Optional[Attitude]
+    gimbal_attitude: Optional[Attitude]
+    gimbal_set_attitude: Optional[Attitude]
+    global_position: Optional[GeoPoint]
+    altitude: Optional[Altitude]
+    home_altitude: Optional[Altitude]
+    terrain_altitude: Optional[Altitude]
+    local_frame_origin: Optional[Position]
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
+class Altitude:
+    """Holds different definitions of altitude in one place
+
+    amsl: Above Mean Sea Level (AMSL)
+    agl: Above Ground Level (AGL)
+    ellipsoid: Above WGS84 ellipsoid
+    home: Above home or starting location
+
+    .. note::
+        Altitude AGL should always be known (cannot be None)
+
+    .. seealso::
+        `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
+    """
+    amsl: Optional[float]
+    agl: Optional[float]
+    ellipsoid: Optional[float]
+    home: Optional[float]
+
+    #def __post_init__(self):
+    #    """Post-initialization validity checks"""
+    #    assert self.agl is not None
+
+
+
+
+# noinspection PyClassHasNoInit
+@dataclass(frozen=True)
 class InputData:
     """InputData of vehicle state and other variables needed for postprocessing pose estimates"""
     r_guess: Optional[np.ndarray]
     """Camera expected attitude"""
 
-    attitude: Optional[Attitude]
-    """Vehicle attitude"""
+    snapshot: Snapshot
+    """Snapshot of vehicle and environment state"""
 
-    ground_elevation: Optional[float]
-    """Assumed elevation of ground plane above mean sea level (AMSL) in meters"""
-
-    ground_elevation_ellipsoid: Optional[float]
-    """Assumed elevation of ground plane above WGS 84 ellipsoid in meters"""
-
-    def __post_init__(self):
-        """Post-initialization computed fields and validity checks
-
-        :raise: DataValueError if a valid data class could not be initialized
-        """
-        if self.ground_elevation is not None and self.ground_elevation_ellipsoid is None or \
-            self.ground_elevation_ellipsoid is not None and self.ground_elevation is None:
-                raise DataValueError('Please provide ground elevation both AMSL and above WGS 84 ellipsoid.')
 
 # noinspection PyClassHasNoInit
 @dataclass
@@ -451,8 +450,7 @@ class FixedCamera:
     image_pair: ImagePair
     pose: Pose
     timestamp: int
-    ground_elevation: Optional[float]  # Terrain altitude AMSL in meters
-    ground_elevation_ellipsoid: Optional[float]  # Terrain altitude above WGS 84 ellipsoid in meters
+    snapshot: Snapshot
     fov: FOV = field(init=False)
     position: Position = field(init=False)
     h: np.ndarray = field(init=False)
@@ -536,13 +534,13 @@ class FixedCamera:
 
         return dst_fov, principal_point_dst
 
-    def _estimate_position(self, ground_elevation: Optional[float], ground_elevation_ellipsoid: Optional[float],
+    def _estimate_position(self, terrain_altitude_amsl: Optional[float], terrain_altitude_ellipsoid: Optional[float],
                            crs: str = 'epsg:4326') -> Optional[Position]:
         """Estimates camera position (WGS84 coordinates + altitude in meters above mean sea level (AMSL)) as well as
         terrain altitude in meters.
 
-        :param ground_elevation: Optional ground elevation above AMSL in meters
-        :param ground_elevation_ellipsoid: Optional ground elevation above WGS 84 ellipsoid in meters
+        :param terrain_altitude_amsl: Optional ground elevation above AMSL in meters
+        :param terrain_altitude_ellipsoid: Optional ground elevation above WGS 84 ellipsoid in meters
         :param crs: CRS to use for the Position
         :return: Camera position
         """
@@ -558,15 +556,18 @@ class FixedCamera:
             # Not a valid position estimate
             return None
 
-
         lon, lat = t_wgs84.squeeze()[1::-1]
         alt = t_wgs84[2]
 
+        altitude = Altitude(
+            agl=alt,
+            amsl=alt + terrain_altitude_amsl if terrain_altitude_amsl is not None else None,
+            ellipsoid=alt + terrain_altitude_ellipsoid if terrain_altitude_ellipsoid is not None else None,
+            home=None  # TODO
+        )
         position = Position(
             xy=GeoPoint(lon, lat, crs),  # lon-lat order
-            z_ground=alt,
-            z_amsl=alt + ground_elevation if ground_elevation is not None else None,
-            z_ellipsoid=alt + ground_elevation_ellipsoid if ground_elevation_ellipsoid is not None else None,
+            altitude=altitude,
             attitude=self._estimate_attitude(),
             timestamp=self.image_pair.qry.timestamp
         )
@@ -578,10 +579,13 @@ class FixedCamera:
 
         :raise: DataValueError if a valid FixedCamera could not be initialized
         """
+        if self.image_pair is None:
+            raise DataValueError('Please provide valid image pair.')
+
         img = self.image_pair.qry
-        if self.ground_elevation is not None and self.ground_elevation_ellipsoid is None or \
-            self.ground_elevation_ellipsoid is not None and self.ground_elevation is None:
-                raise DataValueError('Please provide ground elevation both AMSL and above WGS 84 ellipsoid.')
+        if self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None or \
+            self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None:
+                raise DataValueError('Please provide terrain altitude in both AMSL and above WGS 84 ellipsoid.')
 
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
         try:
@@ -597,7 +601,8 @@ class FixedCamera:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
         try:
-            position = self._estimate_position(self.ground_elevation, self.ground_elevation_ellipsoid)
+            position = self._estimate_position(self.snapshot.terrain_altitude.amsl,
+                                               self.snapshot.terrain_altitude.ellipsoid)
             if position is not None:
                 object.__setattr__(self, 'position', position)
             else:

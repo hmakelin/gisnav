@@ -5,10 +5,9 @@ import rclpy
 import socket
 import json
 
+from typing import Optional, Union
 from datetime import datetime
 
-from std_msgs.msg import Header
-from builtin_interfaces.msg import Time
 from px4_msgs.msg import SensorGps
 from mavros_msgs.msg import GPSINPUT
 
@@ -60,63 +59,30 @@ class MockGPSNode(BaseNode):
         :param fixed_camera: Estimated fixed camera
         """
         assert_type(fixed_camera, FixedCamera)
-        msg = self._generate_sensor_gps(fixed_camera) if self._px4_micrortps else self._generate_gps_input(fixed_camera)
-        #self._gps_publisher.publish(msg)
+        msg: Optional[Union[dict, SensorGps]] = self._generate_sensor_gps(fixed_camera) if self._px4_micrortps \
+            else self._generate_gps_input(fixed_camera)
 
-        if self._px4_micrortps:
-            self._gps_publisher.publish(msg)
+        if msg is not None:
+            if self._px4_micrortps:
+                assert_type(msg, SensorGps)
+                self._gps_publisher.publish(msg)
+            else:
+                assert_type(msg, dict)
+                self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self.UDP_IP, self.UDP_PORT))
         else:
-            self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self.UDP_IP, self.UDP_PORT))
+            self.get_logger().info('Could not create GPS message, skipping publishing.')
 
-    #def _generate_gps_input(self, fixed_camera: FixedCamera) -> GPSINPUT:
-    #    """Generates a :class:`.GPSINPUT` message to send over MAVROS
-    #
-    #    .. seealso:
-    #        `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
-    #    """
-    #    position = fixed_camera.position
-    #    gps_time = GPSTime.from_datetime(datetime.now())
-    #
-    #    ns = time.time_ns()
-    #    sec = int(ns / 1e9)
-    #    nanosec = int(ns - (1e9 * sec))
-    #    header = Header()
-    #    time_ = Time()
-    #    time_.sec = sec
-    #    time_.nanosec = nanosec
-    #    header.stamp = time_
-    #    header.frame_id = 'base_link'
-    #
-    #    msg = GPSINPUT()
-    #    msg.header = header
-    #    msg.gps_id = 0
-    #    msg.ignore_flags = 56  # vel_horiz + vel_vert + speed_accuracy
-    #    msg.time_week = gps_time.week_number
-    #    msg.time_week_ms = int(gps_time.time_of_week * 1e3)
-    #    msg.fix_type = 3  # 3D position
-    #    msg.lat = int(position.lat * 1e7)
-    #    msg.lon = int(position.lon * 1e7)
-    #    msg.alt = float(position.z_ellipsoid)
-    #    msg.horiz_accuracy = 10.0  # position.eph
-    #    msg.vert_accuracy = 3.0  # position.epv
-    #    msg.speed_accuracy = np.nan
-    #    msg.hdop = 0.0
-    #    msg.vdop = 0.0
-    #    msg.vn = np.nan  # should be in ignore_flags
-    #    msg.ve = np.nan  # should be in ignore_flags
-    #    msg.vd = np.nan  # should be in ignore_flags
-    #    msg.satellites_visible = np.iinfo(np.uint8).max
-    #    msg.yaw = int(np.degrees(position.attitude.yaw % (2 * np.pi)) * 100)
-
-    #    return msg
-
-    def _generate_gps_input(self, fixed_camera: FixedCamera) -> dict:
+    def _generate_gps_input(self, fixed_camera: FixedCamera) -> Optional[dict]:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
 
         .. seealso:
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
         """
         position = fixed_camera.position
+
+        if position.altitude.amsl is None:
+            self.get_logger().warn(f'AMSL altitude not estimated ({position.altitude}).')
+            return
 
         msg = {}
 
@@ -131,7 +97,7 @@ class MockGPSNode(BaseNode):
         msg['fix_type'] = 3  # 3D position
         msg['lat'] = int(position.lat * 1e7)
         msg['lon'] = int(position.lon * 1e7)
-        msg['alt'] = position.z_amsl  # float(position.z_ellipsoid)  # ArduPilot Gazebo SITL expects AMSL
+        msg['alt'] = position.altitude.amsl  # ArduPilot Gazebo SITL expects AMSL
         msg['horiz_accuracy'] = 10.0  # position.eph
         msg['vert_accuracy'] = 3.0  # position.epv
         msg['speed_accuracy'] = np.nan # should be in ignore_flags
@@ -149,9 +115,13 @@ class MockGPSNode(BaseNode):
 
         return msg
 
-    def _generate_sensor_gps(self, fixed_camera: FixedCamera) -> SensorGps:
+    def _generate_sensor_gps(self, fixed_camera: FixedCamera) -> Optional[SensorGps]:
         """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige"""
         position = fixed_camera.position
+
+        if position.altitude.amsl is None:
+            self.get_logger().warn(f'AMSL altitude not estimated ({position.altitude}).')
+            return
 
         msg = SensorGps()
         msg.timestamp = self._bridge.synchronized_time  # position.timestamp
@@ -164,8 +134,8 @@ class MockGPSNode(BaseNode):
         msg.c_variance_rad = np.nan
         msg.lat = int(position.lat * 1e7)
         msg.lon = int(position.lon * 1e7)
-        msg.alt = int(position.z_amsl * 1e3)
-        msg.alt_ellipsoid = int(position.z_ellipsoid * 1e3)
+        msg.alt = int(position.altitude.amsl * 1e3)
+        msg.alt_ellipsoid = int(position.altitude.ellipsoid * 1e3)
         msg.eph = 10.0  # position.eph
         msg.epv = 3.0  # position.epv
         msg.hdop = 0.0
@@ -207,6 +177,6 @@ class MockGPSNode(BaseNode):
     def unsubscribe_topics(self) -> None:
         """Unsubscribes ROS topics and closes GPS_INPUT MAVLink UDP socket"""
         super().unsubscribe_topics()
-        if self._px4_micrortps:
+        if not self._px4_micrortps:
             self.get_logger().info('Closing UDP socket.')
             self._socket.close()

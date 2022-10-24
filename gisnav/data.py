@@ -579,6 +579,9 @@ class FixedCamera:
 
         :raise: DataValueError if a valid FixedCamera could not be initialized
         """
+        if self.image_pair is None:
+            raise DataValueError('Please provide valid image pair.')
+
         img = self.image_pair.qry
         if self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None or \
             self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None:

@@ -677,6 +677,9 @@ class BaseNode(Node, ABC):
         if map_update_altitude is None:
             self.get_logger().warn('Cannot determine altitude AGL, skipping map update.')
             return None
+        if map_update_altitude <= 0:
+            self.get_logger().warn(f'Map update altitude {map_update_altitude} should be > 0, skipping map update.')
+            return None
         map_radius = self._get_dynamic_map_radius(map_update_altitude)
         map_candidate = GeoSquare(projected_center if projected_center is not None else self._vehicle_position.xy,
                                   map_radius)
@@ -1123,6 +1126,9 @@ class BaseNode(Node, ABC):
         altitude = self._bridge.altitude_agl(self._terrain_altitude_amsl_at_position(self._bridge.global_position))
         if altitude is None:
             self.get_logger().warn('Cannot determine altitude AGL, skipping mock map data.')
+            return
+        if altitude < 0:
+            self.get_logger().warn(f'Altitude AGL {altitude} was negative, skipping mock map data.')
             return
         radius = scaling * altitude
 

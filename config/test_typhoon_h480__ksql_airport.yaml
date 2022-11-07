@@ -1,15 +1,7 @@
-# Test version used by test_mock_gps_node.launch.py
+# Test version used by test_px4_launch.py
 # Intentionally comments out and changes some values
 mock_gps_node:
   ros__parameters:
-    wms:
-      url: 'http://localhost:80/wms'
-      #version: '1.1.1'
-      layers: ['imagery']
-      styles: ['']
-      srs: 'EPSG:4326'
-      image_format: 'image/jpeg'
-      request_timeout: 10
     misc:
       autopilot: 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
       mock_gps_selection: 1

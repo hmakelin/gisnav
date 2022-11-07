@@ -37,6 +37,21 @@ jobs:
           repository: PX4/px4_msgs
           path: colcon_ws/src/px4_msgs
 
+      - name: Install geographic_msgs and MAVROS
+        run: |
+          sudo apt-get install wget
+          sudo apt-get install -y ros-foxy-mavros ros-foxy-mavros-extras
+          wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh
+          chmod +x install_geographiclib_datasets.sh
+          ./install_geographiclib_datasets.sh
+          sudo apt-get install -y ros-foxy-geographic-msgs
+
+      - name: Checkout GISNav messages
+        uses: actions/checkout@v3
+        with:
+          repository: hmakelin/gisnav_msgs
+          path: colcon_ws/src/gisnav_msgs
+
       - name: Build colcon workspace
         run: |
           cd colcon_ws/src/px4_ros_com/scripts
@@ -58,6 +73,7 @@ jobs:
       - name: Install GISNav
         run: |
           cd colcon_ws
+          source /opt/ros/foxy/setup.bash
           rosdep update
           rosdep install --from-paths src --ignore-src -y --rosdistro=foxy
           cd src/gisnav
@@ -65,15 +81,14 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
           cd ../..
-          colcon build --packages-select gisnav
+          colcon build --packages-select gisnav gisnav_msgs
 
       - name: Run ROS 2 integration tests
         run: |
           cd colcon_ws
           source /opt/ros/foxy/setup.bash
           source install/setup.bash
-          python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/test/test_mock_gps_node.py
-          python3 -m coverage report
+          launch_test src/gisnav/test/test_px4.py
 
       - name: Build Sphinx docs
         run: |

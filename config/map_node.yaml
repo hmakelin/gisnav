@@ -1,0 +1,6 @@
+map_node:
+  ros__parameters:
+    layers: ['imagery']
+    dem_layers: ['osm-buildings']
+    srs: 'EPSG:4326'
+    image_format: 'image/jpeg'

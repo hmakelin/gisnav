@@ -29,12 +29,15 @@ from dataclasses import dataclass, field
 from collections import namedtuple
 from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation
+from geopandas import GeoSeries
+from shapely.geometry import box
 
 from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from gisnav.geo import GeoPoint, GeoTrapezoid, GeoValueError
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
+BBox = namedtuple('BBox', 'left bottom right top')
 
 
 # noinspection PyClassHasNoInit
@@ -158,7 +161,8 @@ class CameraData:
 @dataclass(frozen=True)
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
-    bbox: GeoSquare
+    #bbox: GeoSquare
+    bbox: BBox
     elevation: Optional[Img] = None  # Optional elevation raster
 
     def __post_init__(self):
@@ -206,13 +210,19 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self.map_data.bbox.to_crs('epsg:4326').coords  # .reshape(-1, 1, 2)
+        #dst_corners = self.map_data.bbox.to_crs('epsg:4326').coords  # .reshape(-1, 1, 2)
+        coords = np.array(box(*self.map_data.bbox).exterior.coords)
+        gt = GeoTrapezoid(coords)  # .reshape(-1, 1, 2)
+        #dst_corners = np.flip(coords[:-1], axis=1)  # from ENU frame to WGS 84 axis order
+        dst_corners = gt.square_coords
         dst_corners = np.flip(dst_corners, axis=1)  # from ENU frame to WGS 84 axis order
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
         # Ratio of boundaries in pixels and meters -> Altitude (z) scaling factor
-        vertical_scaling = abs(self.map_data.bbox.meter_length / \
+        #vertical_scaling = abs(self.map_data.bbox.meter_length / \
+        #                       (2*self.map_data.image.dim.width + 2*self.map_data.image.dim.height))
+        vertical_scaling = abs(gt.meter_length / \
                                (2*self.map_data.image.dim.width + 2*self.map_data.image.dim.height))
 
         pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped

@@ -9,7 +9,7 @@ from functools import partial
 from mavsdk import System
 from mavsdk.log_files import LogFilesResult, LogFilesError
 
-DOCKER_CONTAINERS = ['gisnav-docker_mapserver_1', 'gisnav-docker_px4-sitl_1']
+DOCKER_CONTAINERS = ['gisnav-docker_mapserver_1', 'gisnav-docker_sitl_1']
 SYS_ADDR = 'udp://0.0.0.0:14550'
 MISSION_FILE = os.path.join(os.path.dirname(__file__), '../assets/ksql_airport.plan')
 MAVLINK_CONNECTION_TIMEOUT_SEC = 15

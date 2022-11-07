@@ -1,9 +1,15 @@
 """Extends :class:`.BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import time
+import sys
+import io
+import pstats
 import numpy as np
+import cProfile
 import rclpy
 import socket
 import json
+
+from ament_index_python.packages import get_package_share_directory
 
 from typing import Optional, Union
 from datetime import datetime
@@ -180,3 +186,45 @@ class MockGPSNode(BaseNode):
         if not self._px4_micrortps:
             self.get_logger().info('Closing UDP socket.')
             self._socket.close()
+
+
+def main(args=None):
+    """Starts and terminates the ROS 2 node.
+
+    Also starts cProfile profiling in debugging mode.
+
+    :param args: Any args for initializing the rclpy node
+    :return:
+    """
+    if __debug__:
+        pr = cProfile.Profile()
+        pr.enable()
+    else:
+        pr = None
+
+    mock_gps_node = None
+    try:
+        rclpy.init(args=args)
+        mock_gps_node = MockGPSNode('mock_gps_node', get_package_share_directory('gisnav'),
+                                    px4_micrortps='--mavros' not in sys.argv)
+        rclpy.spin(mock_gps_node)
+    except KeyboardInterrupt as e:
+        print(f'Keyboard interrupt received:\n{e}')
+        if pr is not None:
+            # Print out profiling stats
+            pr.disable()
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
+            ps.print_stats(40)
+            print(s.getvalue())
+    finally:
+        if mock_gps_node is not None:
+            mock_gps_node.destroy_timers()
+            mock_gps_node.unsubscribe_topics()
+            mock_gps_node.terminate_pools()
+            mock_gps_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

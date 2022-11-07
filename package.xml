@@ -19,8 +19,10 @@
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>mavros_msgs</exec_depend>
+  <exec_depend>geographic_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>px4_msgs</exec_depend>
+  <exec_depend>gisnav_msgs</exec_depend>
   <exec_depend>ros2launch</exec_depend>
 
   <export>

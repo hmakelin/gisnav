@@ -20,9 +20,9 @@ from gisnav.nodes.mock_gps_node import MockGPSNode
 
 @pytest.mark.launch_test
 def generate_test_description():
-    """Generates a :class:`.MockGPSNode` launch description"""
+    """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, '../launch/test_mock_gps_node.launch.py')
+    filename = os.path.join(dirname, '../launch/test_px4_launch.py')
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
 
     return LaunchDescription([
@@ -46,17 +46,13 @@ class TestInit(unittest.TestCase):
         ('/fmu/vehicle_global_position/out', ['px4_msgs/msg/VehicleGlobalPosition']),
         ('/fmu/vehicle_local_position/out', ['px4_msgs/msg/VehicleLocalPosition']),
         ('/camera/camera_info', ['sensor_msgs/msg/CameraInfo']),
-        ('/camera/image_raw', ['sensor_msgs/msg/Image'])
+        ('/camera/image_raw', ['sensor_msgs/msg/Image']),
+        ('/orthoimage_3d', ['gisnav_msgs/msg/OrthoImage3D'])
     ]
     """Expected node subscribe topic names and message types"""
 
     MIN_MATCH_ALTITUDE = 80
     """Expected misc.min_match_altitude setting in ``test_typhoon_h480__ksql_airport.yaml`` file"""
-
-    @staticmethod
-    def mock_setup_wms_pool(self) -> multiprocessing.pool.Pool:
-        """Returns a mock pool without attempting to connect to WMS endpoint"""
-        return multiprocessing.pool.Pool()
 
     @classmethod
     def setUpClass(cls):
@@ -68,9 +64,6 @@ class TestInit(unittest.TestCase):
         """Shutdown ROS context"""
         rclpy.shutdown()
 
-    @patch.multiple(MockGPSNode,
-                    _setup_wms_pool=mock_setup_wms_pool
-    )
     def setUp(self) -> None:
         """Creates the ROS node"""
         dirname = os.path.dirname(__file__)
@@ -133,10 +126,6 @@ class TestInit(unittest.TestCase):
         Assumes node is initialized with ``test_typhoon_h480__ksql_airport.yaml`` ROS parameter file
         """
         rclpy.spin_once(self.node, timeout_sec=3)
-
-        wms_version = self.node.get_parameter('wms.version').get_parameter_value().string_value
-        assert wms_version == self.node.ROS_D_WMS_VERSION, f'WMS version {wms_version} did not match expected default '\
-                                                           f'value {self.node.ROS_D_WMS_VERSION}'
 
         max_pitch = self.node.get_parameter('misc.max_pitch').get_parameter_value().integer_value
         assert max_pitch == self.node.ROS_D_MISC_MAX_PITCH, f'Max pitch {max_pitch} did not match expected default '\

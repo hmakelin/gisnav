@@ -10,30 +10,35 @@ import os
 import yaml
 import torch
 
+
 from abc import ABC, abstractmethod
 from multiprocessing.pool import Pool
 #from multiprocessing.pool import ThreadPool as Pool  # Rename 'Pool' to keep same interface
 from typing import Optional, Union, Tuple, get_args, Callable
 from rclpy.node import Node
+from rclpy.qos import QoSPresetProfiles
 from rcl_interfaces.msg import ParameterDescriptor
 from cv_bridge import CvBridge
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
+from geographic_msgs.msg import BoundingBox, GeoPoint as ROSGeoPoint
+from shapely.geometry import box
 
 from gisnav.data import Dim, ImageData, MapData, Attitude, DataValueError, InputData, ImagePair, AsyncPoseQuery, \
-    AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position, Altitude
+    AsyncWMSQuery, ContextualMapData, FixedCamera, Img, Pose, Position, Altitude, BBox
 from gisnav.geo import GeoPoint, GeoSquare, GeoTrapezoid
 from gisnav.assertions import assert_type, assert_len, assert_ndim, assert_shape
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.wms import WMSClient
 from gisnav.autopilots.autopilot import Autopilot
 
+from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.srv import GetMap
 
 class BaseNode(Node, ABC):
     """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
 
     # Process counts for multiprocessing pools
-    _WMS_PROCESS_COUNT = 1      # should be 1
     _MATCHER_PROCESS_COUNT = 1  # should be 1
 
     # Encoding of input video (input to CvBridge)
@@ -44,43 +49,6 @@ class BaseNode(Node, ABC):
     _DEM_REQUEST_ALTITUDE = 100
 
     # region ROS Parameter Defaults
-    ROS_D_WMS_URL = 'http://localhost:80/wms'
-    """Default WMS server endpoint URL"""
-
-    ROS_D_WMS_VERSION = '1.3.0'
-    """Default WMS server version"""
-
-    ROS_D_WMS_LAYERS = ['imagery']
-    """Default WMS request layers parameter
-
-    .. note::
-        The combined layers should cover the flight area of the vehicle at high resolution. Typically this list would 
-        have just one layer for high resolution aerial or satellite imagery.
-    """
-
-    ROS_D_WMS_ELEVATION_LAYERS = []
-    """Default WMS request elevation layers parameter
-
-    .. note::
-        This is an optional elevation layer that makes the pose estimation more accurate especially when flying at low 
-        altitude. It is assumed to be grayscale.
-    """
-
-    ROS_D_WMS_STYLES = ['']
-    """Default WMS request styles parameter
-    
-    Must be same length as :py:attr:`.ROS_D_WMS_LAYERS`. Use empty strings for server default styles.
-    """
-
-    ROS_D_WMS_SRS = 'EPSG:4326'
-    """Default WMS request SRS parameter"""
-
-    ROS_D_WMS_REQUEST_TIMEOUT = 10
-    """Default WMS client request timeout in seconds"""
-
-    ROS_D_WMS_IMAGE_FORMAT = 'image/jpeg'
-    """Default WMS client request image format"""
-
     ROS_D_MISC_AUTOPILOT = 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
     """Default autopilot adapter"""
 
@@ -173,12 +141,6 @@ class BaseNode(Node, ABC):
 
     read_only = ParameterDescriptor(read_only=True)
     _ROS_PARAMS = [
-        ('wms.url', ROS_D_WMS_URL, read_only),
-        ('wms.version', ROS_D_WMS_VERSION, read_only),
-        ('wms.layers', ROS_D_WMS_LAYERS),
-        ('wms.styles', ROS_D_WMS_STYLES),
-        ('wms.srs', ROS_D_WMS_SRS),
-        ('wms.request_timeout', ROS_D_WMS_REQUEST_TIMEOUT),
         ('misc.autopilot', ROS_D_MISC_AUTOPILOT, read_only),
         ('misc.static_camera', ROS_D_STATIC_CAMERA, read_only),
         ('misc.attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
@@ -214,10 +176,15 @@ class BaseNode(Node, ABC):
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
         self.__declare_ros_params()
 
-        self._package_share_dir = package_share_dir
+        # TODO: temporary publisher, remove
+        self._bbox_pub = self.create_publisher(BoundingBox, 'bbox', QoSPresetProfiles.SENSOR_DATA.value)
+        self._map_sub = self.create_subscription(OrthoImage3D, 'orthoimage_3d', self._orthoimage3d_callback,
+                                                 QoSPresetProfiles.SENSOR_DATA.value)
+        self._map_cli = self.create_client(GetMap, 'orthoimage_3d_service')
+        while not self._map_cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for GetMap service...')
 
-        self._wms_query = None
-        self._wms_pool = None  # Lazy setup
+        self._package_share_dir = package_share_dir
 
         self._map_update_timer = self._setup_map_update_timer()
 
@@ -243,6 +210,10 @@ class BaseNode(Node, ABC):
         self._map_data = None
         self._pose_guess = None
         self._origin_dem_altitude = None
+        self._msg = None  # orthoimage3d message from map node
+        self._dem = None  # dem map data
+        self._dem_req_future = None  # Store async dem service call
+        self._dem_request_map_candidate = None # todo handle together with dem req future
 
     # region Properties
     @property
@@ -277,26 +248,6 @@ class BaseNode(Node, ABC):
     def _pose_estimator(self, value: Optional[PoseEstimator]) -> None:
         assert issubclass(value, get_args(Optional[PoseEstimator]))
         self.__pose_estimator = value
-
-    @property
-    def _wms_pool(self) -> Optional[Pool]:
-        """Web Map Service client for fetching map rasters."""
-        return self.__wms_pool
-
-    @_wms_pool.setter
-    def _wms_pool(self, value: Optional[Pool]) -> None:
-        assert_type(value, get_args(Optional[Pool]))
-        self.__wms_pool = value
-
-    @property
-    def _wms_query(self) -> Optional[AsyncWMSQuery]:
-        """Asynchronous results from a WMS client request."""
-        return self.__wms_results
-
-    @_wms_query.setter
-    def _wms_query(self, value: Optional[AsyncWMSQuery]) -> None:
-        assert_type(value, get_args(Optional[AsyncWMSQuery]))
-        self.__wms_results = value
 
     @property
     def _map_update_timer(self) -> rclpy.timer.Timer:
@@ -439,11 +390,6 @@ class BaseNode(Node, ABC):
             return gimbal_set_attitude.r
 
     @property
-    def _wms_results_pending(self) -> bool:
-        """True if there are pending results"""
-        return not self._wms_query.result.ready() if self._wms_query is not None else False
-
-    @property
     def _is_gimbal_projection_enabled(self) -> bool:
         """True if map rasters should be retrieved for projected field of view instead of vehicle position
 
@@ -569,24 +515,6 @@ class BaseNode(Node, ABC):
                 # This means parameter is declared from YAML file
                 pass
 
-    def _setup_wms_pool(self) -> Pool:
-        """Returns WMS pool
-
-        .. note::
-            Declare ROS parameters before calling this method
-        """
-        self.get_logger().info('Setting up WMS pool.')
-        url = self.get_parameter('wms.url').get_parameter_value().string_value
-        version = self.get_parameter('wms.version').get_parameter_value().string_value
-        timeout = self.get_parameter('wms.request_timeout').get_parameter_value().integer_value
-        assert_type(url, str)
-        assert_type(version, str)
-        assert_type(timeout, int)
-        pool = Pool(self._WMS_PROCESS_COUNT, initializer=WMSClient.initializer,
-                              initargs=(url, version, timeout))
-
-        return pool
-
     def _setup_pose_estimation_pool(self, params_file: str) -> Tuple[type, Pool]:
         """Returns the pose estimator type along with an initialized pool
 
@@ -642,6 +570,24 @@ class BaseNode(Node, ABC):
         timer = self.create_timer(timer_period, self._map_update_timer_callback)
         return timer
 
+    def request_dem(self, map_candidate):
+        """Request map for local frame origin to fix DEM origin"""
+
+        self._dem_req = GetMap.Request()
+        bbox = BBox(*map_candidate.bounds)
+        bbox = BoundingBox(min_pt=ROSGeoPoint(latitude=bbox.bottom, longitude=bbox.left, altitude=np.nan),
+                           max_pt=ROSGeoPoint(latitude=bbox.top, longitude=bbox.right, altitude=np.nan))
+        self._dem_req.bbox = bbox
+        if self._map_size_with_padding is None:
+            self.get_logger().warn(f'Map size unknown, skipping requesting DEM.')
+            return None
+        self._dem_req.height, self._dem_req.width = self._map_size_with_padding
+        self.get_logger().info(f'Requesting DEM for local frame origin location {bbox}.')
+        self._dem_req_future = self._map_cli.call_async(self._dem_req)
+        #rclpy.spin_until_future_complete(self, self._dem_req_future)
+        #return self._dem_req_future.result()
+        return self._dem_req_future
+
     def _map_update_timer_callback(self) -> None:
         """Attempts to update the stored map at regular intervals
 
@@ -654,11 +600,33 @@ class BaseNode(Node, ABC):
         :py:attr:`._is_gimbal_projection_enabled`, the center of the projected camera field of view is used instead of
         vehicle position to ensure the field of view is best contained in the new map raster.
         """
-        if self._should_request_dem_for_local_frame_origin():
-            assert self._vehicle_position is not None
-            map_radius = self._get_dynamic_map_radius(self._DEM_REQUEST_ALTITUDE)
-            map_candidate = GeoSquare(self._vehicle_position.xy, map_radius)
-            self._wms_query = self._request_new_map(map_candidate)
+        if self._should_request_dem_for_local_frame_origin() and self._map_cli.service_is_ready():
+            if self._dem_req_future is not None and self._dem_req_future.done():
+                # ASync call has returned
+                if self._dem is None:
+                    result = self._dem_req_future.result()
+                    #self.get_logger().info(f'DEM result for local frame origin: {result}')
+                    img = self._cv_bridge.imgmsg_to_cv2(result.image.img, desired_encoding='passthrough')
+                    dem = self._cv_bridge.imgmsg_to_cv2(result.image.dem, desired_encoding='passthrough')
+                    # dem = self._cv_bridge.imgmsg_to_cv2(result.dem, desired_encoding='mono8')  # TODO mono16? if more than 255 meters
+                    assert self._dem_request_map_candidate is not None
+                    self._dem = MapData(bbox=BBox(*self._dem_request_map_candidate.bounds), image=Img(img), elevation=Img(dem))
+
+                    # TODO: assumes that this local_frame_origin is the starting location, same that was used for the request
+                    #  --> not strictly true even if it works for the simulation
+                    if self._origin_dem_altitude is None:
+                        local_frame_origin = self._bridge.local_frame_origin
+                        if local_frame_origin is not None:
+                            self._origin_dem_altitude = self._terrain_altitude_at_position(local_frame_origin.xy,
+                                                                                           local_origin=True)
+            else:
+                # Request DEM for local frame origin
+                assert self._bridge.local_frame_origin is not None
+                map_radius = self._get_dynamic_map_radius(self._DEM_REQUEST_ALTITUDE)
+                map_candidate = GeoSquare(self._bridge.local_frame_origin.xy, map_radius)
+                self.get_logger().info(f'Requesting DEM for local frame origin...')
+                self.request_dem(map_candidate)
+                self._dem_request_map_candidate = map_candidate
 
         if self._vehicle_position is None:
             self.get_logger().warn(f'Could not determine vehicle approximate global position and therefore cannot '
@@ -684,11 +652,11 @@ class BaseNode(Node, ABC):
         map_candidate = GeoSquare(projected_center if projected_center is not None else self._vehicle_position.xy,
                                   map_radius)
 
-        if self._should_request_new_map(map_candidate):
-            self._wms_query = self._request_new_map(map_candidate)
-        else:
-            self.get_logger().debug('Needed map not different enough to request new map yet, '
-                                    'or previous results are not ready.')
+        # TODO: redundant with request_dem contents
+        bbox = BBox(*map_candidate.bounds)
+        bbox = BoundingBox(min_pt=ROSGeoPoint(latitude=bbox.bottom, longitude=bbox.left, altitude=np.nan),
+                           max_pt=ROSGeoPoint(latitude=bbox.top, longitude=bbox.right, altitude=np.nan))
+        self._bbox_pub.publish(bbox)
 
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported
@@ -717,7 +685,19 @@ class BaseNode(Node, ABC):
     # endregion
 
     #region WMSWorkerCallbacks
-    def _wms_pool_worker_callback(self, result: Tuple[np.ndarray, Optional[np.ndarray]]) -> None:
+    def _orthoimage3d_callback(self, msg: OrthoImage3D) -> None:
+        """Callback for :class:`.OrthoImage3D` message"""
+        if self._msg != msg:  # TODO: add property for _msg
+            self._msg = msg
+            # TODO: also in map callback
+            img = self._cv_bridge.imgmsg_to_cv2(msg.img, desired_encoding='passthrough')
+            dem = self._cv_bridge.imgmsg_to_cv2(msg.dem, desired_encoding='passthrough')
+            #dem = self._cv_bridge.imgmsg_to_cv2(msg.dem, desired_encoding='mono8')  # TODO mono16? if more than 255 meters
+            bbox = BBox(msg.bbox.min_pt.longitude, msg.bbox.min_pt.latitude, msg.bbox.max_pt.longitude,
+                        msg.bbox.max_pt.latitude)  # TODO: have method that converts BoudningBox<->BBox
+            self._wms_pool_worker_callback(bbox, (img, dem))
+
+    def _wms_pool_worker_callback(self, bbox, result: Tuple[np.ndarray, Optional[np.ndarray]]) -> None:
         """Handles result from :meth:`gisnav.wms.worker`.
 
         Saves received result to :py:attr:`~_map_data. The result should be a collection containing a single
@@ -736,24 +716,14 @@ class BaseNode(Node, ABC):
             assert_shape(elevation, map_.shape[0:2])
 
         # Should already have received camera info so _map_size_with_padding should not be None
-        assert map_.shape[0:2] == self._map_size_with_padding, 'Decoded map is not of specified size.'
+        assert map_.shape[0:2] == self._map_size_with_padding, f'Decoded map {map_.shape[0:2]} is not of specified ' \
+                                                               f'size {self._map_size_with_padding}.'
 
         elevation = Img(elevation) if elevation is not None else None
-        map_data = MapData(bbox=self._wms_query.geobbox, image=Img(map_), elevation=elevation)
-        self.get_logger().info(f'Map received for bbox: {map_data.bbox.bounds}.')
+        map_data = MapData(bbox=bbox, image=Img(map_), elevation=elevation)
+        self.get_logger().info(f'Map received for bbox: {map_data.bbox}.')
 
         self._map_data = map_data
-
-        # TODO: assumes that this local_frame_origin is the starting location, same that was used for the request
-        #  --> not strictly true even if it works for the simulation
-        # DO AFTER MAP DATA IS SET - terrain_altitude_at_position needs it
-        if self._origin_dem_altitude is None and self._elevation_enabled():
-            # TODO: assumes that local frame origin is withing this map, not necessarily true since same callback is used
-            #  --> Have separate WMS callback for local origin DEM ref request
-            local_frame_origin = self._bridge.local_frame_origin
-            if local_frame_origin is not None:
-                self._origin_dem_altitude = self._terrain_altitude_at_position(local_frame_origin.xy)
-
 
     def _wms_pool_worker_error_callback(self, e: BaseException) -> None:
         """Handles errors from WMS pool worker.
@@ -805,31 +775,27 @@ class BaseNode(Node, ABC):
             self._estimate(image_pair, inputs)
 
     # region Map Updates
-    def _elevation_enabled(self) -> bool:
-        """Returns True if DEM is in use
-
-        :param: True if elevation_layers ROS 2 param is set
-        """
-        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
-        return elevation_layers and not (len(elevation_layers) == 1 and not elevation_layers[0])
-
-    def _terrain_altitude_at_position(self, position: Optional[GeoPoint]) -> Optional[float]:
+    def _terrain_altitude_at_position(self, position: Optional[GeoPoint], local_origin: bool = False) -> Optional[float]:
         """Raw terrain altitude from DEM if available, or None if not available
 
         :param position: Position to query
+        :param local_origin: True to use :py:attr:`._dem` (retrieved specifically for local frame origin)
         :return: Raw altitude in DEM coordinate frame and units
         """
-        if self._elevation_enabled() and self._map_data is not None and position is not None:
-            elevation = self._map_data.elevation.arr
-            bbox = self._map_data.bbox
-            polygon = bbox._geoseries[0]
+        map_data = self._map_data if not local_origin else self._dem
+        if map_data is not None and position is not None:
+            elevation = map_data.elevation.arr
+            bbox = map_data.bbox
+            #polygon = bbox._geoseries[0]
+            polygon = box(*bbox)
             # position = self._bridge.global_position
             point = position._geoseries[0]
 
             if polygon.contains(point):
                 h, w = elevation.shape[0:2]
                 assert h, w == self._img_dim
-                left, bottom, right, top = bbox.bounds
+                #left, bottom, right, top = bbox.bounds
+                left, bottom, right, top = bbox
                 x = w * (position.lon - left) / (right - left)
                 y = h * (position.lat - bottom) / (top - bottom)
                 try:
@@ -847,6 +813,8 @@ class BaseNode(Node, ABC):
                                        'altitude was unknwon, cannot compute terrain altitude.')
                 return None
 
+        self.get_logger().warn(f'Map data or position not provided, cannot determine DEM elevation at position '
+                               f'{position.latlon}.')
         return None
 
     def _terrain_altitude_amsl_at_position(self, position: Optional[GeoPoint]):
@@ -922,98 +890,6 @@ class BaseNode(Node, ABC):
 
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
-    def _request_new_map(self, bbox: GeoSquare) -> AsyncWMSQuery:
-        """Instructs the WMS client to request a new map from the WMS server
-
-        :param bbox: Bounding box of map requested map
-        """
-        if self._map_size_with_padding is None:
-            self.get_logger().warn('Map size not yet available - skipping WMS request.')
-            return
-
-        if self._wms_pool is None:
-            self._wms_pool = self._setup_wms_pool()
-
-        # Build and send WMS request
-        layers = self.get_parameter('wms.layers').get_parameter_value().string_array_value
-        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
-        styles = self.get_parameter('wms.styles').get_parameter_value().string_array_value
-        srs_str = self.get_parameter('wms.srs').get_parameter_value().string_value
-        image_format = self.get_parameter('wms.image_format').get_parameter_value().string_value
-        assert all(isinstance(x, str) for x in layers)
-        assert all(isinstance(x, str) for x in styles)
-        assert_len(styles, len(layers))
-        assert_type(srs_str, str)
-        assert_type(image_format, str)
-        assert self._wms_query is None or self._wms_query.result.ready(), f'New map was requested while previous ' \
-                                                                          f'results were not yet ready.'
-        self.get_logger().info(f'Requesting map for bbox: {bbox.bounds}, layers: {layers}, srs: {srs_str}, format: '
-                               f'{image_format}.')
-        args = [layers, styles, bbox.bounds, self._map_size_with_padding, srs_str, image_format]
-        if len(elevation_layers) > 0:
-            args.append(elevation_layers)
-
-        return AsyncWMSQuery(
-            result=self._wms_pool.apply_async(
-                WMSClient.worker,
-                tuple(args),
-                callback=self._wms_pool_worker_callback,
-                error_callback=self._wms_pool_worker_error_callback
-            ),
-            geobbox=bbox
-        )
-
-    def _previous_map_too_close(self, bbox: GeoSquare) -> bool:
-        """Returns True previous map is too close to new requested one
-
-        This check is made to avoid retrieving a new map that is almost the same as the previous map. Relaxing map
-        update constraints should not improve accuracy of position estimates unless the map is so old that the field of
-        view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
-        or is too small compared to the size of the map (vehicle altitude has significantly decreased).
-
-        :param bbox: Bounding box of new map candidate
-        :return: True if previous map is too close.
-        """
-        assert_type(bbox, GeoSquare)
-        if self._map_data is not None:
-            previous_map_data = self._map_data
-            area_threshold = self.get_parameter('map_update.update_map_area_threshold').get_parameter_value().double_value
-            intersection1 = bbox.intersection(previous_map_data.bbox).area / bbox.area
-            intersection2 = previous_map_data.bbox.intersection(bbox).area / previous_map_data.bbox.area
-            ratio = min(intersection1, intersection2)
-
-            if ratio > area_threshold:
-                return True
-
-        return False
-
-    def _should_request_new_map(self, bbox: GeoSquare) -> bool:
-        """Returns True if a new map should be requested to replace the old map
-
-        Map is updated unless (1) there is a previous map that is close enough to provided center and has radius
-        that is close enough to new request, (2) previous WMS request is still processing, or (3) camera pitch is too
-        large and gimbal projection is used so that map center would be too far or even beyond the horizon.
-
-        :param bbox: Bounding box of new map candidate
-        :return: True if new map should be requested
-        """
-        assert_type(bbox, GeoSquare)
-
-        if self._wms_results_pending:
-            return False
-
-        if self._previous_map_too_close(bbox):
-            return False
-
-        use_gimbal_projection = self.get_parameter('map_update.gimbal_projection').get_parameter_value().bool_value
-        if use_gimbal_projection:
-            max_pitch = self.get_parameter('map_update.max_pitch').get_parameter_value().integer_value
-            if self._camera_roll_or_pitch_too_high(max_pitch):
-                self.get_logger().warn(f'Camera pitch not available or above maximum {max_pitch}. Will not update map.')
-                return False
-
-        return True
-
     def _should_request_dem_for_local_frame_origin(self) -> bool:
         """Returns True if a new map should be requested to determine elevation value for local frame origin
 
@@ -1022,22 +898,15 @@ class BaseNode(Node, ABC):
 
         :return: True if new map should be requested
         """
-        elevation_layers = self.get_parameter('wms.elevation_layers').get_parameter_value().string_array_value
-        if not elevation_layers or (len(elevation_layers) == 1 and not elevation_layers[0]):
-            return False
-
         if self._origin_dem_altitude is not None:
+            self.get_logger().warn(f'Not requesting DEM because origin_dem_altitude is already set.')
             return False
 
         if self._bridge.local_frame_origin is None:
+            self.get_logger().warn(f'Not requesting DEM because local_frame_origin is not available.')
             return False
 
-        if self._wms_results_pending:
-            self.get_logger().warn(f'Should request DEM to determine local frame origin altitude but WMS pool has '
-                                   f'results pending.')
-            return False
-
-        return False
+        return True
 
     def _get_dynamic_map_radius(self, altitude: Union[int, float]) -> int:
         """Returns map radius that adjusts for camera altitude to be used for new map requests
@@ -1134,7 +1003,8 @@ class BaseNode(Node, ABC):
 
         assert_type(origin.xy, GeoPoint)
         bbox = GeoSquare(origin.xy, radius)
-        map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))
+        #map_data = MapData(bbox=bbox, image=Img(np.zeros(self._map_size_with_padding)))
+        map_data = MapData(bbox=BBox(*bbox.bounds), image=Img(np.zeros(self._map_size_with_padding)))
         return map_data
     # endregion
 
@@ -1181,6 +1051,7 @@ class BaseNode(Node, ABC):
         try:
             image_pair = self._pose_estimation_query.image_pair
             input_data = self._pose_estimation_query.input_data
+            #self.get_logger().info(f'snapshot terrain alt {input_data.snapshot.terrain_altitude}')
             fixed_camera = FixedCamera(pose=pose, image_pair=image_pair, snapshot=input_data.snapshot,
                                        timestamp=image_pair.qry.timestamp)
         except DataValueError as _:
@@ -1419,10 +1290,6 @@ class BaseNode(Node, ABC):
         if self._pose_estimator_pool is not None:
             self.get_logger().info('Terminating pose estimator pool.')
             self._pose_estimator_pool.terminate()
-
-        if self._wms_pool is not None:
-            self.get_logger().info('Terminating WMS pool.')
-            self._wms_pool.terminate()
 
     def destroy_timers(self) -> None:
         """Destroys the map update timer

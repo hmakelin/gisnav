@@ -30,21 +30,21 @@ cd gisnav-docker
 docker-compose build sitl
 ```
 
-> **Note** The build for the `sitl` image takes a long time.
-
 Once the `sitl` image has been built, run the `mapserver` and `sitl` services:
 
 ```bash
 docker-compose up -d mapserver sitl
 ```
 
-> **Note**: 
-> The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
-> time until it starts serving the WMS endpoint.
+> **Note**:
+> * The build for the `sitl` image takes a long time.
+> * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
+>   time until it starts serving the WMS endpoint.
+> * Prebuilt [sitl][4] and [mapserver][5] images for the demo are available in Docker Hub in case you have problems with
+>   the build process.
 
-[4]: https://gazebosim.org/home
-
-[5]: https://qgroundcontrol.com/
+[4]: https://hub.docker.com/r/hmakelin/gisnav-sitl
+[5]: https://hub.docker.com/r/hmakelin/gisnav-mapserver
 
 ## Upload flight plan via QGroundControl
 

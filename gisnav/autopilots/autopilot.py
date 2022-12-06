@@ -278,11 +278,13 @@ class Autopilot(ABC):
         """Vehicle local frame origin as a :class:`.Position`"""
         pass
 
-    @property
-    def snapshot(self) -> Snapshot:
-        """Snapshot of all other properties for convenience"""
+    def snapshot(self, terrain_altitude_amsl: Optional[float]) -> Snapshot:
+        """Snapshot of all other properties for convenience
+
+        :param terrain_altitude_amsl: AMSL altitude of ground below drone
+        """
         global_position = self.global_position
-        terrain_altitude_amsl = self._node._terrain_altitude_amsl_at_position(global_position)
+        #terrain_altitude_amsl = self._node._terrain_altitude_amsl_at_position(global_position)
         home_altitude_amsl = self.home_altitude_amsl
         return Snapshot(
             synchronized_time=self.synchronized_time,
@@ -299,7 +301,7 @@ class Autopilot(ABC):
             ),
             terrain_altitude=Altitude(
                 amsl=terrain_altitude_amsl,
-                agl=0,
+                agl=0.,
                 ellipsoid=terrain_altitude_amsl + self._egm96.height(global_position.lat, global_position.lon) if terrain_altitude_amsl is not None else None,
                 home=terrain_altitude_amsl - home_altitude_amsl if terrain_altitude_amsl is not None and home_altitude_amsl is not None else None,
             ),
@@ -307,6 +309,6 @@ class Autopilot(ABC):
                 amsl=home_altitude_amsl,
                 agl=home_altitude_amsl - terrain_altitude_amsl if terrain_altitude_amsl is not None else None,
                 ellipsoid=self.home_altitude_ellipsoid,
-                home=0
+                home=0.
             ),
         )

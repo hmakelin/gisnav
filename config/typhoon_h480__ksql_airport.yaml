@@ -2,18 +2,6 @@ mock_gps_node:
   ros__parameters:
     misc:
       autopilot: 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
-      attitude_deviation_threshold: 10 # degrees
-      max_pitch: 30  # 30  # Used by _should_match
-      min_match_altitude: 50
     map_update:
-      update_delay: 1  # Keep low (e.g. 1 second) if vehicle flying fast or gimbal_projection: True
-      gimbal_projection: True
       max_pitch: 30  # Applies if gimbal_projection: True, used by _should_update_map
-      max_map_radius: 1000
-      update_map_area_threshold: 0.85
-    pose_estimator:
-      #params_file: 'config/superglue_params.yaml'  # For parsing args for matcher's static initializer method
-      params_file: 'config/loftr_params.yaml'
-    debug:
-      export_position: ''
-      export_projection: ''
+

@@ -63,6 +63,8 @@ setup(
         'console_scripts': [
             'mock_gps_node = gisnav.nodes.mock_gps_node:main',
             'map_node = gisnav.nodes.map_node:main',
+            'bbox_node = gisnav.nodes.bbox_node:main',
+            'pose_estimation_node = gisnav.nodes.pose_estimation_node:main',
         ],
     },
 )

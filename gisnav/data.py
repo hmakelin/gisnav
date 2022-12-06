@@ -35,6 +35,8 @@ from shapely.geometry import box
 from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
 from gisnav.geo import GeoPoint, GeoTrapezoid, GeoValueError
 
+from geographic_msgs.msg import GeoPoint as ROSGeoPoint
+
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
 BBox = namedtuple('BBox', 'left bottom right top')
@@ -292,44 +294,6 @@ class ImagePair:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class _AsyncQuery:
-    """Abstract base class of a structure that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along
-    with its input data
-
-    The intention is to keep the result of the query in the same place along with the inputs so that they can be
-    easily reunited again in the callback function.
-
-    .. note::
-        You should not try to instantiate this class directly. Use child classes instead.
-    """
-    result: AsyncResult
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class AsyncPoseQuery(_AsyncQuery):
-    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
-
-    The :meth:`.PoseEstimator.worker` interface expects an image_pair (query, reference images and camera intrinsics matrix)
-    and an input_data context as arguments (along with a guess which is not stored since it is no longer needed after
-    the _match estimation).
-    """
-    image_pair: ImagePair
-    input_data: InputData
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class AsyncWMSQuery(_AsyncQuery):
-    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
-
-    The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input it is needed here
-    """
-    geobbox: GeoSquare
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
 class Pose:
     """Represents camera match (rotation and translation)"""
     r: np.ndarray
@@ -460,7 +424,10 @@ class FixedCamera:
     image_pair: ImagePair
     pose: Pose
     timestamp: int
-    snapshot: Snapshot
+    #snapshot: Snapshot
+    terrain_altitude_amsl: Optional[float]
+    terrain_altitude_ellipsoid: Optional[float]
+    home_position: Optional[ROSGeoPoint]
     fov: FOV = field(init=False)
     position: Position = field(init=False)
     h: np.ndarray = field(init=False)
@@ -593,8 +560,11 @@ class FixedCamera:
             raise DataValueError('Please provide valid image pair.')
 
         img = self.image_pair.qry
-        if self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None or \
-            self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None:
+        #if self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None or \
+        #    self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None:
+        #        raise DataValueError('Please provide terrain altitude in both AMSL and above WGS 84 ellipsoid.')
+        if self.terrain_altitude_amsl is not None and self.terrain_altitude_ellipsoid is None or \
+            self.terrain_altitude_amsl is not None and self.terrain_altitude_ellipsoid is None:
                 raise DataValueError('Please provide terrain altitude in both AMSL and above WGS 84 ellipsoid.')
 
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
@@ -611,8 +581,8 @@ class FixedCamera:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
         try:
-            position = self._estimate_position(self.snapshot.terrain_altitude.amsl,
-                                               self.snapshot.terrain_altitude.ellipsoid)
+            position = self._estimate_position(self.terrain_altitude_amsl,
+                                               self.terrain_altitude_ellipsoid)
             if position is not None:
                 object.__setattr__(self, 'position', position)
             else:
@@ -629,6 +599,9 @@ class FixedCamera:
             raise DataValueError(f'pose.t {self.pose.t} & pose.t {self.pose.t} have values too large compared to ' \
                                  f'(cx, cy, fx): {reference}.')
 
+        # Fix home position
+        if self.home_position is not None:
+            object.__setattr__(self.position.altitude, 'home', -self.position.altitude.ellipsoid - self.home_position.altitude)
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

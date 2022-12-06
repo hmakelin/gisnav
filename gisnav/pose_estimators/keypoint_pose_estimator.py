@@ -13,7 +13,7 @@ from gisnav.assertions import assert_type, assert_len, assert_pose
 class KeypointPoseEstimator(PoseEstimator):
     """Abstract base class for all keypoint-based pose estimators
 
-    This class implements the :meth:`.estimate_pose` method that estimates a pose from matched keypoints. An abstract
+    This class implements an :meth:`.estimate` method that estimates a pose from matched keypoints. An abstract
     :meth:`.find_matching_keypoints` method must be implemented by extending classes.
     """
     _HOMOGRAPHY_MINIMUM_MATCHES = 4
@@ -41,9 +41,9 @@ class KeypointPoseEstimator(PoseEstimator):
         """
         pass
 
-    def estimate_pose(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
-                      guess: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                      elevation_reference: Optional[np.ndarray] = None) \
+    def estimate(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
+                 guess: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                 elevation_reference: Optional[np.ndarray] = None) \
             -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns pose between given query and reference images, or None if no pose could not be estimated
 

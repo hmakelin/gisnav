@@ -313,11 +313,11 @@ class PX4microRTPS(Autopilot):
 
             # TODO: self.home_altitude is redundant
             altitude = Altitude(
-                agl=0,  # local frame origin assumed on ground level
+                agl=0.,  # local frame origin assumed on ground level
                 amsl=self._vehicle_local_position.ref_alt,
                 ellipsoid=self._vehicle_local_position.ref_alt + self._egm96.height(self.global_position.lat,
                                                                                     self.global_position.lon),
-                home=0
+                home=0.
             )
             position = Position(
                 xy=GeoPoint(self._vehicle_local_position.ref_lon, self._vehicle_local_position.ref_lat, crs='epsg:4326'),

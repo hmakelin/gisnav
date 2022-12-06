@@ -4,3 +4,5 @@ map_node:
     dem_layers: ['osm-buildings']
     srs: 'EPSG:4326'
     image_format: 'image/jpeg'
+    map_update_overlay_threshold: 0.85
+    max_map_radius: 1000

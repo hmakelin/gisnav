@@ -9,13 +9,16 @@ import rclpy
 import socket
 import json
 
+from rclpy.qos import QoSPresetProfiles
+
 from ament_index_python.packages import get_package_share_directory
 
 from typing import Optional, Union
 from datetime import datetime
 
 from px4_msgs.msg import SensorGps
-from mavros_msgs.msg import GPSINPUT
+from mavros_msgs.msg import GPSINPUT, Altitude as ROSAltitude
+from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPose as ROSGeoPose
 
 from gps_time import GPSTime
 
@@ -58,6 +61,38 @@ class MockGPSNode(BaseNode):
                                                         self.GPS_INPUT_TOPIC_NAME,
                                                         rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        self._geopoint_sub = self.create_subscription(ROSGeoPoint, "geopoint_estimate",
+                                                      self._geopoint_callback,
+                                                      QoSPresetProfiles.SENSOR_DATA.value)
+        self._geopose_sub = self.create_subscription(ROSGeoPose, "geopose_estimate",
+                                                     self._geopose_callback,
+                                                     QoSPresetProfiles.SENSOR_DATA.value)
+        self._altitude_sub = self.create_subscription(ROSAltitude, "altitude_estimate",
+                                                      self._altitude_callback,
+                                                      QoSPresetProfiles.SENSOR_DATA.value)
+
+    def _geopoint_callback(self, msg: ROSGeoPoint) -> None:
+        """Handles latest geopoint estimate
+
+        :param msg: Latest :class:`geographic_msgs.msg.GeoPoint` message
+        """
+        self._geopoint_estimate = msg
+        # TODO: publish mock gps message here
+
+    def _geopose_callback(self, msg: ROSGeoPose) -> None:
+        """Handles latest geopose estimate
+
+        :param msg: Latest :class:`geographic_msgs.msg.GeoPose` message
+        """
+        self._geopose_estimate = msg
+
+    def _altitude_callback(self, msg: ROSAltitude) -> None:
+        """Handles latest altitude message
+
+        :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
+        """
+        self._altitude_estimate = msg
 
     def publish(self, fixed_camera: FixedCamera) -> None:
         """Publishes drone position as a :class:`px4_msgs.msg.SensorGps` message
@@ -219,9 +254,7 @@ def main(args=None):
             print(s.getvalue())
     finally:
         if mock_gps_node is not None:
-            mock_gps_node.destroy_timers()
             mock_gps_node.unsubscribe_topics()
-            mock_gps_node.terminate_pools()
             mock_gps_node.destroy_node()
         rclpy.shutdown()
 

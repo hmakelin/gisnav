@@ -1,18 +1,12 @@
-"""Module that contains the BaseNode ROS 2 node."""
+"""Module that contains the BridgeNode ROS 2 node."""
 import sys
 import rclpy
 import traceback
 import math
 import numpy as np
 import importlib
-import os
-import yaml
 import time
-import pstats
-import io
-import cProfile
 
-from ament_index_python.packages import get_package_share_directory
 
 from typing import Optional, Union, Tuple, get_args, Callable
 from rclpy.node import Node
@@ -41,7 +35,7 @@ from gisnav.autopilots.ardupilot_mavros import ArduPilotMAVROS
 from gisnav_msgs.msg import OrthoImage3D
 from gisnav_msgs.srv import GetMap
 
-class BaseNode(Node):
+class BridgeNode(Node):
     """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
 
     # Encoding of input video (input to CvBridge)
@@ -66,7 +60,6 @@ class BaseNode(Node):
 
     read_only = ParameterDescriptor(read_only=True)
     _ROS_PARAMS = [
-        ('misc.autopilot', ROS_D_MISC_AUTOPILOT, read_only),
         ('map_update.max_pitch', ROS_D_MAP_UPDATE_MAX_PITCH),
     ]
     """ROS parameter configuration to declare
@@ -78,15 +71,13 @@ class BaseNode(Node):
     """
     # endregion
 
-    def __init__(self, name: str, package_share_dir: str, px4_micrortps: bool = True) -> None:
+    def __init__(self, name: str, px4_micrortps: bool = True) -> None:
         """Initializes the ROS 2 node.
 
         :param name: Name of the node
-        :param package_share_dir: Package share directory file path
         :param px4_micrortps: Set True to use PX4 microRTPS bridge, MAVROS otherwise
         """
         assert_type(name, str)
-        assert_type(package_share_dir, str)
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
         self.__declare_ros_params()
 
@@ -107,8 +98,6 @@ class BaseNode(Node):
                                                  QoSPresetProfiles.SENSOR_DATA.value)
         self._terrain_altitude = None
 
-        self._package_share_dir = package_share_dir
-
         # Autopilot bridge
         ap = 'gisnav.autopilots.px4_micrortps.PX4microRTPS' if px4_micrortps \
             else 'gisnav.autopilots.ardupilot_mavros.ArduPilotMAVROS'
@@ -128,16 +117,6 @@ class BaseNode(Node):
         self._altitude_header_seq_id = 0  # TODO: for _get_header - make static function and move to common module
 
     # region Properties
-    @property
-    def _package_share_dir(self) -> str:
-        """ROS 2 package share directory"""
-        return self.__package_share_dir
-
-    @_package_share_dir.setter
-    def _package_share_dir(self, value: str) -> None:
-        assert_type(value, str)
-        self.__package_share_dir = value
-
     @property
     def _pose_guess(self) -> Optional[Pose]:
         """Stores rotation and translation vectors for use by :func:`cv2.solvePnPRansac`.
@@ -396,42 +375,3 @@ class BaseNode(Node):
         """
         self._bridge.unsubscribe_all()
     # endregion
-
-def main(args=None):
-    """Starts and terminates the ROS 2 node.
-
-    Also starts cProfile profiling in debugging mode.
-
-    :param args: Any args for initializing the rclpy node
-    :return:
-    """
-    if __debug__:
-        pr = cProfile.Profile()
-        pr.enable()
-    else:
-        pr = None
-
-    base_node = None
-    try:
-        rclpy.init(args=args)
-        base_node = BaseNode('base_node', get_package_share_directory('gisnav'),
-                             px4_micrortps='--mavros' not in sys.argv)
-        rclpy.spin(base_node)
-    except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
-        if pr is not None:
-            # Print out profiling stats
-            pr.disable()
-            s = io.StringIO()
-            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats(40)
-            print(s.getvalue())
-    finally:
-        if base_node is not None:
-            base_node.unsubscribe_topics()
-            base_node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

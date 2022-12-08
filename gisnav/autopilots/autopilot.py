@@ -59,7 +59,7 @@ class Autopilot(ABC):
 
     @property
     def _node(self) -> rclpy.node.Node:
-        """Parent :class:`.BaseNode` that handles the subscriptions (and holds a handle to this adapter)"""
+        """Parent :class:`.BridgeNode` that handles the subscriptions (and holds a handle to this adapter)"""
         return self.__node
 
     @_node.setter

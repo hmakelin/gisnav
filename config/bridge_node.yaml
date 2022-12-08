@@ -1,7 +1,5 @@
 mock_gps_node:
   ros__parameters:
-    misc:
-      autopilot: 'gisnav.autopilots.px4_micrortps.PX4microRTPS'
     map_update:
       max_pitch: 30  # Applies if gimbal_projection: True, used by _should_update_map
 

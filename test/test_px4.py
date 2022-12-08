@@ -100,7 +100,7 @@ class TestInit(unittest.TestCase):
                       f'{names_and_namespaces}.'
 
     def test_subscriber_names_and_types(self):
-        """Tests that parent class :class:`.BaseNode` subscribes to the correct ROS topics"""
+        """Tests that parent class :class:`.BridgeNode` subscribes to the correct ROS topics"""
         subscriber_names_and_types = None
         timeout_sec = 2
         end_time = time.time() + timeout_sec

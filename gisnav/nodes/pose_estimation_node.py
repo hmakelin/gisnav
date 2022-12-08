@@ -3,10 +3,7 @@ import rclpy
 import os
 import sys
 import yaml
-import io
-import pstats
 import numpy as np
-import cProfile
 import time
 import traceback
 import importlib
@@ -382,7 +379,7 @@ class PoseEstimationNode(Node):
             assert self._camera_data is not None
             assert hasattr(self._map, 'image'), 'Map data unexpectedly did not contain the image data.'
 
-            # TODO: grab estimation inputs (elevation etc.) from ROS topics (see BaseNode._estimation_inputs)
+            # TODO: grab estimation inputs (elevation etc.) from ROS topics (see BridgeNode._estimation_inputs)
             #inputs, contextual_map_data = self._estimation_inputs
             #self._map_input_data = inputs
             image_pair = ImagePair(image_data, self._contextual_map_data)
@@ -716,42 +713,3 @@ class PoseEstimationNode(Node):
         #self._altitude_header_seq_id += 1
 
         return header
-
-def main(args=None):
-    """Starts and terminates the ROS 2 node.
-
-    Also starts cProfile profiling in debugging mode.
-
-    :param args: Any args for initializing the rclpy node
-    :return:
-    """
-    if __debug__:
-        pr = cProfile.Profile()
-        pr.enable()
-    else:
-        pr = None
-
-    node = None
-    try:
-        rclpy.init(args=args)
-        node = PoseEstimationNode('bbox_node', 'config/loftr_params.yaml', get_package_share_directory('gisnav'),
-                                  px4_micrortps='--mavros' not in sys.argv)
-        rclpy.spin(node)
-    except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
-        if pr is not None:
-            # Print out profiling stats
-            pr.disable()
-            s = io.StringIO()
-            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats(40)
-            print(s.getvalue())
-    finally:
-        if node is not None:
-            #node.destroy()
-            node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

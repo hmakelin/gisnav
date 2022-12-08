@@ -1,9 +1,6 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import numpy as np
 import cv2
-import io
-import pstats
-import cProfile
 import rclpy
 import math
 import time
@@ -745,41 +742,3 @@ class MapNode(Node):
         if self._timer is not None:
             self._timer.destroy()
 
-
-def main(args=None):
-    """Starts and terminates the ROS 2 node.
-
-    Also starts cProfile profiling in debugging mode.
-
-    :param args: Any args for initializing the rclpy node
-    :return:
-    """
-    if __debug__:
-        pr = cProfile.Profile()
-        pr.enable()
-    else:
-        pr = None
-
-    map_node = None
-    try:
-        rclpy.init(args=args)
-        map_node = MapNode('map_node')
-        rclpy.spin(map_node)
-    except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
-        if pr is not None:
-            # Print out profiling stats
-            pr.disable()
-            s = io.StringIO()
-            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats(40)
-            print(s.getvalue())
-    finally:
-        if map_node is not None:
-            map_node.destroy()
-            map_node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

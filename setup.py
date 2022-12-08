@@ -61,11 +61,11 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'base_node = gisnav.nodes.base_node:main',
-            'mock_gps_node = gisnav.nodes.mock_gps_node:main',
-            'map_node = gisnav.nodes.map_node:main',
-            'bbox_node = gisnav.nodes.bbox_node:main',
-            'pose_estimation_node = gisnav.nodes.pose_estimation_node:main',
+            'bridge_node = gisnav.nodes:run_bridge_node',
+            'mock_gps_node = gisnav.nodes:run_mock_gps_node',
+            'map_node = gisnav.nodes:run_map_node',
+            'bbox_node = gisnav.nodes:run_bbox_node',
+            'pose_estimation_node = gisnav.nodes:run_pose_estimation_node',
         ],
     },
 )

@@ -1,9 +1,6 @@
-"""Extends :class:`.BaseNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
+"""Extends :class:`.BridgeNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import sys
-import io
-import pstats
 import numpy as np
-import cProfile
 import rclpy
 import importlib
 import traceback
@@ -195,7 +192,7 @@ class BBoxNode(Node):
             self.get_logger().warn(f'Could not read gimbal projection flag: {gimbal_projection_flag}. Assume False.')
             return False
 
-    # TODO: redundant implementation in BaseNode
+    # TODO: redundant implementation in BridgeNode
     def _load_autopilot(self, autopilot: str) -> Callable:
         """Returns :class:`.Autopilot` instance from provided class path
 
@@ -207,7 +204,7 @@ class BBoxNode(Node):
         class_ = self._import_class(class_name, module_name)
         return class_
 
-    # TODO: redundant implementation in BaseNode
+    # TODO: redundant implementation in BridgeNode
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported
 
@@ -463,42 +460,3 @@ class BBoxNode(Node):
             self._geopoint_sub.destroy()
         if self._timer is not None:
             self._timer.destroy()
-
-
-def main(args=None):
-    """Starts and terminates the ROS 2 node.
-
-    Also starts cProfile profiling in debugging mode.
-
-    :param args: Any args for initializing the rclpy node
-    :return:
-    """
-    if __debug__:
-        pr = cProfile.Profile()
-        pr.enable()
-    else:
-        pr = None
-
-    bbox_node = None
-    try:
-        rclpy.init(args=args)
-        bbox_node = BBoxNode('bbox_node', px4_micrortps='--mavros' not in sys.argv)
-        rclpy.spin(bbox_node)
-    except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
-        if pr is not None:
-            # Print out profiling stats
-            pr.disable()
-            s = io.StringIO()
-            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
-            ps.print_stats(40)
-            print(s.getvalue())
-    finally:
-        if bbox_node is not None:
-            bbox_node.destroy()
-            bbox_node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

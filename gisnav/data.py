@@ -601,7 +601,7 @@ class FixedCamera:
 
         # Fix home position
         if self.home_position is not None:
-            object.__setattr__(self.position.altitude, 'home', -self.position.altitude.ellipsoid - self.home_position.altitude)
+            object.__setattr__(self.position.altitude, 'home', self.position.altitude.ellipsoid - self.home_position.altitude)
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

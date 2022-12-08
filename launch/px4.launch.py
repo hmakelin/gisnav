@@ -16,11 +16,25 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
+    # Bridge node
+    base_node_config = os.path.join(
+        get_package_share_directory(package_data.package_name),
+        'config',
+        'typhoon_h480__ksql_airport.yaml'
+    )
+    base_node = Node(
+        package='gisnav',
+        name='base_node',
+        executable='base_node',
+        parameters=[base_node_config]
+    )
+    ld.add_action(base_node)
+
     # Mock GPS node
     mock_gps_node_config = os.path.join(
         get_package_share_directory(package_data.package_name),
         'config',
-        'typhoon_h480__ksql_airport.yaml'
+        'mock_gps_node.yaml'
     )
     mock_gps_node = Node(
         package='gisnav',

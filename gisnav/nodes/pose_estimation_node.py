@@ -27,7 +27,7 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import CameraInfo, Image
 from mavros_msgs.msg import Altitude
 from geometry_msgs.msg import Quaternion
-from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPose
+from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPoseStamped, GeoPose as ROSGeoPose
 from std_msgs.msg import Header, Float32
 from builtin_interfaces.msg import Time
 
@@ -129,7 +129,7 @@ class PoseEstimationNode(Node):
         self._home_position = None
         #self._pub = self.create_publisher(Pose, 'pose', QoSPresetProfiles.SENSOR_DATA.value)
         self._geopoint_pub = self.create_publisher(ROSGeoPoint, 'geopoint_estimate', QoSPresetProfiles.SENSOR_DATA.value)
-        self._geopose_pub = self.create_publisher(GeoPose, 'geopose_estimate', QoSPresetProfiles.SENSOR_DATA.value)
+        self._geopose_pub = self.create_publisher(GeoPoseStamped, 'geopose_estimate', QoSPresetProfiles.SENSOR_DATA.value)
         self._altitude_pub = self.create_publisher(Altitude, 'altitude_estimate', QoSPresetProfiles.SENSOR_DATA.value)
 
         # Converts image_raw to cv2 compatible image
@@ -678,7 +678,7 @@ class PoseEstimationNode(Node):
         """
         geopoint_msg = ROSGeoPoint(latitude=fixed_camera.position.lat, longitude=fixed_camera.position.lon,
                             altitude=fixed_camera.position.altitude.ellipsoid)
-        self._geopoint_pub.publish(geopoint_msg)
+        #self._geopoint_pub.publish(geopoint_msg)
 
         altitude_msg = Altitude(header=self._get_header(),
                                 amsl=fixed_camera.position.altitude.amsl,
@@ -688,9 +688,15 @@ class PoseEstimationNode(Node):
                                 bottom_clearance=fixed_camera.position.altitude.agl)
         self._altitude_pub.publish(altitude_msg)
 
-        # TODO
-        #geopose_msg = None
-        #self._geopose_pub.publish(geopose_msg)
+        q_xyzw = fixed_camera.position.attitude.q
+        geopose_msg = GeoPoseStamped(
+            header=self._get_header(),
+            pose=ROSGeoPose(
+                position=geopoint_msg,
+                orientation=Quaternion(x=float(q_xyzw[0]), y=float(q_xyzw[1]), z=float(q_xyzw[2]), w=float(q_xyzw[3]))
+            )
+        )
+        self._geopose_pub.publish(geopose_msg)
 
     def _get_header(self) -> Header:
         """Creates class:`std_msgs.msg.Header` for an outgoing ROS message"""
@@ -698,10 +704,12 @@ class PoseEstimationNode(Node):
         sec = int(ns / 1e9)
         nanosec = int(ns - (1e9 * sec))
         header = Header()
-        time_ = Time()
-        time_.sec = sec
-        time_.nanosec = nanosec
-        header.stamp = time_
+        #time_ = Time()
+        #time_.sec = sec
+        #time_.nanosec = nanosec
+        #header.stamp = time_
+        header.stamp.sec = sec
+        header.stamp.nanosec = nanosec
         header.frame_id = 'base_link'
 
         #header.seq = self._altitude_header_seq_id

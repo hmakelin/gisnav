@@ -8,8 +8,12 @@ import importlib
 import os
 import yaml
 import time
+import pstats
+import io
+import cProfile
 
-from abc import ABC
+from ament_index_python.packages import get_package_share_directory
+
 from typing import Optional, Union, Tuple, get_args, Callable
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -31,11 +35,13 @@ from gisnav.data import Dim, MapData, Attitude, DataValueError, InputData, Fixed
 from gisnav.geo import GeoPoint, GeoSquare
 from gisnav.assertions import assert_type, assert_len, assert_ndim, assert_shape
 from gisnav.autopilots.autopilot import Autopilot
+from gisnav.autopilots.px4_micrortps import PX4microRTPS
+from gisnav.autopilots.ardupilot_mavros import ArduPilotMAVROS
 
 from gisnav_msgs.msg import OrthoImage3D
 from gisnav_msgs.srv import GetMap
 
-class BaseNode(Node, ABC):
+class BaseNode(Node):
     """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
 
     # Encoding of input video (input to CvBridge)
@@ -72,11 +78,12 @@ class BaseNode(Node, ABC):
     """
     # endregion
 
-    def __init__(self, name: str, package_share_dir: str) -> None:
+    def __init__(self, name: str, package_share_dir: str, px4_micrortps: bool = True) -> None:
         """Initializes the ROS 2 node.
 
         :param name: Name of the node
         :param package_share_dir: Package share directory file path
+        :param px4_micrortps: Set True to use PX4 microRTPS bridge, MAVROS otherwise
         """
         assert_type(name, str)
         assert_type(package_share_dir, str)
@@ -103,7 +110,8 @@ class BaseNode(Node, ABC):
         self._package_share_dir = package_share_dir
 
         # Autopilot bridge
-        ap = self.get_parameter('misc.autopilot').get_parameter_value().string_value or self.ROS_D_MISC_AUTOPILOT
+        ap = 'gisnav.autopilots.px4_micrortps.PX4microRTPS' if px4_micrortps \
+            else 'gisnav.autopilots.ardupilot_mavros.ArduPilotMAVROS'
         ap: Autopilot = self._load_autopilot(ap)
         # TODO: implement passing init args, kwargs
         self._bridge = ap(self, self._image_raw_callback)
@@ -388,3 +396,42 @@ class BaseNode(Node, ABC):
         """
         self._bridge.unsubscribe_all()
     # endregion
+
+def main(args=None):
+    """Starts and terminates the ROS 2 node.
+
+    Also starts cProfile profiling in debugging mode.
+
+    :param args: Any args for initializing the rclpy node
+    :return:
+    """
+    if __debug__:
+        pr = cProfile.Profile()
+        pr.enable()
+    else:
+        pr = None
+
+    base_node = None
+    try:
+        rclpy.init(args=args)
+        base_node = BaseNode('base_node', get_package_share_directory('gisnav'),
+                             px4_micrortps='--mavros' not in sys.argv)
+        rclpy.spin(base_node)
+    except KeyboardInterrupt as e:
+        print(f'Keyboard interrupt received:\n{e}')
+        if pr is not None:
+            # Print out profiling stats
+            pr.disable()
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
+            ps.print_stats(40)
+            print(s.getvalue())
+    finally:
+        if base_node is not None:
+            base_node.unsubscribe_topics()
+            base_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

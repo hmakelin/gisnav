@@ -29,6 +29,8 @@ from owslib.util import ServiceException
 
 from cv_bridge import CvBridge
 
+from . import messaging
+
 from gisnav.assertions import assert_len, assert_type, assert_ndim
 from gisnav_msgs.msg import OrthoImage3D
 from gisnav_msgs.srv import GetMap
@@ -684,7 +686,7 @@ class MapNode(Node):
 
             if terrain_altitude_amsl is not None and terrain_altitude_home is not None \
                     and terrain_altitude_agl is not None:
-                terrain_altitude_msg = ROSAltitude(header=self._get_header(),
+                terrain_altitude_msg = ROSAltitude(header=messaging.create_header('base_link'),
                                         amsl=terrain_altitude_amsl,
                                         local=terrain_altitude_home,
                                         relative=terrain_altitude_home,
@@ -715,23 +717,6 @@ class MapNode(Node):
             self._orthoimage_pub.publish(self._msg)
         self._publish_terrain_altitude()
 
-    # TODO: redudnant implementation in pose_estimation_node.py and base node
-    def _get_header(self) -> Header:
-        """Creates class:`std_msgs.msg.Header` for an outgoing ROS message"""
-        ns = time.time_ns()
-        sec = int(ns / 1e9)
-        nanosec = int(ns - (1e9 * sec))
-        header = Header()
-        time_ = Time()
-        time_.sec = sec
-        time_.nanosec = nanosec
-        header.stamp = time_
-        header.frame_id = 'base_link'
-
-        #header.seq = self._altitude_header_seq_id
-        #self._altitude_header_seq_id += 1
-
-        return header
 
     def destroy(self) -> None:
         """Unsubscribes ROS topics and destroys timer"""

@@ -18,7 +18,9 @@ from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPoseStamped as ROSGe
 
 from gps_time import GPSTime
 
-from gisnav.data import FixedCamera, Attitude
+from . import messaging
+
+from gisnav.data import Attitude
 from gisnav.assertions import assert_type
 
 
@@ -89,7 +91,7 @@ class MockGPSNode(Node):
             attitude = msg.pose.orientation
             q_xyzw = np.array([attitude.x, attitude.y, attitude.z, attitude.w])
             yaw = Attitude(q=q_xyzw).yaw
-            timestamp = int(msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000) / 10e6)  # usec
+            timestamp = messaging.usec_from_header(msg.header)
             self._publish(lat, lon, alt_amsl, alt_ellipsoid, yaw, timestamp)
         else:
             self.get_logger().warn('Altitude estimate not yet received, skipping publishing mock GPS message.')

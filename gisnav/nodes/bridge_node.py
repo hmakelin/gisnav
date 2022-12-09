@@ -11,18 +11,17 @@ import time
 from typing import Optional, Union, Tuple, get_args, Callable
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from rclpy.timer import Timer
 
 from rcl_interfaces.msg import ParameterDescriptor
 from cv_bridge import CvBridge
-from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
 from mavros_msgs.msg import Altitude as ROSAltitude
 from geographic_msgs.msg import BoundingBox, GeoPoint as ROSGeoPoint
 from geometry_msgs.msg import Quaternion
-from shapely.geometry import box
 from std_msgs.msg import Float32, Header
 from builtin_interfaces.msg import Time
+
+from . import messaging
 
 from gisnav.data import Dim, MapData, Attitude, DataValueError, InputData, FixedCamera, Img, Pose, Position, \
     Altitude, BBox
@@ -32,8 +31,6 @@ from gisnav.autopilots.autopilot import Autopilot
 from gisnav.autopilots.px4_micrortps import PX4microRTPS
 from gisnav.autopilots.ardupilot_mavros import ArduPilotMAVROS
 
-from gisnav_msgs.msg import OrthoImage3D
-from gisnav_msgs.srv import GetMap
 
 class BridgeNode(Node):
     """ROS 2 node that publishes position estimate based on visual match of drone video to map of same location"""
@@ -81,10 +78,6 @@ class BridgeNode(Node):
         super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
         self.__declare_ros_params()
 
-        #self._map_cli = self.create_client(GetMap, 'orthoimage_3d_service')
-        #while not self._map_cli.wait_for_service(timeout_sec=1.0):
-        #    self.get_logger().info('Waiting for GetMap service...')
-
         self._altitude_agl_pub = self.create_publisher(Float32, 'altitude_agl', QoSPresetProfiles.SENSOR_DATA.value)  # TODO: just publish vehicle altitude
         self._camera_yaw_pub = self.create_publisher(Float32, 'camera_yaw', QoSPresetProfiles.SENSOR_DATA.value)  # TODO: just publish camera attitude (once bridge is properly refactored)
         self._vehicle_attitude_pub = self.create_publisher(Quaternion, 'attitude', QoSPresetProfiles.SENSOR_DATA.value)
@@ -114,7 +107,6 @@ class BridgeNode(Node):
         self._pose_guess = None
         self._msg = None  # orthoimage3d message from map node
 
-        self._altitude_header_seq_id = 0  # TODO: for _get_header - make static function and move to common module
 
     # region Properties
     @property
@@ -328,8 +320,7 @@ class BridgeNode(Node):
         if self._bridge.attitude is not None:
             assert hasattr(self._bridge.attitude, 'q')
             quaternion = self._bridge.attitude.q
-            quaternion_msg = Quaternion(x=float(quaternion[0]), y=float(quaternion[1]), z=float(quaternion[2]),
-                                        w=float(quaternion[3]))
+            quaternion_msg = messaging.as_ros_quaternion(self._bridge.attitude.q)
             self._vehicle_attitude_pub.publish(quaternion_msg)
         else:
             self.get_logger().warn(f'Could not determine vehicle attitude, skipping publishing it.')
@@ -338,8 +329,7 @@ class BridgeNode(Node):
         if self._bridge.gimbal_set_attitude is not None:
             assert hasattr(self._bridge.gimbal_set_attitude, 'q')
             quaternion = self._bridge.gimbal_set_attitude.q
-            quaternion_msg = Quaternion(x=float(quaternion[0]), y=float(quaternion[1]), z=float(quaternion[2]),
-                                        w=float(quaternion[3]))
+            quaternion_msg = messaging.as_ros_quaternion(self._bridge.gimbal_set_attitude.q)
             self._gimbal_attitude_pub.publish(quaternion_msg)
         else:
             self.get_logger().warn(f'Could not determine vehicle attitude, skipping publishing it.')
@@ -347,24 +337,6 @@ class BridgeNode(Node):
     def _terrain_altitude_callback(self, msg: ROSAltitude) -> None:
         """Handles terrain altitude message"""
         self._terrain_altitude = msg
-
-    # TODO: redudnant implementation in pose_estimation_node.py
-    def _get_header(self) -> Header:
-        """Creates class:`std_msgs.msg.Header` for an outgoing ROS message"""
-        ns = time.time_ns()
-        sec = int(ns / 1e9)
-        nanosec = int(ns - (1e9 * sec))
-        header = Header()
-        time_ = Time()
-        time_.sec = sec
-        time_.nanosec = nanosec
-        header.stamp = time_
-        header.frame_id = 'base_link'
-
-        #header.seq = self._altitude_header_seq_id
-        #self._altitude_header_seq_id += 1
-
-        return header
 
     # region PublicAPI
     def unsubscribe_topics(self) -> None:

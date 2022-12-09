@@ -16,8 +16,6 @@ from scipy.spatial.transform import Rotation
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
-from ament_index_python.packages import get_package_share_directory
-
 from cv_bridge import CvBridge
 
 from geometry_msgs.msg import Pose
@@ -25,14 +23,15 @@ from sensor_msgs.msg import CameraInfo, Image
 from mavros_msgs.msg import Altitude
 from geometry_msgs.msg import Quaternion
 from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPoseStamped, GeoPose as ROSGeoPose
-from std_msgs.msg import Header, Float32
-from builtin_interfaces.msg import Time
+from std_msgs.msg import Float32
+
+from . import messaging
 
 from gisnav_msgs.msg import OrthoImage3D
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
 from gisnav.assertions import assert_type, assert_ndim, assert_shape
 from gisnav.data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, ContextualMapData, BBox, Dim, \
-    MapData, CameraData, ImagePair
+    MapData, CameraData, ImagePair, Position
 from gisnav.geo import GeoPoint, GeoTrapezoid
 from gisnav.autopilots.autopilot import Autopilot
 from gisnav.nodes.map_node import MapNode
@@ -125,7 +124,6 @@ class PoseEstimationNode(Node):
         self._vehicle_attitude = None
         self._home_position = None
         #self._pub = self.create_publisher(Pose, 'pose', QoSPresetProfiles.SENSOR_DATA.value)
-        self._geopoint_pub = self.create_publisher(ROSGeoPoint, 'geopoint_estimate', QoSPresetProfiles.SENSOR_DATA.value)
         self._geopose_pub = self.create_publisher(GeoPoseStamped, 'geopose_estimate', QoSPresetProfiles.SENSOR_DATA.value)
         self._altitude_pub = self.create_publisher(Altitude, 'altitude_estimate', QoSPresetProfiles.SENSOR_DATA.value)
 
@@ -144,8 +142,6 @@ class PoseEstimationNode(Node):
         pose_estimator: PoseEstimator = self._import_class(class_name, module_name)
         self._estimator = pose_estimator(*params.get('args', []))
 
-        # Increasing header nonce, see :meth:`._get_header`
-        self._altitude_header_seq_id = 0
 
     # TODO: redundant, should only be used in basenode?
     def _load_autopilot(self, autopilot: str) -> Callable:
@@ -564,7 +560,7 @@ class PoseEstimationNode(Node):
             if export_geojson != '':
                 self._export_position(fixed_camera.position.xy, fixed_camera.fov.fov, export_geojson)
 
-        self.publish(fixed_camera)
+        self.publish(fixed_camera.position)
 
     def _is_valid_estimate(self, fixed_camera: FixedCamera, r_guess_: np.ndarray) -> bool:
         """Returns True if the estimate is valid
@@ -668,48 +664,24 @@ class PoseEstimationNode(Node):
             self.get_logger().error(f'Could not write file {filename} because of exception:'
                                     f'\n{e}\n{traceback.print_exc()}')
 
-    def publish(self, fixed_camera: FixedCamera) -> None:
+    def publish(self, position: Position) -> None:
         """Publishes estimated position
 
-        :param fixed_camera: Estimated position and other metadata
+        :param position: Estimated position
         """
-        geopoint_msg = ROSGeoPoint(latitude=fixed_camera.position.lat, longitude=fixed_camera.position.lon,
-                            altitude=fixed_camera.position.altitude.ellipsoid)
-        #self._geopoint_pub.publish(geopoint_msg)
-
-        altitude_msg = Altitude(header=self._get_header(),
-                                amsl=fixed_camera.position.altitude.amsl,
-                                local=fixed_camera.position.altitude.home,
-                                relative=fixed_camera.position.altitude.home,
-                                terrain=fixed_camera.position.altitude.agl,
-                                bottom_clearance=fixed_camera.position.altitude.agl)
+        altitude_msg = Altitude(header=messaging.create_header('base_link'),
+                                amsl=position.altitude.amsl,
+                                local=position.altitude.home,
+                                relative=position.altitude.home,
+                                terrain=position.altitude.agl,
+                                bottom_clearance=position.altitude.agl)
         self._altitude_pub.publish(altitude_msg)
 
-        q_xyzw = fixed_camera.position.attitude.q
         geopose_msg = GeoPoseStamped(
-            header=self._get_header(),
+            header=messaging.create_header('base_link'),
             pose=ROSGeoPose(
-                position=geopoint_msg,
-                orientation=Quaternion(x=float(q_xyzw[0]), y=float(q_xyzw[1]), z=float(q_xyzw[2]), w=float(q_xyzw[3]))
+                position=ROSGeoPoint(latitude=position.lat, longitude=position.lon, altitude=position.altitude.ellipsoid),
+                orientation=messaging.as_ros_quaternion(position.attitude.q)
             )
         )
         self._geopose_pub.publish(geopose_msg)
-
-    def _get_header(self) -> Header:
-        """Creates class:`std_msgs.msg.Header` for an outgoing ROS message"""
-        ns = time.time_ns()
-        sec = int(ns / 1e9)
-        nanosec = int(ns - (1e9 * sec))
-        header = Header()
-        #time_ = Time()
-        #time_.sec = sec
-        #time_.nanosec = nanosec
-        #header.stamp = time_
-        header.stamp.sec = sec
-        header.stamp.nanosec = nanosec
-        header.frame_id = 'base_link'
-
-        #header.seq = self._altitude_header_seq_id
-        #self._altitude_header_seq_id += 1
-
-        return header

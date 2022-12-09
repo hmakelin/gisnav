@@ -33,7 +33,6 @@ from . import messaging
 
 from gisnav.assertions import assert_len, assert_type, assert_ndim
 from gisnav_msgs.msg import OrthoImage3D
-from gisnav_msgs.srv import GetMap
 from gisnav.data import BBox, MapData, CameraData, Dim, Img
 from gisnav.geo import GeoSquare, GeoPoint
 
@@ -189,7 +188,6 @@ class MapNode(Node):
         self._home_position_sub = self.create_subscription(ROSGeoPoint, MapNode.DEFAULT_HOME_POSITION_TOPIC,
                                                          self._home_position_callback,
                                                          QoSPresetProfiles.SENSOR_DATA.value)
-        self._srv = self.create_service(GetMap, 'orthoimage_3d_service', self._srv_callback)
         self._timer = self._setup_map_update_timer(publish_rate)
         self._msg = None
 
@@ -284,16 +282,6 @@ class MapNode(Node):
     def _bbox(self, value: BBox) -> None:
         assert_type(value, BBox)
         self.__bbox = value
-
-    @property
-    def _srv(self) -> Service:
-        """:class:`.OrthoImage3D` service"""
-        return self.__srv
-
-    @_srv.setter
-    def _srv(self, value: Service) -> None:
-        assert_type(value, Service)
-        self.__srv = value
 
     @property
     def _origin_dem_altitude(self) -> Optional[float]:
@@ -482,16 +470,6 @@ class MapNode(Node):
             dem = np.zeros_like(img)
 
         return img, dem
-
-    def _srv_callback(self, request, response):
-        """Service callback"""
-        bbox = BBox(request.bbox.min_pt.longitude, request.bbox.min_pt.latitude,
-                    request.bbox.max_pt.longitude, request.bbox.max_pt.latitude)
-        size = request.height, request.width
-        img, dem = self._get_map(bbox, size)
-        response.image = self._create_msg(bbox, img, dem)
-
-        return response
 
     @staticmethod
     def _read_img(img: bytes, grayscale: bool = False) -> np.ndarray:

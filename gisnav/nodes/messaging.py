@@ -41,7 +41,7 @@ def as_ros_quaternion(q: np.ndarray) -> Quaternion:
     assert_type(q, np.ndarray)
     q = q.squeeze()
     assert_shape(q, (4,))
-    return Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+    return Quaternion(x=q[0].item(), y=q[1].item(), z=q[2].item(), w=q[3].item())
 
 
 def as_np_quaternion(q: Quaternion) -> np.ndarray:

@@ -12,7 +12,7 @@ from mavros_msgs.msg import MountControl, HomePosition
 
 from gisnav.assertions import assert_type
 from gisnav.data import TimePair, Attitude, Position, Altitude
-from gisnav.geo import GeoPoint
+from gisnav.geo import GeoPt
 
 from gisnav.autopilots.autopilot import Autopilot
 
@@ -284,12 +284,12 @@ class ArduPilotMAVROS(Autopilot):
             return None
 
     @property
-    def global_position(self) -> Optional[GeoPoint]:
-        """Returns vehicle global position as a :class:`.GeoPoint`"""
+    def global_position(self) -> Optional[GeoPt]:
+        """Returns vehicle global position as a :class:`.GeoPt`"""
         if self._global_position_global is not None and hasattr(self._global_position_global, 'latitude') \
                 and hasattr(self._global_position_global, 'longitude'):
-            return GeoPoint(self._global_position_global.longitude, self._global_position_global.latitude,
-                            crs='epsg:4326')
+            return GeoPt(self._global_position_global.longitude, self._global_position_global.latitude,
+                         crs='epsg:4326')
         else:
             return None
 
@@ -345,8 +345,8 @@ class ArduPilotMAVROS(Autopilot):
                 home=0
             )
             position = Position(
-                xy=GeoPoint(self._home_position_home.geo.longitude, self._home_position_home.geo.latitude,
-                            crs='epsg:4326'),
+                xy=GeoPt(self._home_position_home.geo.longitude, self._home_position_home.geo.latitude,
+                         crs='epsg:4326'),
                 altitude=altitude,
                 attitude=None,
                 timestamp=None

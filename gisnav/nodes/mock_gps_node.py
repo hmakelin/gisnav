@@ -1,73 +1,74 @@
 """Extends :class:`.BridgeNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import time
-import sys
 import numpy as np
 import rclpy
 import socket
 import json
 
 from rclpy.qos import QoSPresetProfiles
-from rclpy.node import Node
 
 from typing import Optional, Union
 from datetime import datetime
 
 from px4_msgs.msg import SensorGps
-from mavros_msgs.msg import GPSINPUT, Altitude as ROSAltitude
-from geographic_msgs.msg import GeoPoint as ROSGeoPoint, GeoPoseStamped as ROSGeoPoseStamped
+from mavros_msgs.msg import GPSINPUT, Altitude
+from geographic_msgs.msg import GeoPoseStamped
 
 from gps_time import GPSTime
 
 from . import messaging
-
+from gisnav.nodes.base.base_node import _BaseNode
 from gisnav.data import Attitude
 from gisnav.assertions import assert_type
 
 
-class MockGPSNode(Node):
+class MockGPSNode(_BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
-
-    GPS_INPUT_TOPIC_NAME = '/mavros/gps_input/gps_input'
-    """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages over MAVROS"""
-
-    SENSOR_GPS_TOPIC_NAME = '/fmu/sensor_gps/in'
-    """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages over PX4 microRTPS bridge"""
-
     UDP_IP = "127.0.0.1"
-    """MAVProxy GPSInput plugin host"""
+    """MAVProxy GPSInput plugin default host"""
 
     UDP_PORT = 25100
-    """MAVProxy GPSInput plugin port"""
+    """MAVProxy GPSInput plugin default port"""
 
-    def __init__(self, name: str, px4_micrortps: bool = True):
+    def __init__(self, name: str, px4_micrortps: bool = True, udp_ip: str = UDP_IP, udp_port: int = UDP_PORT):
         """Class initializer
 
         :param name: Node name
         :param px4_micrortps: Set True to use PX4 microRTPS bridge, MAVROS otherwise
+        :param udp_ip: MAVProxy GPSInput plugin host (ignored if px4_micrortps == True)
+        :param udp_port: MAVProxy GPSInput plugin port (ignored if px4_micrortps == True)
         """
-        super().__init__(name, allow_undeclared_parameters=True, automatically_declare_parameters_from_overrides=True)
+        super().__init__(name)
+
+        # MAVROS only
+        self._udp_ip = udp_ip
+        self._udp_port = udp_port
 
         self._px4_micrortps = px4_micrortps
         if self._px4_micrortps:
-            self._gps_publisher = self.create_publisher(SensorGps,
-                                                        self.SENSOR_GPS_TOPIC_NAME,
-                                                        rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
+            self._mock_gps_pub = self.create_publisher(SensorGps,
+                                                       messaging.ROS_TOPIC_SENSOR_GPS,
+                                                       QoSPresetProfiles.SENSOR_DATA.value)
             self._socket = None
         else:
-            self._gps_publisher = self.create_publisher(GPSINPUT,
-                                                        self.GPS_INPUT_TOPIC_NAME,
-                                                        rclpy.qos.QoSPresetProfiles.SENSOR_DATA.value)
+            # TODO: try to get MAVROS work for GPSINPUT message and get rid of UDP socket
+            #self._mock_gps_pub = self.create_publisher(GPSINPUT,
+            #                                           messaging.ROS_TOPIC_GPS_INPUT,
+            #                                           QoSPresetProfiles.SENSOR_DATA.value)
+            self._mock_gps_pub = None
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         #self._geopoint_sub = self.create_subscription(ROSGeoPoint, "geopoint_estimate",
         #                                              self._geopoint_callback,
         #                                              QoSPresetProfiles.SENSOR_DATA.value)
-        self._geopose_sub = self.create_subscription(ROSGeoPoseStamped, "geopose_estimate",
-                                                     self._geopose_callback,
-                                                     QoSPresetProfiles.SENSOR_DATA.value)
-        self._altitude_sub = self.create_subscription(ROSAltitude, "altitude_estimate",
-                                                      self._altitude_callback,
-                                                      QoSPresetProfiles.SENSOR_DATA.value)
+        self._vehicle_geopose_estimate_sub = self.create_subscription(GeoPoseStamped,
+                                                                      messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
+                                                                      self._vehicle_geopose_estimate_callback,
+                                                                      QoSPresetProfiles.SENSOR_DATA.value)
+        self._vehicle_altitude_estimate_sub = self.create_subscription(Altitude,
+                                                                       messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
+                                                                       self._vehicle_altitude_estimate_callback,
+                                                                       QoSPresetProfiles.SENSOR_DATA.value)
         self._geopose_estimate = None
         self._altitude_estimate = None
 
@@ -78,7 +79,7 @@ class MockGPSNode(Node):
     #    """
     #    self._geopoint_estimate = msg
 
-    def _geopose_callback(self, msg: ROSGeoPoseStamped) -> None:
+    def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
         """Handles latest geopose estimate
 
         :param msg: Latest :class:`geographic_msgs.msg.GeoPose` message
@@ -88,54 +89,54 @@ class MockGPSNode(Node):
             lat, lon = msg.pose.position.latitude, msg.pose.position.longitude
             alt_amsl = self._altitude_estimate.amsl
             alt_ellipsoid = msg.pose.position.altitude
-            attitude = msg.pose.orientation
-            q_xyzw = np.array([attitude.x, attitude.y, attitude.z, attitude.w])
-            yaw = Attitude(q=q_xyzw).yaw
+            q = messaging.as_np_quaternion(msg.pose.orientation)
+            yaw = Attitude(q=q).yaw
             timestamp = messaging.usec_from_header(msg.header)
             self._publish(lat, lon, alt_amsl, alt_ellipsoid, yaw, timestamp)
         else:
             self.get_logger().warn('Altitude estimate not yet received, skipping publishing mock GPS message.')
 
-    def _altitude_callback(self, msg: ROSAltitude) -> None:
+    def _vehicle_altitude_estimate_callback(self, msg: Altitude) -> None:
         """Handles latest altitude message
 
         :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
         """
         self._altitude_estimate = msg
 
-    #def publish(self, fixed_camera: FixedCamera) -> None:
     def _publish(self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp) -> None:
         """Publishes drone position as a :class:`px4_msgs.msg.SensorGps` message
 
-        :param fixed_camera: Estimated fixed camera
+        :param lat: Vehicle latitude
+        :param lon: Vehicle longitude
+        :param altitude_amsl: Vehicle altitude AMSL
+        :param altitude_ellipsoid: Vehicle altitude above WGS 84 ellipsoid
+        :param heading: Vehicle heading in radians
+        :param timestamp: Timestamp for outgoing mock GPS message (e.g. system time)
+
         """
-        #assert_type(fixed_camera, FixedCamera)
-        msg: Optional[Union[dict, SensorGps]] = self._generate_sensor_gps(lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp) if self._px4_micrortps \
-            else self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
+        if self._px4_micrortps:
+            msg: SensorGps = self._generate_sensor_gps(lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp)
+        else:
+            msg: dict = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
 
         if msg is not None:
             if self._px4_micrortps:
                 assert_type(msg, SensorGps)
-                self._gps_publisher.publish(msg)
+                assert self._socket is None
+                self._mock_gps_pub.publish(msg)
             else:
                 assert_type(msg, dict)
-                self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self.UDP_IP, self.UDP_PORT))
+                assert self._mock_gps_pub is None
+                self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self._udp_ip, self._upd_port))
         else:
             self.get_logger().info('Could not create GPS message, skipping publishing.')
 
-    #def _generate_gps_input(self, fixed_camera: FixedCamera) -> Optional[dict]:
     def _generate_gps_input(self, lat, lon, altitude_amsl, heading, timestamp) -> Optional[dict]:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
 
         .. seealso:
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
         """
-        #position = fixed_camera.position
-
-        #if position.altitude.amsl is None:
-        #    self.get_logger().warn(f'AMSL altitude not estimated ({position.altitude}).')
-        #    return
-
         msg = {}
 
         # Adjust UTC epoch timestamp for estimation delay
@@ -167,15 +168,8 @@ class MockGPSNode(Node):
 
         return msg
 
-    #def _generate_sensor_gps(self, fixed_camera: FixedCamera) -> Optional[SensorGps]:
     def _generate_sensor_gps(self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp) -> Optional[SensorGps]:
         """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige"""
-        #position = fixed_camera.position
-
-        #if position.altitude.amsl is None:
-        #    self.get_logger().warn(f'AMSL altitude not estimated ({position.altitude}).')
-        #    return
-
         msg = SensorGps()
         msg.timestamp = timestamp  # self._bridge.synchronized_time  # position.timestamp
         # msg.timestamp_sample = msg.timestamp
@@ -227,9 +221,12 @@ class MockGPSNode(Node):
         # = 11469064
         return 11469064
 
-    def unsubscribe_topics(self) -> None:
-        """Unsubscribes ROS topics and closes GPS_INPUT MAVLink UDP socket"""
-        #super().unsubscribe_topics()
+    def destroy_node(self) -> None:
+        """Closes GPS_INPUT MAVLink UDP socket when node is destroyed"""
         if not self._px4_micrortps:
-            self.get_logger().info('Closing UDP socket.')
+            assert self._socket is not None
+            self.get_logger().info('Closing UDP socket...')
             self._socket.close()
+
+        # socket closed - call parent method
+        super().destroy_node()

@@ -18,7 +18,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory(package_data.package_name),
         'config',
-        'bridge_node.yaml'
+        'px4_node.yaml'
     )
     node = Node(
         package='gisnav',

@@ -10,7 +10,8 @@ packages_ = [
     pdata.package_name,
     pdata.package_name + '.autopilots',
     pdata.package_name + '.pose_estimators',
-    pdata.package_name + '.nodes'
+    pdata.package_name + '.nodes',
+    pdata.package_name + '.nodes.base'
 ]
 package_dir_ = {}
 package_data_ = {}
@@ -61,7 +62,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'bridge_node = gisnav.nodes:run_bridge_node',
+            'px4_node = gisnav.nodes:run_px4_node',
+            'mavros_node = gisnav.nodes:run_mavros_node',
             'mock_gps_node = gisnav.nodes:run_mock_gps_node',
             'map_node = gisnav.nodes:run_map_node',
             'bbox_node = gisnav.nodes:run_bbox_node',

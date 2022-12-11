@@ -35,7 +35,7 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
-    ld.add_action(_create_node_action(package_share_dir, 'bridge_node', 'config/bridge_node.yaml'))
+    ld.add_action(_create_node_action(package_share_dir, 'px4_node', 'config/px4_node.yaml'))
     ld.add_action(_create_node_action(package_share_dir, 'mock_gps_node', 'config/mock_gps_node.yaml'))
     ld.add_action(_create_node_action(package_share_dir, 'map_node', 'config/map_node.yaml'))
     ld.add_action(_create_node_action(package_share_dir, 'bbox_node', 'config/bbox_node.yaml'))

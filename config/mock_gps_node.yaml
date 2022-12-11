@@ -1,2 +1,2 @@
-map_node:
+mock_gps_node:
   ros__parameters: []

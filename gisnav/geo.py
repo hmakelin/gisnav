@@ -1,6 +1,6 @@
 """Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
-
+from typing import TYPE_CHECKING
 import math
 import numpy as np
 import warnings
@@ -11,6 +11,9 @@ from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
 
 from gisnav.assertions import assert_len, assert_type
+if TYPE_CHECKING:
+    # CameraData used as type hint only - avoid ImportError due to circular import
+    from ..data import CameraData
 
 
 class _GeoObject(ABC):
@@ -19,7 +22,7 @@ class _GeoObject(ABC):
     Each instance wraps a :class:`geopandas.GeoSeries` instance of length one, i.e. containing a single Shapely shape.
     The GeoSeries class is versatile and operates on an entire series, so this wrapper is provided to only expose
     specific functionality that is needed in the application as well as provide an abstraction for a 'GeoObject' i.e. a
-    GeoSeries of length 1. For example, it is conceptually more convenient to handle a 'GeoPoint' object than a
+    GeoSeries of length 1. For example, it is conceptually more convenient to handle a 'GeoPt' object than a
     GeoSeries of length 1 with a single Shapely Point in it.
     """
 
@@ -43,7 +46,7 @@ class _GeoObject(ABC):
     def to_crs(self, crs: str) -> _GeoObject:  # TODO: return None? Misleading this way
         """Converts to provided CRS
 
-        :return: The same GeoPoint instance transformed to new CRS
+        :return: The same GeoPt instance transformed to new CRS
         """
         if self._geoseries.crs != crs:
             self._geoseries = self._geoseries.to_crs(crs)
@@ -68,9 +71,9 @@ class _GeoPolygon(_GeoObject):
     """Abstract base class for :class:`_GeoObject`s that contain a Shapely Polygon"""
 
     @property
-    def center(self) -> GeoPoint:
+    def center(self) -> GeoPt:
         """Returns center point of the polygon"""
-        return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
+        return GeoPt(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
     @property
     def bounds(self) -> Tuple[4*(float,)]:
@@ -118,7 +121,7 @@ class _GeoPolygon(_GeoObject):
         assert_type(self._geoseries[0], Polygon)
 
 
-class GeoPoint(_GeoObject):
+class GeoPt(_GeoObject):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (a geographical coordinate pair)"""
     def __init__(self, x: float, y: float, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a geographical coordinate pair
@@ -163,7 +166,7 @@ class GeoPoint(_GeoObject):
 
 class GeoSquare(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (square shaped) bounding box"""
-    def __init__(self, center: GeoPoint, radius: float, crs: str = _GeoObject.DEFAULT_CRS):
+    def __init__(self, center: GeoPt, radius: float, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a square bounding box by enveloping a circle of given radius at given center
 
         :param center: Center of the bounding box
@@ -236,6 +239,19 @@ class GeoTrapezoid(_GeoPolygon):
         ])
 
         return corners
+
+
+def get_dynamic_map_radius(camera_data: CameraData, max_map_radius: int, altitude: float) -> float:
+    """Returns map radius that adjusts for camera altitude to be used for new map requests
+
+    :param camera_data: Camera data
+    :param max_map_radius: Max map radius
+    :param altitude: Altitude of camera in meters
+    :return: Suitable map radius in meters
+    """
+    hfov = 2 * math.atan(camera_data.dim.width / (2 * camera_data.fx))
+    map_radius = 1.5 * hfov * altitude  # Arbitrary padding of 50%
+    return min(map_radius, max_map_radius)
 
 
 class GeoValueError(ValueError):

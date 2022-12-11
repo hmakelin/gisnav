@@ -33,7 +33,7 @@ from geopandas import GeoSeries
 from shapely.geometry import box
 
 from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
-from gisnav.geo import GeoPoint, GeoTrapezoid, GeoValueError
+from gisnav.geo import GeoPt, GeoTrapezoid, GeoValueError
 
 from geographic_msgs.msg import GeoPoint as ROSGeoPoint
 
@@ -50,7 +50,7 @@ class Position:
     .. note::
         (x, y, z) coordinates are in ENU frame
     """
-    xy: GeoPoint                    # XY coordinates (e.g. longitude & latitude in WGS84)
+    xy: GeoPt                    # XY coordinates (e.g. longitude & latitude in WGS84)
     altitude: Altitude
     attitude: Optional[Attitude]    # attitude in NED frame
     timestamp: Optional[int]        # Reference timestamp of position
@@ -327,7 +327,7 @@ class Snapshot:
     attitude: Optional[Attitude]
     gimbal_attitude: Optional[Attitude]
     gimbal_set_attitude: Optional[Attitude]
-    global_position: Optional[GeoPoint]
+    global_position: Optional[GeoPt]
     altitude: Optional[Altitude]
     home_altitude: Optional[Altitude]
     terrain_altitude: Optional[Altitude]
@@ -379,7 +379,7 @@ class FOV:
     """Camera field of view related attributes"""
     fov_pix: np.ndarray
     fov: Optional[GeoTrapezoid]
-    c: GeoPoint
+    c: GeoPt
     c_pix: np.ndarray
     scaling: float = field(init=False)
 
@@ -449,7 +449,7 @@ class FixedCamera:
             fov = FOV(fov_pix=fov_pix,
                       fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),
                       c_pix=c_pix,
-                      c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
+                      c=GeoPt(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                       )
             return fov
         except GeoValueError as _:
@@ -543,7 +543,7 @@ class FixedCamera:
             home=None  # TODO
         )
         position = Position(
-            xy=GeoPoint(lon, lat, crs),  # lon-lat order
+            xy=GeoPt(lon, lat, crs),  # lon-lat order
             altitude=altitude,
             attitude=self._estimate_attitude(),
             timestamp=self.image_pair.qry.timestamp

@@ -11,7 +11,7 @@ import io
 from ament_index_python.packages import get_package_share_directory
 share_dir = get_package_share_directory('gisnav')
 
-from .bridge_node import BridgeNode
+from .px4_node import PX4Node
 from .mock_gps_node import MockGPSNode
 from .map_node import MapNode
 from .bbox_node import BBoxNode
@@ -22,8 +22,8 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
     """Spins up a ROS 2 node
 
     :param constructor: Node constructor
-    :param *args: Constructor args
-    :param **kwargs: Constructor kwargs
+    :param *args: Node constructor args
+    :param **kwargs: Node constructor kwargs
     :return:
     """
     if __debug__:
@@ -53,9 +53,9 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         rclpy.shutdown()
 
 
-def run_bridge_node():
-    """Spins up a :class:`.BridgeNode`"""
-    _run(BridgeNode, 'bridge_node')
+def run_px4_node():
+    """Spins up a :class:`.PX4Node`"""
+    _run(PX4Node, 'px4_node')
 
 
 def run_mock_gps_node():

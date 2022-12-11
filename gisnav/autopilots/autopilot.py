@@ -10,7 +10,7 @@ from pygeodesy.geoids import GeoidPGM
 from sensor_msgs.msg import Image, CameraInfo
 
 from gisnav.data import Attitude, CameraData, ImageData, Dim, Altitude, Snapshot, Position
-from gisnav.geo import GeoPoint
+from gisnav.geo import GeoPt
 from gisnav.assertions import assert_type
 
 
@@ -268,8 +268,8 @@ class Autopilot(ABC):
 
     @property
     @abstractmethod
-    def global_position(self) -> Optional[GeoPoint]:
-        """Vehicle global position as a :class:`.GeoPoint`"""
+    def global_position(self) -> Optional[GeoPt]:
+        """Vehicle global position as a :class:`.GeoPt`"""
         pass
 
     @property

@@ -186,8 +186,8 @@ class PoseEstimationNode(_CameraSubscriberNode):
                 self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
                 return None
             else:
-                if self._vehicle_attitude is not None:
-                    vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_attitude))
+                if self._vehicle_geopose is not None:
+                    vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
                     vehicle_attitude = vehicle_attitude.as_rotation()
                     vehicle_attitude *= Rotation.from_euler('XYZ', [0, -np.pi / 2, 0])
                     # Need coordinates in image frame, not NED
@@ -223,7 +223,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
             else:
                 self.get_logger().debug(f'Assuming zero yaw relative to vehicle body for static nadir-facing camera.')
                 assert self._vehicle_geopose is not None
-                vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.orientation))
+                vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
                 camera_yaw = vehicle_attitude.yaw
 
         return ContextualMapData(rotation=camera_yaw, map_data=self._map, crop=self.img_dim,
@@ -437,7 +437,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
                                        'static camera.')
                 return False
 
-            vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.orienation))
+            vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
             # Add vehicle roll & pitch (yaw handled separately through map rotation)
             r_guess = Attitude(Rotation.from_euler('XYZ', [vehicle_att.roll, vehicle_att.pitch - np.pi / 2, 0])
                                .as_quat()).to_esd().as_rotation()
@@ -497,7 +497,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
                     self.get_logger().warn('Vehicle geopose was not available, assuming static camera pitch too high.')
                     return True
                 else:
-                    vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.orienation))
+                    vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
                     pitch = max(vehicle_att.pitch, vehicle_att.roll)
 
         assert pitch is not None

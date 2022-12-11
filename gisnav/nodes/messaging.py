@@ -122,9 +122,9 @@ def wxyz_to_xyzw_q(q: np.ndarray) -> np.ndarray:
 
 
 def geopoint_to_geopt(msg: Union[GeoPoint, GeoPointStamped]) -> GeoPt:
-    """Convert :class:`geographic_msgs.msg.GeoPoint` and :class:`geographic_msgs.msg.GeoPointStamped` to :class:`.GeoPt`
+    """Convert :class:`geographic_msgs.msg.GeoPoint` or :class:`geographic_msgs.msg.GeoPointStamped` to :class:`.GeoPt`
 
-    :param q: ROS GeoPoint message
+    :param msg: ROS GeoPoint(Stamped) message
     :return: GeoPt instance
     """
     if isinstance(msg, GeoPoint):

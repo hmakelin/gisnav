@@ -8,7 +8,6 @@ pdata = PackageData.parse_package_data(os.path.abspath('package.xml'))
 # Setup packages depending on what submodules have been downloaded
 packages_ = [
     pdata.package_name,
-    pdata.package_name + '.autopilots',
     pdata.package_name + '.pose_estimators',
     pdata.package_name + '.nodes',
     pdata.package_name + '.nodes.base'
@@ -63,6 +62,7 @@ setup(
     entry_points={
         'console_scripts': [
             'px4_node = gisnav.nodes:run_px4_node',
+            'ardupilot_node = gisnav.nodes:run_ardupilot_node',
             'mavros_node = gisnav.nodes:run_mavros_node',
             'mock_gps_node = gisnav.nodes:run_mock_gps_node',
             'map_node = gisnav.nodes:run_map_node',

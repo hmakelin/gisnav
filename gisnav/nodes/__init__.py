@@ -12,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 share_dir = get_package_share_directory('gisnav')
 
 from .px4_node import PX4Node
+from .ardupilot_node import ArduPilotNode
 from .mock_gps_node import MockGPSNode
 from .map_node import MapNode
 from .bbox_node import BBoxNode
@@ -56,6 +57,11 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
 def run_px4_node():
     """Spins up a :class:`.PX4Node`"""
     _run(PX4Node, 'px4_node')
+
+
+def run_ardupilot_node():
+    """Spins up a :class:`.ArduPilotNode`"""
+    _run(ArduPilotNode, 'ardupilot_node')
 
 
 def run_mock_gps_node():

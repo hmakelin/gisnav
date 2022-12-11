@@ -23,10 +23,6 @@ class PX4Node(_AutopilotNode):
         does not publish the actual attitude. The set attitude does not match actual attitude in situations where
         gimbal has not yet stabilized.
     """
-
-    # Should not need anything but these PX4 messages to implement parent :class:`._AutopilotNode` computed attributes
-    __slots__ = 'vehicle_global_position', 'vehicle_local_position', 'vehicle_attitude', 'gimbal_device_set_attitude'
-
     def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node
 

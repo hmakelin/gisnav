@@ -38,10 +38,10 @@ ROS_TOPIC_ORTHOIMAGE = 'gisnav/orthoimage_3d'
 """ROS publish topic for :class:`.OrthoImage3D` message"""
 
 ROS_TOPIC_TERRAIN_ALTITUDE = 'gisnav/terrain_altitude'
-"""ROS publish topic for :class:`.OrthoImage3D` message"""
+"""ROS publish topic for :class:`mavros_msgs.msg.Altitude` message"""
 
 ROS_TOPIC_TERRAIN_GEOPOINT = 'gisnav/terrain_geopoint'
-"""ROS publish topic for :class:`.OrthoImage3D` message"""
+"""ROS publish topic for :class:`geographic_msgs.msg.GeoPointStamped` message"""
 
 ROS_TOPIC_EGM96_HEIGHT = 'gisnav/egm96_height'
 """ROS publish topic for EGM96 ellipsoid height :class:`std_msgs.msg.Float32` message"""

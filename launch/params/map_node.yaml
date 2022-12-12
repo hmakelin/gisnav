@@ -2,7 +2,7 @@ map_node:
   ros__parameters:
     layers: ['imagery']
     dem_layers: ['osm-buildings']
-    srs: 'EPSG:4326'
+    # srs: 'EPSG:4326'  # default value, disabled for testing purposes
     image_format: 'image/jpeg'
     map_update_overlay_threshold: 0.85
     max_map_radius: 1000

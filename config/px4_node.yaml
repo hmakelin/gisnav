@@ -1,5 +1,0 @@
-px4_node:
-  ros__parameters:
-    map_update:
-      max_pitch: 30  # Applies if gimbal_projection: True, used by _should_update_map
-

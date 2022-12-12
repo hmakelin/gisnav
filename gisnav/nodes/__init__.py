@@ -81,4 +81,4 @@ def run_map_node():
 
 def run_pose_estimation_node():
     """Spins up a :class:`.PoseEstimationNode`"""
-    _run(PoseEstimationNode, 'pose_estimation_node', 'config/loftr_params.yaml', share_dir)
+    _run(PoseEstimationNode, 'pose_estimation_node', 'launch/params/loftr_params.yaml', share_dir)

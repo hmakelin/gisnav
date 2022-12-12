@@ -1,6 +1,0 @@
-bbox_node:
-  ros__parameters:
-    gimbal_projection: True
-    max_map_radius: 1000
-    static_camera: False  # set to True when using MAVROS adapter (gisnav-docker ArduPilot simulation has static camera)
-    export_projection: ''

@@ -1,5 +1,6 @@
 """Abstract base class for all nodes implementing shared logic"""
 from abc import ABC
+from typing import Union, List, Tuple
 import time
 
 from rclpy.node import Node
@@ -32,12 +33,12 @@ class _BaseNode(ABC, Node):
         """Returns system time in microseconds"""
         return int(time.time_ns() / 1e3)
 
-    def __declare_ros_params(self, ros_params: dict) -> None:
+    def __declare_ros_params(self, ros_params: List[Tuple[str, Union[int, float, str, bool, List[str]]]]) -> None:
         """Declares ROS parameters
 
-        Does not override ROS parameters that are already declared (e.g. from YAML file on launch)
+        Does not override ROS parameters that are already declared (e.g. from YAML file on launch).
 
-        :param: Dictionary of ROS parameters
+        :param ros_params: List of tuples containing ROS parameter name and default value
         """
         # Declare parameters one by one because declare_parameters will not declare remaining parameters if it
         # raises a ParameterAlreadyDeclaredException

@@ -234,22 +234,9 @@ class BBoxNode(_CameraSubscriberNode):
         :param xy: Camera position
         :return: Center of the projected FOV, or None if not available
         """
-        static_camera = self.get_parameter('static_camera').get_parameter_value().bool_value
-
         if self._gimbal_quaternion is None:
-            if not static_camera:
-                self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
-                return None
-            else:
-                if self._vehicle_attitude is not None:
-                    attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.orientation))
-                    attitude = attitude.as_rotation()
-                    attitude *= Rotation.from_euler('XYZ', [0, -np.pi/2, 0])
-                    gimbal_attitude = Attitude(attitude.as_quat()).to_esd().r
-                else:
-                    self.get_logger().warn('Vehicle attitude not available, will not provide pose guess for static '
-                                           'camera.')
-                    return None
+            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
+            return None
         else:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion))
             gimbal_attitude = gimbal_attitude.to_esd()  # Need coordinates in image frame, not NED

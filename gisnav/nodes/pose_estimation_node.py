@@ -35,9 +35,6 @@ class PoseEstimationNode(_CameraSubscriberNode):
     # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
     _IMAGE_ENCODING = 'bgr8'
 
-    ROS_D_STATIC_CAMERA = False
-    """Default value for static camera flag (true for static camera facing down from vehicle body)"""
-
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
     """Default filename for exporting GeoJSON containing estimated field of view and position
 
@@ -59,7 +56,6 @@ class PoseEstimationNode(_CameraSubscriberNode):
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
 
     _ROS_PARAMS_DEFAULTS = [
-        ('static_camera', ROS_D_STATIC_CAMERA),
         ('max_pitch', ROS_D_MISC_MAX_PITCH),
         ('min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
         ('attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
@@ -75,7 +71,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
         :param package_share_dir: Package shared directory
         """
         super().__init__(name, ros_param_defaults=self._ROS_PARAMS_DEFAULTS)
-        self._package_share_dir = package_share_dir  # Needed for loading pose estimator config file
+        self._package_share_dir = package_share_dir  # Needed for loading pose estimator params file
         params = self._load_config(params_file)
         module_name, class_name = params.get('class_name', '').rsplit('.', 1)
         pose_estimator: PoseEstimator = self._import_class(class_name, module_name)
@@ -146,7 +142,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
         return imported_class
 
     def _load_config(self, yaml_file: str) -> dict:
-        """Loads config from the provided YAML file
+        """Loads params from the provided YAML file
 
         :param yaml_file: Path to the yaml file
         :return: The loaded yaml file as dictionary
@@ -156,10 +152,10 @@ class PoseEstimationNode(_CameraSubscriberNode):
             # noinspection PyBroadException
             try:
                 config = yaml.safe_load(f)
-                self.get_logger().info(f'Loaded config:\n{config}.')
+                self.get_logger().info(f'Loaded params:\n{config}.')
                 return config
             except Exception as e:
-                self.get_logger().error(f'Could not load config file {yaml_file} because of unexpected exception.')
+                self.get_logger().error(f'Could not load params file {yaml_file} because of unexpected exception.')
                 raise
 
     @property
@@ -180,23 +176,9 @@ class PoseEstimationNode(_CameraSubscriberNode):
             Should be roughly same as rotation matrix stored in :py:attr:`._pose_guess`, even though it is derived via
             a different route. If gimbal is not stabilized to its set position, the rotation matrix will be different.
         """
-        static_camera = self.get_parameter('static_camera').get_parameter_value().bool_value
         if self._gimbal_quaternion is None:
-            if not static_camera:
-                self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
-                return None
-            else:
-                if self._vehicle_geopose is not None:
-                    vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
-                    vehicle_attitude = vehicle_attitude.as_rotation()
-                    vehicle_attitude *= Rotation.from_euler('XYZ', [0, -np.pi / 2, 0])
-                    # Need coordinates in image frame, not NED
-                    vehicle_attitude = Attitude(vehicle_attitude.as_quat()).to_esd()
-                    return vehicle_attitude.r
-                else:
-                    self.get_logger().warn('Vehicle attitude not available, will not provide pose guess for static '
-                                           'camera.')
-                    return None
+            self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
+            return None
         else:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion))
             gimbal_attitude = gimbal_attitude.to_esd()  # Need coordinates in image frame, not NED
@@ -208,23 +190,15 @@ class PoseEstimationNode(_CameraSubscriberNode):
 
         :return: Rotated map with associated metadata, or None if not available
         """
-        static_camera = self.get_parameter('static_camera').get_parameter_value().bool_value
-
         # Get cropped and rotated map
-        if self._gimbal_quaternion is not None and not static_camera:
+        if self._gimbal_quaternion is not None:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion), extrinsic=True)
             camera_yaw = gimbal_attitude.yaw
             assert_type(camera_yaw, float)
             assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
         else:
-            if not static_camera:
-                self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
-                return
-            else:
-                self.get_logger().debug(f'Assuming zero yaw relative to vehicle body for static nadir-facing camera.')
-                assert self._vehicle_geopose is not None
-                vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
-                camera_yaw = vehicle_attitude.yaw
+            self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
+            return None
 
         return ContextualMapData(rotation=camera_yaw, map_data=self._map, crop=self.img_dim,
                                  altitude_scaling=self._altitude_scaling)
@@ -430,29 +404,16 @@ class PoseEstimationNode(_CameraSubscriberNode):
         the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
         estimates.
         """
-        static_camera = self.get_parameter('static_camera').get_parameter_value().bool_value
-        if static_camera:
-            if self._vehicle_geopose is None:
-                self.get_logger().warn('Vehicle geopose was not available, skipping post-estimation validity check for '
-                                       'static camera.')
-                return False
-
-            vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
-            # Add vehicle roll & pitch (yaw handled separately through map rotation)
-            r_guess = Attitude(Rotation.from_euler('XYZ', [vehicle_att.roll, vehicle_att.pitch - np.pi / 2, 0])
-                               .as_quat()).to_esd().as_rotation()
-
-        if r_guess_ is None and not static_camera:
+        if r_guess_ is None:
             self.get_logger().warn('Reference gimbal attitude (r_guess) was not available, cannot do post-estimation '
                                    'validity check.')
             return False
 
-        if not static_camera:
-            r_guess = Rotation.from_matrix(r_guess_)
-            # Adjust for map rotation
-            camera_yaw = fixed_camera.image_pair.ref.rotation
-            camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
-            r_guess *= camera_yaw
+        r_guess = Rotation.from_matrix(r_guess_)
+        # Adjust for map rotation
+        camera_yaw = fixed_camera.image_pair.ref.rotation
+        camera_yaw = Rotation.from_euler('xyz', [0, 0, camera_yaw], degrees=False)
+        r_guess *= camera_yaw
 
         r_estimate = Rotation.from_matrix(fixed_camera.pose.r)
 
@@ -472,33 +433,21 @@ class PoseEstimationNode(_CameraSubscriberNode):
         """Returns True if (set) camera roll or pitch exceeds given limit OR camera pitch is unknown
 
         Used to determine whether camera roll or pitch is too high up from nadir to make matching against a map
-        not worthwhile. Checks roll for static camera, but assumes zero roll for 2-axis gimbal (static_camera: False).
-
-        .. note::
-            Uses actual vehicle attitude (instead of gimbal set attitude) if static_camera ROS param is True
+        not worthwhile.
 
         :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        static_camera = self.get_parameter('static_camera').get_parameter_value().bool_value
         pitch = None
-        if self._gimbal_quaternion is not None and not static_camera:
+        if self._gimbal_quaternion is not None:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion), extrinsic=True)
             # TODO: do not assume zero roll here - camera attitude handling needs refactoring
             # +90 degrees to re-center from FRD frame to nadir-facing camera as origin for max pitch comparison
             pitch = np.degrees(gimbal_attitude.pitch) + 90
         else:
-            if not static_camera:
-                self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
-                return True
-            else:
-                if self._vehicle_geopose is None:
-                    self.get_logger().warn('Vehicle geopose was not available, assuming static camera pitch too high.')
-                    return True
-                else:
-                    vehicle_att = Attitude(q=messaging.as_np_quaternion(self._vehicle_geopose.pose.orientation))
-                    pitch = max(vehicle_att.pitch, vehicle_att.roll)
+            self.get_logger().warn('Gimbal attitude was not available, assuming camera pitch too high.')
+            return True
 
         assert pitch is not None
         if pitch > max_pitch:

@@ -30,7 +30,7 @@ class SuperGluePoseEstimator(KeypointPoseEstimator):
         so that attributes initialized here are also available for :meth:`.worker`.
 
         :param min_matches: Minimum required keypoint matches (should be >= 4)
-        :param params: SuperGluePoseEstimator config to be passed to :class:`models.matching.Matching`
+        :param params: SuperGluePoseEstimator params to be passed to :class:`models.matching.Matching`
         """
         super(SuperGluePoseEstimator, self).__init__(min_matches)
         self._device = SuperGluePoseEstimator.TorchDevice.CUDA.value if torch.cuda.is_available() else \

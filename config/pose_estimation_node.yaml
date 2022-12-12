@@ -1,7 +1,0 @@
-pose_estimation_node:
-  ros__parameters:
-    export_position: ''
-    max_pitch: 30  # 30  # Used by _should_match
-    min_match_altitude: 50
-    static_camera: False
-    attitude_deviation_threshold: 10 # degrees

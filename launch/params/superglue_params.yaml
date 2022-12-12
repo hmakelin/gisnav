@@ -1,5 +1,5 @@
 class_name: 'gisnav.pose_estimators.superglue_pose_estimator.SuperGluePoseEstimator'
-args: # Recommended outdoor config from SuperGluePoseEstimator repo's README.md
+args: # Recommended outdoor params from SuperGluePoseEstimator repo's README.md
   - 15  # _min_matches
   - superpoint:
       nms_radius: 3

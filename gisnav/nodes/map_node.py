@@ -1,8 +1,10 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
+import time
 from typing import Optional, Tuple, get_args
 
 import numpy as np
 import cv2
+import requests
 from owslib.wms import WebMapService
 from owslib.util import ServiceException
 from shapely.geometry import box
@@ -133,12 +135,12 @@ class MapNode(_CameraSubscriberNode):
     ]
     """ROS parameters used by this node to declare"""
 
+    _WMS_CONNECTION_ATTEMPT_DELAY = 10
+    """Delay in seconds until a new WMS connection is attempted in case of connection error"""
+
     def __init__(self, name: str, url: str = DEFAULT_URL, version: str = DEFAULT_VERSION,
                  timeout: int = DEFAULT_TIMEOUT, publish_rate: int = DEFAULT_PUBLISH_RATE):
         super().__init__(name, ros_param_defaults=self._ROS_PARAMS_DEFAULTS)
-
-        self._cv_bridge = CvBridge()
-        self._wms_client = WebMapService(url, version=version, timeout=timeout)
 
         # Publishers
         self._terrain_altitude_pub = self.create_publisher(Altitude,
@@ -182,6 +184,20 @@ class MapNode(_CameraSubscriberNode):
 
         # TODO: make configurable / use shared folder home path instead
         self._egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
+
+        self._cv_bridge = CvBridge()
+
+        self._wms_client = None
+        while self._wms_client is None:
+            try:
+                self.get_logger().error(f'Connecting to WMS endpoint...')
+                self._wms_client = WebMapService(url, version=version, timeout=timeout)
+            except requests.exceptions.ConnectionError as e:
+                self.get_logger().error(f'Could not connect to WMS endpoint, trying again in '
+                                        f'{self._WMS_CONNECTION_ATTEMPT_DELAY}s...')
+                time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY)
+        else:
+            self.get_logger().info(f'WMS client setup complete.')
 
     # region Properties
     @property

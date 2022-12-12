@@ -10,7 +10,9 @@ packages_ = [
     pdata.package_name,
     pdata.package_name + '.pose_estimators',
     pdata.package_name + '.nodes',
-    pdata.package_name + '.nodes.base'
+    pdata.package_name + '.nodes.base',
+    'test',
+    'test.launch'
 ]
 package_dir_ = {}
 package_data_ = {}
@@ -48,7 +50,7 @@ setup(
         ('share/' + pdata.package_name, ['package.xml']),
         # Need to download weights separately, here in weights folder
         (os.path.join('share', pdata.package_name, 'weights'), glob('weights/*.ckpt')),
-        (os.path.join('share', pdata.package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', pdata.package_name, 'launch/params'), glob('launch/params/*.yaml')),
         (os.path.join('share', pdata.package_name, 'launch'), glob('launch/*.launch*')),
     ],
     zip_safe=True,

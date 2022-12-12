@@ -11,6 +11,7 @@ from sensor_msgs.msg import NavSatFix
 
 from . import messaging
 from .base.autopilot_node import _AutopilotNode
+from ..data import Attitude
 
 
 class ArduPilotNode(_AutopilotNode):
@@ -157,8 +158,21 @@ class ArduPilotNode(_AutopilotNode):
 
     @property
     def gimbal_quaternion(self) -> Optional[Quaternion]:
-        """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message or None if not available"""
-        return None  # TODO
+        """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message or None if not available
+
+        .. note::
+            Current implementation assumes static nadir facing camera
+        """
+        # TODO: assumes static nadir facing camera, do proper implementation
+        if self.vehicle_geopose is not None:
+            vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation))
+            vehicle_attitude = vehicle_attitude.as_rotation()
+            gimbal_attitude = vehicle_attitude * Rotation.from_euler('XYZ', [0, -np.pi / 2, 0])
+            gimbal_attitude = messaging.as_ros_quaternion(gimbal_attitude.as_quat())
+            return gimbal_attitude
+        else:
+            self.get_logger().warn('Vehicle GeoPose unknown, cannot determine gimbal quaternion for static camera.')
+            return None
 
     @property
     def home_geopoint(self) -> Optional[GeoPointStamped]:

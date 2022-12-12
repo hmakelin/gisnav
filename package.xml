@@ -18,6 +18,7 @@
   <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>geographic_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>

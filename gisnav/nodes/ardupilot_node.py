@@ -57,6 +57,7 @@ class ArduPilotNode(_AutopilotNode):
         self._vehicle_nav_sat_fix = msg
         self.publish_vehicle_geopose()
         self.publish_vehicle_altitude()
+        self.publish_gimbal_quaternion()  # TODO: temporarily assuming static camera so publishing gimbal quat here
 
     def _vehicle_pose_stamped_callback(self, msg: PoseStamped) -> None:
         """Handles latest :class:`mavros_msgs.msg.PoseStamped` message
@@ -102,16 +103,15 @@ class ArduPilotNode(_AutopilotNode):
             latitude, longitude = self._vehicle_nav_sat_fix.latitude, self._vehicle_nav_sat_fix.longitude
             altitude = self._vehicle_nav_sat_fix.altitude
 
-            # Attitude
-            attitude_ned_q = np.array([self._vehicle_pose_stamped.pose.orientation.y,
-                                       self._vehicle_pose_stamped.pose.orientation.x,
-                                       -self._vehicle_pose_stamped.pose.orientation.z,
-                                       self._vehicle_pose_stamped.pose.orientation.w])
-
             # Convert ENU->NED + re-center yaw
-            attitude_ned = Rotation.from_quat(attitude_ned_q) * Rotation.from_rotvec(np.array([0, 0, np.pi / 2]))
-            #attitude_ned = Attitude(attitude_ned.as_quat(), extrinsic=True)
-            orientation = messaging.as_ros_quaternion(attitude_ned.as_quat())
+            enu_to_ned = Rotation.from_euler('XYZ', np.array([np.pi, 0, np.pi / 2]))
+            attitude_ned = Rotation.from_quat(messaging.as_np_quaternion(self._vehicle_pose_stamped.pose.orientation)) \
+                * enu_to_ned.inv()
+            rpy = attitude_ned.as_euler('XYZ', degrees=True)
+            rpy[0] = (rpy[0] + 180) % 360
+            attitude_ned = Rotation.from_euler('XYZ', rpy, degrees=True)
+            attitude_ned = attitude_ned.as_quat()
+            orientation = messaging.as_ros_quaternion(attitude_ned)
 
             return GeoPoseStamped(header=messaging.create_header('base_link'),
                                   pose=GeoPose(
@@ -165,11 +165,11 @@ class ArduPilotNode(_AutopilotNode):
         """
         # TODO: assumes static nadir facing camera, do proper implementation
         if self.vehicle_geopose is not None:
-            vehicle_attitude = Attitude(q=messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation))
-            vehicle_attitude = vehicle_attitude.as_rotation()
-            gimbal_attitude = vehicle_attitude * Rotation.from_euler('XYZ', [0, -np.pi / 2, 0])
-            gimbal_attitude = messaging.as_ros_quaternion(gimbal_attitude.as_quat())
-            return gimbal_attitude
+            vehicle_attitude = Rotation.from_quat(messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation))
+            gimbal_rpy = vehicle_attitude.as_euler('xyz', degrees=True)
+            gimbal_rpy[1] -= 90
+            gimbal_attitude = Rotation.from_euler('xyz', gimbal_rpy, degrees=True)
+            return messaging.as_ros_quaternion(gimbal_attitude.as_quat())
         else:
             self.get_logger().warn('Vehicle GeoPose unknown, cannot determine gimbal quaternion for static camera.')
             return None

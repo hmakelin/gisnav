@@ -193,9 +193,19 @@ class PoseEstimationNode(_CameraSubscriberNode):
         # Get cropped and rotated map
         if self._gimbal_quaternion is not None:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion), extrinsic=True)
+            roll = gimbal_attitude.roll
             camera_yaw = gimbal_attitude.yaw
+            if abs(roll) > np.pi / 2:
+                # Assume camera pitch (NED frame) is lower than -90 degrees
+                # A naive interpretation of the Euler angles would assume the camera (and the vehicle) is upside down
+                # cause the map being rotated incorrectly by 180 degrees compared to what is needed for pose estimation
+                # This might happen e.g. if gimbal has been pointing straight down nadir and vehicle body has suddenly
+                # gained additional negative pitch before gimbal has had time to stabilize
+                self.get_logger().debug(f'Gimbal absolute Euler roll angle over 90 degrees: assuming gimbal is not '
+                                        f'upside down and that gimbal absolute pitch is over 90 degrees instead.')
+                camera_yaw = (camera_yaw + np.pi / 2) % (2 * np.pi)
             assert_type(camera_yaw, float)
-            assert -np.pi <= camera_yaw <= np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-pi, pi] expected).'
+            assert -2 * np.pi <= camera_yaw <= 2 * np.pi, f'Unexpected gimbal yaw value: {camera_yaw} ([-2*pi, 2*pi] expected).'
         else:
             self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
             return None
@@ -269,7 +279,7 @@ class PoseEstimationNode(_CameraSubscriberNode):
                 pose = Pose(*pose)
                 self._post_process_pose(pose, image_pair)
             else:
-                self.get_logger().warn(f'Worker did not return a pose, skipping this frame.')
+                self.get_logger().warn(f'Could not estimate a pose, skipping this frame.')
                 return None
 
     def _orthoimage_3d_callback(self, msg: OrthoImage3D) -> None:

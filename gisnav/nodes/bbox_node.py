@@ -235,7 +235,7 @@ class BBoxNode(_CameraSubscriberNode):
         :return: Center of the projected FOV, or None if not available
         """
         if self._gimbal_quaternion is None:
-            self.get_logger().warn('Gimbal set attitude not available, cannot project gimbal FOV.')
+            self.get_logger().warn('Gimbal quaternion not available, cannot project gimbal FOV.')
             return None
         else:
             gimbal_attitude = Attitude(q=messaging.as_np_quaternion(self._gimbal_quaternion))

@@ -2,7 +2,7 @@ https://user-images.githubusercontent.com/22712178/187902004-480397cc-460f-4d57-
 
 # Introduction
 
-> **Warning** Do not use this software for real drone flights. This software is untested and has only been demonstrated
+> **Warning** Do not use this software for real drone flights. GISNav is untested and has only been demonstrated
 > in a software-in-the-loop (SITL) simulation environment.
 
 GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones **in a simulation environment**.

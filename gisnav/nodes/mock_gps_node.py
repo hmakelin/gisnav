@@ -17,34 +17,41 @@ from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
 
 from . import messaging
-from gisnav.nodes.base.base_node import _BaseNode
+from gisnav.nodes.base.base_node import BaseNode
 from gisnav.data import Attitude
 from gisnav.assertions import assert_type
 
 
-class MockGPSNode(_BaseNode):
+class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
-    UDP_IP = "127.0.0.1"
+    ROS_D_UDP_IP = "127.0.0.1"
     """MAVProxy GPSInput plugin default host"""
 
-    UDP_PORT = 25100
+    ROS_D_UDP_PORT = 25100
     """MAVProxy GPSInput plugin default port"""
 
-    def __init__(self, name: str, px4_micrortps: bool = True, udp_ip: str = UDP_IP, udp_port: int = UDP_PORT):
+    ROS_D_PX4_MICRORTPS = True
+    """True for PX4 microRTPS bridge, False for ArduPilot MAVROS"""
+
+    ROS_PARAM_DEFAULTS = [
+        ('udp_ip', ROS_D_UDP_IP, True),
+        ('udp_port', ROS_D_UDP_PORT, True),
+        ('px4_micrortps', ROS_D_PX4_MICRORTPS, True),
+    ]
+    """List containing ROS parameter name, default value and read_only flag tuples"""
+
+    def __init__(self, name: str):
         """Class initializer
 
         :param name: Node name
-        :param px4_micrortps: Set True to use PX4 microRTPS bridge, MAVROS otherwise
-        :param udp_ip: MAVProxy GPSInput plugin host (ignored if px4_micrortps == True)
-        :param udp_port: MAVProxy GPSInput plugin port (ignored if px4_micrortps == True)
         """
         super().__init__(name)
 
         # MAVROS only
-        self._udp_ip = udp_ip
-        self._udp_port = udp_port
+        self._udp_ip = self.get_parameter('udp_ip').get_parameter_value().string_value
+        self._udp_port = self.get_parameter('udp_port').get_parameter_value().integer_value
 
-        self._px4_micrortps = px4_micrortps
+        self._px4_micrortps = self.get_parameter('px4_micrortps').get_parameter_value().bool_value
         if self._px4_micrortps:
             self._mock_gps_pub = self.create_publisher(SensorGps,
                                                        messaging.ROS_TOPIC_SENSOR_GPS,

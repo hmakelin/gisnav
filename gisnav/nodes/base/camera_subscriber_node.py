@@ -6,12 +6,12 @@ import numpy as np
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 
-from .base_node import _BaseNode
+from .base_node import BaseNode
 from gisnav.data import Dim, CameraData
 from gisnav.assertions import assert_type
 
 
-class _CameraSubscriberNode(_BaseNode):
+class CameraSubscriberNode(BaseNode):
     """Abstract base class for all nodes that subscribe to the camera info and image topics
 
     This class is intended to be extended by nodes in the same package and should not be imported directly in any other
@@ -28,13 +28,12 @@ class _CameraSubscriberNode(_BaseNode):
     ROS_IMAGE_TOPIC = 'camera/image_raw'
     """:class:`sensor_msgs.msg.Image` topic to subscribe to"""
 
-    def __init__(self, name: str, ros_param_defaults: dict = None):
+    def __init__(self, name: str):
         """Initializes the node
 
         :param name: Node name
-        :param ros_param_defaults: ROS parameters and default values to declare on initialization
         """
-        super().__init__(name, ros_param_defaults=ros_param_defaults)
+        super().__init__(name)
 
         self.__camera_info = None
         self.__camera_info_sub = self.create_subscription(CameraInfo,

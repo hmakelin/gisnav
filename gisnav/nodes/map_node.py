@@ -1,6 +1,6 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
-from typing import Optional, Tuple, get_args
+from typing import Optional, Tuple, List, Union, get_args
 
 import numpy as np
 import cv2
@@ -19,13 +19,13 @@ from cv_bridge import CvBridge
 
 from gisnav_msgs.msg import OrthoImage3D
 from . import messaging
-from .base.camera_subscriber_node import _CameraSubscriberNode
+from .base.camera_subscriber_node import CameraSubscriberNode
 from ..assertions import assert_len, assert_type
 from ..data import BBox, MapData, Img
 from ..geo import GeoSquare, GeoPt, get_dynamic_map_radius
 
 
-class MapNode(_CameraSubscriberNode):
+class MapNode(CameraSubscriberNode):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic and provides them through a service
 
     Downloads and stores orthoimage and optional DEM from WMS for location of projected camera field of view.
@@ -45,16 +45,16 @@ class MapNode(_CameraSubscriberNode):
         ``requests``. They are therefore handled as unexpected errors.
     """
 
-    DEFAULT_URL = 'http://localhost:80/wms'
+    ROS_D_URL = 'http://localhost:80/wms'
     """Default WMS URL"""
 
-    DEFAULT_VERSION = '1.3.0'
+    ROS_D_VERSION = '1.3.0'
     """Default WMS version"""
 
-    DEFAULT_TIMEOUT = 10
+    ROS_D_TIMEOUT = 10
     """Default WMS GetMap request timeout in seconds"""
 
-    DEFAULT_PUBLISH_RATE = 1
+    ROS_D_PUBLISH_RATE = 1
     """Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
 
     ROS_D_LAYERS = ['imagery']
@@ -123,24 +123,31 @@ class MapNode(_CameraSubscriberNode):
     # Altitude in meters used for DEM request to get local origin elevation
     _DEM_REQUEST_ALTITUDE = 100
 
-    _ROS_PARAMS_DEFAULTS = [
-        ('layers', ROS_D_LAYERS),
-        ('styles', ROS_D_STYLES),
-        ('dem_layers', ROS_D_DEM_LAYERS),
-        ('dem_styles', ROS_D_DEM_STYLES),
-        ('srs', ROS_D_SRS),
-        ('transparency', ROS_D_IMAGE_TRANSPARENCY),
-        ('format', ROS_D_IMAGE_FORMAT),
-        ('map_overlap_update_threshold', ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD),
-    ]
-    """ROS parameters used by this node to declare"""
-
     _WMS_CONNECTION_ATTEMPT_DELAY = 10
     """Delay in seconds until a new WMS connection is attempted in case of connection error"""
 
-    def __init__(self, name: str, url: str = DEFAULT_URL, version: str = DEFAULT_VERSION,
-                 timeout: int = DEFAULT_TIMEOUT, publish_rate: int = DEFAULT_PUBLISH_RATE):
-        super().__init__(name, ros_param_defaults=self._ROS_PARAMS_DEFAULTS)
+    ROS_PARAM_DEFAULTS = [
+        ('url', ROS_D_URL, True),
+        ('version', ROS_D_VERSION, True),
+        ('timeout', ROS_D_TIMEOUT, True),
+        ('publish_rate', ROS_D_PUBLISH_RATE, True),
+        ('layers', ROS_D_LAYERS, False),
+        ('styles', ROS_D_STYLES, False),
+        ('dem_layers', ROS_D_DEM_LAYERS, False),
+        ('dem_styles', ROS_D_DEM_STYLES, False),
+        ('srs', ROS_D_SRS, False),
+        ('transparency', ROS_D_IMAGE_TRANSPARENCY, False),
+        ('format', ROS_D_IMAGE_FORMAT, False),
+        ('map_overlap_update_threshold', ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
+    ]
+    """List containing ROS parameter name, default value and read_only flag tuples"""
+
+    def __init__(self, name: str):
+        """Class initializer
+
+        :param name: Node name
+        """
+        super().__init__(name)
 
         # Publishers
         self._terrain_altitude_pub = self.create_publisher(Altitude,
@@ -174,6 +181,8 @@ class MapNode(_CameraSubscriberNode):
                                                            self._home_geopoint_callback,
                                                            QoSPresetProfiles.SENSOR_DATA.value)
 
+
+        publish_rate = self.get_parameter('publish_rate').get_parameter_value().integer_value
         self._publish_timer = self._create_publish_timer(publish_rate)
         self._ortho_image_3d_msg = None
 
@@ -187,6 +196,9 @@ class MapNode(_CameraSubscriberNode):
 
         self._cv_bridge = CvBridge()
 
+        url = self.get_parameter('url').get_parameter_value().string_value
+        version = self.get_parameter('version').get_parameter_value().string_value
+        timeout = self.get_parameter('timeout').get_parameter_value().integer_value
         self._wms_client = None
         while self._wms_client is None:
             try:

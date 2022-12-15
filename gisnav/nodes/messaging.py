@@ -51,8 +51,6 @@ ROS_TOPIC_GPS_INPUT = '/mavros/gps_input/gps_input'
 
 ROS_TOPIC_SENSOR_GPS = '/fmu/sensor_gps/in'
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages over PX4 microRTPS bridge"""
-
-
 # endregion ROS topic names
 
 

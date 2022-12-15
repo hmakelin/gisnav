@@ -1,5 +1,5 @@
 """Module that contains the PX4Node ROS 2 node."""
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -10,11 +10,11 @@ from mavros_msgs.msg import Altitude
 from px4_msgs.msg import VehicleAttitude, VehicleLocalPosition, VehicleGlobalPosition, GimbalDeviceSetAttitude
 
 from . import messaging
-from .base.autopilot_node import _AutopilotNode
+from .base.autopilot_node import AutopilotNode
 from ..assertions import assert_shape
 
 
-class PX4Node(_AutopilotNode):
+class PX4Node(AutopilotNode):
     """ROS 2 node that acts as an adapter for PX4's microRTPS bridge
 
     .. note::
@@ -23,6 +23,10 @@ class PX4Node(_AutopilotNode):
         does not publish the actual attitude. The set attitude does not match actual attitude in situations where
         gimbal has not yet stabilized.
     """
+
+    ROS_PARAM_DEFAULTS = []
+    """List containing ROS parameter name, default value and read_only flag tuples"""
+
     def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node
 

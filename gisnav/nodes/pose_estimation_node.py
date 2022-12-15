@@ -5,9 +5,10 @@ import yaml
 import numpy as np
 import traceback
 import importlib
-from typing import Optional, Union, get_args
+from typing import Optional, Union, List, Tuple, get_args
 
 import cv2
+from ament_index_python.packages import get_package_share_directory
 from scipy.spatial.transform import Rotation
 from rclpy.qos import QoSPresetProfiles
 from cv_bridge import CvBridge
@@ -20,7 +21,7 @@ from std_msgs.msg import Float32
 from gisnav_msgs.msg import OrthoImage3D
 
 from . import messaging
-from .base.camera_subscriber_node import _CameraSubscriberNode
+from .base.camera_subscriber_node import CameraSubscriberNode
 from ..pose_estimators.pose_estimator import PoseEstimator
 from ..assertions import assert_type, assert_ndim, assert_shape
 from ..data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, ContextualMapData, BBox, MapData, \
@@ -28,12 +29,15 @@ from ..data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, 
 from ..geo import GeoPt, GeoTrapezoid
 
 
-class PoseEstimationNode(_CameraSubscriberNode):
+class PoseEstimationNode(CameraSubscriberNode):
     """Publishes pose between two images"""
 
     # Encoding of input video (input to CvBridge)
     # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
     _IMAGE_ENCODING = 'bgr8'
+
+    ROS_D_POSE_ESTIMATOR_PARAMS = 'launch/params/pose_estimators/loftr_params.yaml'
+    """Default parameters for initializing :class:`.PoseEstimator`"""
 
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
     """Default filename for exporting GeoJSON containing estimated field of view and position
@@ -55,34 +59,37 @@ class PoseEstimationNode(_CameraSubscriberNode):
     ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
 
-    _ROS_PARAMS_DEFAULTS = [
-        ('max_pitch', ROS_D_MISC_MAX_PITCH),
-        ('min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE),
-        ('attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD),
-        ('export_position', ROS_D_DEBUG_EXPORT_POSITION),
+    ROS_PARAM_DEFAULTS = [
+        ('pose_estimator_params', ROS_D_POSE_ESTIMATOR_PARAMS, True),
+        ('max_pitch', ROS_D_MISC_MAX_PITCH, False),
+        ('min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE, False),
+        ('attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD, False),
+        ('export_position', ROS_D_DEBUG_EXPORT_POSITION, False),
     ]
-    """ROS parameters used by this node to declare"""
+    """List containing ROS parameter name, default value and read_only flag tuples"""
 
-    def __init__(self, name: str, params_file: str,  package_share_dir: str) -> None:
+    def __init__(self, name: str) -> None:
         """Node initializer
 
         :param name: Node name
-        :param params_file: Pose estimator params file
-        :param package_share_dir: Package shared directory
         """
-        super().__init__(name, ros_param_defaults=self._ROS_PARAMS_DEFAULTS)
-        self._package_share_dir = package_share_dir  # Needed for loading pose estimator params file
+        super().__init__(name)
+        self._package_share_dir = get_package_share_directory('gisnav')
+
+        # region setup pose estimator
+        params_file = self.get_parameter('pose_estimator_params').get_parameter_value().string_value
         params = self._load_config(params_file)
         module_name, class_name = params.get('class_name', '').rsplit('.', 1)
         pose_estimator: PoseEstimator = self._import_class(class_name, module_name)
         self._estimator = pose_estimator(*params.get('args', []))
+        # endregion setup pose estimator
 
         self._map = None
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # Subscribers
+        # region subscribers
         self._orthoimage_3d = None
         self._orthoimage_3d_sub = self.create_subscription(OrthoImage3D,
                                                            messaging.ROS_TOPIC_ORTHOIMAGE,
@@ -118,14 +125,16 @@ class PoseEstimationNode(_CameraSubscriberNode):
                                                            messaging.ROS_TOPIC_HOME_GEOPOINT,
                                                            self._home_geopoint_callback,
                                                            QoSPresetProfiles.SENSOR_DATA.value)
+        # endregion subscribers
 
-        # Publishers
+        # region publishers
         self._geopose_pub = self.create_publisher(GeoPoseStamped,
                                                   messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
                                                   QoSPresetProfiles.SENSOR_DATA.value)
         self._altitude_pub = self.create_publisher(Altitude,
                                                    messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
                                                    QoSPresetProfiles.SENSOR_DATA.value)
+        # endregion publishers
 
     def _import_class(self, class_name: str, module_name: str) -> type:
         """Dynamically imports class from given module if not yet imported

@@ -1,8 +1,7 @@
 """A node that publishes bounding box of field of view projected to ground from vehicle approximate location"""
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 from rclpy.qos import QoSPresetProfiles
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPointStamped, GeoPoseStamped
 from mavros_msgs.msg import Altitude
@@ -10,13 +9,13 @@ from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Image
 
 from . import messaging
-from .base.camera_subscriber_node import _CameraSubscriberNode
+from .base.camera_subscriber_node import CameraSubscriberNode
 from ..data import BBox, Pose, FixedCamera, Attitude, DataValueError, MapData, ImagePair, ImageData, Img, \
     ContextualMapData
 from ..geo import GeoPt as GeoPt, GeoSquare, get_dynamic_map_radius
 
 
-class BBoxNode(_CameraSubscriberNode):
+class BBoxNode(CameraSubscriberNode):
     """A node that publishes bounding box of field of view projected to ground
 
     This is the suggested bounding box for the next map update
@@ -42,19 +41,19 @@ class BBoxNode(_CameraSubscriberNode):
     Set to '' to disable
     """
 
-    _ROS_PARAM_DEFAULTS = [
-        ('gimbal_projection', ROS_D_GIMBAL_PROJECTION),
-        ('max_map_radius', ROS_D_MAX_MAP_RADIUS),
-        ('export_projection', ROS_D_DEBUG_EXPORT_PROJECTION),
+    ROS_PARAM_DEFAULTS = [
+        ('gimbal_projection', ROS_D_GIMBAL_PROJECTION, False),
+        ('max_map_radius', ROS_D_MAX_MAP_RADIUS, False),
+        ('export_projection', ROS_D_DEBUG_EXPORT_PROJECTION, False),
     ]
-    """ROS parameters used by this node to declare"""
+    """List containing ROS parameter name, default value and read_only flag tuples"""
 
     def __init__(self, name: str):
         """Class initializer
 
         :param name: Node name
         """
-        super().__init__(name, ros_param_defaults=self._ROS_PARAM_DEFAULTS)
+        super().__init__(name)
 
         # Subscribers
         self._vehicle_geopose = None

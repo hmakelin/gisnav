@@ -10,11 +10,11 @@ from mavros_msgs.msg import Altitude, HomePosition, MountControl
 from sensor_msgs.msg import NavSatFix
 
 from . import messaging
-from .base.autopilot_node import _AutopilotNode
+from .base.autopilot_node import AutopilotNode
 from ..data import Attitude
 
 
-class ArduPilotNode(_AutopilotNode):
+class ArduPilotNode(AutopilotNode):
     """ROS 2 node that acts as an adapter for ArduPilot vis MAVROS"""
 
     def __init__(self, name: str) -> None:

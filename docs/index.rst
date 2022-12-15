@@ -3,27 +3,38 @@ GISNav Developer Documentation
 #####################################
 Welcome to GISNav's developer documentation!
 
-This site contains the following pages:
+.. card:: Get Started
+    :link: pages/get_started.html
 
-* `Get Started <pages/get_started.html>`_
+    A quick demonstration of GNSS-free visual navigation with GISNav
 
-    A quick demonstration of GNSS-free visual navigation with GISNav's :class:`.MockGPSNode`
-
-* `Setup <pages/setup.html>`_
-
-    Instructions on how to to setup your own PX4 development and simulation environment
-
-* `Developer Guide <pages/developer_guide.html>`_
+.. card:: Developer Guide
+    :link: pages/developer_guide/index.html
 
     Instructions on how to integrate GISNav with your own project and how to extend its functionality
 
-* `API Documentation <pages/api_documentation.html>`_
+.. card:: API Documentation
+    :link: pages/api_documentation/index.html
 
     GISNav public API reference for developers
 
-* `Contribute <pages/contribute.html>`_
+.. card:: Contribute
+    :link: pages/contribute.html
 
-    Contributions to GISNav are welcome! Please see this page for guidance.
+    Contributions to GISNav are welcome! Please see this page for guidance
+
+Generate documentation
+_________________________________________
+To build this Sphinx documentation yourself, first install the :ref:`GISNav ROS package` including the
+:ref:`Development dependencies` and then run:
+
+.. code-block:: bash
+    :caption: Build Sphinx documentation
+
+    cd ~/colcon_ws/src/gisnav/docs
+    make html
+
+The HTML documentation will then appear in the ``~/colcon_ws/src/gisnav/docs/_build/`` folder.
 
 .. seealso::
 
@@ -39,7 +50,6 @@ This site contains the following pages:
    :hidden:
 
    pages/get_started
-   pages/setup
-   pages/developer_guide
-   pages/api_documentation
+   pages/developer_guide/index
+   pages/api_documentation/index
    pages/contribute

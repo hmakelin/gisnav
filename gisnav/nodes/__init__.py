@@ -2,14 +2,14 @@
 
 All ROS 2 nodes are defined in dedicated modules to keep individual file size down. They are imported here to package
 namespace for convenience.
+
+Node names are hard-coded inside the static public node entrypoints defined here. Other node initialization arguments
+are provided via ROS 2 launch arguments.
 """
 import rclpy
 import cProfile
 import pstats
 import io
-
-from ament_index_python.packages import get_package_share_directory
-share_dir = get_package_share_directory('gisnav')
 
 from .px4_node import PX4Node
 from .ardupilot_node import ArduPilotNode
@@ -81,4 +81,4 @@ def run_map_node():
 
 def run_pose_estimation_node():
     """Spins up a :class:`.PoseEstimationNode`"""
-    _run(PoseEstimationNode, 'pose_estimation_node', 'launch/params/loftr_params.yaml', share_dir)
+    _run(PoseEstimationNode, 'pose_estimation_node')

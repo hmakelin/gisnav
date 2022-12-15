@@ -51,7 +51,10 @@ setup(
         # Need to download weights separately, here in weights folder
         (os.path.join('share', pdata.package_name, 'weights'), glob('weights/*.ckpt')),
         (os.path.join('share', pdata.package_name, 'launch/params'), glob('launch/params/*.yaml')),
+        (os.path.join('share', pdata.package_name, 'launch/params/pose_estimators'),
+         glob('launch/params/pose_estimators/*.yaml')),
         (os.path.join('share', pdata.package_name, 'launch'), glob('launch/*.launch*')),
+        (os.path.join('share', pdata.package_name, 'launch/examples'), glob('launch/examples/*.launch*')),
     ],
     zip_safe=True,
     author=pdata.author,

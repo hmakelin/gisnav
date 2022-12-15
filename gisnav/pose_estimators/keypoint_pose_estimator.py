@@ -25,7 +25,7 @@ class KeypointPoseEstimator(PoseEstimator):
         :param min_matches: Minimum (>=4) required matched keypoints for pose estimates
         """
         # Use provided value as long as it's above _HOMOGRAPHY_MINIMUM_MATCHES
-        self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or _HOMOGRAPHY_MINIMUM_MATCHES)
+        self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or self._HOMOGRAPHY_MINIMUM_MATCHES)
 
     @abstractmethod
     def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \

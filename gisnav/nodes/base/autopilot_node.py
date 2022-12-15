@@ -1,4 +1,4 @@
-"""Module that contains the _AutopilotNode ROS 2 node."""
+"""Module that contains the AutopilotNode ROS 2 node."""
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -10,10 +10,10 @@ from geometry_msgs.msg import Quaternion
 from std_msgs.msg import Float32
 
 from gisnav.nodes import messaging
-from gisnav.nodes.base.base_node import _BaseNode
+from gisnav.nodes.base.base_node import BaseNode
 
 
-class _AutopilotNode(_BaseNode, ABC):
+class AutopilotNode(BaseNode, ABC):
     """A ROS 2 node that provides a stable internal interface to autopilot telemetry
 
     This abstract base class is intended for package internal use only. It should be extended by nodes that adapt it
@@ -114,7 +114,6 @@ class _AutopilotNode(_BaseNode, ABC):
 
     def publish_vehicle_altitude(self) -> None:
         """Publishes vehicle :class:`mavros_msgs.msg.Altitude`"""
-        # TODO: replace altitude_agl_pub with altitude_pub
         if self.vehicle_altitude is not None:
             self.__vehicle_altitude_pub.publish(self.vehicle_altitude)
         else:

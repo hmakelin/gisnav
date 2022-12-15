@@ -1,7 +1,0 @@
-pose_estimation_node:
-  ros__parameters:
-    export_position: ''
-    max_pitch: 30
-    min_match_altitude: 50
-    static_camera: True  # ArduPilot simulation currently only supports static camera (gimbal quaternion unknown)
-    attitude_deviation_threshold: 10  # degrees

@@ -1,29 +1,14 @@
-"""Launches GISNav with PX4 SITL simulation configuration."""
+"""Launches GISNav with ArduPilot SITL simulation configuration."""
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.substitutions import ThisLaunchFileDir
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 from gisnav.data import PackageData
-
-
-def _create_node_action(package_share_dir: str, name: str, yaml_path: str) -> Node:
-    """Returns a node action
-
-    :param package_share_dir: Package share directory
-    :param name: Node and executable name (must be same)
-    :param yaml_path: Configuration YAML file path in package share directory
-    """
-    yaml_path = yaml_path.strip('/').split('/')
-    config = os.path.join(package_share_dir, *yaml_path)
-    node = Node(
-        package='gisnav',
-        name=name,
-        executable=name,
-        parameters=[config]
-    )
-    return node
 
 
 def generate_launch_description():
@@ -33,13 +18,21 @@ def generate_launch_description():
     package_data = PackageData.parse_package_data(os.path.abspath(filename))
     package_share_dir = get_package_share_directory(package_data.package_name)
 
-    ld = LaunchDescription()
-
-    ld.add_action(_create_node_action(package_share_dir, 'ardupilot_node', 'launch/params/ardupilot_node.yaml'))
-    ld.add_action(_create_node_action(package_share_dir, 'mock_gps_node', 'launch/params/mock_gps_node.yaml'))
-    ld.add_action(_create_node_action(package_share_dir, 'map_node', 'launch/params/map_node.yaml'))
-    ld.add_action(_create_node_action(package_share_dir, 'bbox_node', 'launch/params/bbox_node.yaml'))
-    ld.add_action(_create_node_action(package_share_dir, 'pose_estimation_node',
-                                      'launch/params/pose_estimation_node_ardupilot.yaml'))
-
+    ld = LaunchDescription([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([ThisLaunchFileDir(), '/base.launch.py'])
+        ),
+    ])
+    ld.add_action(Node(
+        package='gisnav',
+        name='ardupilot_node',
+        executable='ardupilot_node',
+        parameters=[os.path.join(package_share_dir, 'launch/params/ardupilot_node.yaml')]
+    ))
+    ld.add_action(Node(
+        package='gisnav',
+        name='mock_gps_node',
+        executable='mock_gps_node',
+        parameters=[os.path.join(package_share_dir, 'launch/params/mock_gps_node_ardupilot.yaml')]
+    ))
     return ld

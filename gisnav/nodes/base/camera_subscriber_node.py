@@ -1,4 +1,4 @@
-"""Abstract base class for all nodes that subscribe to the camera info and image topics"""
+"""Abstract base class for :class:`sensor_msgs.msg.CameraInfo and :class:`sensor_msgs.msg.Image` subscribers"""
 from abc import abstractmethod
 from typing import Optional, Tuple
 
@@ -12,16 +12,18 @@ from gisnav.assertions import assert_type
 
 
 class CameraSubscriberNode(BaseNode):
-    """Abstract base class for all nodes that subscribe to the camera info and image topics
-
-    This class is intended to be extended by nodes in the same package and should not be imported directly in any other
-    package.
+    """Abstract base class for :class:`sensor_msgs.msg.CameraInfo and :class:`sensor_msgs.msg.Image` subscribers
 
     Extending classes must implement the :class:`sensor_msgs.msg.Image` callback. :class:`sensor_msgs.msg.CameraInfo`
     messages are automatically consumed and the contained information provided through the :py:attr:`.camera_data`
     property for convenience.
+
+    .. note::
+        This class is intended to be extended by nodes in the same package and should not be imported directly in any
+        other package.
     """
 
+    # TODO: move these to messaging.py?
     ROS_CAMERA_INFO_TOPIC = 'camera/camera_info'
     """:class:`sensor_msgs.msg.CameraInfo` topic to subscribe to"""
 

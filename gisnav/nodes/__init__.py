@@ -1,7 +1,12 @@
 """Entry points for ROS 2 nodes
 
 All ROS 2 nodes are defined in dedicated modules to keep individual file size down. They are imported here to package
-namespace for convenience.
+namespace for convenience. For example:
+
+.. code-block::
+
+    #from gisnav.nodes.pose_estimator_node import PoseEstimatorNode
+    from gisnav.nodes import PoseEstimatorNode
 
 Node names are hard-coded inside the static public node entrypoints defined here. Other node initialization arguments
 are provided via ROS 2 launch arguments.

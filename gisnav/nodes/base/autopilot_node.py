@@ -1,4 +1,4 @@
-"""Module that contains the AutopilotNode ROS 2 node."""
+"""Module that contains the AutopilotNode abstract base class ROS 2 node."""
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -14,10 +14,11 @@ from gisnav.nodes.base.base_node import BaseNode
 
 
 class AutopilotNode(BaseNode, ABC):
-    """A ROS 2 node that provides a stable internal interface to autopilot telemetry
+    """A ROS 2 abstract base class for nodes that provide a stable internal interface to autopilot telemetry
 
-    This abstract base class is intended for package internal use only. It should be extended by nodes that adapt it
-    to the ROS topics provided by any given autopilot platform, for example PX4 or ArduPilot.
+    .. note::
+        This abstract base class is intended for package internal use only. It should be extended by nodes that adapt it
+        to the ROS topics provided by any given autopilot platform, for example PX4 or ArduPilot.
     """
     def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node.

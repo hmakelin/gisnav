@@ -26,11 +26,9 @@ class SuperGluePoseEstimator(KeypointPoseEstimator):
     def __init__(self, min_matches: int, params: dict) -> None:
         """Class initializer
 
-        This method is intended to be called inside :meth:`.initializer` together with a global variable declaration
-        so that attributes initialized here are also available for :meth:`.worker`.
-
         :param min_matches: Minimum required keypoint matches (should be >= 4)
-        :param params: SuperGluePoseEstimator params to be passed to :class:`models.matching.Matching`
+        :param params: SuperGluePoseEstimator params to be passed to
+            :class:`SuperGluePretrainedNetwork.models.matching.Matching`
         """
         super(SuperGluePoseEstimator, self).__init__(min_matches)
         self._device = SuperGluePoseEstimator.TorchDevice.CUDA.value if torch.cuda.is_available() else \

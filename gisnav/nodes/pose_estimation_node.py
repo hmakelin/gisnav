@@ -17,21 +17,23 @@ from sensor_msgs.msg import CameraInfo, Image
 from mavros_msgs.msg import Altitude
 from geometry_msgs.msg import Quaternion
 from geographic_msgs.msg import GeoPoint, GeoPointStamped, GeoPose, GeoPoseStamped
-from std_msgs.msg import Float32
 from gisnav_msgs.msg import OrthoImage3D
 
 from . import messaging
 from .base.camera_subscriber_node import CameraSubscriberNode
 from ..pose_estimators.pose_estimator import PoseEstimator
 from ..assertions import assert_type, assert_ndim, assert_shape
-from ..data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, ContextualMapData, BBox, MapData, \
-    ImagePair, Position
+from ..data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, ContextualMapData, MapData, ImagePair, \
+    Position
 from ..geo import GeoPt, GeoTrapezoid
 
 
 class PoseEstimationNode(CameraSubscriberNode):
-    """Publishes pose between two images"""
+    """Estimates and publishes pose between two images
 
+    Compares images from :class:`sensor_msgs.msg.Image` message to maps from :class:`gisnav_msgs.msg.OrthoImage3D`
+    message to estimate :class:`geographic_msgs.msg.GeoPoseStamped`.
+    """
     # Encoding of input video (input to CvBridge)
     # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
     _IMAGE_ENCODING = 'bgr8'
@@ -84,7 +86,7 @@ class PoseEstimationNode(CameraSubscriberNode):
         self._estimator = pose_estimator(*params.get('args', []))
         # endregion setup pose estimator
 
-        self._map = None
+        self._map_data = None
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
@@ -169,7 +171,7 @@ class PoseEstimationNode(CameraSubscriberNode):
 
     @property
     def _altitude_scaling(self) -> Optional[float]:
-        """Returns camera focal length divided by camera altitude in meters."""
+        """Returns camera focal length divided by camera altitude in meters"""
         if self.camera_data is not None and self._vehicle_altitude is not None:
             return self.camera_data.fx / self._vehicle_altitude.terrain  # TODO: assumes fx == fy
         else:
@@ -179,12 +181,7 @@ class PoseEstimationNode(CameraSubscriberNode):
 
     @property
     def _r_guess(self) -> Optional[np.ndarray]:
-        """Gimbal rotation matrix guess (based on :class:`px4_msgs.GimbalDeviceSetAttitude` message)
-
-        .. note::
-            Should be roughly same as rotation matrix stored in :py:attr:`._pose_guess`, even though it is derived via
-            a different route. If gimbal is not stabilized to its set position, the rotation matrix will be different.
-        """
+        """Gimbal rotation matrix guess"""
         if self._gimbal_quaternion is None:
             self.get_logger().warn('Gimbal set attitude not available, will not provide pose guess.')
             return None
@@ -219,7 +216,7 @@ class PoseEstimationNode(CameraSubscriberNode):
             self.get_logger().warn(f'Camera yaw unknown, cannot estimate pose.')
             return None
 
-        return ContextualMapData(rotation=camera_yaw, map_data=self._map, crop=self.img_dim,
+        return ContextualMapData(rotation=camera_yaw, map_data=self._map_data, crop=self.img_dim,
                                  altitude_scaling=self._altitude_scaling)
 
     def _should_estimate(self) -> bool:
@@ -230,8 +227,8 @@ class PoseEstimationNode(CameraSubscriberNode):
 
         :return: True if pose estimation be attempted
         """
-        # Check condition (1) - that _map_data exists
-        if self._map is None:
+        # Check condition (1) - that MapData exists
+        if self._map_data is None:
             self.get_logger().warn(f'No reference map available. Skipping pose estimation.')
             return False
 
@@ -247,8 +244,7 @@ class PoseEstimationNode(CameraSubscriberNode):
         assert min_alt > 0
         if self._vehicle_altitude is None or self._vehicle_altitude.terrain is np.nan:
             self.get_logger().warn('Cannot determine altitude AGL, skipping map update.')
-            return None
-
+            return False
         if self._vehicle_altitude.terrain < min_alt:
             self.get_logger().warn(f'Assumed altitude {self._vehicle_altitude.terrain} was lower than minimum '
                                    f'threshold for matching ({min_alt}) or could not be determined. Skipping pose '
@@ -258,16 +254,16 @@ class PoseEstimationNode(CameraSubscriberNode):
         return True
 
     def image_callback(self, msg: Image) -> None:
-        """Handles latest :class:`px4_msgs.msg.Image` message
+        """Handles latest :class:`sensor_msgs.msg.Image` message
 
-        :param msg: The :class:`px4_msgs.msg.Image` message from the PX4-ROS 2 bridge
+        :param msg: The :class:`sensor_msgs.msg.Image` message
         """
         cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
 
         # Check that image dimensions match declared dimensions
         if self.img_dim is not None:
             cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self.img_dim, f'Converted cv_image shape {cv_img_shape} did not match '\
+            assert cv_img_shape == self.img_dim, f'Converted cv_image shape {cv_img_shape} did not match ' \
                                                   f'declared image shape {self.img_dim}.'
 
         if self.camera_data is None:
@@ -278,9 +274,9 @@ class PoseEstimationNode(CameraSubscriberNode):
                                camera_data=self.camera_data)
 
         if self._should_estimate():
-            assert self._map is not None
+            assert self._map_data is not None
             assert self.camera_data is not None
-            assert hasattr(self._map, 'image'), 'Map data unexpectedly did not contain the image data.'
+            assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
             image_pair = ImagePair(image_data, self._contextual_map_data)
             pose = self._estimator.estimate(image_data.image.arr, image_pair.ref.image.arr, self.camera_data.k)
@@ -310,50 +306,50 @@ class PoseEstimationNode(CameraSubscriberNode):
                                                              f'size {self.map_size_with_padding}.'
 
         elevation = Img(dem) if dem is not None else None
-        self._map = MapData(bbox=bbox, image=Img(img), elevation=elevation)
+        self._map_data = MapData(bbox=bbox, image=Img(img), elevation=elevation)
 
     def _terrain_altitude_callback(self, msg: Altitude) -> None:
-        """Handles latest terrain altitude message
+        """Handles latest terrain :class:`mavros_msgs.msg.Altitude` message
 
-        :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
+        :param msg: Latest terrain :class:`mavros_msgs.msg.Altitude` message
         """
         self._terrain_altitude = msg
 
     def _home_geopoint_callback(self, msg: GeoPointStamped) -> None:
         """Receives home :class:`geographic_msgs.msg.GeoPointStamped` message
 
-        :param msg: Latest :class:`geographic_msgs.msg.GeoPointStamped` message
+        :param msg: Latest home :class:`geographic_msgs.msg.GeoPointStamped` message
         """
         self._home_geopoint = msg
 
     def _terrain_geopoint_callback(self, msg: GeoPointStamped) -> None:
         """Receives terrain :class:`geographic_msgs.msg.GeoPointStamped` message
 
-        :param msg: Latest :class:`geographic_msgs.msg.GeoPointStamped` message
+        :param msg: Latest terrain :class:`geographic_msgs.msg.GeoPointStamped` message
         """
         self._terrain_geopoint = msg
 
     def _vehicle_altitude_callback(self, msg: Altitude) -> None:
         """Receives vehicle :class:`mavros_msgs.msg.Altitude` message
 
-        :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
+        :param msg: Latest vehicle :class:`mavros_msgs.msg.Altitude` message
         """
         self._vehicle_altitude = msg
 
     def _gimbal_quaternion_callback(self, msg: Quaternion) -> None:
         """Receives gimbal :class:`geometry_msgs.msg.Quaternion` message
 
-        .. note::
+        .. warning::
             This could be gimbal set attitude, not actual attitude
 
-        :param msg: Latest :class:`geometry_msgs.msg.Quaternion` message
+        :param msg: Latest gimbal :class:`geometry_msgs.msg.Quaternion` message
         """
         self._gimbal_quaternion = msg
 
     def _vehicle_geopose_callback(self, msg: GeoPoseStamped) -> None:
         """Receives vehicle :class:`geographic_msgs.msg.GeoPoseStamped` message
 
-        :param msg: Latest :class:`geographic_msgs.msg.GeoPoseStamped` message
+        :param msg: Latest vehicle :class:`geographic_msgs.msg.GeoPoseStamped` message
         """
         self._vehicle_geopose = msg
 
@@ -385,7 +381,7 @@ class PoseEstimationNode(CameraSubscriberNode):
             fixed_camera = FixedCamera(pose=pose, image_pair=image_pair,
                                        terrain_altitude_amsl=self._terrain_altitude.amsl,
                                        terrain_altitude_ellipsoid=self._terrain_geopoint.position.altitude,
-                                       home_position=self._home_geopoint.position, #messaging.geopoint_to_geopt(self._home_geopoint),
+                                       home_position=self._home_geopoint.position,
                                        timestamp=image_pair.qry.timestamp)
         except DataValueError as _:
             self.get_logger().warn(f'Could not estimate a valid camera position, skipping this frame.')
@@ -419,9 +415,9 @@ class PoseEstimationNode(CameraSubscriberNode):
     def _is_valid_estimate(self, fixed_camera: FixedCamera, r_guess_: np.ndarray) -> bool:
         """Returns True if the estimate is valid
 
-        Compares computed estimate to guess based on set gimbal device attitude. This will reject estimates made when
-        the gimbal was not stable (which is strictly not necessary), which is assumed to filter out more inaccurate
-        estimates.
+        Compares computed estimate to guess based on earlier gimbal attitude. This will reject estimates made when
+        the gimbal was not stable (which is strictly not necessary) if gimbal attitude is based on set attitude and not
+        actual attitude, which is assumed to filter out more inaccurate estimates.
         """
         if r_guess_ is None:
             self.get_logger().warn('Reference gimbal attitude (r_guess) was not available, cannot do post-estimation '
@@ -452,7 +448,7 @@ class PoseEstimationNode(CameraSubscriberNode):
         """Returns True if (set) camera roll or pitch exceeds given limit OR camera pitch is unknown
 
         Used to determine whether camera roll or pitch is too high up from nadir to make matching against a map
-        not worthwhile.
+        worthwhile.
 
         :param max_pitch: The limit for the pitch in degrees from nadir over which it will be considered too high
         :return: True if pitch is too high
@@ -476,14 +472,15 @@ class PoseEstimationNode(CameraSubscriberNode):
         return False
 
     def _export_position(self, position: GeoPt, fov: GeoTrapezoid, filename: str) -> None:
-        """Exports the computed position and field of view (FOV) into a geojson file
+        """Exports the computed position and field of view into a GeoJSON file
 
-        The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it contains.
+        .. note::
+            The GeoJSON file is not used by the node but can be accessed by GIS software to visualize the data it
+            contains
 
         :param position: Computed camera position or projected principal point for gimbal projection
-        :param: fov: Field of view of camera
+        :param: fov: Field of view of camera projected to ground
         :param filename: Name of file to write into
-        :return:
         """
         assert_type(position, GeoPt)
         assert_type(fov, GeoTrapezoid)
@@ -495,7 +492,7 @@ class PoseEstimationNode(CameraSubscriberNode):
                                     f'\n{e}\n{traceback.print_exc()}')
 
     def publish(self, position: Position) -> None:
-        """Publishes estimated position
+        """Publishes estimated position over ROS topic
 
         :param position: Estimated position
         """

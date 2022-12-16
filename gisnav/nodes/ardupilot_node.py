@@ -1,5 +1,5 @@
-"""Module that contains the PX4Node ROS 2 node."""
-from typing import Optional
+"""Module that contains the ArduPilot adapter ROS 2 node."""
+from typing import Optional, List, Tuple, Union
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -11,11 +11,13 @@ from sensor_msgs.msg import NavSatFix
 
 from . import messaging
 from .base.autopilot_node import AutopilotNode
-from ..data import Attitude
 
 
 class ArduPilotNode(AutopilotNode):
     """ROS 2 node that acts as an adapter for ArduPilot vis MAVROS"""
+
+    ROS_PARAM_DEFAULTS = []
+    """List containing ROS parameter name, default value and read_only flag tuples"""
 
     def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node
@@ -161,7 +163,7 @@ class ArduPilotNode(AutopilotNode):
         """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message or None if not available
 
         .. note::
-            Current implementation assumes static nadir facing camera
+            Current implementation assumes camera is facing directly down from vehicle body
         """
         # TODO: assumes static nadir facing camera, do proper implementation
         if self.vehicle_geopose is not None:

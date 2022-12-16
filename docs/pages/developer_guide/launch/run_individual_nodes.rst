@@ -1,6 +1,6 @@
 Run individual node
 ____________________________________________________
-It is recommended that you :ref:`Launch GISNav using ROS launch files`. However, you can also launch individual nodes
+It is recommended that you :ref:`Launch from ROS launch file`. However, you can also launch individual nodes
 and optionally provide launch values for ROS parameters from the YAML files in the ``launch/params/`` folder:
 
 .. code-block:: bash

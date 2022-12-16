@@ -1,13 +1,12 @@
 """Extends :class:`.BridgeNode` to publish mock GPS (GNSS) messages that can substitute real GPS"""
 import time
 import numpy as np
-import rclpy
 import socket
 import json
 
 from rclpy.qos import QoSPresetProfiles
 
-from typing import Optional, Union
+from typing import Optional
 from datetime import datetime
 
 from px4_msgs.msg import SensorGps
@@ -58,16 +57,13 @@ class MockGPSNode(BaseNode):
                                                        QoSPresetProfiles.SENSOR_DATA.value)
             self._socket = None
         else:
-            # TODO: try to get MAVROS work for GPSINPUT message and get rid of UDP socket
+            # TODO: try to get MAVROS to work for GPSINPUT message and get rid of UDP socket
             #self._mock_gps_pub = self.create_publisher(GPSINPUT,
             #                                           messaging.ROS_TOPIC_GPS_INPUT,
             #                                           QoSPresetProfiles.SENSOR_DATA.value)
             self._mock_gps_pub = None
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        #self._geopoint_sub = self.create_subscription(ROSGeoPoint, "geopoint_estimate",
-        #                                              self._geopoint_callback,
-        #                                              QoSPresetProfiles.SENSOR_DATA.value)
         self._vehicle_geopose_estimate_sub = self.create_subscription(GeoPoseStamped,
                                                                       messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
                                                                       self._vehicle_geopose_estimate_callback,
@@ -78,13 +74,6 @@ class MockGPSNode(BaseNode):
                                                                        QoSPresetProfiles.SENSOR_DATA.value)
         self._geopose_estimate = None
         self._altitude_estimate = None
-
-    #def _geopoint_callback(self, msg: ROSGeoPoint) -> None:
-    #    """Handles latest geopoint estimate
-    #
-    #    :param msg: Latest :class:`geographic_msgs.msg.GeoPoint` message
-    #    """
-    #    self._geopoint_estimate = msg
 
     def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
         """Handles latest geopose estimate
@@ -141,8 +130,19 @@ class MockGPSNode(BaseNode):
     def _generate_gps_input(self, lat, lon, altitude_amsl, heading, timestamp) -> Optional[dict]:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
 
+        .. note::
+            Currently the message is sent directly over a UDP socket so the GPS_INPUT is returned as a Python dict,
+            not as a :class:`mavros_msgs.msg.GPSINPUT`
+
         .. seealso:
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_
+
+        :param lat: Vehicle latitude
+        :param lon: Vehicle longitude
+        :param altitude_amsl: Vehicle altitude in meters AMSL
+        :param heading: Vehicle heading in radians
+        :param timestamp: System time in microseconds
+        :return: MAVLink GPS_INPUT message as Python dict
         """
         msg = {}
 
@@ -176,10 +176,17 @@ class MockGPSNode(BaseNode):
         return msg
 
     def _generate_sensor_gps(self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp) -> Optional[SensorGps]:
-        """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige"""
+        """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige
+
+        :param lat: Vehicle latitude
+        :param lon: Vehicle longitude
+        :param altitude_amsl: Vehicle altitude in meters AMSL
+        :param altitude_ellipsoid: Vehicle altitude in meters above WGS 84 ellipsoid
+        :param heading: Vehicle heading in radians
+        :param timestamp: System time in microseconds
+        """
         msg = SensorGps()
-        msg.timestamp = timestamp  # self._bridge.synchronized_time  # position.timestamp
-        # msg.timestamp_sample = msg.timestamp
+        msg.timestamp = timestamp
         msg.timestamp_sample = 0
         # msg.device_id = self._generate_device_id()
         msg.device_id = 0

@@ -16,8 +16,8 @@ from mavros_msgs.msg import Altitude
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 from cv_bridge import CvBridge
-
 from gisnav_msgs.msg import OrthoImage3D
+
 from . import messaging
 from .base.camera_subscriber_node import CameraSubscriberNode
 from ..assertions import assert_len, assert_type
@@ -117,7 +117,7 @@ class MapNode(CameraSubscriberNode):
     .. note::
         This parameter provides a hard upper limit for WMS GetMap request frequency. Even if this parameter is set low, 
         WMS GetMap requests will likely be much less frequent because they will throttled by the conditions set in  
-        :meth:`._should_update_map` (private method - see source code for reference).
+        :meth:`._should_request_new_map`.
     """
 
     # Altitude in meters used for DEM request to get local origin elevation
@@ -181,7 +181,6 @@ class MapNode(CameraSubscriberNode):
                                                            self._home_geopoint_callback,
                                                            QoSPresetProfiles.SENSOR_DATA.value)
 
-
         publish_rate = self.get_parameter('publish_rate').get_parameter_value().integer_value
         self._publish_timer = self._create_publish_timer(publish_rate)
         self._ortho_image_3d_msg = None
@@ -214,7 +213,7 @@ class MapNode(CameraSubscriberNode):
     # region Properties
     @property
     def _publish_timer(self) -> Timer:
-        """:class:`.OrthoImage3D` publish and map update timer"""
+        """:class:`gisnav_msgs.msg.OrthoImage3D` publish and map update timer"""
         return self.__publish_timer
 
     @_publish_timer.setter
@@ -224,7 +223,7 @@ class MapNode(CameraSubscriberNode):
 
     @property
     def _ortho_image_3d_msg(self) -> Optional[OrthoImage3D]:
-        """:class:`.OrthoImage3D` message to publish"""
+        """:class:`gisnav_msgs.msg.OrthoImage3D` message to publish"""
         return self.__ortho_image_3d_msg
 
     @_ortho_image_3d_msg.setter
@@ -272,7 +271,7 @@ class MapNode(CameraSubscriberNode):
 
     def image_callback(self, msg: Image) -> None:
         """Receives :class:`sensor_msgs.msg.Image` message"""
-        # Do nothing - required by _SubscriberNode parent
+        # Do nothing - enforced by CameraSubscriberNode parent
         pass
     # endregion rclpy subscriber callbacks
 
@@ -284,7 +283,7 @@ class MapNode(CameraSubscriberNode):
         view either no longer completely fits inside (vehicle has moved away or camera is looking in other direction)
         or is too small compared to the size of the map (vehicle altitude has significantly decreased).
 
-        :param bbox: Bounding box of latest :class:`.FOV`
+        :param bbox: Bounding box of latest containing camera field of view
         :return: True if new map should be requested
         """
         if self._bounding_box is not None:
@@ -303,7 +302,7 @@ class MapNode(CameraSubscriberNode):
             return False
 
     def _create_publish_timer(self, publish_rate: int) -> Timer:
-        """Returns a timer to publish :class:`.OrthoImage3D`
+        """Returns a timer to publish :class:`gisnav_msgs.msg.OrthoImage3D`
 
         :param publish_rate: Publishing rate for the timer (in Hz)
         :return: The :class:`.Timer` instance
@@ -321,7 +320,7 @@ class MapNode(CameraSubscriberNode):
         Returns zero raster as DEM if no DEM layer is available.
 
         TODO: Currently no support for separate arguments for imagery and height layers. Assumes height layer is
-        available at same CRS as imagery layer.
+            available at same CRS as imagery layer.
 
         :param bbox: Bounding box of the map (left, bottom, right, top)
         :param size: Map raster resolution (height, width)
@@ -411,14 +410,14 @@ class MapNode(CameraSubscriberNode):
             bbox=messaging.bbox_to_bounding_box(bbox),
             img=self._cv_bridge.cv2_to_imgmsg(img, encoding="passthrough"),
             dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="passthrough")
-            #dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="mono8")  # mono16?
+            #dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="mono8")  # TODO: need to use mono16? 255 meters max?
         )
 
     def _terrain_altitude_at_position(self, position: Optional[GeoPt], local_origin: bool = False) -> Optional[float]:
         """Raw terrain altitude from DEM if available, or None if not available
 
         :param position: Position to query
-        :param local_origin: True to use :py:attr:`._dem` (retrieved specifically for local frame origin)
+        :param local_origin: True to use :py:attr:`._home_dem` (retrieved specifically for local frame origin)
         :return: Raw altitude in DEM coordinate frame and units
         """
         map_data = self._map_data if not local_origin else self._home_dem
@@ -431,7 +430,6 @@ class MapNode(CameraSubscriberNode):
             if polygon.contains(point):
                 h, w = elevation.shape[0:2]
                 assert h, w == self._img_dim
-                #left, bottom, right, top = bbox.bounds
                 left, bottom, right, top = bbox
                 x = w * (position.lon - left) / (right - left)
                 y = h * (position.lat - bottom) / (top - bottom)
@@ -457,7 +455,7 @@ class MapNode(CameraSubscriberNode):
         """Terrain altitude in meters AMSL accroding to DEM if available, or None if not available
 
         :param position: Position to query
-        :param local_origin: Retrieve for local frame origin (bypass to use _dem instead of _map_data)
+        :param local_origin: Set to True to use :py:attr:`._home_dem` instead of :py:attr:`._map_data`
         :return: Terrain altitude AMSL in meters at position
         """
         dem_elevation = self._terrain_altitude_at_position(position, local_origin)
@@ -496,7 +494,6 @@ class MapNode(CameraSubscriberNode):
     def _publish_terrain_altitude(self) -> None:
         """Publishes terrain altitude at current position"""
         terrain_altitude_amsl = None
-        #self.get_logger().error(f'vehicel position {vehicle_position}, home position {self._home_geopoint}')
         if self._vehicle_geopose is not None and self._home_geopoint is not None:
             xy = GeoPt(x=self._vehicle_geopose.pose.position.longitude, y=self._vehicle_geopose.pose.position.latitude)
             terrain_altitude_amsl = self._terrain_altitude_amsl_at_position(xy)
@@ -506,7 +503,6 @@ class MapNode(CameraSubscriberNode):
                 self.get_logger().warn(f'Could not get terrain altitude amsl for position from map data for publishing '
                                        f'geopoint, trying DEM which is intended for local origin...')
                 terrain_altitude_amsl = self._terrain_altitude_amsl_at_position(xy, True)
-            #snapshot = self._bridge.snapshot(terrain_altitude_amsl)
 
             # TODO: redundant in autopilot.py snapshot, remove the bridge eventually
             assert self._home_geopoint is not None
@@ -527,11 +523,11 @@ class MapNode(CameraSubscriberNode):
             if terrain_altitude_amsl is not None and terrain_altitude_home is not None \
                     and terrain_altitude_agl is not None:
                 terrain_altitude_msg = Altitude(header=messaging.create_header('base_link'),
-                                        amsl=terrain_altitude_amsl,
-                                        local=terrain_altitude_home,
-                                        relative=terrain_altitude_home,
-                                        terrain=terrain_altitude_agl,
-                                        bottom_clearance=terrain_altitude_agl)
+                                                amsl=terrain_altitude_amsl,
+                                                local=terrain_altitude_home,
+                                                relative=terrain_altitude_home,
+                                                terrain=terrain_altitude_agl,
+                                                bottom_clearance=terrain_altitude_agl)
                 self._terrain_altitude_pub.publish(terrain_altitude_msg)
 
                 # Also publish geopoint message, includes lat and lon in atomic message
@@ -554,12 +550,13 @@ class MapNode(CameraSubscriberNode):
             self.get_logger().warn(f'Could not determine vehicle or home position, skipping publishing terrain altitude')
 
     def _update_and_publish(self) -> None:
-        """Updates stored map and publishes :class:`.OrthoImage3d` and terrain :class:`mavros_msgs.msg.Altitude`
+        """Updates map and publishes :class:`gisnav_msgs.msg.OrthoImage3d` and terrain :class:`mavros_msgs.msg.Altitude`
 
-        Additionally requests DEM for home (assumed local frame origin) if needed (see :meth:`._should_request_dem)
+        Additionally requests DEM for home (assumed local frame origin) if needed (see
+        :meth:`._should_request_dem_for_local_frame_origin).
 
-        Calls :meth:`._update_map` if the center and altitude coordinates for the new map raster are available and the
-        :meth:`._should_update_map` check passes.
+        Calls :meth:`._request_new_map` if the center and altitude coordinates for the new map raster are available
+        and the :meth:`._should_request_new_map` check passes.
         """
         if self._should_request_dem_for_local_frame_origin():
             assert self._home_geopoint is not None

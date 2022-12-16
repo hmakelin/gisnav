@@ -1,6 +1,6 @@
 """Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 import math
 import numpy as np
 import warnings
@@ -13,7 +13,7 @@ from shapely.geometry import Point, Polygon, box
 from gisnav.assertions import assert_len, assert_type
 if TYPE_CHECKING:
     # CameraData used as type hint only - avoid ImportError due to circular import
-    from ..data import CameraData
+    from .data import CameraData
 
 
 class _GeoObject(ABC):
@@ -76,7 +76,7 @@ class _GeoPolygon(_GeoObject):
         return GeoPt(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
     @property
-    def bounds(self) -> Tuple[4*(float,)]:
+    def bounds(self) -> Tuple[4 * (float,)]:
         """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple (e.g. for WMS GetMap)"""
         return self._geoseries[0].bounds
 
@@ -109,9 +109,9 @@ class _GeoPolygon(_GeoObject):
         assert_len(exterior_coords, 4)
         return exterior_coords
 
-    def intersection(self, box: _GeoPolygon) -> GeoTrapezoid:
+    def intersection(self, box_: _GeoPolygon) -> GeoTrapezoid:
         """Returns the intersection with the given :class:`._GeoPolygon`"""
-        return GeoTrapezoid(self._geoseries.intersection(box._geoseries))
+        return GeoTrapezoid(self._geoseries.intersection(box_._geoseries))
 
     def __post_init__(self):
         """Post-initialization validity checks
@@ -198,7 +198,7 @@ class GeoSquare(_GeoPolygon):
 class GeoTrapezoid(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex isosceles) trapezoid
 
-    Used to represents camera field of view projected to ground plane.
+    Used to represent camera field of view projected to ground plane.
     """
     def __init__(self, corners: np.ndarray, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a square bounding box by enveloping a circle of given radius inside
@@ -211,8 +211,6 @@ class GeoTrapezoid(_GeoPolygon):
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        #if not (self._geoseries[0].is_valid and self._is_convex_isosceles_trapezoid()):
-        #    raise GeoValueError(f'Not a valid convex isosceles trapezoid: {self._geoseries[0]}')
         if not (self._geoseries[0].is_valid and not self._is_convex()):
             raise GeoValueError(f'Not a valid convex trapezoid: {self._geoseries[0]}')
 

@@ -1,5 +1,5 @@
 """Module that contains the PX4Node ROS 2 node."""
-from typing import Optional, List, Tuple, Union
+from typing import Optional
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -17,7 +17,7 @@ from ..assertions import assert_shape
 class PX4Node(AutopilotNode):
     """ROS 2 node that acts as an adapter for PX4's microRTPS bridge
 
-    .. note::
+    .. warning::
         Current implementation uses :class:`px4_msgs.msg.GimbalDeviceSetAttitude` instead of
         :class:`px4_msgs.msg.GimbalDeviceAttitudeStatus` for :py:attr:`.gimbal_quaternion` because the SITL simulation
         does not publish the actual attitude. The set attitude does not match actual attitude in situations where

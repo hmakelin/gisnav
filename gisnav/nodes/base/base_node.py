@@ -1,4 +1,4 @@
-"""Abstract base class for all nodes implementing shared logic"""
+"""Abstract base class implementing shared logic for all nodes"""
 from abc import ABC, abstractmethod
 from typing import Union, List, Tuple
 import time
@@ -11,8 +11,9 @@ from rcl_interfaces.msg import ParameterDescriptor
 class BaseNode(ABC, Node):
     """Abstract base class for all nodes implementing shared logic
 
-    This class is intended to be extended by nodes in the same package and should not be imported directly in any other
-    package.
+    .. note::
+        This class is intended to be extended by nodes in the same package and should not be imported directly in any
+        other package.
     """
     @property
     @abstractmethod
@@ -40,7 +41,7 @@ class BaseNode(ABC, Node):
     @property
     def sec(self) -> int:
         """Returns system time in seconds"""
-        return time.time()
+        return int(time.time())
 
     @property
     def usec(self) -> int:
@@ -48,7 +49,7 @@ class BaseNode(ABC, Node):
         return int(time.time_ns() / 1e3)
 
     def __declare_ros_params(self) -> None:
-        """Declares ROS parameters
+        """Declares ROS parameters from :py:attr:`.ROS_PARAM_DEFAULTS`
 
         Does not override ROS parameters that are already declared (e.g. from YAML file on launch).
         """

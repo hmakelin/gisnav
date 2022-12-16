@@ -1,5 +1,5 @@
 """A node that publishes bounding box of field of view projected to ground from vehicle approximate location"""
-from typing import Optional, List, Tuple, Union
+from typing import Optional
 
 import numpy as np
 from rclpy.qos import QoSPresetProfiles
@@ -16,20 +16,20 @@ from ..geo import GeoPt as GeoPt, GeoSquare, get_dynamic_map_radius
 
 
 class BBoxNode(CameraSubscriberNode):
-    """A node that publishes bounding box of field of view projected to ground
+    """A node that publishes bounding box that matches camera field of view projected to ground
 
-    This is the suggested bounding box for the next map update
+    This is the suggested bounding box for the next map update, or "approximate location" of what the camera is seeing.
+
+    .. note::
+        :class:`.KeypointPoseEstimator` takes elevation data into account if DEMs are provided, but the projection
+        logic here currently assumes planar terrain regardless of whether a DEM is provided via :class:`.MapNode`.
     """
     ROS_D_GIMBAL_PROJECTION = True
     """Default flag to enable map updates based on expected center of field of view (FOV) projected onto ground
 
-    When this flag is enabled, map rasters are retrieved for the expected center of the camera FOV instead of the
-    expected position of the vehicle, which increases the chances that the FOV is fully contained in the map raster.
-    This again increases the chances of getting a good pose estimate.
-
-    .. seealso::
-        :py:attr:`.ROS_D_MISC_MAX_PITCH`
-        :py:attr:`.ROS_D_MAP_UPDATE_MAX_PITCH`
+    When this flag is enabled, map rasters are retrieved for the expected camera FOV instead of the expected position 
+    of the vehicle, which increases the chances that the FOV is fully contained in the map raster. This again increases 
+    the chances of getting a good pose estimate.
     """
 
     ROS_D_MAX_MAP_RADIUS = 400
@@ -39,6 +39,9 @@ class BBoxNode(CameraSubscriberNode):
     """Default filename for exporting GeoJSON containing projected field of view (FOV) and FOV center
 
     Set to '' to disable
+    
+    .. note::
+        Exporting the projection as GeoJSON and viewing it in a GIS software may be useful for e.g. debugging
     """
 
     ROS_PARAM_DEFAULTS = [
@@ -102,12 +105,11 @@ class BBoxNode(CameraSubscriberNode):
 
         If this is set to false, map rasters are retrieved for the vehicle's global position instead. This is typically
         fine as long as the camera is not aimed too far in to the horizon and has a relatively wide field of view. For
-        best results, this should be on to ensure the field of view is fully contained within the area of the retrieved
-        map raster.
+        best results, this should be enabled to ensure the field of view is fully contained within the area of the
+        retrieved map raster.
 
         .. note::
-            If you know your camera will be nadir-facing, disabling ``map_update.gimbal_projection`` may improve
-            performance by a small amount.
+            If you know your camera will be nadir-facing, disabling ``gimbal_projection`` may improve performance
         """
         gimbal_projection_flag = self.get_parameter('gimbal_projection').get_parameter_value().bool_value
         if type(gimbal_projection_flag) is bool:
@@ -118,7 +120,7 @@ class BBoxNode(CameraSubscriberNode):
             return False
 
     def _vehicle_geopose_callback(self, msg: GeoPoseStamped) -> None:
-        """Receives vehicle :class:`geographic_msgs.msg.GeoPointStamped` message"""
+        """Receives vehicle :class:`geographic_msgs.msg.GeoPoseStamped` message"""
         self._vehicle_geopose = msg
 
         # Vehicle GeoPose changes affect bbox estimate -> call _publish here
@@ -151,7 +153,7 @@ class BBoxNode(CameraSubscriberNode):
 
     def image_callback(self, msg: Image) -> None:
         """Receives :class:`sensor_msgs.msg.Image` message"""
-        # Do nothing - required by _SubscriberNode parent
+        # Do nothing - implementation enforced by parent class
         pass
 
     # region Mock Image Pair
@@ -177,7 +179,7 @@ class BBoxNode(CameraSubscriberNode):
         image_pair = ImagePair(image_data, contextual_map_data)
         return image_pair
 
-    # TODO: make property?
+    # TODO: make property
     def _mock_image_data(self) -> Optional[ImageData]:
         """Creates mock :class:`.ImageData` for guessing projected FOV for map requests, or None if not available
 
@@ -219,7 +221,7 @@ class BBoxNode(CameraSubscriberNode):
             return
 
         # Scaling factor of image pixels := terrain_altitude
-        scaling = (self.map_size_with_padding[0]/2) / self.camera_data.fx
+        scaling = (self.map_size_with_padding[0] / 2) / self.camera_data.fx
         radius = scaling * altitude_agl
 
         bbox = GeoSquare(xy, radius)
@@ -287,10 +289,10 @@ class BBoxNode(CameraSubscriberNode):
         return mock_fixed_camera.fov.fov.to_crs('epsg:4326').center
 
     def _publish(self) -> None:
-        """Publishes :class:`.BoundingBox` message
+        """Publishes :class:`geographic_msgs.msg.BoundingBox` message
 
-        If :py:attr:`._is_gimbal_projection_enabled`, the center of the projected camera field of view is used instead
-        of vehicle position to ensure the field of view is best contained in the new map raster.
+        If :py:attr:`._is_gimbal_projection_enabled` is True, the center of the projected camera field of view is
+        used instead of the vehicle position to ensure the field of view is best contained in the new map raster.
         """
         if self._vehicle_geopose is None:
             self.get_logger().warn('Cannot determine vehicle geopose, skipping publishing bbox')
@@ -323,7 +325,6 @@ class BBoxNode(CameraSubscriberNode):
         map_radius = get_dynamic_map_radius(self.camera_data, max_map_radius, map_update_altitude_agl)
         map_candidate = GeoSquare(projected_center if projected_center is not None else geopt, map_radius)
 
-        # TODO: redundant with request_dem contents
         bbox = BBox(*map_candidate.bounds)
         bbox = BoundingBox(min_pt=GeoPoint(latitude=bbox.bottom, longitude=bbox.left, altitude=np.nan),
                            max_pt=GeoPoint(latitude=bbox.top, longitude=bbox.right, altitude=np.nan))

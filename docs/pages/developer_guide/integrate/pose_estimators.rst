@@ -53,7 +53,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 
             import numpy as np
             from typing import Optional, Tuple
-            from gisnav.pose_estimators.pose_estimator import PoseEstimator
+            from gisnav.pose_estimators import PoseEstimator
 
             class MyPoseEstimator(PoseEstimator):
 
@@ -86,7 +86,7 @@ You can use the below snippets to get started with your own :class:`.PoseEstimat
 
             import numpy as np
             from typing import Optional, Tuple
-            from gisnav.pose_estimators.keypoint_pose_estimator import KeypointPoseEstimator
+            from gisnav.pose_estimators import KeypointPoseEstimator
 
             class MyKeypointPoseEstimator(KeypointPoseEstimator):
 

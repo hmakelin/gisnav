@@ -1,6 +1,6 @@
-"""Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
+"""Contains :class:`.Node` that provides :class:`OrthoImage3D` s"""
 import time
-from typing import Optional, Tuple, List, Union, get_args
+from typing import Optional, Tuple, get_args
 
 import numpy as np
 import cv2

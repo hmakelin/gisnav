@@ -13,6 +13,7 @@ being instantiated. Example usage that handles the exception:
     except DataValueError as dve:
         self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
         return None
+
 """
 from __future__ import annotations  # Python version 3.7+
 

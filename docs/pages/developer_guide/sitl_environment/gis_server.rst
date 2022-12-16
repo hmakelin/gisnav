@@ -1,6 +1,6 @@
 GIS server
 ______________________________________________________
-Introduction
+Overview
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 GISNav requires access to a GIS server that serves high resolution `orthoimagery`_ and optional
 `digital elevation models`_ (DEM) for the approximate location of the aircraft. The orthoimage and DEM `rasters`_ are

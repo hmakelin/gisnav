@@ -2,7 +2,7 @@ GISNav ROS package
 ____________________________________________________
 Install ROS 2
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you followed the :ref:`Autopilot` SITL install instructions you should already have ROS 2 installed. See
+If you followed the :ref:`Autopilots` SITL install instructions you should already have ROS 2 installed. See
 `ROS 2 foxy install instructions`_  if you do not yet have ROS 2 on your machine. You can check your
 ROS version with the ``whereis ros2`` command:
 

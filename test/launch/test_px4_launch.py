@@ -6,9 +6,7 @@ from typing import List, Tuple
 
 import rclpy
 import pytest
-import yaml
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -140,7 +138,7 @@ class TestPX4Launch(unittest.TestCase):
         """Tests that nodes are running with correct name and namespace"""
         names, _ = tuple(zip(*self.NODE_NAMES_AND_NAMESPACES))
 
-        found_names_and_namespaces = self._get_names_and_namespaces_within_timeout()
+        found_names_and_namespaces = self._get_names_and_namespaces_within_timeout(10)
         found_names, found_namespaces = tuple(zip(*found_names_and_namespaces))
 
         assert set(names).issubset(found_names), f'Not all nodes ({names}) were discovered ({found_names}).'

@@ -37,7 +37,7 @@ jobs:
           repository: PX4/px4_msgs
           path: colcon_ws/src/px4_msgs
 
-      - name: Install geographic_msgs and MAVROS
+      - name: Install geographic_msgs and GeographicLib datasets
         run: |
           sudo apt-get install wget
           sudo apt-get install -y ros-foxy-mavros ros-foxy-mavros-extras
@@ -83,12 +83,15 @@ jobs:
           cd ../..
           colcon build --packages-select gisnav gisnav_msgs
 
-      - name: Run ROS 2 integration tests
+      - name: Run ROS 2 launch tests
         run: |
           cd colcon_ws
+          sudo apt-get -y update
+          sudo apt-get -y dist-upgrade
           source /opt/ros/foxy/setup.bash
           source install/setup.bash
-          launch_test src/gisnav/test/test_px4.py
+          launch_test src/gisnav/test/launch/test_px4_launch.py
+          launch_test src/gisnav/test/launch/test_ardupilot_launch.py
 
       - name: Build Sphinx docs
         run: |

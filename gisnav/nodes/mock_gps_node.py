@@ -123,7 +123,7 @@ class MockGPSNode(BaseNode):
             else:
                 assert_type(msg, dict)
                 assert self._mock_gps_pub is None
-                self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self._udp_ip, self._upd_port))
+                self._socket.sendto(f'{json.dumps(msg)}'.encode('utf-8'), (self._udp_ip, self._udp_port))
         else:
             self.get_logger().info('Could not create GPS message, skipping publishing.')
 

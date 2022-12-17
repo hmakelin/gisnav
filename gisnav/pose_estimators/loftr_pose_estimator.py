@@ -30,9 +30,6 @@ class LoFTRPoseEstimator(KeypointPoseEstimator):
     def __init__(self, min_matches: int) -> None:
         """Class initializer
 
-        This method is intended to be called inside :meth:`.initializer` together with a global variable declaration
-        so that attributes initialized here are also available for :meth:`.worker`.
-
         :param min_matches: Minimum required keypoint matches (should be >= 4)
         """
         super(LoFTRPoseEstimator, self).__init__(min_matches)

@@ -2,11 +2,15 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>gisnav</name>
-  <version>0.62.0</version>
+  <version>0.63.0</version>
   <description>Estimates airborne drone global position by matching video to map retrieved from onboard GIS server.</description>
   <author email="hmakelin@protonmail.com">Harri Makelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
   <license>MIT</license>
+
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
@@ -14,14 +18,19 @@
   <test_depend>python3-pytest</test_depend>
   <test_depend>launch_testing</test_depend>
 
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>rcl_interfaces</exec_depend>
-  <exec_depend>cv_bridge</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>mavros_msgs</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
-  <exec_depend>px4_msgs</exec_depend>
-  <exec_depend>ros2launch</exec_depend>
+  <depend>rclpy</depend>
+  <depend>rosidl_typesupport_c</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>cv_bridge</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>geographic_info</depend>
+  <depend>geographic_msgs</depend>
+  <depend>px4_msgs</depend>
+  <depend>gisnav_msgs</depend>
+  <depend>ros2launch</depend>
 
   <export>
     <build_type>ament_python</build_type>

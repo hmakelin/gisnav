@@ -13,6 +13,7 @@ being instantiated. Example usage that handles the exception:
     except DataValueError as dve:
         self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
         return None
+
 """
 from __future__ import annotations  # Python version 3.7+
 
@@ -24,17 +25,19 @@ import warnings
 warnings.filterwarnings(action='ignore', category=UserWarning, message='Gimbal lock detected.')
 
 from xml.etree import ElementTree
-from typing import Optional
+from typing import Optional, Tuple
 from dataclasses import dataclass, field
 from collections import namedtuple
-from multiprocessing.pool import AsyncResult
 from scipy.spatial.transform import Rotation
+from shapely.geometry import box
+from geographic_msgs.msg import GeoPoint
 
 from gisnav.assertions import assert_type, assert_ndim, assert_shape, assert_len
-from gisnav.geo import GeoPoint, GeoTrapezoid, GeoValueError
+from gisnav.geo import GeoPt, GeoTrapezoid, GeoValueError
 
 Dim = namedtuple('Dim', 'height width')
 TimePair = namedtuple('TimePair', 'local foreign')
+BBox = namedtuple('BBox', 'left bottom right top')
 
 
 # noinspection PyClassHasNoInit
@@ -45,7 +48,7 @@ class Position:
     .. note::
         (x, y, z) coordinates are in ENU frame
     """
-    xy: GeoPoint                    # XY coordinates (e.g. longitude & latitude in WGS84)
+    xy: GeoPt                       # XY coordinates (e.g. longitude & latitude in WGS84)
     altitude: Altitude
     attitude: Optional[Attitude]    # attitude in NED frame
     timestamp: Optional[int]        # Reference timestamp of position
@@ -90,7 +93,7 @@ class Attitude:
 
         :return: Attitude in SED frame
         """
-        nadir_pitch = np.array([0, np.sin(np.pi/4), 0, np.sin(np.pi/4)])  # Adjust origin to nadir facing camera
+        nadir_pitch = np.array([0, np.sin(np.pi / 4), 0, np.sin(np.pi / 4)])  # Adjust origin to nadir facing camera
         r = Rotation.from_quat(self.q) * Rotation.from_quat(nadir_pitch)
         q = r.as_quat()
         q = np.array([q[1], -q[0], q[2], -q[3]])  # NED to ESD
@@ -158,39 +161,40 @@ class CameraData:
 @dataclass(frozen=True)
 class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
-    bbox: GeoSquare
+    bbox: BBox
     elevation: Optional[Img] = None  # Optional elevation raster
 
     def __post_init__(self):
         """Post-initialization validity check."""
         if self.elevation is not None:
             assert self.elevation.arr.shape[0:2], self.image.arr.shape[0:2]
-            assert_ndim(self.elevation.arr, 2) # Grayscale image expected
+            assert_ndim(self.elevation.arr, 2)  # Grayscale image expected
 
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ContextualMapData(_ImageHolder):
-    """Contains the rotated and cropped map image for _match estimation"""
-    image: Img = field(init=False)  # This is the cropped and rotated map which is same size as the camera frames
+    """Contains the rotated and cropped map image pose estimation"""
+    image: Img = field(init=False)              # Cropped and rotated map which is the same size as the camera frames
     elevation: Optional[Img] = field(init=None) # Rotated elevation raster (optional) in meters
-    rotation: float                 # radians
-    crop: Dim                       # Same value will also be found at image.dim (but not at initialization)
-    map_data: MapData               # This is the original (square) map with padding
+    rotation: float                             # radians
+    crop: Dim                                   # Same value will also be found at image.dim (but not at initialization)
+    map_data: MapData                           # This is the original (square) map with padding
     pix_to_wgs84: np.ndarray = field(init=False)
-    mock_data: bool = False         # Indicates that this was used for field of view guess (mock map data)
-    altitude_scaling: Optional[float] = None # altitude scaling (elevation raster meters -> camera pixels)
+    mock_data: bool = False                     # Indicates that this was used for field of view guess (mock map data)
+    altitude_scaling: Optional[float] = None    # altitude scaling (elevation raster meters -> camera pixels)
 
+    # TODO: update docs - only one transformation is returned
     def _pix_to_wgs84(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84 coordinates
-        along with intermediate transformations
+        """Returns tuple of affine 2D transformation matrix for converting matched pixel coordinates to WGS84
+        coordinates along with intermediate transformations
 
-        These transformations can be used to reverse the rotation and cropping that :func:`~rotate_and_crop_map` did to
+        These transformations can be used to reverse the rotation and cropping that :func:`._rotate_and_crop_map` did to
         the original map.
 
-        :return: Tuple containing 2D affinre transformations from 1. pixel coordinates to WGS84, 2. from original unrotated
-        and uncropped map pixel coordinates to WGS84, 3. from rotated map coordinates to unrotated map coordinates, and 4.
-        from cropped map coordinates to uncropped (but still rotated) map pixel coordinates.
+        :return: Tuple containing 2D affine transformations from 1. pixel coordinates to WGS84, 2. from original
+            unrotated and uncropped map pixel coordinates to WGS84, 3. from rotated map coordinates to unrotated map
+            coordinates, and 4. from cropped map coordinates to uncropped (but still rotated) map pixel coordinates.
         """
         map_dim_arr = np.array(self.map_data.image.dim)
         img_dim_arr = np.array(self.image.dim)
@@ -206,14 +210,16 @@ class ContextualMapData(_ImageHolder):
         uncropped_to_unrotated = np.vstack((rotation, rotation_padding))
 
         src_corners = create_src_corners(*self.map_data.image.dim)
-        dst_corners = self.map_data.bbox.to_crs('epsg:4326').coords  # .reshape(-1, 1, 2)
+        coords = np.array(box(*self.map_data.bbox).exterior.coords)
+        gt = GeoTrapezoid(coords)  # .reshape(-1, 1, 2)
+        dst_corners = gt.square_coords
         dst_corners = np.flip(dst_corners, axis=1)  # from ENU frame to WGS 84 axis order
         unrotated_to_wgs84 = cv2.getPerspectiveTransform(np.float32(src_corners).squeeze(),
                                                          np.float32(dst_corners).squeeze())
 
         # Ratio of boundaries in pixels and meters -> Altitude (z) scaling factor
-        vertical_scaling = abs(self.map_data.bbox.meter_length / \
-                               (2*self.map_data.image.dim.width + 2*self.map_data.image.dim.height))
+        vertical_scaling = abs(gt.meter_length / \
+                               (2 * self.map_data.image.dim.width + 2 * self.map_data.image.dim.height))
 
         pix_to_wgs84_ = unrotated_to_wgs84 @ uncropped_to_unrotated @ pix_to_uncropped
 
@@ -222,9 +228,7 @@ class ContextualMapData(_ImageHolder):
         return pix_to_wgs84_  # , unrotated_to_wgs84, uncropped_to_unrotated, pix_to_uncropped
 
     def _rotate_and_crop_map(self, elevation: bool = False) -> np.ndarray:
-        """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle.
-
-        Map needs padding so that a circle with diameter of the diagonal of the img_size rectangle is enclosed in map.
+        """Rotates map counter-clockwise and then crops a dimensions-sized part from the middle
 
         :param elevation: Set True to do rotation on elevation raster instead
         :return: Rotated and cropped map raster
@@ -248,7 +252,7 @@ class ContextualMapData(_ImageHolder):
 
     @staticmethod
     def _crop_center(img: np.ndarray, dimensions: Dim) -> np.ndarray:
-        """Crops dimensions sized part from center.
+        """Crops dimensions sized part from center
 
         :param img: Image to crop
         :param dimensions: Dimensions of area to crop (not of image itself)
@@ -257,9 +261,8 @@ class ContextualMapData(_ImageHolder):
         cx, cy = tuple(np.array(img.shape[0:2]) / 2)
         img_cropped = img[math.floor(cy - dimensions.height / 2):math.floor(cy + dimensions.height / 2),
                       math.floor(cx - dimensions.width / 2):math.floor(cx + dimensions.width / 2)]
-        assert (
-        img_cropped.shape[0:2] == dimensions.height, dimensions.width), 'Something went wrong when cropping the ' \
-                                                                        'map raster. '
+        assert (img_cropped.shape[0:2] == dimensions.height, dimensions.width), \
+            'Something went wrong when cropping the map raster.'
         return img_cropped
 
     def __post_init__(self):
@@ -278,44 +281,6 @@ class ImagePair:
     """Atomic image pair to represent a matched pair of images"""
     qry: ImageData
     ref: ContextualMapData
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class _AsyncQuery:
-    """Abstract base class of a structure that stores a :py:class:`multiprocessing.pool.AsyncResult` instance along
-    with its input data
-
-    The intention is to keep the result of the query in the same place along with the inputs so that they can be
-    easily reunited again in the callback function.
-
-    .. note::
-        You should not try to instantiate this class directly. Use child classes instead.
-    """
-    result: AsyncResult
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class AsyncPoseQuery(_AsyncQuery):
-    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
-
-    The :meth:`.PoseEstimator.worker` interface expects an image_pair (query, reference images and camera intrinsics matrix)
-    and an input_data context as arguments (along with a guess which is not stored since it is no longer needed after
-    the _match estimation).
-    """
-    image_pair: ImagePair
-    input_data: InputData
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class AsyncWMSQuery(_AsyncQuery):
-    """Stores a :py:class:`multiprocessing.pool.AsyncResult` instance along with its input data
-
-    The :meth:`.WMSClient.worker` expects the :class:`.GeoSquare` bounds as input it is needed here
-    """
-    geobbox: GeoSquare
 
 
 # noinspection PyClassHasNoInit
@@ -347,21 +312,6 @@ class Pose:
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
-class Snapshot:
-    """Snapshot of vehicle and environment state"""
-    synchronized_time: Optional[int]
-    attitude: Optional[Attitude]
-    gimbal_attitude: Optional[Attitude]
-    gimbal_set_attitude: Optional[Attitude]
-    global_position: Optional[GeoPoint]
-    altitude: Optional[Altitude]
-    home_altitude: Optional[Altitude]
-    terrain_altitude: Optional[Altitude]
-    local_frame_origin: Optional[Position]
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
 class Altitude:
     """Holds different definitions of altitude in one place
 
@@ -371,7 +321,7 @@ class Altitude:
     home: Above home or starting location
 
     .. note::
-        Altitude AGL should always be known (cannot be None)
+        TODO: Altitude AGL should always be known (cannot be None)
 
     .. seealso::
         `Altitude definitions <https://ardupilot.org/copter/docs/common-understanding-altitude.html>`_
@@ -381,22 +331,10 @@ class Altitude:
     ellipsoid: Optional[float]
     home: Optional[float]
 
+    # TODO
     #def __post_init__(self):
     #    """Post-initialization validity checks"""
     #    assert self.agl is not None
-
-
-
-
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class InputData:
-    """InputData of vehicle state and other variables needed for postprocessing pose estimates"""
-    r_guess: Optional[np.ndarray]
-    """Camera expected attitude"""
-
-    snapshot: Snapshot
-    """Snapshot of vehicle and environment state"""
 
 
 # noinspection PyClassHasNoInit
@@ -405,7 +343,7 @@ class FOV:
     """Camera field of view related attributes"""
     fov_pix: np.ndarray
     fov: Optional[GeoTrapezoid]
-    c: GeoPoint
+    c: GeoPt
     c_pix: np.ndarray
     scaling: float = field(init=False)
 
@@ -444,13 +382,16 @@ class FOV:
 class FixedCamera:
     """WGS84-fixed camera attributes
 
-    Collects field of view and map_match under a single structure that is intended to be stored in input data context as
-    visual odometry fix reference. Includes the needed map_match and pix_to_wgs84 transformation for the vo fix.
+    # TODO: refactor this class out - it was used earlier for visual odometry but is now redundant
+
+    Collects field of view and map_match under a single structure.
     """
     image_pair: ImagePair
     pose: Pose
     timestamp: int
-    snapshot: Snapshot
+    terrain_altitude_amsl: Optional[float]
+    terrain_altitude_ellipsoid: Optional[float]
+    home_position: Optional[GeoPoint]
     fov: FOV = field(init=False)
     position: Position = field(init=False)
     h: np.ndarray = field(init=False)
@@ -472,7 +413,7 @@ class FixedCamera:
             fov = FOV(fov_pix=fov_pix,
                       fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs='epsg:4326'),
                       c_pix=c_pix,
-                      c=GeoPoint(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
+                      c=GeoPt(*c_wgs84.squeeze()[::-1], crs='epsg:4326')
                       )
             return fov
         except GeoValueError as _:
@@ -482,7 +423,7 @@ class FixedCamera:
             # Could not create a valid FOV
             return None
 
-    def _estimate_attitude(self) -> np.ndarray:
+    def _estimate_attitude(self) -> Attitude:
         """Estimates gimbal (not vehicle) attitude in NED frame
 
         .. note::
@@ -496,7 +437,6 @@ class FixedCamera:
         assert not np.isnan(rT).any()
         gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
 
-        #gimbal_estimated_attitude *= Rotation.from_rotvec(-(np.pi/2) * np.array([0, 1, 0]))  # camera body
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1]))  # unrotated map pixel frame
 
@@ -512,7 +452,7 @@ class FixedCamera:
 
         :param img_arr_shape: Image array shape tuple (height, width)
         :param h_mat: Homography matrix
-        :return: Tuple of FOV corner coordinates and prinicpal point np.ndarrays
+        :return: Tuple of FOV corner coordinates and principal point np.ndarrays
         """
         assert_type(img_arr_shape, tuple)
         assert_len(img_arr_shape, 2)
@@ -542,13 +482,12 @@ class FixedCamera:
         :param terrain_altitude_amsl: Optional ground elevation above AMSL in meters
         :param terrain_altitude_ellipsoid: Optional ground elevation above WGS 84 ellipsoid in meters
         :param crs: CRS to use for the Position
-        :return: Camera position
+        :return: Camera position or None if not available
         """
         assert self.fov is not None  # Call _estimate_fov before _estimate_position!
         # Translation in WGS84 (and altitude or z-axis translation in meters above ground)
         assert_type(self.image_pair.ref, ContextualMapData)  # need pix_to_wgs84
         t_wgs84 = self.image_pair.ref.pix_to_wgs84 @ np.append(self.camera_position[0:2], 1)
-        #t_wgs84[2] = -self.image_pair.ref.pix_to_wgs84[2][2] * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
         t_wgs84[2] = -self.fov.scaling * self.camera_position[2]  # In NED frame z-coordinate is negative above ground, make altitude >0
 
         # Check that we have all the values needed for a global position
@@ -566,7 +505,7 @@ class FixedCamera:
             home=None  # TODO
         )
         position = Position(
-            xy=GeoPoint(lon, lat, crs),  # lon-lat order
+            xy=GeoPt(lon, lat, crs),  # lon-lat order
             altitude=altitude,
             attitude=self._estimate_attitude(),
             timestamp=self.image_pair.qry.timestamp
@@ -583,8 +522,8 @@ class FixedCamera:
             raise DataValueError('Please provide valid image pair.')
 
         img = self.image_pair.qry
-        if self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None or \
-            self.snapshot.terrain_altitude.amsl is not None and self.snapshot.terrain_altitude.ellipsoid is None:
+        if self.terrain_altitude_amsl is not None and self.terrain_altitude_ellipsoid is None or \
+            self.terrain_altitude_amsl is not None and self.terrain_altitude_ellipsoid is None:
                 raise DataValueError('Please provide terrain altitude in both AMSL and above WGS 84 ellipsoid.')
 
         object.__setattr__(self, 'h', img.camera_data.k @ np.delete(self.pose.e, 2, 1))  # Remove z-column, making the matrix square
@@ -601,8 +540,8 @@ class FixedCamera:
             raise DataValueError('Could not initialize a valid FixedCamera.')
 
         try:
-            position = self._estimate_position(self.snapshot.terrain_altitude.amsl,
-                                               self.snapshot.terrain_altitude.ellipsoid)
+            position = self._estimate_position(self.terrain_altitude_amsl,
+                                               self.terrain_altitude_ellipsoid)
             if position is not None:
                 object.__setattr__(self, 'position', position)
             else:
@@ -619,6 +558,9 @@ class FixedCamera:
             raise DataValueError(f'pose.t {self.pose.t} & pose.t {self.pose.t} have values too large compared to ' \
                                  f'(cx, cy, fx): {reference}.')
 
+        # Fix home position
+        if self.home_position is not None:
+            object.__setattr__(self.position.altitude, 'home', self.position.altitude.ellipsoid - self.home_position.altitude)
 
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)

@@ -4,17 +4,16 @@ import numpy as np
 
 from abc import abstractmethod
 from typing import Tuple, Optional
-from dataclasses import dataclass, field
 
 from gisnav.pose_estimators.pose_estimator import PoseEstimator
-from gisnav.assertions import assert_type, assert_len, assert_pose
+from gisnav.assertions import assert_pose
 
 
 class KeypointPoseEstimator(PoseEstimator):
     """Abstract base class for all keypoint-based pose estimators
 
-    This class implements the :meth:`.estimate_pose` method that estimates a pose from matched keypoints. An abstract
-    :meth:`.find_matching_keypoints` method must be implemented by extending classes.
+    This class implements an :meth:`.estimate` method that estimates a pose from matched keypoints. An abstract
+    :meth:`._find_matching_keypoints` method must be implemented by extending classes.
     """
     _HOMOGRAPHY_MINIMUM_MATCHES = 4
     """Minimum matches for homography estimation, should be at least 4"""
@@ -25,7 +24,7 @@ class KeypointPoseEstimator(PoseEstimator):
         :param min_matches: Minimum (>=4) required matched keypoints for pose estimates
         """
         # Use provided value as long as it's above _HOMOGRAPHY_MINIMUM_MATCHES
-        self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or _HOMOGRAPHY_MINIMUM_MATCHES)
+        self._min_matches = max(self._HOMOGRAPHY_MINIMUM_MATCHES, min_matches or self._HOMOGRAPHY_MINIMUM_MATCHES)
 
     @abstractmethod
     def _find_matching_keypoints(self, query: np.ndarray, reference: np.ndarray) \
@@ -41,9 +40,9 @@ class KeypointPoseEstimator(PoseEstimator):
         """
         pass
 
-    def estimate_pose(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
-                      guess: Optional[Tuple[np.ndarray, np.ndarray]] = None,
-                      elevation_reference: Optional[np.ndarray] = None) \
+    def estimate(self, query: np.ndarray, reference: np.ndarray, k: np.ndarray,
+                 guess: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+                 elevation_reference: Optional[np.ndarray] = None) \
             -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Returns pose between given query and reference images, or None if no pose could not be estimated
 
@@ -54,7 +53,7 @@ class KeypointPoseEstimator(PoseEstimator):
         :param k: Camera intrinsics matrix (3, 3)
         :param guess: Optional initial guess for camera pose
         :param elevation_reference: Optional elevation raster (same size resolution as reference image, grayscale)
-        :return: Pose tuple consisting of a rotation (3, 3) and translation (3, 1) np.ndarrays
+        :return: Pose tuple consisting of a rotation (3, 3) and translation (3, 1) NumPy arrays
         """
         if elevation_reference is not None:
             assert elevation_reference.shape[0:2] == reference.shape[0:2]

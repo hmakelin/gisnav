@@ -1,6 +1,6 @@
 """Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
-
+from typing import TYPE_CHECKING, Tuple
 import math
 import numpy as np
 import warnings
@@ -11,6 +11,9 @@ from geopandas import GeoSeries
 from shapely.geometry import Point, Polygon, box
 
 from gisnav.assertions import assert_len, assert_type
+if TYPE_CHECKING:
+    # CameraData used as type hint only - avoid ImportError due to circular import
+    from .data import CameraData
 
 
 class _GeoObject(ABC):
@@ -19,7 +22,7 @@ class _GeoObject(ABC):
     Each instance wraps a :class:`geopandas.GeoSeries` instance of length one, i.e. containing a single Shapely shape.
     The GeoSeries class is versatile and operates on an entire series, so this wrapper is provided to only expose
     specific functionality that is needed in the application as well as provide an abstraction for a 'GeoObject' i.e. a
-    GeoSeries of length 1. For example, it is conceptually more convenient to handle a 'GeoPoint' object than a
+    GeoSeries of length 1. For example, it is conceptually more convenient to handle a 'GeoPt' object than a
     GeoSeries of length 1 with a single Shapely Point in it.
     """
 
@@ -43,7 +46,7 @@ class _GeoObject(ABC):
     def to_crs(self, crs: str) -> _GeoObject:  # TODO: return None? Misleading this way
         """Converts to provided CRS
 
-        :return: The same GeoPoint instance transformed to new CRS
+        :return: The same GeoPt instance transformed to new CRS
         """
         if self._geoseries.crs != crs:
             self._geoseries = self._geoseries.to_crs(crs)
@@ -68,12 +71,12 @@ class _GeoPolygon(_GeoObject):
     """Abstract base class for :class:`_GeoObject`s that contain a Shapely Polygon"""
 
     @property
-    def center(self) -> GeoPoint:
+    def center(self) -> GeoPt:
         """Returns center point of the polygon"""
-        return GeoPoint(*self._geoseries.centroid[0].coords[0], crs=self.crs)
+        return GeoPt(*self._geoseries.centroid[0].coords[0], crs=self.crs)
 
     @property
-    def bounds(self) -> Tuple[4*(float,)]:
+    def bounds(self) -> Tuple[4 * (float,)]:
         """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy) formatted tuple (e.g. for WMS GetMap)"""
         return self._geoseries[0].bounds
 
@@ -106,9 +109,9 @@ class _GeoPolygon(_GeoObject):
         assert_len(exterior_coords, 4)
         return exterior_coords
 
-    def intersection(self, box: _GeoPolygon) -> GeoTrapezoid:
+    def intersection(self, box_: _GeoPolygon) -> GeoTrapezoid:
         """Returns the intersection with the given :class:`._GeoPolygon`"""
-        return GeoTrapezoid(self._geoseries.intersection(box._geoseries))
+        return GeoTrapezoid(self._geoseries.intersection(box_._geoseries))
 
     def __post_init__(self):
         """Post-initialization validity checks
@@ -118,7 +121,7 @@ class _GeoPolygon(_GeoObject):
         assert_type(self._geoseries[0], Polygon)
 
 
-class GeoPoint(_GeoObject):
+class GeoPt(_GeoObject):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a 2D Point (a geographical coordinate pair)"""
     def __init__(self, x: float, y: float, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a geographical coordinate pair
@@ -163,7 +166,7 @@ class GeoPoint(_GeoObject):
 
 class GeoSquare(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (square shaped) bounding box"""
-    def __init__(self, center: GeoPoint, radius: float, crs: str = _GeoObject.DEFAULT_CRS):
+    def __init__(self, center: GeoPt, radius: float, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a square bounding box by enveloping a circle of given radius at given center
 
         :param center: Center of the bounding box
@@ -195,7 +198,7 @@ class GeoSquare(_GeoPolygon):
 class GeoTrapezoid(_GeoPolygon):
     """Wrapper for :class:`geopandas.GeoSeries` that constrains it to a (convex isosceles) trapezoid
 
-    Used to represents camera field of view projected to ground plane.
+    Used to represent camera field of view projected to ground plane.
     """
     def __init__(self, corners: np.ndarray, crs: str = _GeoObject.DEFAULT_CRS):
         """Creates a square bounding box by enveloping a circle of given radius inside
@@ -208,8 +211,6 @@ class GeoTrapezoid(_GeoPolygon):
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        #if not (self._geoseries[0].is_valid and self._is_convex_isosceles_trapezoid()):
-        #    raise GeoValueError(f'Not a valid convex isosceles trapezoid: {self._geoseries[0]}')
         if not (self._geoseries[0].is_valid and not self._is_convex()):
             raise GeoValueError(f'Not a valid convex trapezoid: {self._geoseries[0]}')
 
@@ -220,35 +221,35 @@ class GeoTrapezoid(_GeoPolygon):
         """
         return self._geoseries[0].bounds == self._geoseries[0].convex_hull.bounds
 
-    #def _is_convex_isosceles_trapezoid(self, diagonal_length_tolerance: float = 0.1) -> bool:
-    #    """Returns True if the quadrilateral is a convex isosceles trapezoid
-    #
-    #    .. note::
-    #        If the estimated field of view (FOV) is not a convex isosceles trapezoid, it is a sign that (1) the match
-    #        was bad or (2) the gimbal the camera is mounted on has not had enough time to stabilize (camera has
-    #        non-zero roll). Matches where the FOV is not a convex isosceles trapezoid should be rejected assuming we
-    #        can't tell (1) from (2) and that it is better to wait for a good position estimate than to use a bad one.
-    #
-    #    .. seealso::
-    #        :func:`.create_src_corners` for the assumed order of the quadrilateral corners.
-    #
-    #    :param diagonal_length_tolerance: Tolerance for relative length difference between trapezoid diagonals
-    #    :return: True if the quadrilateral is a convex isosceles trapezoid
-    #    """
-    #    ul, ll, lr, ur = tuple(map(lambda pt: pt.squeeze().tolist(), self.coords))
-    #
-    #    # Check convexity (exclude self-crossing trapezoids)
-    #    # Note: inverted y-axis, origin at upper left corner of image
-    #    if not (ul[0] < ur[0] and ul[1] < ll[1] and lr[0] > ll[0] and lr[1] > ur[1]):
-    #        return False
-    #
-    #    # Check diagonals same length within tolerance
-    #    ul_lr_length = math.sqrt((ul[0] - lr[0]) ** 2 + (ul[1] - lr[1]) ** 2)
-    #    ll_ur_length = math.sqrt((ll[0] - ur[0]) ** 2 + (ll[1] - ur[1]) ** 2)
-    #    if abs((ul_lr_length / ll_ur_length) - 1) > diagonal_length_tolerance:
-    #        return False
-    #
-    #    return True
+    @property
+    def square_coords(self) -> np.ndarray:
+        """Returns a numpy array of the corners coordinates of the bbox
+
+        Order should be top-left, bottom-left, bottom-right, top-right (same as
+        :meth:`gisnav.data.create_src_corners`).
+        """
+        corners = box(*self.bounds).exterior.coords
+        corners = np.array([
+            corners[2],  # tl
+            corners[3],  # bl
+            corners[0],  # br
+            corners[1]   # tr
+        ])
+
+        return corners
+
+
+def get_dynamic_map_radius(camera_data: CameraData, max_map_radius: int, altitude: float) -> float:
+    """Returns map radius that adjusts for camera altitude to be used for new map requests
+
+    :param camera_data: Camera data
+    :param max_map_radius: Max map radius
+    :param altitude: Altitude of camera in meters
+    :return: Suitable map radius in meters
+    """
+    hfov = 2 * math.atan(camera_data.dim.width / (2 * camera_data.fx))
+    map_radius = 1.5 * hfov * altitude  # Arbitrary padding of 50%
+    return min(map_radius, max_map_radius)
 
 
 class GeoValueError(ValueError):

@@ -37,7 +37,13 @@ author = package_data.author
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage', 'autodocsumm', 'myst_parser']
+extensions = ['sphinx.ext.autodoc',
+              'sphinx.ext.coverage',
+              'sphinx.ext.autosectionlabel',
+              'sphinx_design',
+              'autodocsumm',
+              'myst_parser'
+              ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -79,6 +85,7 @@ html_theme_options = {
         }
     ],
     "icon_links_label": "Quick Links",
+    "show_toc_level": 3,
 }
 
 # Make version number accessible in .rst files

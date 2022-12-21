@@ -11,9 +11,8 @@ being instantiated. Example usage that handles the exception:
         )
         return position
     except DataValueError as dve:
-        self.get_logger().warn(f'Error determining vehicle position:\n{dve},\n{traceback.print_exc()}.')
+        self.get_logger().error('Error determining vehicle position.')
         return None
-
 """
 from __future__ import annotations  # Python version 3.7+
 

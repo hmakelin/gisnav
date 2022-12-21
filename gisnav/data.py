@@ -174,7 +174,7 @@ class MapData(_ImageHolder):
 # noinspection PyClassHasNoInit
 @dataclass(frozen=True)
 class ContextualMapData(_ImageHolder):
-    """Contains the rotated and cropped map image pose estimation"""
+    """Contains the rotated and cropped map image for pose estimation"""
     image: Img = field(init=False)              # Cropped and rotated map which is the same size as the camera frames
     elevation: Optional[Img] = field(init=None) # Rotated elevation raster (optional) in meters
     rotation: float                             # radians

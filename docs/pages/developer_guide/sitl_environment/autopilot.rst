@@ -14,10 +14,12 @@ Setup PX4
 ___________________________________________________
 **These instructions are written for PX4 version >=1.13.0, <=1.14.0-beta1**
 
-Follow the PX4 instructions to setup your `Ubuntu Development Environment`_ with `Fast DDS`_ support.
+Follow the PX4 instructions to setup your `Ubuntu Development Environment`_ with `Fast DDS`_ and `PX4-ROS 2 Bridge`_
+support.
 
 .. _Ubuntu Development Environment: https://docs.px4.io/master/en/simulation/ros_interface.html
 .. _Fast DDS: https://docs.px4.io/main/en/dev_setup/fast-dds-installation.html
+.. _PX4-ROS 2 Bridge: https://docs.px4.io/main/en/ros/ros2_comm.html
 
 Build Gazebo simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

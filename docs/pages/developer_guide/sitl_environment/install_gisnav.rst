@@ -36,6 +36,9 @@ Install GISNav in your ROS 2 Workspace:
     cd ~/colcon_ws
     mkdir -p src && cd "$_"
     git clone https://github.com/hmakelin/gisnav.git
+    git clone https://github.com/hmakelin/gisnav_msgs.git
+    rosdep update
+    rosdep install --from-paths . -y --ignore-src
     cd gisnav
     pip3 install -r requirements.txt
 

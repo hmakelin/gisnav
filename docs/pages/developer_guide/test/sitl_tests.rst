@@ -4,7 +4,7 @@ SITL tests are under the ``test/sitl`` folder. They are simple Python scripts:
 
 .. code-block:: bash
 
-    cd ~/px4_ros_com_ros2/src/gisnav/test/sitl
+    cd ~/colcon_ws/src/gisnav/test/sitl
     python sitl_test_mock_gps_node.py
 
 Flight Log Analysis

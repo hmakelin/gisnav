@@ -100,7 +100,7 @@ convenient to proxy an existing commercial tile-based endpoint.
             docker run \
               --name $CONTAINER_NAME \
               -p 80:80 \
-              -v $PWD/mapfiles/:$MASERVER_PATH/:ro \
+              -v $PWD/mapfiles/:$MAPSERVER_PATH/:ro \
               camptocamp/mapserver
 
         Test your MapServer WMS service by opening the capabilities XML in your browser:

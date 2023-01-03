@@ -27,21 +27,19 @@ You will need to have [NVIDIA Container Toolkit][2] for Docker installed.
 ```bash
 git clone https://github.com/hmakelin/gisnav-docker.git
 cd gisnav-docker
-docker-compose build sitl
+docker-compose -f docker-compose.yaml -f docker-compose.demo.yaml build sitl
 ```
 
 Once the `sitl` image has been built, run the `mapserver` and `sitl` services:
 
 ```bash
-docker-compose up -d mapserver sitl
+docker-compose -f docker-compose.yaml -f docker-compose.demo.yaml up -d mapserver sitl
 ```
 
 > **Note**:
 > * The build for the `sitl` image takes a long time.
 > * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
 >   time until it starts serving the WMS endpoint.
-> * Prebuilt [sitl][4] and [mapserver][5] images for the demo are available in Docker Hub in case you have problems with
->   the build process.
 
 [4]: https://hub.docker.com/r/hmakelin/gisnav-sitl
 [5]: https://hub.docker.com/r/hmakelin/gisnav-mapserver

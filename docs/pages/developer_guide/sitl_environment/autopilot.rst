@@ -34,6 +34,18 @@ vicinity of San Carlos (KSQL) airport:
     .. tab-item:: v1.14.0-beta1
         :selected:
 
+        .. note::
+            You must `create the micro-ros-agent`_ for the following command to work
+
+        .. _create the micro-ros-agent: https://micro.ros.org/docs/tutorials/core/first_application_linux/
+
+        .. code-block:: bash
+            :caption: Run ``micro-ros-agent``
+
+            cd ~/colcon_ws
+            ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
+
+
         .. code-block:: bash
             :caption: Run PX4 Gazebo SITL simulation at KSQL airport
 

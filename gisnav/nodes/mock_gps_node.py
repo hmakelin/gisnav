@@ -212,7 +212,6 @@ class MockGPSNode(BaseNode):
         msg.cog_rad = np.nan
         msg.vel_ned_valid = False
         msg.timestamp_time_relative = 0
-        msg.time_utc_usec = int(time.time() * 1e6)
         msg.satellites_used = np.iinfo(np.uint8).max
         msg.time_utc_usec = int(time.time() * 1e6)
         msg.heading = heading

@@ -36,22 +36,22 @@ class PX4Node(AutopilotNode):
 
         self._vehicle_global_position = None
         self._vehicle_global_position_sub = self.create_subscription(VehicleGlobalPosition,
-                                                                     '/fmu/vehicle_global_position/out',
+                                                                     '/fmu/out/vehicle_global_position',
                                                                      self._vehicle_global_position_callback,
                                                                      QoSPresetProfiles.SENSOR_DATA.value)
         self._vehicle_local_position = None
         self._vehicle_local_position_sub = self.create_subscription(VehicleLocalPosition,
-                                                                    '/fmu/vehicle_local_position/out',
+                                                                    '/fmu/out/vehicle_local_position',
                                                                     self._vehicle_local_position_callback,
                                                                     QoSPresetProfiles.SENSOR_DATA.value)
         self._vehicle_attitude = None
         self._vehicle_attitude_sub = self.create_subscription(VehicleAttitude,
-                                                              '/fmu/vehicle_attitude/out',
+                                                              '/fmu/out/vehicle_attitude',
                                                               self._vehicle_attitude_callback,
                                                               QoSPresetProfiles.SENSOR_DATA.value)
         self._gimbal_device_set_attitude = None
         self._gimbal_device_set_attitude_sub = self.create_subscription(GimbalDeviceSetAttitude,
-                                                                        '/fmu/gimbal_device_set_attitude/out',
+                                                                        '/fmu/out/gimbal_device_set_attitude',
                                                                         self._gimbal_device_set_attitude_callback,
                                                                         QoSPresetProfiles.SENSOR_DATA.value)
 

@@ -10,5 +10,13 @@ package namespace for convenience. For example:
 """
 from .pose_estimator import PoseEstimator
 from .keypoint_pose_estimator import KeypointPoseEstimator
-from .superglue_pose_estimator import SuperGluePoseEstimator
-from .loftr_pose_estimator import LoFTRPoseEstimator
+try:
+    from .superglue_pose_estimator import SuperGluePoseEstimator
+except ModuleNotFoundError as e:
+    # Submodule not loaded
+    pass
+try:
+    from .loftr_pose_estimator import LoFTRPoseEstimator
+except ModuleNotFoundError as e:
+    # Submodule not loaded
+    pass

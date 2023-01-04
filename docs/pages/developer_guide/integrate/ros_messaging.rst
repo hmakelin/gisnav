@@ -65,7 +65,7 @@ You can see the subscribed topic names and message types in the ``__init__`` met
 
 .. note::
     See :ref:`Remapping ROS 2 topics` to adapt these nodes to your system. For example, you must remap the PX4 topic
-    names from ``fmu/*/out`` to ``fmu/out/*`` if you are using PX4 v1.14.0-beta1 instead of v1.13.X.
+    names from  ``fmu/out/*`` to ``fmu/*/out`` if you are using PX4 v1.13.X instead of v1.14.0-beta1.
 
     .. _name remapping: https://design.ros2.org/articles/static_remapping.html
 

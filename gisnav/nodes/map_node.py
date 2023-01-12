@@ -45,7 +45,7 @@ class MapNode(CameraSubscriberNode):
         ``requests``. They are therefore handled as unexpected errors.
     """
 
-    ROS_D_URL = 'http://localhost:80/wms'
+    ROS_D_URL = 'http://127.0.0.1:80/wms'
     """Default WMS URL"""
 
     ROS_D_VERSION = '1.3.0'

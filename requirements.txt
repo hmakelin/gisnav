@@ -8,9 +8,9 @@ pyyaml
 requests
 
 # Geospatial objects handling
-geopandas
-shapely
-pyproj
+geopandas==0.12.2
+shapely==1.8.2
+pyproj==3.2.1
 
 # Used by LoFTR
 einops

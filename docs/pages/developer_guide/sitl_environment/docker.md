@@ -48,16 +48,6 @@ Follow these instructions to launch the SITL simulation used in the [mock GPS de
 
 [7]: https://github.com/hmakelin/gisnav/blob/master/README.md#mock-gps-example
 
-### Clone
-
-Clone this repository and change to its root directory:
-
-```bash
-cd $HOME
-git clone https://github.com/hmakelin/gisnav-docker.git
-cd gisnav-docker
-```
-
 ### Build
 
 To build the `mapserver`, `px4`,  `micro-ros-agent`, and `gisnav` services by running the following command:
@@ -162,6 +152,11 @@ ros2 daemon start
 
 ### Disable AppArmor for ArduPilot SITL
 
+> dbus[33]: The last reference on a connection was dropped without closing the connection. This is a bug in an 
+> application. See dbus_connection_unref() documentation for details. Most likely, the application was supposed to call 
+> dbus_connection_close(), since this is a private connection. D-Bus not built with -rdynamic so unable to print a 
+> backtrace
+
 **Caution advised**: Possibly needed if using `--network host`: If QGroundControl or Gazebo do not seem to be starting 
 when running the containers, you may need to run them image with `--security-opt apparmor:unconfined` or `--privileged` 
 options.
@@ -181,5 +176,5 @@ docker run -it \
   --tty \
   --network host \
   --entrypoint="/bin/bash" \
-  gisnav-docker-px4
+  gisnav-px4
 ```

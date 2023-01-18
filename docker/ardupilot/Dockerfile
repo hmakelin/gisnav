@@ -38,7 +38,7 @@ RUN cd $HOME/ardupilot/ && \
     Tools/environment_install/install-prereqs-ubuntu.sh -y
 
 # Update PATH
-ENV PATH="/usr/lib/ccache:${PATH}:${HOME}/ardupilot/Tools/autotest"
+ENV PATH="/usr/lib/ccache:/home/$USERNAME/.local/bin:${PATH}:/home/$USERNAME/ardupilot/Tools/autotest"
 
 # Install Gazebo plugin
 RUN cd $HOME && \
@@ -64,4 +64,4 @@ RUN sudo mv -t $HOME/ /gazebo-iris.parm /Makefile && \
     cat $HOME/gazebo-iris.parm >> $HOME/ardupilot/Tools/autotest/default_params/gazebo-iris.parm && \
     echo "KSQL_Airport=37.523640,-122.255122,1.7,90" >> $HOME/ardupilot/Tools/autotest/locations.txt
 
-CMD ["bash"]
+CMD cd $HOME && make sim_vehicle

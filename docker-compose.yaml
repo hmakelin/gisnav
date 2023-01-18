@@ -113,6 +113,7 @@ services:
     network_mode: host
     stdin_open: true
     tty: true
+    #privileged: True
     deploy:
       resources:
         reservations:
@@ -120,4 +121,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: bash -c "cd ~ && make gazebo"

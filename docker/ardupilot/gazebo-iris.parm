@@ -1,0 +1,13 @@
+# SIMULATION USE ONLY
+# ArduPilot mock GPS SITL simulation demo default parameters
+# Disable GPS arming check (GPS2 will not work until already flying) and use best GPS
+# Use MAVLink (14) for second GPS type
+# Use 2D position only with EK2 (no velocity estimates)
+ARMING_CHECK 0
+AHRS_EKF_TYPE 2
+EK2_ENABLE 1
+EK3_ENABLE 0
+EK2_GPS_TYPE 2
+GPS_TYPE2 14
+SIM_GPS2_TYPE 14
+GPS_AUTO_SWITCH 1

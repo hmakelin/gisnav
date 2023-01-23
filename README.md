@@ -7,44 +7,47 @@ https://user-images.githubusercontent.com/22712178/187902004-480397cc-460f-4d57-
 
 GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones **in a simulation environment**.
 
-GISNav provides an *accurate* **global** position for an airborne drone by visually comparing frames from the drone's 
-nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying 
-GIS system.
+GISNav provides a *precise* global position for an airborne drone by visually comparing frames from the drone's 
+nadir-facing camera to a map of the drone's *approximate* global position retrieved from an underlying GIS system.
 
 # Mock GPS Example
 
-The below steps demonstrate how GISNav's `MockGPSNode` ROS 2 node enables GNSS-free flight with PX4 Autopilot's 
-[Mission mode][1] in a SITL simulation.
+The below steps demonstrate how GISNav enables GNSS-free flight with PX4 Autopilot's [Mission mode][1] in a SITL 
+simulation.
 
-You will need to have [NVIDIA Container Toolkit][2] for Docker installed.
+You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
 
 [1]: https://docs.px4.io/v1.12/en/flight_modes/mission.html
-
-[2]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+[2]: https://docs.docker.com/compose/install/linux/
+[3]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 
 ## Build and run SITL simulation
 
+Build the Docker images:
 ```bash
-git clone https://github.com/hmakelin/gisnav-docker.git
-cd gisnav-docker
-docker-compose build sitl
+git clone https://github.com/hmakelin/gisnav.git
+cd gisnav
+docker compose build px4 qgc mapserver micro-ros-agent gisnav
 ```
 
-Once the `sitl` image has been built, run the `mapserver` and `sitl` services:
-
+Run GISNav along with supporting services:
 ```bash
-docker-compose up -d mapserver sitl
+docker compose up px4 qgc mapserver micro-ros-agent gisnav 
 ```
 
-> **Note**:
-> * The build for the `sitl` image takes a long time.
-> * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery, so it may take some 
->   time until it starts serving the WMS endpoint.
-> * Prebuilt [sitl][4] and [mapserver][5] images for the demo are available in Docker Hub in case you have problems with
->   the build process.
+> **Note**
+> * The build for the `px4` and `gisnav` images may take a long time.
+> * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery when ran for the first 
+>   time, so it may take some time until it starts serving the WMS endpoint.
+> * If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
+>   Docker containers (see e.g. [ROS GUI Tutorial][4]):
+>   ```bash
+>   for containerId in $(docker ps -f name=gisnav -q); do
+>     xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
+>   done
+>   ```
 
-[4]: https://hub.docker.com/r/hmakelin/gisnav-sitl
-[5]: https://hub.docker.com/r/hmakelin/gisnav-mapserver
+[4]: http://wiki.ros.org/docker/Tutorials/GUI
 
 ## Upload flight plan via QGroundControl
 
@@ -54,11 +57,9 @@ Docker container, and then start the mission.
 
 ## Simulate GPS failure
 
-> **Warning** Do not attempt this on a real flight - simulation use only.
-
 Wait until the drone has risen to its final mission altitude. You should see a visualization of the GISNav-estimated 
-field of view projected on the ground appear. You can then try disabling GPS from the *nsh* console running on the drone
-through your [MAVLink Shell][6] *(accessible e.g. through QGroundControl > Analyze Tools > MAVLink Console)*:
+field of view projected on the ground appear. You can then try disabling GPS through your [MAVLink Shell][5] 
+*(accessible e.g. through QGroundControl > Analyze Tools > MAVLink Console)*:
 
 ```
 failure gps off
@@ -75,14 +76,14 @@ listener sensor_gps
 If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output 
 as expected.
 
-[6]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
+[5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 
 # Documentation
 
-See the [latest developer documentation][7] for information on how to setup a local environment for GISNav development, 
+See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development, 
 for code examples and API documentation, and for contribution guidelines.
 
-[7]: https://hmakelin.github.io/gisnav
+[6]: https://hmakelin.github.io/gisnav
 
 # License
 

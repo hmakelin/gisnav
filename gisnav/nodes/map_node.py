@@ -45,7 +45,7 @@ class MapNode(CameraSubscriberNode):
         ``requests``. They are therefore handled as unexpected errors.
     """
 
-    ROS_D_URL = 'http://localhost:80/wms'
+    ROS_D_URL = 'http://127.0.0.1:80/wms'
     """Default WMS URL"""
 
     ROS_D_VERSION = '1.3.0'
@@ -104,6 +104,9 @@ class MapNode(CameraSubscriberNode):
     ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
     """Overlap ration between FOV and current map, under which a new map will be requested."""
 
+    ROS_D_MAX_MAP_RADIUS = 1000
+    """Max radius for circle inside the maps (half map side length)"""
+
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
     """Default delay in seconds for throttling WMS GetMap requests
     
@@ -139,6 +142,7 @@ class MapNode(CameraSubscriberNode):
         ('transparency', ROS_D_IMAGE_TRANSPARENCY, False),
         ('format', ROS_D_IMAGE_FORMAT, False),
         ('map_overlap_update_threshold', ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
+        ('max_map_radius', ROS_D_MAX_MAP_RADIUS, False),
     ]
     """List containing ROS parameter name, default value and read_only flag tuples"""
 

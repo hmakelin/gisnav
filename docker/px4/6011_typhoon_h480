@@ -1,0 +1,13 @@
+# SIMULATION USE ONLY
+# PX4 mock GPS SITL simulation demo default parameters
+param set-default NAV_ACC_RAD 20.0
+param set-default MPC_YAWRAUTO_MAX 22.5.0
+param set-default COM_POS_FS_DELAY 5
+param set-default COM_POS_FS_EPH 10
+param set-default EKF2_GPS_P_NOISE 10
+param set-default EKF2_GPS_P_GATE 7
+param set-default EKF2_GPS_V_NOISE 3
+param set-default SENS_GPS_MASK 4
+
+param set-default EKF2_GPS_CTRL 3
+param set-default EKF2_GPS_CHECK 12

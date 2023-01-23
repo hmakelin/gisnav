@@ -49,7 +49,7 @@ ROS_TOPIC_EGM96_HEIGHT = 'gisnav/egm96_height'
 ROS_TOPIC_GPS_INPUT = '/mavros/gps_input/gps_input'
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages over MAVROS"""
 
-ROS_TOPIC_SENSOR_GPS = '/fmu/sensor_gps/in'
+ROS_TOPIC_SENSOR_GPS = '/fmu/in/sensor_gps'
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages over PX4 microRTPS bridge"""
 # endregion ROS topic names
 

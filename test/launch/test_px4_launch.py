@@ -58,11 +58,11 @@ class TestPX4Launch(unittest.TestCase):
     """List of camera topic names and types"""
 
     AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
-        ('/fmu/vehicle_global_position/out', VehicleGlobalPosition),
-        ('/fmu/vehicle_local_position/out', VehicleLocalPosition),
-        ('/fmu/vehicle_attitude/out', VehicleAttitude),
-        ('/fmu/gimbal_device_set_attitude/out', GimbalDeviceSetAttitude),
-        ('/fmu/sensor_gps/in', SensorGps)
+        ('/fmu/out/vehicle_global_position', VehicleGlobalPosition),
+        ('/fmu/out/vehicle_local_position', VehicleLocalPosition),
+        ('/fmu/out/vehicle_attitude', VehicleAttitude),
+        ('/fmu/out/gimbal_device_set_attitude', GimbalDeviceSetAttitude),
+        ('/fmu/in/sensor_gps', SensorGps)
     ]
     """List of autopilot topic names and types"""
 

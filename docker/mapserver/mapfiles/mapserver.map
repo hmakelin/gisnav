@@ -1,0 +1,47 @@
+MAP
+  NAME "GISNav OGC WMS"
+  PROJECTION
+    "init=epsg:4326"
+  END
+  EXTENT -122.3153963 37.4973779 -122.1845578 37.5650967
+  WEB
+    METADATA
+        "wms_title"           "GISNav WMS NAIP Imagery"
+        "wms_onlineresource"  "http://localhost:80/wms"
+        "wms_srs"             "EPSG:3857 EPSG:4326"
+        "wms_enable_request"  "GetMap GetCapabilities"
+    END
+  END
+  LAYER
+    NAME          "imagery"
+    DATA          "/etc/mapserver/naip.vrt"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:26910"
+    END
+  END
+  LAYER
+    NAME          "osm-buildings"
+    DATA          "/etc/mapserver/osm-buildings-ksql-airport.tif"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:4326"
+    END
+  END
+  LAYER
+    NAME          "usgs-dem"
+    DATA          "/etc/mapserver/USGS_13_n38w123_20220810.tif"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:4326"
+    END
+  END
+  LAYER
+    NAME          "osm-buildings-dem"
+    DATA          "/etc/mapserver/osm-buildings-dem.tif"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:4326"
+    END
+  END
+END

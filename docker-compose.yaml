@@ -1,0 +1,123 @@
+version: "3.4"
+
+services:
+  mapserver:
+    image: camptocamp/mapserver
+    network_mode: host
+    environment:
+      - NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
+      - OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
+    volumes:
+      - $PWD/docker/mapserver/mapfiles/mapserver.map:/etc/mapserver/mapserver.map:ro
+      - $PWD/docker/mapserver/setup_mapserver.sh:/etc/mapserver/setup_mapserver.sh:ro
+    entrypoint: /etc/mapserver/setup_mapserver.sh
+
+  mapproxy:
+    build:
+      context: docker/mapproxy
+      dockerfile: Dockerfile
+    network_mode: host
+
+  micro-ros-agent:
+    image: microros/micro-ros-agent:foxy
+    command: udp4 -p 8888
+    network_mode: host
+    volumes:
+      - /dev/shm:/dev/shm
+
+  mavros:
+    build:
+      context: docker/mavros
+      dockerfile: Dockerfile
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    network_mode: host
+    volumes:
+      - /dev/shm:/dev/shm
+
+  qgc:
+    build:
+      context: docker/qgc
+      dockerfile: Dockerfile
+    environment:
+      - QT_X11_NO_MITSHM=1
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - /dev/shm:/dev/shm
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+
+  gisnav:
+    build:
+      context: docker/gisnav
+      dockerfile: Dockerfile
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    volumes:
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    command: bash -c "source /opt/ros/foxy/setup.bash && source ~/colcon_ws/install/setup.bash && ros2 launch gisnav px4.launch.py"
+
+  px4:
+    build:
+      context: docker/px4
+      dockerfile: Dockerfile
+    environment:
+      - QT_X11_NO_MITSHM=1
+      - DISPLAY=${DISPLAY}
+      - GAZEBO_HEADLESS=${GAZEBO_HEADLESS}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - /dev/shm:/dev/shm
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  #ardupilot:
+  #  build:
+  #    context: https://github.com/ArduPilot/ardupilot.git
+  #    dockerfile: https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Dockerfile
+
+  ardupilot:
+    build:
+      context: docker/ardupilot
+      dockerfile: Dockerfile
+    environment:
+      - QT_X11_NO_MITSHM=1
+      - DISPLAY=${DISPLAY}
+      - GAZEBO_HEADLESS=${GAZEBO_HEADLESS}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - /dev/shm:/dev/shm
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+    #privileged: True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]

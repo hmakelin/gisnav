@@ -186,12 +186,12 @@ class MockGPSNode(BaseNode):
         :param timestamp: System time in microseconds
         """
         msg = SensorGps()
-        msg.timestamp = timestamp
-        msg.timestamp_sample = 0
+        msg.timestamp = int(time.time_ns() / 1e3) #timestamp
+        msg.timestamp_sample = int(timestamp)
         # msg.device_id = self._generate_device_id()
         msg.device_id = 0
         msg.fix_type = 3
-        msg.s_variance_m_s = np.nan
+        msg.s_variance_m_s = 10.0 #np.nan
         msg.c_variance_rad = np.nan
         msg.lat = int(lat * 1e7)
         msg.lon = int(lon * 1e7)
@@ -205,18 +205,18 @@ class MockGPSNode(BaseNode):
         msg.automatic_gain_control = 0
         msg.jamming_state = 0
         msg.jamming_indicator = 0
-        msg.vel_m_s = np.nan
-        msg.vel_n_m_s = np.nan
-        msg.vel_e_m_s = np.nan
-        msg.vel_d_m_s = np.nan
+        msg.vel_m_s = 0. #np.nan
+        msg.vel_n_m_s = 0. #np.nan
+        msg.vel_e_m_s = 0. #np.nan
+        msg.vel_d_m_s = 0. #np.nan
         msg.cog_rad = np.nan
-        msg.vel_ned_valid = False
+        msg.vel_ned_valid = True #False
         msg.timestamp_time_relative = 0
         msg.satellites_used = np.iinfo(np.uint8).max
-        msg.time_utc_usec = int(time.time() * 1e6)
+        msg.time_utc_usec = msg.timestamp
         msg.heading = heading
-        msg.heading_offset = np.nan
-        # msg.heading_accuracy = np.nan
+        msg.heading_offset = 0. #np.nan
+        msg.heading_accuracy = np.nan
         # msg.rtcm_injection_rate = np.nan
         # msg.selected_rtcm_instance = np.nan
 

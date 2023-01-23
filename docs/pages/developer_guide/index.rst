@@ -11,8 +11,8 @@ it to match your use case.
 .. toctree::
     :caption: Setup SITL environment
 
-    sitl_environment/docker
     sitl_environment/prerequisites
+    sitl_environment/docker
     sitl_environment/autopilot
     sitl_environment/qgroundcontrol
     sitl_environment/gis_server

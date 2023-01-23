@@ -1,6 +1,6 @@
 map_node:
   ros__parameters:
-    url: 'http://localhost:80/wms'
+    url: 'http://127.0.0.1:80/wms'
     layers: ['imagery']
     dem_layers: ['osm-buildings']
     # srs: 'EPSG:4326'  # default value, disabled for testing purposes

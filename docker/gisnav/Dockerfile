@@ -13,7 +13,7 @@ USER $USERNAME
 # Install GISNav & colcon dependencies
 RUN mkdir -p $HOME/colcon_ws/src && \
     cd $HOME/colcon_ws/src && \
-    git clone --branch hmakelin-update-px4-v1.14 https://github.com/hmakelin/gisnav.git && \
+    git clone https://github.com/hmakelin/gisnav.git && \
     git clone https://github.com/hmakelin/gisnav_msgs.git && \
     git clone https://github.com/px4/px4_msgs.git && \
     rosdep update && \

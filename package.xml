@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>gisnav</name>
-  <version>0.63.1</version>
+  <version>0.64.0</version>
   <description>Estimates airborne drone global position by matching video to map retrieved from onboard GIS server.</description>
   <author email="hmakelin@protonmail.com">Harri Makelin</author>
   <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>

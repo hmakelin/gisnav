@@ -55,6 +55,8 @@ services:
       context: docker/gisnav
       dockerfile: Dockerfile
     environment:
+      - QT_X11_NO_MITSHM=1
+      - DISPLAY=${DISPLAY}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
     volumes:
       - /dev/dri:/dev/dri

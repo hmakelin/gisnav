@@ -567,22 +567,29 @@ class MapNode(CameraSubscriberNode):
             assert self.camera_data is not None
             max_map_radius = self.get_parameter('max_map_radius').get_parameter_value().integer_value
             map_radius = get_dynamic_map_radius(self.camera_data, max_map_radius, self._DEM_REQUEST_ALTITUDE)
-            xy = GeoPt(x=self._home_geopoint.position.longitude, y=self._home_geopoint.position.latitude)
-            map_candidate = GeoSquare(xy, map_radius)
-
-            bbox = BBox(*map_candidate.bounds)
-            if self.map_size_with_padding is not None:
-                self.get_logger().info(f'Requesting DEM for home/local frame origin (assumed same!).')
-                img, dem = self._get_map(bbox, self.map_size_with_padding)
-                self._home_dem = MapData(bbox=bbox, image=Img(img), elevation=Img(dem))
-
-                # TODO: assumes that this local_frame_origin is the starting location, same that was used for the request
-                #  --> not strictly true even if it works for the simulation
-                if self._origin_dem_altitude is None:
-                    if self._home_geopoint is not None:
-                        self._origin_dem_altitude = self._terrain_altitude_at_position(xy, local_origin=True)
+            if map_radius <= 0:
+                self.get_logger().warn(f'Could not determine valid map radius ({map_radius}), skipping requesting DEM '
+                                       f'for home.')
             else:
-                self.get_logger().warn('Required map size unknown, skipping requesting DEM for home.')
+                assert -180 <= abs(self._home_geopoint.position.longitude) <= 180
+                assert -90 <= abs(self._home_geopoint.position.latitude) <= 90
+                assert_type(map_radius, float)
+                xy = GeoPt(x=self._home_geopoint.position.longitude, y=self._home_geopoint.position.latitude)
+                map_candidate = GeoSquare(xy, map_radius)
+
+                bbox = BBox(*map_candidate.bounds)
+                if self.map_size_with_padding is not None:
+                    self.get_logger().info(f'Requesting DEM for home/local frame origin (assumed same!).')
+                    img, dem = self._get_map(bbox, self.map_size_with_padding)
+                    self._home_dem = MapData(bbox=bbox, image=Img(img), elevation=Img(dem))
+
+                    # TODO: assumes that this local_frame_origin is the starting location, same that was used for the
+                    #  request --> not strictly true even if it works for the simulation
+                    if self._origin_dem_altitude is None:
+                        if self._home_geopoint is not None:
+                            self._origin_dem_altitude = self._terrain_altitude_at_position(xy, local_origin=True)
+                else:
+                    self.get_logger().warn('Required map size unknown, skipping requesting DEM for home.')
 
         if self._ortho_image_3d_msg is not None:
             self._ortho_image_3d_pub.publish(self._ortho_image_3d_msg)

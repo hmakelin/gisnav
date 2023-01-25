@@ -9,11 +9,11 @@ from functools import partial
 from mavsdk import System
 from mavsdk.log_files import LogFilesResult, LogFilesError
 
-DOCKER_CONTAINERS = ['gisnav-docker_mapserver_1', 'gisnav-docker_sitl_1']
+DOCKER_CONTAINERS = ['gisnav-mapserver-1', 'gisnav-px4-1', 'gisnav-micro-ros-agent-1', 'gisnav-gisnav-1']
 SYS_ADDR = 'udp://0.0.0.0:14550'
 MISSION_FILE = os.path.join(os.path.dirname(__file__), '../assets/ksql_airport.plan')
-MAVLINK_CONNECTION_TIMEOUT_SEC = 15
-PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC = 15
+MAVLINK_CONNECTION_TIMEOUT_SEC = 30
+PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC = 30
 LOG_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), 'output')
 
 
@@ -79,7 +79,7 @@ async def run():
 
 async def connect_mavlink(drone):
     """Connects to drone via MAVLink"""
-    print(f'Connecting to drone at "{SYS_ADDR}"...')
+    print(f'Connecting to drone at "{SYS_ADDR}" (timeout {MAVLINK_CONNECTION_TIMEOUT_SEC} sec)...')
     await drone.connect(system_address=SYS_ADDR)
     async for state in drone.core.connection_state():
         # This might take a while assuming the Docker containers have not had time to start yet
@@ -90,7 +90,7 @@ async def connect_mavlink(drone):
 
 async def check_health(drone):
     """Goes through (pre-flight) health checks"""
-    print("Going through health-checks...")
+    print(f"Going through health-checks (timeout {PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC} sec)...")
     async for health in drone.telemetry.health():
         if health.is_global_position_ok \
                 and health.is_local_position_ok \

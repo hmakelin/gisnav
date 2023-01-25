@@ -1,11 +1,16 @@
 SITL tests
 ____________________________________________________
-SITL tests are under the ``test/sitl`` folder. They are simple Python scripts:
+SITL tests are under the ``test/sitl`` folder. They are Python scripts. Use the below ``make`` command to run the
+SITL test:
 
 .. code-block:: bash
 
-    cd ~/colcon_ws/src/gisnav/test/sitl
-    python sitl_test_mock_gps_node.py
+    cd ~/colcon_ws/src/gisnav
+    make test-sitl
+
+.. note::
+    The ``test/sitl/sitl_test_mock_gps_node.py`` script assumes you have already built the services defined in the
+    ``docker-compose.yaml`` file.
 
 Flight Log Analysis
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

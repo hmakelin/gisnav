@@ -14,7 +14,7 @@ The `docker-compose.yaml` file defines the following services:
   * Starts `typhoon_h480` model at KSQL Airport
 * `mavros`
   * Used for ArduPilot SITL
-* `micro_ros_agent`
+* `micro-ros-agent`
   * Used for PX4 SITL
 * `mapserver`
   * WMS server with self-hosted [NAIP][2] and [OSM Buildings][3] data covering KSQL airport  

@@ -10,6 +10,12 @@ RUN apt-get update --fix-missing && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 USER $USERNAME
 
+# Install GDAL
+RUN sudo apt-get -y install software-properties-common && \
+    sudo add-apt-repository ppa:ubuntugis/ppa && \
+    sudo apt-get update && \
+    sudo apt-get -y install gdal-bin libgdal-dev
+
 # Install GISNav & colcon dependencies
 RUN mkdir -p $HOME/colcon_ws/src && \
     cd $HOME/colcon_ws/src && \

@@ -11,7 +11,9 @@ RUN apt-get update --fix-missing && \
 USER $USERNAME
 
 # Install GDAL
-RUN sudo apt-get -y install software-properties-common && \
+RUN sudo apt-get -y upgrade && \
+    sudo apt-get -y update && \
+    sudo apt-get -y install software-properties-common && \
     sudo add-apt-repository ppa:ubuntugis/ppa && \
     sudo apt-get update && \
     sudo apt-get -y install gdal-bin libgdal-dev

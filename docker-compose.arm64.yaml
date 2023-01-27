@@ -1,0 +1,5 @@
+version: "3.4"
+
+services:
+  mapserver:
+    image: camptocamp/mapserver:latest-arm64

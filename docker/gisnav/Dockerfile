@@ -10,14 +10,6 @@ RUN apt-get update --fix-missing && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 USER $USERNAME
 
-# Install GDAL
-RUN sudo apt-get -y upgrade && \
-    sudo apt-get -y update && \
-    sudo apt-get -y install software-properties-common && \
-    sudo add-apt-repository ppa:ubuntugis/ppa && \
-    sudo apt-get update && \
-    sudo apt-get -y install gdal-bin libgdal-dev
-
 # Install GISNav & colcon dependencies
 RUN mkdir -p $HOME/colcon_ws/src && \
     cd $HOME/colcon_ws/src && \
@@ -35,6 +27,14 @@ RUN cd $HOME/colcon_ws/src/gisnav && \
     mkdir weights && \
     cd weights && \
     $HOME/.local/lib/$USERNAME/gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
+
+# Install GDAL
+RUN sudo apt-get -y upgrade && \
+    sudo apt-get -y update && \
+    sudo apt-get -y install software-properties-common && \
+    sudo add-apt-repository ppa:ubuntugis/ppa && \
+    sudo apt-get update && \
+    sudo apt-get -y install gdal-bin libgdal-dev \
 
 # Python dependencies
 RUN cd $HOME/colcon_ws/src/gisnav && \

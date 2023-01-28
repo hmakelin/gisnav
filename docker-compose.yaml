@@ -70,7 +70,10 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: bash -c "source /opt/ros/foxy/setup.bash && source ~/colcon_ws/install/setup.bash && ros2 launch gisnav px4.launch.py"
+    command: >
+      bash -c "source /opt/ros/foxy/setup.bash && source ~/colcon_ws/install/setup.bash &&
+      export LD_PRELOAD=$(find $(pip3 show torch |grep Location:  |cut -d' ' -f 2)/torch/lib -name 'libgomp*') &&
+      ros2 launch gisnav px4.launch.py"
 
   px4:
     build:

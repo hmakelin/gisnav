@@ -28,6 +28,14 @@ RUN cd $HOME/colcon_ws/src/gisnav && \
     cd weights && \
     $HOME/.local/lib/$USERNAME/gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
 
+# Install GDAL
+RUN sudo apt-get -y upgrade && \
+    sudo apt-get -y update && \
+    sudo apt-get -y install software-properties-common && \
+    sudo add-apt-repository ppa:ubuntugis/ppa && \
+    sudo apt-get update && \
+    sudo apt-get -y install gdal-bin libgdal-dev \
+
 # Python dependencies
 RUN cd $HOME/colcon_ws/src/gisnav && \
     pip3 install -r requirements.txt  && \

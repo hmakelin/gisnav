@@ -26,6 +26,18 @@ ROS version with the ``whereis ros2`` command:
         echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
         echo "source ~/colcon_ws/install/setup.bash" >> ~/.bashrc
 
+Install GDAL
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+``GDAL`` is required to install the ``geopandas`` Python dependency:
+
+.. code-block:: text
+    :caption: Install GDAL
+
+    sudo apt-get -y install software-properties-common
+    sudo add-apt-repository ppa:ubuntugis/ppa
+    sudo apt-get update
+    sudo apt-get -y install gdal-bin libgdal-dev
+
 Install GISNav
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Install GISNav in your ROS 2 Workspace:

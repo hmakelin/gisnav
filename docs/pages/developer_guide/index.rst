@@ -9,14 +9,20 @@ it to match your use case.
     software-in-the-loop (SITL) simulation environment.
 
 .. toctree::
-    :caption: Setup SITL environment
+    :caption: Setup SITL
 
-    sitl_environment/prerequisites
-    sitl_environment/docker
-    sitl_environment/autopilot
-    sitl_environment/qgroundcontrol
-    sitl_environment/gis_server
-    sitl_environment/install_gisnav
+    sitl/prerequisites
+    sitl/docker
+    sitl/autopilot
+    sitl/qgroundcontrol
+    sitl/gis_server
+    sitl/install_gisnav
+    sitl/companion_computer
+
+.. toctree::
+    :caption: Setup HIL
+
+    hil/jetson_pixhawk
 
 .. toctree::
     :caption: Launch GISNav

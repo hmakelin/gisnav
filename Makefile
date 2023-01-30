@@ -3,10 +3,12 @@ SHELL := /bin/bash
 # docker compose
 # Onboard services
 up-%: up-middleware-%
-	@docker compose up -d mapserver gisnav
+	@docker compose up -f docker-compose.yaml -f docker-compose.arm64.yaml -d mapserver
+	@docker compose up -d gisnav
 
 build-%:
-	@docker compose build mapserver gisnav
+	@docker compose build -f docker-compose.yaml -f docker-compose.arm64.yaml mapserver
+	@docker compose build gisnav
 
 # SITL simulation (e.g. on host machine, intended to be paired with up-% on companion computer)
 up-sitl-%: up-middleware-%

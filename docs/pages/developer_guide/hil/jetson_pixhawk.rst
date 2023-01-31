@@ -1,7 +1,15 @@
 Jetson Nano & PX4/Pixhawk
 ____________________________________________________
 
-The following example describes how to run GISNav on a Jetson Nano in a PX4 HIL simulation on a Pixhawk board.
+This section provides an example on how to run GISNav on a Jetson Nano in a PX4 HIL simulation on a Pixhawk board. The
+example adds a simulated ROS camera to the default PX4 Gazebo ``iris_hitl`` model. The example also assumes you have a
+`NXP FMUK66-E board`_, but it should be adaptable to any `PX4 supported board`_.
+
+.. _NXP FMUK66-E board: https://docs.px4.io/main/en/flight_controller/nxp_rddrone_fmuk66.html
+.. _PX4 supported board: https://px4.io/autopilots/
+
+.. warning::
+    Keep the propellers **off** your drone throughout the HIL simulation.
 
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -15,6 +23,23 @@ Prerequisites
   yourself (see :ref:`PX4-ROS 2 bridge topic configuration`).
 
   .. _https://github.com/hmakelin/PX4-Autopilot.git: https://github.com/hmakelin/PX4-Autopilot.git
+
+.. note::
+    In this example we have powered both the Pixhawk and Jetson Nano boards from the desktop computer via USB for
+    convenience and to avoid having to handle LiPo batteries (fire hazard). In a more realistic setup you would supply
+    power to both boards from the onboard battery.
+
+.. figure:: ../../../_static/img/gisnav_hil_jetson_nano_setup.jpg
+
+    Jetson Nano connected to laptop via micro-USB and Ethernet. Power supply from wall socket.
+
+.. figure:: ../../../_static/img/gisnav_hil_fmuk66-e_setup.jpg
+
+    NXP FMUK66-E board connected to laptop via micro-USB. Other wires as per `manufacturer's instructions`_, except for
+    missing telemetry radio. Also the power supply line here is not connected to a LiPo battery as power is drawn from
+    the USB cable instead.
+
+    .. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
 
 Upload PX4 firmware
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -155,10 +180,7 @@ The output will look like the following:
     spracing_h7extreme[_default]
     uvify_core[_default]
 
-Then choose your appropriate board for the following examples. The example below assumes you have a
-`NXP FMUK66-E board`_.
-
-.. _NXP FMUK66-E board: https://docs.px4.io/main/en/flight_controller/nxp_rddrone_fmuk66.html
+Then choose your appropriate board for the following examples.
 
 .. code-block:: bash
     :caption: Upload PX4 to NXP FMU66K board
@@ -167,14 +189,52 @@ Then choose your appropriate board for the following examples. The example below
     make distclean
     make nxp_fmuk66-e_default upload
 
+Add simulated ROS camera to ``iris_hitl`` model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Add the below configuration to the ``Tools/simulation/sitl/gazebo/sitl_gazebo/models/iris_hitl/iris_hitl.sdf`` file as a
+child to the ``base_link`` link:
+
+.. code-block:: xml
+    :caption: Example simulated ROS camera
+
+    <sensor name="camera" type="camera">
+      <pose>0 0 0 1.57 1.57 0</pose>
+      <camera>
+        <horizontal_fov>2.0</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.1</near>
+          <far>15000</far>
+        </clip>
+      </camera>
+      <always_on>1</always_on>
+      <update_rate>10</update_rate>
+      <visualize>1</visualize>
+      <plugin name="camera_controller" filename="libgazebo_ros_camera.so"></plugin>
+    </sensor>
+
 Run HIL simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Follow the steps in `PX4 HIL simulation instructions`_.
+Follow the steps in `PX4 HIL simulation instructions`_. Make sure that you precisely match the ``COM_RC_IN_MODE``
+parameter setting if mentioned in the instructions. Also ensure that you have HITL enabled in QGC Safety settings, and
+virtual joystick enabled in QGC General settings. At the end you would type commands such as these:
 
 .. _PX4 HIL simulation instructions: https://docs.px4.io/main/en/simulation/hitl.html
 
-Once you have the HIL simulation running, login to your Jetson Nano and start the onboard services (as described in
-:ref:`Onboard computer`) just like in the SITL simulation case:
+ .. code-block:: bash
+
+    cd ~/PX4-Autopilot
+    make clean
+    DONT_RUN=1 make px4_sitl gazebo___ksql_airport
+    source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
+    gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world
+
+Once you have the HIL simulation running, login to your Jetson Nano and start the onboard services just like in the
+SITL simulation case (:ref:`Onboard computer`):
 
 .. code-block:: bash
     :caption: Run GISNav and GIS server on onboard computer

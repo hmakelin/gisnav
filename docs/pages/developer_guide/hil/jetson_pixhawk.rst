@@ -16,6 +16,7 @@ Prerequisites
 * Connect your Jetson Nano to your desktop (simulation host) computer via Ethernet cable (see :ref:`Onboard computer`
   for more information).
 * Connect your Pixhawk board to your desktop (simulation host) computer via USB cable.
+* Connect your Pixhawk board to your Jetson Nano via TELEM2 (set PX4 ``XRCE_DDS_0_CFG`` parameter to 102)
 * Install a bootloader on your Pixhawk board if your board does not yet have one. See your board manufacturer's
   instructions on how to load one onto your specific board.
 * (1) Install the `https://github.com/hmakelin/PX4-Autopilot.git`_ custom fork of PX4-Autopilot which includes
@@ -29,17 +30,16 @@ Prerequisites
     convenience and to avoid having to handle LiPo batteries (fire hazard). In a more realistic setup you would supply
     power to both boards from the onboard battery.
 
-.. figure:: ../../../_static/img/gisnav_hil_jetson_nano_setup.jpg
-
-    Jetson Nano connected to laptop via micro-USB and Ethernet. Power supply from wall socket.
-
 .. figure:: ../../../_static/img/gisnav_hil_fmuk66-e_setup.jpg
 
-    NXP FMUK66-E board connected to laptop via micro-USB. Other wires as per `manufacturer's instructions`_, except for
-    missing telemetry radio. Also the power supply line here is not connected to a LiPo battery as power is drawn from
-    the USB cable instead.
+    NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM2 (IR/TLM2). Other wires as
+    per `manufacturer's instructions`_, except for missing telemetry radio. FMU draws power from laptop via micro-USB,
+    and Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection to
+    from FMU to Jetson Nano via IR/TLM2 using USB to UART converter. See `FMUK66-E revision C pin layout`_ for
+    how to wire the 4-pin IR/TLM2 JST-GH connector.
 
     .. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
+    .. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-2#rddrone-fmuk66-rev.-c-schematic
 
 Upload PX4 firmware
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -240,5 +240,5 @@ SITL simulation case (:ref:`Onboard computer`):
     :caption: Run GISNav and GIS server on onboard computer
 
     cd ~/colcon_ws
-    make build-px4
-    make up-px4
+    make build-serial-px4
+    make up-serial-px4

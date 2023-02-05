@@ -7,13 +7,18 @@ better idea of performance in a real use case.
 Jetson Nano
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note::
-    These instructions assume that your Jetson Nano is connected to the same network as your desktop computer. This
-    could be done e.g. by connecting them to the same WiFi (need dongle for Jetson Nano), or by connecting them by
-    Ethernet cable. Example instructions with screenshots for both WiFi and Ethernet cable can be found through the
-    following link:
+These instructions assume that your Jetson Nano is connected to the same network as your desktop computer. This
+could be done e.g. by connecting them to the same WiFi (need dongle for Jetson Nano), or by connecting them by
+Ethernet cable. Example instructions with screenshots for both WiFi and Ethernet cable can be found through the
+following link:
 
-    * https://www.forecr.io/blogs/connectivity/how-to-share-internet-from-computer-to-nvidia-jetson-modules
+* https://www.forecr.io/blogs/connectivity/how-to-share-internet-from-computer-to-nvidia-jetson-modules
+
+See also the below screenshot also used in the :ref:`Jetson Nano & PX4/Pixhawk` example:
+
+ .. figure:: ../../../_static/img/gisnav_hil_jetson_nano_setup.jpg
+
+    Jetson Nano connected to laptop via micro-USB and Ethernet. Power supply from wall socket.
 
 Log into your desktop computer and build and run the services required for the SITL simulation:
 

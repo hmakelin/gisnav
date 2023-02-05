@@ -3,11 +3,20 @@ SHELL := /bin/bash
 # docker compose
 # Onboard services
 up-%: up-middleware-%
-	@docker compose up -f docker-compose.yaml -f docker-compose.arm64.yaml -d mapserver
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml up -d mapserver
 	@docker compose up -d gisnav
 
-build-%:
-	@docker compose build -f docker-compose.yaml -f docker-compose.arm64.yaml mapserver
+build-%: build-middleware-%
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build mapserver
+	@docker compose build gisnav
+
+# Onboard services with serial connection for micro-ros-agent
+up-serial-%: up-middleware-serial-%
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml up -d mapserver
+	@docker compose up -d gisnav
+
+build-serial-%: build-middleware-serial-%
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build mapserver
 	@docker compose build gisnav
 
 # SITL simulation (e.g. on host machine, intended to be paired with up-% on companion computer)
@@ -38,6 +47,24 @@ build-middleware-%:
 		docker compose build micro-ros-agent; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose build mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
+
+up-middleware-serial-%:
+	@if [ "$*" = "px4" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d micro-ros-agent; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
+
+build-middleware-serial-%:
+	@if [ "$*" = "px4" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build micro-ros-agent; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose build -f docker-compose.yaml -f docker-compose.serial.yaml mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi

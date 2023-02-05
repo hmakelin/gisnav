@@ -1,0 +1,9 @@
+version: "3.4"
+
+services:
+  micro-ros-agent:
+    command: serial --dev /dev/ttyUSB0 -b 921600 ROS_DOMAIN_ID=0
+    privileged: True
+    volumes:
+      - /dev:/dev
+      - /dev/ttyUSB0:/dev/ttyUSB0

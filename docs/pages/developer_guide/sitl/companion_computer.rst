@@ -14,7 +14,7 @@ following link:
 
 * https://www.forecr.io/blogs/connectivity/how-to-share-internet-from-computer-to-nvidia-jetson-modules
 
-See also the below screenshot also used in the :ref:`Jetson Nano & PX4/Pixhawk` example:
+See also the below screenshot:
 
  .. figure:: ../../../_static/img/gisnav_hil_jetson_nano_setup.jpg
 

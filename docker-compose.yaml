@@ -19,7 +19,9 @@ services:
     network_mode: host
 
   micro-ros-agent:
-    image: microros/micro-ros-agent:foxy
+    build:
+      context: docker/micro-ros-agent
+      dockerfile: Dockerfile
     command: udp4 -p 8888
     network_mode: host
     volumes:

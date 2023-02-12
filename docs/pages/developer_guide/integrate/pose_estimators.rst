@@ -31,7 +31,7 @@ except on the featureless buildings.
 
 .. _KSQL Airport Gazebo model: https://docs.px4.io/main/en/simulation/gazebo_worlds.html#ksql-airport
 
-.. figure:: ../../../_static/img/gisnav_sitl_featureless_buildings.png
+.. figure:: ../../../_static/img/gisnav_sitl_featureless_buildings.jpg
 
     LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)
 

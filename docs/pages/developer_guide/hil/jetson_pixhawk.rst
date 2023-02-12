@@ -1,6 +1,9 @@
 Jetson Nano & Pixhawk
 ____________________________________________________
 
+.. note::
+    These instructions are still **incomplete** but they may already help you get started with HIL simulation.
+
 This section provides an example on how to run GISNav on a Jetson Nano in a PX4 HIL simulation on a Pixhawk board. The
 example adds a simulated ROS camera to the default PX4 Gazebo ``iris_hitl`` model. The example also assumes you have a
 `NXP FMUK66-E board`_, but it should be adaptable to any `PX4 supported board`_.
@@ -218,6 +221,12 @@ child to the ``base_link`` link:
       <visualize>1</visualize>
       <plugin name="camera_controller" filename="libgazebo_ros_camera.so"></plugin>
     </sensor>
+
+Create KSQL Airport world with ``iris_hitl`` model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+    TODO: Instructions for combining ``iris_hitl`` model with ``ksql_airport.world`` file.
 
 Run HIL simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

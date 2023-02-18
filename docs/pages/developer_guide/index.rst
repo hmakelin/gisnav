@@ -30,6 +30,7 @@ it to match your use case.
     launch/launch_files
     launch/run_individual_nodes
     launch/modify_params
+    launch/deploy_with_make
 
 .. toctree::
     :caption: Run tests

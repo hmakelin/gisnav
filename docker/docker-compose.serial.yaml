@@ -8,3 +8,5 @@ services:
     network_mode: True
     volumes:
       - /dev:/dev
+
+  # TODO: mavros/Ardupilot

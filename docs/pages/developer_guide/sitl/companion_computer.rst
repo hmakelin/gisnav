@@ -25,20 +25,20 @@ Log into your desktop computer and build and run the services required for the S
 .. code-block:: bash
     :caption: Run Gazebo SITL simulation on desktop
 
-    cd ~/colcon_ws
-    make build-sitl-px4
-    make up-sitl-px4
+    cd ~/colcon_ws/src/gisnav
+    make -C docker build-offboard-sitl-px4
+    make -C docker up-offboard-sitl-px4
 
 Then log into your Jetson Nano and build and run the onboard services:
 
 .. code-block:: bash
     :caption: Run GISNav and GIS server on onboard computer
 
-    cd ~/colcon_ws
-    make build-px4
-    make up-px4
+    cd ~/colcon_ws/src/gisnav
+    make -C build-companion-sitl-px4
+    make -C up-companion-sitl-px4
 
-You should now have the SITL simulation running on your desktop computer, while ``gisnav``, ``mapserver`` and the
-autopilot specific middleware run on your Jetson Nano. If you have your network setup correctly, the middleware on the
-onboard computer will connect to the simulated autopilot on your desktop and pipe the telemetry and video feed to
-ROS for GISNav to consume.
+You should now have the SITL simulation and QGgroundControl running on your offboard workstation, while ``gisnav``,
+``mapserver`` and the autopilot specific middleware run on your Jetson Nano. If you have your network setup correctly,
+the middleware on the onboard companion computer will connect to the simulated autopilot on your workstation and pipe
+the telemetry and video feed to ROS for GISNav to consume.

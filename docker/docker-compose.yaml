@@ -14,13 +14,13 @@ services:
 
   mapproxy:
     build:
-      context: docker/mapproxy
+      context: mapproxy
       dockerfile: Dockerfile
     network_mode: host
 
   micro-ros-agent:
     build:
-      context: docker/micro-ros-agent
+      context: micro-ros-agent
       dockerfile: Dockerfile
     command: udp4 -p 8888
     network_mode: host
@@ -29,7 +29,7 @@ services:
 
   mavros:
     build:
-      context: docker/mavros
+      context: mavros
       dockerfile: Dockerfile
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
@@ -39,7 +39,7 @@ services:
 
   qgc:
     build:
-      context: docker/qgc
+      context: qgc
       dockerfile: Dockerfile
     environment:
       - QT_X11_NO_MITSHM=1
@@ -54,7 +54,7 @@ services:
 
   gisnav:
     build:
-      context: docker/gisnav
+      context: gisnav
       dockerfile: Dockerfile
     environment:
       - QT_X11_NO_MITSHM=1
@@ -79,7 +79,7 @@ services:
 
   px4:
     build:
-      context: docker/px4
+      context: px4
       dockerfile: Dockerfile
     environment:
       - QT_X11_NO_MITSHM=1
@@ -107,7 +107,7 @@ services:
 
   ardupilot:
     build:
-      context: docker/ardupilot
+      context: ardupilot
       dockerfile: Dockerfile
     environment:
       - QT_X11_NO_MITSHM=1

@@ -22,9 +22,9 @@ Prerequisites
 * Connect your Pixhawk board to your Jetson Nano via TELEM1 (set PX4 ``XRCE_DDS_0_CFG`` parameter to 101)
 * Install a bootloader on your Pixhawk board if your board does not yet have one. See your board manufacturer's
   instructions on how to load one onto your specific board.
-* (1) Install the `https://github.com/hmakelin/PX4-Autopilot.git`_ custom fork of PX4-Autopilot which includes
-  required modifications to the microDDS bridge ``dds_topics.yaml`` configuration file, or (2) configure the bridge
-  yourself (see :ref:`PX4-ROS 2 bridge topic configuration`).
+* (1) Install the ``v1.14.0-1.0.1-beta`` tag of the `https://github.com/hmakelin/PX4-Autopilot.git`_ custom fork of
+  PX4-Autopilot which includes required modifications to the microDDS bridge ``dds_topics.yaml`` configuration file, or
+  (2) configure the bridge yourself (see :ref:`PX4-ROS 2 bridge topic configuration`).
 
   .. _https://github.com/hmakelin/PX4-Autopilot.git: https://github.com/hmakelin/PX4-Autopilot.git
 
@@ -38,13 +38,13 @@ Prerequisites
 
     NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM1. Other wires as per
     `manufacturer's instructions`_, except for missing telemetry radio. FMU draws power from laptop via micro-USB, and
-    Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection to from
+    Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection from
     FMU to Jetson Nano via TELEM1 serial port using USB to UART converter. See `FMUK66-E revision C pin layout`_ for
     how to wire the TELEM1 JST-GH connector (only GND, RX and TX used here). Note that the TX from one board connects
     to the RX of the other board, and vice versa.
 
     .. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
-    .. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-2#rddrone-fmuk66-rev.-c-schematic
+    .. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-1
 
 Upload PX4 firmware
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -239,17 +239,16 @@ virtual joystick enabled in QGC General settings. At the end you would type comm
  .. code-block:: bash
 
     cd ~/PX4-Autopilot
-    make clean
+    make -C docker clean
     DONT_RUN=1 make px4_sitl gazebo___ksql_airport
     source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
     gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world
 
-Once you have the HIL simulation running, login to your Jetson Nano and start the onboard services just like in the
-SITL simulation case (:ref:`Onboard computer`):
+Once you have the HIL simulation running, login to your Jetson Nano and build and deploy the onboard services:
 
 .. code-block:: bash
     :caption: Run GISNav and GIS server on onboard computer
 
-    cd ~/colcon_ws
-    make build-serial-px4
-    make up-serial-px4
+    cd ~/colcon_ws/src/gisnav
+    make -C docker build-companion-hil-px4
+    make -C docker up-companion-hil-px4

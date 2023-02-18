@@ -1,6 +1,6 @@
 Deploy with Make
 ____________________________________________________
-The ``Makefile`` in the ``docker`` folder defines phony build targets that can be used to launch GISNav along with
+The ``Makefile`` in the ``docker`` folder defines phony make targets that can be used to launch GISNav along with
 supporting services in various configurations. This builds on top of the services defined in the
 ``docker/docker-compose.yaml`` file to define groups of related services that should be spun up together depending on
 use case.
@@ -19,7 +19,7 @@ Generally the targets are named using the following scheme to suggest how they s
     cd ~/colcon_ws/src/gisnav
     make -C docker <up/down>-<companion/offboard>-<sitl/hil>-<middleware/dev/test/...>-<px4/ardupilot>
 
-The second to last group with options like "middleware", "dev" etc. is optional and is not used by all build targets.
+The second to last group with options like "middleware", "dev" etc. is optional and is not used by all make targets.
 
 Explanation on what the different options for the make targets mean is provided below:
 

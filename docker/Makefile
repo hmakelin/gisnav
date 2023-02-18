@@ -104,11 +104,11 @@ demo:
 # GISNav, middleware and GIS server is run on more powerful offboard workstation computer
 . PHONY: $(addprefix up-demo-, $(AUTOPILOTS))
 up-demo-%: up-offboard-sitl-dev-%
-	@docker compose up -d $* gisnav
+	@docker compose up -d gisnav
 
 . PHONY: $(addprefix build-demo-, $(AUTOPILOTS))
 build-demo-%: build-offboard-sitl-dev-%
-	@docker compose build $* gisnav
+	@docker compose build gisnav
 
 # shutdown any and all services
 . PHONY: down

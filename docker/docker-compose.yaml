@@ -8,8 +8,8 @@ services:
       - NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
       - OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
     volumes:
-      - $PWD/docker/mapserver/mapfiles/mapserver.map:/etc/mapserver/mapserver.map:ro
-      - $PWD/docker/mapserver/setup_mapserver.sh:/etc/mapserver/setup_mapserver.sh:ro
+      - $PWD/mapserver/mapfiles/mapserver.map:/etc/mapserver/mapserver.map:ro
+      - $PWD/mapserver/setup_mapserver.sh:/etc/mapserver/setup_mapserver.sh:ro
     entrypoint: /etc/mapserver/setup_mapserver.sh
 
   mapproxy:

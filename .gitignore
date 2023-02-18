@@ -1,5 +1,5 @@
 # Python virtual environment
-/venv
+venv/
 
 # PyCharm generated files
 .idea/
@@ -7,7 +7,7 @@
 # Python bytecode
 *.pyc
 
-# Unwanted folders
+# colcon created folders
 build/
 install/
 log/
@@ -26,3 +26,5 @@ test/sitl/output/
 
 # Jupyter Notebook checkpoints
 test/sitl/ulog_analysis/.ipynb_checkpoints/
+
+.benchmarks/

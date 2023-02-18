@@ -5,7 +5,8 @@ ARG UID=1000
 ARG GID=$UID
 
 RUN apt-get update --fix-missing && \
-    apt-get install sudo && \
+    apt-get -y dist-upgrade && \
+    apt-get -y install sudo && \
     groupadd --gid $GID $USERNAME && useradd --uid $UID --gid $GID -m $USERNAME && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
 USER $USERNAME
@@ -34,7 +35,7 @@ RUN sudo apt-get -y upgrade && \
     sudo apt-get -y install software-properties-common && \
     sudo add-apt-repository ppa:ubuntugis/ppa && \
     sudo apt-get update && \
-    sudo apt-get -y install gdal-bin libgdal-dev \
+    sudo apt-get -y install gdal-bin libgdal-dev
 
 # Python dependencies
 RUN cd $HOME/colcon_ws/src/gisnav && \

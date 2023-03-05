@@ -15,4 +15,3 @@ search bar or the below module index to find what you are looking for.
 
     common_automodule
     nodes/automodule
-    pose_estimators/automodule

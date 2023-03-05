@@ -4,53 +4,67 @@ SHELL := /bin/bash
 # docker compose section start
 AUTOPILOTS := px4 ardupilot  # Supported autopilots, must match docker/docker-compose.yaml service name
 
+#L4T_RELEASE := $(cat /etc/nv_tegra_release |grep release |cut -d\  -f2| tr -d R)
+#L4T_REVISION := $(cat /etc/nv_tegra_release |grep REVISION: |cut -d\  -f5| tr -d ,)
+
+# "nvcc command not found": https://forums.developer.nvidia.com/t/cuda-nvcc-not-found/118068
+CUDA_VERSION := 102 #$(nvcc --version |grep release |cut -d\  -f5| tr -d ,)
+
+BASE_IMAGE := nvcr.io/nvidia/l4t-pytorch:r32.6.1-pth1.9-py3
+
 # companion hil services: GIS server, ROS middleware, and GISNav
 # The arm64 override for Jetson Nano is used for the mapserver service.
 . PHONY: $(addprefix up-companion-hil-, $(AUTOPILOTS))
 up-companion-hil-%: up-companion-hil-middleware-%
-	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml up -d mapserver
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml up -d mapserver torch-serve
 	@docker compose up -d gisnav
 
 . PHONY: $(addprefix build-companion-hil-, $(AUTOPILOTS))
 build-companion-hil-%: build-companion-hil-middleware-%
-	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build mapserver
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build mapserver torch-serve
 	@docker compose build gisnav
 
-# companion sitl services: Same as with hil (with sitl the autopilot is run offboard but companion is same)
+# companion sitl services: Same as with hil but middleware is same as offboard (UDP, not serial)
 . PHONY: $(addprefix up-companion-sitl-, $(AUTOPILOTS))
-up-companion-sitl-%: up-companion-hil-%
+up-companion-sitl-%: up-offboard-sitl-middleware-%
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml up -d mapserver torch-serve
+	@docker compose up -d gisnav
 
 . PHONY: $(addprefix build-companion-sitl-, $(AUTOPILOTS))
-build-companion-sitl-%: build-companion-hil-%
+build-companion-sitl-%: build-offboard-sitl-middleware-%
+	@docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build --build-arg BASE_IMAGE=$(BASE_IMAGE) \
+		--build-arg CUDA_VERSION=$(CUDA_VERSION) mapserver torch-serve
+	@docker compose build gisnav
 
-# sitl testing services: Gazebo simulation, ROS middleware, mapserver, but excluding GISNav and QGC
-# Used for e.g. automated testing where local GISNav testing/development version is used together
-# with something like MAVSDK so that a ground control software (QGC) is not needed
-. PHONY: $(addprefix up-offboard-sitl-test-, $(AUTOPILOTS))
-up-offboard-sitl-test-%: up-offboard-sitl-middleware-%
-	@docker compose up -d $* mapserver
-
-. PHONY: $(addprefix build-offboard-sitl-test-, $(AUTOPILOTS))
-build-offboard-sitl-test-%: build-offboard-sitl-middleware-%
-	@docker compose build $* qgc mapserver
-
-# sitl development services: Gazebo simulation, ROS middleware, mapserver, QGC, and excluding GISNav
-. PHONY: $(addprefix up-offboard-sitl-dev-, $(AUTOPILOTS))
-up-offboard-sitl-dev-%: up-offboard-sitl-test-%
-	@docker compose up -d $* qgc
-
-. PHONY: $(addprefix build-offboard-sitl-dev-, $(AUTOPILOTS))
-build-offboard-sitl-dev-%: build-offboard-sitl-test-%
-	@docker compose build $* qgc
-
-# offboard sitl services: GIS server, Gazebo simulation, QGC
+# offboard sitl services: Gazebo simulation, QGC
 . PHONY: $(addprefix up-offboard-sitl-, $(AUTOPILOTS))
 up-offboard-sitl-%: up-offboard-sitl-dev-%
-	@docker compose up -d $*
+	@docker compose up $* qgc
 
 . PHONY: $(addprefix build-offboard-sitl-, $(AUTOPILOTS))
 build-offboard-sitl-%: build-offboard-sitl-dev-%
-	@docker compose build $*
+	@docker compose build $* qgc
+
+# sitl testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
+# Used for e.g. automated testing where local GISNav testing/development version is used together
+# with something like MAVSDK so that a ground control software (QGC) is not needed
+# Gazebo runs in HEADLESS mode
+. PHONY: $(addprefix up-offboard-sitl-test-, $(AUTOPILOTS))
+up-offboard-sitl-test-%: up-offboard-sitl-middleware-%
+	@docker compose -f docker-compose.yaml -f docker-compose.headless.yaml up $* torch-serve mapserver
+
+. PHONY: $(addprefix build-offboard-sitl-test-, $(AUTOPILOTS))
+build-offboard-sitl-test-%: build-offboard-sitl-middleware-%
+	@docker compose -f docker-compose.yaml -f docker-compose.headless.yaml build $* torch-serve mapserver
+
+# sitl development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, but excluding GISNav
+. PHONY: $(addprefix up-offboard-sitl-dev-, $(AUTOPILOTS))
+up-offboard-sitl-dev-%:
+	@docker compose up $* torch-serve mapserver qgc
+
+. PHONY: $(addprefix build-offboard-sitl-dev-, $(AUTOPILOTS))
+build-offboard-sitl-dev-%:
+	@docker compose build $* torch-serve mapserver qgc
 
 # offboard sitl middleware: micro-ros-agent over UDP if PX4, mavros if Ardupilot
 . PHONY: $(addprefix up-offboard-sitl-middleware-, $(AUTOPILOTS))
@@ -77,9 +91,9 @@ build-offboard-sitl-middleware-%:
 . PHONY: $(addprefix up-companion-hil-middleware-, $(AUTOPILOTS))
 up-companion-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d micro-ros-agent; \
+		docker compose -f docker-compose.yaml -f docker-compose.uros-serial.yaml up -d micro-ros-agent; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
@@ -87,9 +101,9 @@ up-companion-hil-middleware-%:
 . PHONY: $(addprefix build-companion-hil-middleware-, $(AUTOPILOTS))
 build-companion-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build micro-ros-agent; \
+		docker compose -f docker-compose.yaml -f docker-compose.uros-serial.yaml build micro-ros-agent; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
@@ -104,11 +118,23 @@ demo:
 # GISNav, middleware and GIS server is run on more powerful offboard workstation computer
 . PHONY: $(addprefix up-demo-, $(AUTOPILOTS))
 up-demo-%: up-offboard-sitl-dev-%
-	@docker compose up -d gisnav
+	@if [ "$*" = "px4" ]; then \
+		docker compose up gisnav; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.ardupilot.yaml up gisnav; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
 . PHONY: $(addprefix build-demo-, $(AUTOPILOTS))
 build-demo-%: build-offboard-sitl-dev-%
-	@docker compose build gisnav
+	@if [ "$*" = "px4" ]; then \
+		docker compose build gisnav; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.ardupilot.yaml build gisnav; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
 # shutdown any and all services
 . PHONY: down
@@ -120,3 +146,4 @@ down:
 build:
 	@docker compose build
 # docker compose section end
+

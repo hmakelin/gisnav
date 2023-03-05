@@ -23,7 +23,7 @@ You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolk
 
 ## Build and run SITL simulation
 
-Build the Docker images:
+Build the Docker images (may take a long time):
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
@@ -36,16 +36,15 @@ make -C docker demo
 ```
 
 > **Note**
-> * The build for the `px4` and `gisnav` Docker images may take a long time.
-> * The `mapserver` Docker container needs to download roughly 1 GB of high-resolution aerial imagery when ran for the 
->   first time, so it will take some time until it starts serving the WMS endpoint.
-> * If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
->   Docker containers (see e.g. [ROS GUI Tutorial][4]):
->   ```bash
->   for containerId in $(docker ps -f name=gisnav -q); do
->     xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
->   done
->   ```
+> If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
+> Docker containers (see e.g. [ROS GUI Tutorial][4]):
+> ```bash
+> for containerId in $(docker ps -f name=docker -q); do
+>   xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
+> done
+> ```
+> See the [Docker troubleshooting section](https://www.gisnav.org/pages/developer_guide/sitl/docker.html#troubleshooting)
+> in the developer documentation for more information.
 
 [4]: http://wiki.ros.org/docker/Tutorials/GUI
 

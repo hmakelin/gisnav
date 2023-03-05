@@ -14,20 +14,11 @@ USER $USERNAME
 # Install GISNav & colcon dependencies
 RUN mkdir -p $HOME/colcon_ws/src && \
     cd $HOME/colcon_ws/src && \
-    git clone https://github.com/hmakelin/gisnav.git && \
+    git clone --branch hmakelin-docker-cleanup https://github.com/hmakelin/gisnav.git && \
     git clone https://github.com/hmakelin/gisnav_msgs.git && \
     git clone https://github.com/px4/px4_msgs.git && \
     rosdep update && \
     rosdep install --from-paths . -y --ignore-src
-
-# Install LoFTR
-RUN cd $HOME/colcon_ws/src/gisnav && \
-    git submodule update --init gisnav/pose_estimators/third_party/LoFTR && \
-    sudo apt-get -y install python3-pip && \
-    pip3 install gdown && \
-    mkdir weights && \
-    cd weights && \
-    $HOME/.local/lib/$USERNAME/gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
 
 # Install GDAL
 RUN sudo apt-get -y upgrade && \
@@ -39,8 +30,9 @@ RUN sudo apt-get -y upgrade && \
 
 # Python dependencies
 RUN cd $HOME/colcon_ws/src/gisnav && \
-    pip3 install -r requirements.txt  && \
-    pip3 install --upgrade numpy python-dateutil
+    sudo apt-get -y install python3-pip && \
+    pip install -r requirements.txt  && \
+    pip install --upgrade numpy python-dateutil
 
 # GeographicLib
 RUN sudo apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
@@ -59,4 +51,8 @@ RUN sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
 
 COPY * /
-RUN sudo chmod 755 /disable_shared_memory.xml
+
+RUN sudo chmod 755 /disable_shared_memory.xml && \
+    sudo chmod 755 /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

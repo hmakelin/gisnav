@@ -16,8 +16,8 @@ its `GetMap`_ operation.
 
 .. seealso::
     The DEM is optionally used to input terrain z-coordinates (depth, or altitude) to the `PnP`_ problem solved by
-    :meth:`.KeypointPoseEstimator.estimate`. If a DEM is not available GISNav simply assumes a planar terrain which
-    may be less accurate. See :ref:`SuperGlue & LoFTR` for more information on how GISNav estimates aircraft pose from
+    the current pose estimation algorithm. If a DEM is not available GISNav simply assumes a planar terrain which
+    may be less accurate. See :ref:`Pose Estimators` for more information on how GISNav estimates aircraft pose from
     the map rasters.
 
     .. _PnP: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html

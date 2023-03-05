@@ -19,6 +19,3 @@ RUN sudo apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
 
 COPY * /
 RUN sudo chmod 755 /disable_shared_memory.xml
-
-CMD ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://127.0.0.1:14551@14555
-#CMD ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://127.0.0.1:14540@14550  # px4

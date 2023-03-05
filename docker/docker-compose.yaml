@@ -2,63 +2,69 @@ version: "3.4"
 
 services:
   mapserver:
-    image: camptocamp/mapserver
+    build:
+      context: mapserver
+      dockerfile: Dockerfile
+      args:
+        - DOCKER_TAG=latest
     network_mode: host
-    environment:
-      - NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
-      - OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
-    volumes:
-      - $PWD/mapserver/mapfiles/mapserver.map:/etc/mapserver/mapserver.map:ro
-      - $PWD/mapserver/setup_mapserver.sh:/etc/mapserver/setup_mapserver.sh:ro
-    entrypoint: /etc/mapserver/setup_mapserver.sh
+    command: /usr/local/bin/start-server
 
   mapproxy:
     build:
       context: mapproxy
       dockerfile: Dockerfile
+      args:
+        - MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s"
+        - CONFIG_FILE=yaml/mapproxy.yaml
+        - HOST=localhost
+        - PORT=80
     network_mode: host
+    command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
   micro-ros-agent:
     build:
       context: micro-ros-agent
       dockerfile: Dockerfile
-    command: udp4 -p 8888
     network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=0
     volumes:
       - /dev/shm:/dev/shm
+    command: udp4 -p 8888
 
   mavros:
     build:
       context: mavros
       dockerfile: Dockerfile
     environment:
+      - ROS_DOMAIN_ID=0
       - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
     network_mode: host
     volumes:
       - /dev/shm:/dev/shm
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://localhost:14551@14555
 
   qgc:
     build:
       context: qgc
       dockerfile: Dockerfile
-    environment:
-      - QT_X11_NO_MITSHM=1
-      - DISPLAY=${DISPLAY}
+    env_file:
+      - .env/.x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     network_mode: host
-    stdin_open: true
-    tty: true
+    privileged: true
 
   gisnav:
     build:
       context: gisnav
       dockerfile: Dockerfile
+    env_file:
+      - .env/.x11.env
     environment:
-      - QT_X11_NO_MITSHM=1
-      - DISPLAY=${DISPLAY}
       - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
     volumes:
       - /dev/dri:/dev/dri
@@ -72,19 +78,14 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: >
-      bash -c "source /opt/ros/foxy/setup.bash && source ~/colcon_ws/install/setup.bash &&
-      export LD_PRELOAD=$(find $(pip3 show torch |grep Location:  |cut -d' ' -f 2)/torch/lib -name 'libgomp*') &&
-      ros2 launch gisnav px4.launch.py"
+    command: ros2 launch gisnav px4.launch.py
 
   px4:
     build:
       context: px4
       dockerfile: Dockerfile
-    environment:
-      - QT_X11_NO_MITSHM=1
-      - DISPLAY=${DISPLAY}
-      - GAZEBO_HEADLESS=${GAZEBO_HEADLESS}
+    env_file:
+      - .env/.x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -100,27 +101,36 @@ services:
               count: 1
               capabilities: [ gpu ]
 
-  #ardupilot:
-  #  build:
-  #    context: https://github.com/ArduPilot/ardupilot.git
-  #    dockerfile: https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Dockerfile
-
   ardupilot:
     build:
       context: ardupilot
       dockerfile: Dockerfile
-    environment:
-      - QT_X11_NO_MITSHM=1
-      - DISPLAY=${DISPLAY}
-      - GAZEBO_HEADLESS=${GAZEBO_HEADLESS}
+    env_file:
+      - .env/.x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     network_mode: host
+    privileged: True
     stdin_open: true
     tty: true
-    #privileged: True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    command: bash -c "cd ~ && make sim_vehicle"
+
+  torch-serve:
+    build:
+      context: torch-serve
+      dockerfile: Dockerfile
+      args:
+        - BASE_IMAGE=pytorch/torchserve:latest-gpu
+    network_mode: host
     deploy:
       resources:
         reservations:

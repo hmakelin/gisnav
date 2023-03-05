@@ -43,11 +43,11 @@ COPY * /
 RUN sudo mv -t $HOME/ /6011_typhoon_h480 && \
     cat $HOME/6011_typhoon_h480 >> $HOME/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480
 
-# Run SITL simulation - answer 'y' to prompt about custom commit in submodule
+# Run SITL simulation - answer 'y' to prompt about custom commit in submodule (temp fix until 1.14 stable comes out)
 CMD cd ${HOME}/PX4-Autopilot && \
 	expect -c \
 		"set timeout -1; \
-		spawn make HEADLESS=${GAZEBO_HEADLESS} px4_sitl gazebo_typhoon_h480__ksql_airport; \
+		spawn make px4_sitl gazebo_typhoon_h480__ksql_airport; \
 		expect \"Hit 'y' and <ENTER> to continue the build with this version. Hit <ENTER> to resolve manually.\"; \
 		send \"y\n\"; \
 		interact"

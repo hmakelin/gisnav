@@ -60,21 +60,6 @@ Install GISNav in your ROS 2 Workspace:
 
     .. _PX4 ROS 2 User Guide: https://docs.px4.io/main/en/ros/ros2_comm.html
 
-Download the LoFTR submodule and weights:
-
-.. code-block:: bash
-    :caption: Install LoFTR keypoint matcher
-
-    cd ~/colcon_ws/src/gisnav
-    git submodule update LoFTR
-    mkdir weights && cd "$_"
-    pip3 install gdown
-    gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
-
-.. note::
-    The example downloads the dual-softmax (_ds suffix) outdoor weights which are permissively licensed (does not use
-    SuperGlue)
-
 Build the GISNav package along with other dependencies you may have in your colcon workspace. If you have already built
 the other dependencies (such as ``px4_msgs`` and ``px4_ros_com`` for PX4 configuration) earlier you may want to skip
 rebuilding them and build GISNav only to save time:

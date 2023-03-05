@@ -18,9 +18,6 @@ docs/_build/
 # coverage.py files
 .coverage*
 
-# Optional weights folder (LoFTR)
-weights/
-
 # SITL test log output (but leave one sample flight log)
 test/sitl/output/
 

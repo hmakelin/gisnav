@@ -60,8 +60,9 @@ RUN cd $HOME/ardupilot && \
 
 # Copy and apply configuration files, add SITL simulation demo location
 COPY * /
+
+RUN sudo chmod 755 /entrypoint.sh
+
 RUN sudo mv -t $HOME/ /gazebo-iris.parm /Makefile && \
     cat $HOME/gazebo-iris.parm >> $HOME/ardupilot/Tools/autotest/default_params/gazebo-iris.parm && \
     echo "KSQL_Airport=37.523640,-122.255122,1.7,90" >> $HOME/ardupilot/Tools/autotest/locations.txt
-
-CMD cd $HOME && make sim_vehicle

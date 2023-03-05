@@ -1,3 +1,0 @@
-class_name: 'gisnav.pose_estimators.loftr_pose_estimator.LoFTRPoseEstimator'
-args:
-  - 15  # min_matches

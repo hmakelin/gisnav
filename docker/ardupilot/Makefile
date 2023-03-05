@@ -5,7 +5,7 @@ sim_vehicle: gazebo
 
 gazebo:
 	cd ${HOME} && \
-	if [ -z ${GAZEBO_HEADLESS} ]; then \
+	if [ -z ${HEADLESS} ]; then \
 		echo "Launching Gazebo client & server..."; \
 		gazebo --verbose worlds/ksql_airport.world & \
 	else \

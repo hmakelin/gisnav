@@ -1,9 +1,14 @@
-Deploy with Make
+GISNav service orchestration
 ____________________________________________________
 The ``Makefile`` in the ``docker`` folder defines phony make targets that can be used to launch GISNav along with
 supporting services in various configurations. This builds on top of the services defined in the
 ``docker/docker-compose.yaml`` file to define groups of related services that should be spun up together depending on
 use case.
+
+.. warning::
+    If your offboard computer (not onboard companion computer like Jetson Nano) is based on ``arm64``, the ``Makefile``
+    targets and the ``mapserver`` Docker image especially may currently not work. See below for more information on
+    what is meant by *offboard*, *onboard*, and *companion*.
 
 For example, to build and run GISNav with all supporting services required for the mock GPS demo, you could do:
 
@@ -67,3 +72,4 @@ Below you can take a look at what's included in the Makefile:
     :start-after: # docker compose section start
     :end-before: # docker compose section end
     :language: make
+

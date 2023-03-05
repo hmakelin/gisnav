@@ -239,7 +239,7 @@ virtual joystick enabled in QGC General settings. At the end you would type comm
  .. code-block:: bash
 
     cd ~/PX4-Autopilot
-    make -C docker clean
+    make clean
     DONT_RUN=1 make px4_sitl gazebo___ksql_airport
     source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
     gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world

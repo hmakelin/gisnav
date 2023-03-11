@@ -1,7 +1,6 @@
 setuptools
 numpy
 opencv-python
-torch
 scipy>=1.4.0
 OWSLib==0.25.0
 pyyaml
@@ -11,11 +10,6 @@ requests
 geopandas==0.12.2
 shapely==1.8.2
 pyproj==3.2.1
-
-# Used by LoFTR
-einops
-kornia
-yacs
 
 # MockGPSNode
 gps-time

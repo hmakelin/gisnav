@@ -23,36 +23,35 @@ You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolk
 
 ## Build and run SITL simulation
 
-Build the Docker images:
+Build the Docker images (may take a long time):
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
-docker compose build px4 qgc mapserver micro-ros-agent gisnav
+make -C docker build-demo-px4
 ```
 
 Run GISNav along with supporting services:
 ```bash
-docker compose up px4 qgc mapserver micro-ros-agent gisnav 
+make -C docker demo
 ```
 
 > **Note**
-> * The build for the `px4` and `gisnav` images may take a long time.
-> * The `mapserver` container needs to download roughly 1 GB of high-resolution aerial imagery when ran for the first 
->   time, so it may take some time until it starts serving the WMS endpoint.
-> * If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
->   Docker containers (see e.g. [ROS GUI Tutorial][4]):
->   ```bash
->   for containerId in $(docker ps -f name=gisnav -q); do
->     xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
->   done
->   ```
+> If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
+> Docker containers (see e.g. [ROS GUI Tutorial][4]):
+> ```bash
+> for containerId in $(docker ps -f name=docker -q); do
+>   xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
+> done
+> ```
+> See the [Docker troubleshooting section](https://www.gisnav.org/pages/developer_guide/sitl/docker.html#troubleshooting)
+> in the developer documentation for more information.
 
 [4]: http://wiki.ros.org/docker/Tutorials/GUI
 
 ## Upload flight plan via QGroundControl
 
 Once both the Gazebo and QGroundControl windows have appeared (QGroundControl should show the drone location near San 
-Carlos airport), use QGroundControl to upload the sample `~/ksql_airport.plan` flight plan that is included inside the 
+Carlos airport), use QGroundControl to upload the sample `~/ksql_airport_px4.plan` flight plan that is included inside the 
 Docker container, and then start the mission.
 
 ## Simulate GPS failure
@@ -74,7 +73,7 @@ listener sensor_gps
 ```
 
 If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output 
-as expected.
+as expected. QGroundControl will most likely show 0 satellites used next to the GPS icon as shown in the demo video.
 
 [5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 

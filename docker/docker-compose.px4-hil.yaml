@@ -1,0 +1,7 @@
+# TODO
+version: "3.4"
+
+services:
+  # Starts PX4 HIL simulation instead of SITL
+  simulator:
+    command: echo TODO

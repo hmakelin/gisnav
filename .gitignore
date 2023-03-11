@@ -1,5 +1,5 @@
 # Python virtual environment
-/venv
+venv/
 
 # PyCharm generated files
 .idea/
@@ -7,7 +7,7 @@
 # Python bytecode
 *.pyc
 
-# Unwanted folders
+# colcon created folders
 build/
 install/
 log/
@@ -18,11 +18,13 @@ docs/_build/
 # coverage.py files
 .coverage*
 
-# Optional weights folder (LoFTR)
-weights/
-
 # SITL test log output (but leave one sample flight log)
 test/sitl/output/
 
 # Jupyter Notebook checkpoints
 test/sitl/ulog_analysis/.ipynb_checkpoints/
+
+.benchmarks/
+
+# LoFTR archive generated in torch-serve folder
+docker/torch-serve/loftr.mar

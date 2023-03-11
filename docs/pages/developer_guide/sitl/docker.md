@@ -16,6 +16,8 @@ The `docker-compose.yaml` file defines the following services:
   * Used for ArduPilot SITL
 * `micro-ros-agent`
   * Used for PX4 SITL
+* `torch-serve`
+  * Deep learning service that handles image matching
 * `mapserver`
   * WMS server with self-hosted [NAIP][2] and [OSM Buildings][3] data covering KSQL airport  
 * `mapproxy`
@@ -53,7 +55,7 @@ Follow these instructions to launch the SITL simulation used in the [mock GPS de
 To build the `mapserver`, `px4`,  `micro-ros-agent`, and `gisnav` services by running the following command:
 
 ```bash
-docker compose build mapserver px4 micro-ros-agent qgc gisnav
+docker compose build mapserver px4 micro-ros-agent torch-serve qgc gisnav
 ```
 
 ### Run
@@ -61,13 +63,13 @@ docker compose build mapserver px4 micro-ros-agent qgc gisnav
 Run the PX4 SITL simulation with GISNav:
 
 ```bash
-docker compose up mapserver px4 micro-ros-agent qgc gisnav
+docker compose up mapserver px4 micro-ros-agent torch-serve qgc gisnav
 ```
 
 ### Shutdown
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## ArduPilot SITL
@@ -78,16 +80,16 @@ Build and run the SITL simulation environment with ArduPilot instead of PX4:
 ```bash
 docker compose \
   -f docker-compose.yaml \
-  -f docker-compose.ardupilot.yaml \
-  build mapserver ardupilot mavros qgc
+  -f docker-compose.gisnav-ardupilot.yaml \
+  build mapserver ardupilot mavros qgc torch-serve
 ```
 
 ### Run
 ```bash
 docker compose \
   -f docker-compose.yaml \
-  -f docker-compose.ardupilot.yaml \
-  up mapserver ardupilot mavros qgc
+  -f docker-compose.gisnav-ardupilot.yaml \
+  up mapserver ardupilot mavros qgc torch-serve
 ```
 
 ## Mapproxy
@@ -101,10 +103,10 @@ Run the SITL simulation with a WMS proxy instead of locally hosted maps:
 [8]: https://mapproxy.org/docs/latest/configuration_examples.html
 
 ```bash
-docker-compose build \
+docker compose build \
   --build-arg MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s" \
-  mapproxy px4 micro-ros-agent gisnav
-docker compose up mapproxy px4 micro-ros-agent qgc
+  mapproxy px4 micro-ros-agent gisnav qgc torch-serve
+docker compose up mapproxy px4 micro-ros-agent qgc torch-serve
 ```
 
 ## Troubleshooting
@@ -128,7 +130,7 @@ You may want to run Gazebo in headless mode when doing automated testing ([e.g. 
 [10]: https://github.com/hmakelin/gisnav/blob/master/test/sitl/sitl_test_mock_gps_node.py
 
 ```bash
-GAZEBO_HEADLESS=1 docker compose up px4
+docker compose -f docker-compose.headless.yaml up px4
 ```
 
 ### Disable SharedMemory for Fast DDS

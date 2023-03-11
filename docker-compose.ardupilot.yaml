@@ -1,5 +1,0 @@
-version: "3.4"
-
-services:
-  gisnav:
-    command: bash -c "source ~/colcon_ws/install/setup.bash && ros2 launch gisnav ardupilot.launch.py"

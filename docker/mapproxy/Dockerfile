@@ -35,6 +35,3 @@ RUN mv $(basename $CONFIG_FILE) $HOME/$(basename $CONFIG_FILE) && \
 
 # Expose port for incoming WMS requests
 EXPOSE $PORT/tcp
-
-# Start the MapProxy server
-CMD mapproxy-util serve-develop -b ${HOST}:${PORT} ${HOME}/$(basename $CONFIG_FILE)

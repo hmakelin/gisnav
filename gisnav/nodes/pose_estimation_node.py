@@ -5,6 +5,9 @@ import yaml
 import numpy as np
 import traceback
 import importlib
+import pickle
+import json
+import requests
 from typing import Optional, Union, List, Tuple, get_args
 
 import cv2
@@ -21,7 +24,6 @@ from gisnav_msgs.msg import OrthoImage3D
 
 from . import messaging
 from .base.camera_subscriber_node import CameraSubscriberNode
-from ..pose_estimators.pose_estimator import PoseEstimator
 from ..assertions import assert_type, assert_ndim, assert_shape
 from ..data import Pose, FixedCamera, DataValueError, ImageData, Img, Attitude, ContextualMapData, MapData, ImagePair, \
     Position
@@ -38,8 +40,8 @@ class PoseEstimationNode(CameraSubscriberNode):
     # e.g. gscam2 only supports bgr8 so this is used to override encoding in image header
     _IMAGE_ENCODING = 'bgr8'
 
-    ROS_D_POSE_ESTIMATOR_PARAMS = 'launch/params/pose_estimators/loftr_params.yaml'
-    """Default parameters for initializing :class:`.PoseEstimator`"""
+    ROS_D_POSE_ESTIMATOR_ENDPOINT = 'http://localhost:8090/predictions/loftr'
+    """Default pose estimator endpoint URL"""
 
     ROS_D_DEBUG_EXPORT_POSITION = '' # 'position.json'
     """Default filename for exporting GeoJSON containing estimated field of view and position
@@ -62,7 +64,7 @@ class PoseEstimationNode(CameraSubscriberNode):
     """Magnitude of allowed attitude deviation of estimate from expectation in degrees"""
 
     ROS_PARAM_DEFAULTS = [
-        ('pose_estimator_params', ROS_D_POSE_ESTIMATOR_PARAMS, True),
+        ('pose_estimator_endpoint', ROS_D_POSE_ESTIMATOR_ENDPOINT, True),
         ('max_pitch', ROS_D_MISC_MAX_PITCH, False),
         ('min_match_altitude', ROS_D_MISC_MIN_MATCH_ALTITUDE, False),
         ('attitude_deviation_threshold', ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD, False),
@@ -77,14 +79,6 @@ class PoseEstimationNode(CameraSubscriberNode):
         """
         super().__init__(name)
         self._package_share_dir = get_package_share_directory('gisnav')
-
-        # region setup pose estimator
-        params_file = self.get_parameter('pose_estimator_params').get_parameter_value().string_value
-        params = self._load_config(params_file)
-        module_name, class_name = params.get('class_name', '').rsplit('.', 1)
-        pose_estimator: PoseEstimator = self._import_class(class_name, module_name)
-        self._estimator = pose_estimator(*params.get('args', []))
-        # endregion setup pose estimator
 
         self._map_data = None
 
@@ -137,37 +131,6 @@ class PoseEstimationNode(CameraSubscriberNode):
                                                    messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
                                                    QoSPresetProfiles.SENSOR_DATA.value)
         # endregion publishers
-
-    def _import_class(self, class_name: str, module_name: str) -> type:
-        """Dynamically imports class from given module if not yet imported
-
-        :param class_name: Name of the class to import
-        :param module_name: Name of module that contains the class
-        :return: Imported class
-        """
-        if module_name not in sys.modules:
-            self.get_logger().info(f'Importing module {module_name}.')
-            importlib.import_module(module_name)
-        imported_class = getattr(sys.modules[module_name], class_name, None)
-        assert imported_class is not None, f'{class_name} was not found in module {module_name}.'
-        return imported_class
-
-    def _load_config(self, yaml_file: str) -> dict:
-        """Loads params from the provided YAML file
-
-        :param yaml_file: Path to the yaml file
-        :return: The loaded yaml file as dictionary
-        """
-        assert_type(yaml_file, str)
-        with open(os.path.join(self._package_share_dir, yaml_file), 'r') as f:
-            # noinspection PyBroadException
-            try:
-                config = yaml.safe_load(f)
-                self.get_logger().info(f'Loaded params:\n{config}.')
-                return config
-            except Exception as e:
-                self.get_logger().error(f'Could not load params file {yaml_file} because of unexpected exception.')
-                raise
 
     @property
     def _altitude_scaling(self) -> Optional[float]:
@@ -279,7 +242,28 @@ class PoseEstimationNode(CameraSubscriberNode):
             assert hasattr(self._map_data, 'image'), 'Map data unexpectedly did not contain the image data.'
 
             image_pair = ImagePair(image_data, self._contextual_map_data)
-            pose = self._estimator.estimate(image_data.image.arr, image_pair.ref.image.arr, self.camera_data.k)
+
+            # region pose estimation request
+            # TODO: timeout, connection errors, exceptions etc.
+            pose_estimator_endpoint = self.get_parameter('pose_estimator_endpoint').get_parameter_value().string_value
+            r = requests.post(pose_estimator_endpoint, data={'query': pickle.dumps(image_pair.qry.image.arr),
+                                                             'reference': pickle.dumps(image_pair.ref.image.arr),
+                                                             'k': pickle.dumps(self.camera_data.k),
+                                                             'elevation': pickle.dumps(image_pair.ref.map_data.elevation.arr)}
+                              )
+            if r.status_code == 200:
+                # TODO: should return None if the length of these is 0?
+                data = json.loads(r.text)
+                if 'r' in data and 't' in data:
+                    pose = np.asarray(data.get('r')), np.asarray(data.get('t'))
+                else:
+                    self.get_logger().warn(f'Could not estimate pose, returned text {r.text}')
+                    return None
+            else:
+                self.get_logger().warn(f'Could not estimate pose, status code {r.status_code}')
+                return None
+            # endregion pose estimation request
+
             if pose is not None:
                 pose = Pose(*pose)
                 self._post_process_pose(pose, image_pair)

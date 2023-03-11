@@ -63,13 +63,6 @@ jobs:
           path: colcon_ws/src/gisnav
           submodules: 'true'
 
-      - name: Get LoFTR weights
-        run: |
-          pip install gdown
-          cd colcon_ws/src/gisnav
-          mkdir weights && cd "$_"
-          gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
-
       - name: Install GISNav
         run: |
           cd colcon_ws

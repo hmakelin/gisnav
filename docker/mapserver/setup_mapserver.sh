@@ -81,8 +81,3 @@ if [ -f "$DEM_4326_FILENAME" -a -f "$OSM_TIF_FILENAME" ] && ! [ -f "$COMPOUND_FI
   else \
     echo "OSM Buildings or DEM missing, or compound layer already calculated."; \
 fi
-
-# Setup complete, start MapServer with default mapfile
-MS_MAPFILE=/etc/mapserver/mapserver.map
-export MS_MAPFILE
-/usr/local/bin/start-server

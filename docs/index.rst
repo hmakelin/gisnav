@@ -31,8 +31,8 @@ To build this Sphinx documentation yourself, first install the :ref:`GISNav ROS 
 .. code-block:: bash
     :caption: Build Sphinx documentation
 
-    cd ~/colcon_ws/src/gisnav/docs
-    make html
+    cd ~/colcon_ws/src/gisnav
+    make docs
 
 The HTML documentation will then appear in the ``~/colcon_ws/src/gisnav/docs/_build/`` folder.
 

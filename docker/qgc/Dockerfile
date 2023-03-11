@@ -27,4 +27,4 @@ RUN wget -P $HOME https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl.Ap
 COPY * /
 RUN sudo mv -t $HOME/ /ksql_airport_px4.plan /ksql_airport_ardupilot.plan
 
-ENTRYPOINT ["/bin/bash", "-c", "cd $HOME && ./QGroundControl.AppImage --appimage-extract-and-run"]
+ENTRYPOINT ["/bin/bash", "-c", "cd $HOME && ./QGroundControl.AppImage --appimage-extract-and-run >/dev/null"]

@@ -1,0 +1,6 @@
+version: "3.4"
+
+services:
+  # Runs Ardupilot MAVROS launch configuration instead of default PX4 micro-ros
+  gisnav:
+    command: ros2 launch gisnav ardupilot.launch.py

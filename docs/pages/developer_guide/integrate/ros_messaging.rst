@@ -119,8 +119,9 @@ the info through the :py:attr:`.CameraSubscriberNode.camera_data` property, but 
     :pyobject: CameraSubscriberNode.image_callback
 
 .. note::
-    In the KSQL airport SITL demo, ``gscam`` is used to publish the :class:`sensor_msgs.msg.CameraInfo` and
-    :class:`sensor_msgs.msg.Image` messages. They are not published over the PX4-ROS 2 bridge.
+    In the KSQL airport SITL demo, ``gscam`` was used in earlier versions of GISNav to publish the
+    :class:`sensor_msgs.msg.CameraInfo` and :class:`sensor_msgs.msg.Image` messages. Newer versions use the Gazebo
+    ROS camera plugin which is also based on gstreamer. The camera topics are not published over the PX4-ROS 2 bridge.
 
 Aircraft GeoPose estimate topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

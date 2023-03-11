@@ -1,0 +1,6 @@
+services:
+  # User arm64 version of mapserver docker image (e.g. for Jetson Nano)
+  mapserver:
+    build:
+      args:
+        - DOCKER_TAG=latest-arm64

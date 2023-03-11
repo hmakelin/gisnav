@@ -1,10 +1,10 @@
 # Sphinx
-Sphinx==4.3.2
+Sphinx>=4.3.2
 pydata-sphinx-theme
-autodocsumm==0.2.7
+autodocsumm>=0.2.7
 docutils>=0.17
-myst_parser==0.16.1
-pygments==2.11.2  # make Sphinx highlighting work
+myst_parser>=0.16.1
+pygments>=2.11.2
 sphinx-design
 sphinxcontrib-video
 

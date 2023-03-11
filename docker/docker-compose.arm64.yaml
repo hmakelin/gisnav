@@ -4,12 +4,3 @@ services:
     build:
       args:
         - DOCKER_TAG=latest-arm64
-
-  # torch-server for Jetson Nano
-  # Makefile sets the environment variables (L4T_RELEASE, L4T_REVISION, CUDA_VERSION) automatically
-  torch-serve:
-    build:
-      dockerfile: Dockerfile_nano
-      args:
-        - BASE_IMAGE=nvcr.io/nvidia/l4t-pytorch:r${L4T_RELEASE}.${L4T_REVISION}-pth1.9-py3
-        - CUDA_VERSION=${CUDA_VERSION}

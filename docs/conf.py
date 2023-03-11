@@ -43,7 +43,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx_design',
               'autodocsumm',
               'myst_parser',
-              'sphinxcontrib.video'
+              'sphinxcontrib.video',
               ]
 
 # Add any paths that contain templates here, relative to this directory.

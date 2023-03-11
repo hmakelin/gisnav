@@ -25,3 +25,6 @@ test/sitl/output/
 test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 .benchmarks/
+
+# LoFTR archive generated in torch-serve folder
+docker/torch-serve/loftr.mar

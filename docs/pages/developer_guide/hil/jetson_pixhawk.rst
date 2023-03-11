@@ -25,6 +25,13 @@ Prerequisites
 * (1) Install the ``v1.14.0-1.0.1-beta`` tag of the `https://github.com/hmakelin/PX4-Autopilot.git`_ custom fork of
   PX4-Autopilot which includes required modifications to the microDDS bridge ``dds_topics.yaml`` configuration file, or
   (2) configure the bridge yourself (see :ref:`PX4-ROS 2 bridge topic configuration`).
+* Install `QEMU`_ emulator to make ``linux/amd64`` images run on the ``linux/arm64`` Jetson Nano:
+
+    .. code-block:: bash
+
+         docker run --privileged --rm tonistiigi/binfmt --install all
+
+    .. _QEMU: https://docs.docker.com/build/building/multi-platform/#building-multi-platform-images
 
   .. _https://github.com/hmakelin/PX4-Autopilot.git: https://github.com/hmakelin/PX4-Autopilot.git
 

@@ -18,6 +18,7 @@ it to match your use case.
     sitl/gis_server
     sitl/install_gisnav
     sitl/companion_computer
+    sitl/variance_estimation
 
 .. toctree::
     :caption: Setup HIL

@@ -36,7 +36,16 @@ Log into your desktop computer and build and run the services required for the S
     make -C docker build-offboard-sitl-px4
     make -C docker up-offboard-sitl-px4
 
-Then log into your Jetson Nano and build and run the onboard services:
+Then log into your Jetson Nano install `QEMU`_ emulators to make ``linux/amd64`` images run on the ``linux/arm64``
+Jetson Nano:
+
+.. code-block:: bash
+
+     docker run --privileged --rm tonistiigi/binfmt --install all
+
+.. _QEMU: https://docs.docker.com/build/building/multi-platform/#building-multi-platform-images
+
+Then build and run the onboard services on the Jetson Nano:
 
 .. code-block:: bash
     :caption: Run GISNav and GIS server on onboard computer

@@ -24,4 +24,3 @@ You must first start ``jupyter-notebook``:
 
 The notebook documents the analysis and displays the results. Download the example ULog file from Google Drive `here
 <https://drive.google.com/drive/folders/1SmcOV11IJG4qL7Of77mpNICeiLP_9fH7?usp=sharing>`_.
-

@@ -9,24 +9,27 @@ on:
   # Allows running manually from the Actions tab
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   run:
     runs-on: ubuntu-20.04
-    container: hmakelin/gisnav:latest
+    container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
     defaults:
       run:
         shell: bash
     steps:
-      - name: Install node
-        run: |
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-
       - name: Install GISNav developer dependencies
-        run: python3 -m pip install -r requirements-dev.txt
+        run: |
+          cd ~/colcon_ws/src/gisnav
+          python3 -m pip install -r requirements-dev.txt
 
       - name: Run ROS 2 launch tests
         run: |
+          cd ~/colcon_ws
           source install/setup.bash
-          launch_test src/gisnav/test/launch/test_px4_launch.py
-          launch_test src/gisnav/test/launch/test_ardupilot_launch.py
+          cd src/gisnav/test/launch
+          launch_test test_px4_launch.py
+          launch_test test_ardupilot_launch.py

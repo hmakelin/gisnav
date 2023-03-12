@@ -38,6 +38,8 @@ jobs:
 
       - name: Install node
         run: |
+          sudo apt-get update
+          sudo apt-get -y install curl
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt-get install -y nodejs
 
@@ -46,18 +48,17 @@ jobs:
 
       - name: Make "Upload pages artifact" step work with containers
         run: |
-          mkdir -p ${{runner.temp}}
-          mkdir -p /__w/_temp
-          ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
+          sudo mkdir -p ${{runner.temp}}
+          sudo mkdir -p /__w/_temp
+          sudo ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: '~/colcon_ws/src/gisnav/docs/_build/html/'
+          path: '/home/gisnav/colcon_ws/src/gisnav/docs/_build/html/'
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
 
     permissions:
       contents: read

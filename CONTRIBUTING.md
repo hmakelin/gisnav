@@ -21,8 +21,6 @@ submit your pull request:
 
 * See [Style Guide for Python Code][4] for general code style guidelines.
 
-* Consider following [Conventional Commits][3] when making your commit message.
-
 * If your pull request is related to an existing [open issue][1], please mention it in your pull request description.
 
 * If your pull request addresses a new issue or improvement, consider posting it on the [open issues][1] page before 

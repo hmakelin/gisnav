@@ -9,50 +9,47 @@ RUN apt-get update --fix-missing && \
     apt-get -y install sudo && \
     groupadd --gid $GID $USERNAME && useradd --uid $UID --gid $GID -m $USERNAME && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
+
 USER $USERNAME
 
-# Install GISNav & colcon dependencies
-RUN mkdir -p $HOME/colcon_ws/src && \
-    cd $HOME/colcon_ws/src && \
-    git clone --branch hmakelin-docker-cleanup https://github.com/hmakelin/gisnav.git && \
-    git clone https://github.com/hmakelin/gisnav_msgs.git && \
-    git clone https://github.com/px4/px4_msgs.git && \
-    rosdep update && \
-    rosdep install --from-paths . -y --ignore-src
+WORKDIR /home/$USERNAME/colcon_ws/src/gisnav
+COPY --chown=$USERNAME . .
+
+RUN sudo chmod +x docker/gisnav/entrypoint.sh
+
+# Install GISNav dependencies
+RUN rosdep update && \
+    rosdep install --from-paths . -y -r --ignore-src && \
+    sudo apt-get -y install python3-pip && \
+    pip install -r requirements.txt
 
 # Install GDAL
-RUN sudo apt-get -y upgrade && \
-    sudo apt-get -y update && \
-    sudo apt-get -y install software-properties-common && \
+RUN sudo apt-get -y install software-properties-common && \
     sudo add-apt-repository ppa:ubuntugis/ppa && \
+    sudo apt-get -y upgrade && \
     sudo apt-get update && \
     sudo apt-get -y install gdal-bin libgdal-dev
 
-# Python dependencies
-RUN cd $HOME/colcon_ws/src/gisnav && \
-    sudo apt-get -y install python3-pip && \
-    pip install -r requirements.txt  && \
-    pip install --upgrade numpy python-dateutil
-
-# GeographicLib
+# Install GeographicLib
 RUN sudo apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
-    cd $HOME && \
     wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
     sudo bash ./install_geographiclib_datasets.sh
 
+WORKDIR /home/$USERNAME/colcon_ws/src
+
+# Custom ROS messages
+RUN git clone https://github.com/hmakelin/gisnav_msgs.git && \
+    git clone https://github.com/px4/px4_msgs.git
+
+WORKDIR /home/$USERNAME/colcon_ws
+
 # Build
 SHELL ["/bin/bash", "-c"]
-RUN cd $HOME/colcon_ws && \
-    source /opt/ros/foxy/setup.bash && \
+RUN source /opt/ros/foxy/setup.bash && \
     colcon build
 
 # Clean
 RUN sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
 
-COPY * /
-
-RUN sudo chmod 755 /disable_shared_memory.xml && \
-    sudo chmod 755 /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["src/gisnav/docker/gisnav/entrypoint.sh"]

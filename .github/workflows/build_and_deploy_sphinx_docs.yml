@@ -9,22 +9,32 @@ on:
   # Allows running manually from the Actions tab
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   build:
-    runs-on: hmakelin/gisnav:latest
+    runs-on: ubuntu-20.04
+    container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
     defaults:
       run:
         shell: bash
     steps:
       - name: Install GISNav developer dependencies
-        run: python3 -m pip install -r requirements-dev.txt
+        run: |
+          cd ~/colcon_ws/src/gisnav
+          python3 -m pip install -r requirements-dev.txt
 
       - name: Build Sphinx docs
         run: |
+          cd ~/colcon_ws
+          source /opt/ros/foxy/setup.bash
           source install/setup.bash
-          export PATH=$(dirname $(find / -iname sphinx-build -print -quit)):$PATH
+          cd src/gisnav
+          export PATH=$(dirname $(find ~ -iname sphinx-build -print -quit)):$PATH
           make -C docs html
-          cd _build/html && touch .nojekyll
+          cd docs/_build/html && touch .nojekyll
 
       - name: Setup pages
         uses: actions/configure-pages@v1
@@ -38,7 +48,7 @@ jobs:
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: 'docs/_build/html/'
+          path: '~/colcon_ws/src/gisnav/docs/_build/html/'
 
   deploy:
     needs: build

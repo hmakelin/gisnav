@@ -58,14 +58,16 @@ services:
     network_mode: host
     privileged: true
 
+  # Note: build context is repository root
   gisnav:
     build:
-      context: gisnav
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/gisnav/Dockerfile
+    image: gisnav
     env_file:
       - .env/.x11.env
     environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+      - FASTRTPS_DEFAULT_PROFILES_FILE=~/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
       - /dev/dri:/dev/dri
     network_mode: host

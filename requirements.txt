@@ -1,5 +1,5 @@
 setuptools
-numpy
+numpy>=1.24.2
 opencv-python
 scipy>=1.4.0
 OWSLib==0.25.0
@@ -10,6 +10,7 @@ requests
 geopandas==0.12.2
 shapely==1.8.2
 pyproj==3.2.1
+python-dateutil>=2.8.2
 
 # MockGPSNode
 gps-time

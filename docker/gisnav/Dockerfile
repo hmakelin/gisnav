@@ -48,8 +48,10 @@ SHELL ["/bin/bash", "-c"]
 RUN source /opt/ros/foxy/setup.bash && \
     colcon build
 
-# Clean
-RUN sudo apt-get clean && \
+# Upgrade & clean
+RUN sudo apt-get update && \
+    sudo apt-get -y upgrade && \
+    sudo apt-get clean && \
     sudo rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["src/gisnav/docker/gisnav/entrypoint.sh"]

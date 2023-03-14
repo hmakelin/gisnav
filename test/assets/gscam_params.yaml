@@ -8,4 +8,3 @@ gscam_publisher:
     use_gst_timestamps: True
     frame_id: 'mono'
     image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
-

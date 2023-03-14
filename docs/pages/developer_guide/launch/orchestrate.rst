@@ -72,4 +72,3 @@ Below you can take a look at what's included in the Makefile:
     :start-after: # docker compose section start
     :end-before: # docker compose section end
     :language: make
-

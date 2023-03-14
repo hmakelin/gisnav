@@ -1,19 +1,20 @@
 import importlib
 import pickle
 
-import torch
 import cv2
 import numpy as np
+import torch
 from ts.torch_handler.base_handler import BaseHandler
+
 
 def bgr2gray(bgr):
     """Convert (OpenCV) BGR format to grayscale"""
-    b, g, r = bgr[:,:,0], bgr[:,:,1], bgr[:,:,2]
+    b, g, r = bgr[:, :, 0], bgr[:, :, 1], bgr[:, :, 2]
     gray = 0.114 * b + 0.587 * g + 0.299 * r
     return gray
 
-class LoFTRHandler(BaseHandler):
 
+class LoFTRHandler(BaseHandler):
     MIN_MATCHES = 15
     """Minimum amount of keypoint matches for a good match"""
 
@@ -21,9 +22,9 @@ class LoFTRHandler(BaseHandler):
     """Confidence threshold for filtering out bad matches"""
 
     def _load_pickled_model(self, _, model_file, model_pt_path):
-        """Modify parent method to recognize LoFTR model definition inside loftr.py and to pass default config"""
+        """Recognize LoFTR model definition inside loftr.py and pass config"""
         module = importlib.import_module(model_file.split(".")[0])
-        model_ = getattr(module, 'LoFTR')
+        model_ = getattr(module, "LoFTR")
         model = model_()
         state_dict = torch.load(model_pt_path, map_location=self.device)
         model.load_state_dict(state_dict)
@@ -32,15 +33,15 @@ class LoFTRHandler(BaseHandler):
     def preprocess(self, data):
         """Convert incoming images to torch tensors"""
         data = data[0]
-        qry = pickle.loads(data['query'])
-        ref = pickle.loads(data['reference'])
-        k = pickle.loads(data['k'])
-        elevation = pickle.loads(data['elevation'])
+        qry = pickle.loads(data["query"])
+        ref = pickle.loads(data["reference"])
+        k = pickle.loads(data["k"])
+        elevation = pickle.loads(data["elevation"])
         qry_grayscale = bgr2gray(qry)
         ref_grayscale = bgr2gray(ref)
-        qry_tensor = torch.Tensor(qry_grayscale)[None][None].cuda() / 255.
-        ref_tensor = torch.Tensor(ref_grayscale)[None][None].cuda() / 255.
-        batch = {'image0': qry_tensor, 'image1': ref_tensor}
+        qry_tensor = torch.Tensor(qry_grayscale)[None][None].cuda() / 255.0
+        ref_tensor = torch.Tensor(ref_grayscale)[None][None].cuda() / 255.0
+        batch = {"image0": qry_tensor, "image1": ref_tensor}
         return batch, k, elevation
 
     def inference(self, batch):
@@ -53,9 +54,9 @@ class LoFTRHandler(BaseHandler):
     def postprocess(self, data):
         """Filter based on confidence threshold"""
         batch, k, elevation = data
-        mkp_qry = batch['keypoints0'].cpu().numpy()
-        mkp_ref = batch['keypoints1'].cpu().numpy()
-        conf = batch['confidence'].cpu().numpy()
+        mkp_qry = batch["keypoints0"].cpu().numpy()
+        mkp_ref = batch["keypoints1"].cpu().numpy()
+        conf = batch["confidence"].cpu().numpy()
         valid = conf > self.CONFIDENCE_THRESHOLD
 
         mkp_qry = mkp_qry[valid, :]
@@ -65,18 +66,29 @@ class LoFTRHandler(BaseHandler):
             return [{}]  # Not enough matching keypoints found
 
         if elevation is None:
-            # Set world z values to zero (assume planar ground surface and estimate homography)
+            # Set world z values to zero
+            # assume planar ground surface and estimate homography
             z_values = np.array([[0]] * len(mkp_qry))
         else:
-            # Z values are assumed to be in camera native coordinates (not in meters)
-            x, y = np.transpose(np.floor(mkp_ref).astype(int))  # do floor first before converting to int
+            # Z values assumed to be in camera native coordinates (not meters)
+            x, y = np.transpose(
+                np.floor(mkp_ref).astype(int)
+            )  # do floor first before converting to int
             z_values = elevation[y, x].reshape(-1, 1)  # y axis first
 
         mkp2_3d = np.hstack((mkp_ref, z_values))
 
         dist_coeffs = np.zeros((4, 1))
-        _, r, t, __ = cv2.solvePnPRansac(mkp2_3d, mkp_qry, k, dist_coeffs, None, None, useExtrinsicGuess=False,
-                                         iterationsCount=10)
+        _, r, t, __ = cv2.solvePnPRansac(
+            mkp2_3d,
+            mkp_qry,
+            k,
+            dist_coeffs,
+            None,
+            None,
+            useExtrinsicGuess=False,
+            iterationsCount=10,
+        )
         r, _ = cv2.Rodrigues(r)
 
-        return [{'r': r.tolist(), 't': t.tolist()}]
+        return [{"r": r.tolist(), "t": t.tolist()}]

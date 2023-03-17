@@ -117,12 +117,12 @@ class CameraSubscriberNode(BaseNode):
     @property
     def camera_data(self) -> Optional[CameraData]:
         """Camera intrinsics or None if not available"""
-        if not all(
+        if self.__camera_info is None or not all(
             hasattr(self.__camera_info, attr) for attr in ["k", "height", "width"]
         ):
             return None
         else:
-            camera_info = self.__camera_info
+            camera_info: CameraInfo = self.__camera_info
             return CameraData(
                 camera_info.k.reshape((3, 3)),
                 dim=Dim(camera_info.height, camera_info.width),

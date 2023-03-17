@@ -289,8 +289,9 @@ class BBoxNode(CameraSubscriberNode):
         radius = scaling * altitude_agl
 
         bbox = GeoSquare(xy, radius)
+        zeros = np.zeros(self.map_size_with_padding)
         map_data = MapData(
-            bbox=BBox(*bbox.bounds), image=Img(np.zeros(self.map_size_with_padding))
+            bbox=BBox(*bbox.bounds), image=Img(zeros), elevation=Img(zeros)
         )
         return map_data
 

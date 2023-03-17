@@ -37,6 +37,14 @@ class _GeoObject(ABC):
     """Use WGS 84 latitude and longitude by default"""
 
     @property
+    def _geoseries(self) -> GeoSeries:
+        return self.__geoseries
+
+    @_geoseries.setter
+    def _geoseries(self, value: GeoSeries) -> None:
+        self.__geoseries = value
+
+    @property
     def crs(self) -> str:
         """Returns current CRS string
 
@@ -81,10 +89,14 @@ class _GeoPolygon(_GeoObject):
     @property
     def center(self) -> GeoPt:
         """Returns center point of the polygon"""
-        return GeoPt(*self._geoseries.centroid[0].coords[0], crs=self.crs)
+        return GeoPt(
+            self._geoseries.centroid[0].coords[0][0],
+            self._geoseries.centroid[0].coords[0][1],
+            crs=self.crs,
+        )
 
     @property
-    def bounds(self) -> Tuple[4 * (float,)]:
+    def bounds(self) -> Tuple[float, float, float, float]:
         """Returns (left, bottom, right, top) or (minx, miny, maxx, maxy)
         formatted tuple (e.g. for WMS GetMap)"""
         return self._geoseries[0].bounds

@@ -3,7 +3,7 @@ import json
 import socket
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Generic, TypeVar
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
@@ -18,8 +18,11 @@ from gisnav.nodes.base.base_node import BaseNode
 
 from . import messaging
 
+_MsgType = TypeVar("_MsgType", SensorGps, dict)
+"""Type variable for outgoing GPS messages"""
 
-class MockGPSNode(BaseNode):
+
+class MockGPSNode(BaseNode, Generic[_MsgType]):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_UDP_IP = "127.0.0.1"
@@ -128,13 +131,11 @@ class MockGPSNode(BaseNode):
 
         """
         if self._px4_micrortps:
-            msg: SensorGps = self._generate_sensor_gps(
+            msg: _MsgType = self._generate_sensor_gps(
                 lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp
             )
         else:
-            msg: dict = self._generate_gps_input(
-                lat, lon, altitude_amsl, heading, timestamp
-            )
+            msg = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
 
         if msg is not None:
             if self._px4_micrortps:
@@ -144,15 +145,14 @@ class MockGPSNode(BaseNode):
             else:
                 assert_type(msg, dict)
                 assert self._mock_gps_pub is None
+                assert self._socket is not None
                 self._socket.sendto(
                     f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
                 )
         else:
             self.get_logger().info("Could not create GPS message, skipping publishing.")
 
-    def _generate_gps_input(
-        self, lat, lon, altitude_amsl, heading, timestamp
-    ) -> Optional[dict]:
+    def _generate_gps_input(self, lat, lon, altitude_amsl, heading, timestamp) -> dict:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
 
         .. note::
@@ -206,7 +206,7 @@ class MockGPSNode(BaseNode):
 
     def _generate_sensor_gps(
         self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp
-    ) -> Optional[SensorGps]:
+    ) -> SensorGps:
         """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige
 
         :param lat: Vehicle latitude

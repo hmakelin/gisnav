@@ -22,7 +22,7 @@ import os
 import warnings
 from collections import namedtuple
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 from xml.etree import ElementTree
 
 import cv2
@@ -55,11 +55,8 @@ class Position:
 
     xy: GeoPt  # XY coordinates (e.g. longitude & latitude in WGS84)
     altitude: Altitude
-    attitude: Optional[Attitude]  # attitude in NED frame
+    attitude: Attitude  # attitude in NED frame
     timestamp: Optional[int]  # Reference timestamp of position
-
-    _KALMAN_FILTER_EPSG_CODE = "epsg:3857"
-    """Used for converting into an array that can be passed to :class:`.SimpleFilter"""
 
     @property
     def lat(self) -> float:
@@ -177,13 +174,12 @@ class MapData(_ImageHolder):
     """Keeps map frame related data in one place and protects it from corruption."""
 
     bbox: BBox
-    elevation: Optional[Img] = None  # Optional elevation raster
+    elevation: Img
 
     def __post_init__(self):
         """Post-initialization validity check."""
-        if self.elevation is not None:
-            assert self.elevation.arr.shape[0:2], self.image.arr.shape[0:2]
-            assert_ndim(self.elevation.arr, 2)  # Grayscale image expected
+        assert self.elevation.arr.shape[0:2], self.image.arr.shape[0:2]
+        assert_ndim(self.elevation.arr, 2)  # Grayscale image expected
 
 
 # noinspection PyClassHasNoInit
@@ -194,9 +190,7 @@ class ContextualMapData(_ImageHolder):
     image: Img = field(
         init=False
     )  # Cropped and rotated map which is the same size as the camera frames
-    elevation: Optional[Img] = field(
-        init=None
-    )  # Rotated elevation raster (optional) in meters
+    elevation: Img = field(init=False)  # Rotated elevation raster (optional) in meters
     rotation: float  # radians
     crop: Dim  # Same value will also be found at image.dim (but not at initialization)
     map_data: MapData  # This is the original (square) map with padding
@@ -309,10 +303,8 @@ class ContextualMapData(_ImageHolder):
     def __post_init__(self):
         """Set computed fields after initialization."""
         object.__setattr__(self, "image", Img(self._rotate_and_crop_map()))
-        if self.map_data.elevation is not None:
-            object.__setattr__(self, "elevation", Img(self._rotate_and_crop_map(True)))
-        else:
-            object.__setattr__(self, "elevation", None)
+        assert self.map_data.elevation is not None
+        object.__setattr__(self, "elevation", Img(self._rotate_and_crop_map(True)))
         object.__setattr__(self, "pix_to_wgs84", self._pix_to_wgs84())
 
 
@@ -393,7 +385,7 @@ class FOV:
     """Camera field of view related attributes"""
 
     fov_pix: np.ndarray
-    fov: Optional[GeoTrapezoid]
+    fov: GeoTrapezoid
     c: GeoPt
     c_pix: np.ndarray
     scaling: float = field(init=False)
@@ -475,7 +467,11 @@ class FixedCamera:
                 fov_pix=fov_pix,
                 fov=GeoTrapezoid(np.flip(fov_wgs84, axis=2), crs="epsg:4326"),
                 c_pix=c_pix,
-                c=GeoPt(*c_wgs84.squeeze()[::-1], crs="epsg:4326"),
+                c=GeoPt(
+                    c_wgs84.squeeze()[::-1][0],
+                    c_wgs84.squeeze()[::-1][1],
+                    crs="epsg:4326",
+                ),
             )
             return fov
         except GeoValueError:
@@ -673,12 +669,19 @@ class PackageData:
 
     package_name: str
     version: str
-    description: str
-    author: str
-    author_email: str
-    maintainer: str
-    maintainer_email: str
-    license_name: str
+    description: Optional[str]
+    author: Optional[str]
+    author_email: Optional[str]
+    maintainer: Optional[str]
+    maintainer_email: Optional[str]
+    license_name: Optional[str]
+
+    @staticmethod
+    def require_not_none(text: Optional[Union[str, ElementTree.Element]]):
+        """Raises ValueError if input is not a string but None"""
+        if text is None:
+            raise ValueError("Expected not None")
+        return text
 
     @staticmethod
     def parse_package_data(package_file: str) -> PackageData:
@@ -691,16 +694,24 @@ class PackageData:
         if os.path.isfile(package_file):
             tree = ElementTree.parse(package_file)
             root = tree.getroot()
-            package_data = PackageData(
-                package_name=root.find("name").text,
-                version=root.find("version").text,
-                description=root.find("description").text,
-                author=root.find("author").text,
-                author_email=root.find("author").attrib.get("email", ""),
-                maintainer=root.find("maintainer").text,
-                maintainer_email=root.find("maintainer").attrib.get("email", ""),
-                license_name=root.find("license").text,
-            )
+
+            author = root.find("author")
+            maintainer = root.find("maintainer")
+            kwargs = {
+                "package_name": PackageData.require_not_none(root.findtext("name")),
+                "version": PackageData.require_not_none(root.findtext("version")),
+                "description": root.findtext("description"),
+                "author": root.findtext("author"),
+                "author_email": author.attrib.get("email")
+                if author is not None
+                else None,
+                "maintainer": root.findtext("maintainer"),
+                "maintainer_email": maintainer.attrib.get("email")
+                if maintainer is not None
+                else None,
+                "license_name": root.findtext("license"),
+            }
+            package_data = PackageData(**kwargs)
             return package_data
         else:
             raise FileNotFoundError(f"Could not find package file at {package_file}.")

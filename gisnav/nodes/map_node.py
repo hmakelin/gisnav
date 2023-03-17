@@ -1,6 +1,6 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
-from typing import Optional, Tuple, get_args
+from typing import IO, Optional, Tuple, get_args
 
 import cv2
 import numpy as np
@@ -202,7 +202,7 @@ class MapNode(CameraSubscriberNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
         self._vehicle_geopose = None
-        self._vehicle_geopose_callback = self.create_subscription(
+        self._vehicle_geopose_sub = self.create_subscription(
             GeoPoseStamped,
             messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
             self._vehicle_geopose_callback,
@@ -235,8 +235,8 @@ class MapNode(CameraSubscriberNode):
         url = self.get_parameter("url").get_parameter_value().string_value
         version = self.get_parameter("version").get_parameter_value().string_value
         timeout = self.get_parameter("timeout").get_parameter_value().integer_value
-        self._wms_client = None
-        while self._wms_client is None:
+        self.connected = False  # TODO: handle disconnects, declare property
+        while not self.connected:
             try:
                 self.get_logger().error("Connecting to WMS endpoint...")
                 self._wms_client = WebMapService(url, version=version, timeout=timeout)
@@ -246,8 +246,9 @@ class MapNode(CameraSubscriberNode):
                     f"{self._WMS_CONNECTION_ATTEMPT_DELAY}s..."
                 )
                 time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY)
-        else:
-            self.get_logger().info("WMS client setup complete.")
+
+        self.connected = True
+        self.get_logger().info("WMS client setup complete.")
 
     # region Properties
     @property
@@ -259,6 +260,15 @@ class MapNode(CameraSubscriberNode):
     def _publish_timer(self, value: Timer) -> None:
         assert_type(value, Timer)
         self.__publish_timer = value
+
+    @property
+    def _map_data(self) -> Optional[MapData]:
+        """Stored map data"""
+        return self.__map_data
+
+    @_map_data.setter
+    def _map_data(self, value: MapData) -> None:
+        self.__map_data = value
 
     @property
     def _ortho_image_3d_msg(self) -> Optional[OrthoImage3D]:
@@ -309,9 +319,18 @@ class MapNode(CameraSubscriberNode):
         )
         if self._should_request_new_map(bbox):
             if self.map_size_with_padding is not None:
-                img, dem = self._get_map(bbox, self.map_size_with_padding)
-                self._map_data = MapData(bbox=bbox, image=Img(img), elevation=Img(dem))
-                self._ortho_image_3d_msg = self._create_msg(bbox, img, dem)
+                map = self._get_map(bbox, self.map_size_with_padding)
+                if map is not None:
+                    img, dem = map
+                    self._map_data = MapData(
+                        bbox=bbox, image=Img(img), elevation=Img(dem)
+                    )
+                    self._ortho_image_3d_msg = self._create_msg(bbox, img, dem)
+                else:
+                    self.get_logger().warn(
+                        "Could not get new map - will not update map data nor "
+                        "orthoimage message."
+                    )
             else:
                 self.get_logger().warn(
                     f"Cannot request new map, could not determine size "
@@ -430,7 +449,7 @@ class MapNode(CameraSubscriberNode):
         # (see class docstring)
         try:
             self.get_logger().info("Requesting orthoimage...")
-            img = self._wms_client.getmap(
+            img: IO = self._wms_client.getmap(
                 layers=layers,
                 styles=styles,
                 srs=srs,
@@ -446,7 +465,7 @@ class MapNode(CameraSubscriberNode):
             return None
         finally:
             self.get_logger().info("Orthoimage request complete.")
-        img = self._read_img(img)
+        img_ = self._read_img(img)
 
         dem = None
         if len(dem_layers) > 0 and dem_layers[0]:
@@ -474,12 +493,12 @@ class MapNode(CameraSubscriberNode):
             self.get_logger().debug(
                 "No DEM layer provided, assuming flat (=zero) elevation model."
             )
-            dem = np.zeros_like(img)
+            dem = np.zeros_like(img_)
 
-        return img, dem
+        return img_, dem
 
     @staticmethod
-    def _read_img(img: bytes, grayscale: bool = False) -> np.ndarray:
+    def _read_img(img: IO, grayscale: bool = False) -> np.ndarray:
         """Reads image bytes and returns numpy array
 
         :return: Image as np.ndarray

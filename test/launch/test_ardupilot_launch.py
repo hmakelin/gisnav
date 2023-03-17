@@ -15,7 +15,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
-from launch import LaunchDescription
+from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 

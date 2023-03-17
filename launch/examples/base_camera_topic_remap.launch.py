@@ -10,11 +10,8 @@ from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
 from gisnav.data import PackageData
-from gisnav.nodes.base.camera_subscriber_node import (
-    ROS_CAMERA_INFO_TOPIC,
-    ROS_IMAGE_TOPIC,
-)
-from launch import LaunchDescription
+from gisnav.nodes.base.camera_subscriber_node import CameraSubscriberNode
+from launch import LaunchDescription  # type: ignore
 
 
 def generate_launch_description():
@@ -54,8 +51,8 @@ def generate_launch_description():
                 )
             ],
             remappings=[
-                (ROS_IMAGE_TOPIC, "image"),
-                (ROS_CAMERA_INFO_TOPIC, "camera_info"),
+                (CameraSubscriberNode.ROS_IMAGE_TOPIC, "image"),
+                (CameraSubscriberNode.ROS_CAMERA_INFO_TOPIC, "camera_info"),
             ],
         )
     )

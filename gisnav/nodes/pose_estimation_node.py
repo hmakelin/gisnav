@@ -1,7 +1,6 @@
 """Module that contains the pose estimation node"""
 import json
 import pickle
-import traceback
 from typing import Optional, Union, get_args
 
 import cv2
@@ -165,6 +164,15 @@ class PoseEstimationNode(CameraSubscriberNode):
         # endregion publishers
 
     @property
+    def _map_data(self) -> Optional[MapData]:
+        """Stored map data"""
+        return self.__map_data
+
+    @_map_data.setter
+    def _map_data(self, value: MapData) -> None:
+        self.__map_data = value
+
+    @property
     def _altitude_scaling(self) -> Optional[float]:
         """Returns camera focal length divided by camera altitude in meters"""
         if self.camera_data is not None and self._vehicle_altitude is not None:
@@ -316,7 +324,10 @@ class PoseEstimationNode(CameraSubscriberNode):
                 self._map_data, "image"
             ), "Map data unexpectedly did not contain the image data."
 
-            image_pair = ImagePair(image_data, self._contextual_map_data)
+            # TODO: check below assertion in _should_estimate?
+            assert self._contextual_map_data is not None
+            contextual_map_data: ContextualMapData = self._contextual_map_data
+            image_pair = ImagePair(image_data, contextual_map_data)
 
             # region pose estimation request
             # TODO: timeout, connection errors, exceptions etc.
@@ -352,8 +363,8 @@ class PoseEstimationNode(CameraSubscriberNode):
             # endregion pose estimation request
 
             if pose is not None:
-                pose = Pose(*pose)
-                self._post_process_pose(pose, image_pair)
+                pose_ = Pose(*pose)
+                self._post_process_pose(pose_, image_pair)
             else:
                 self.get_logger().warn(
                     "Could not estimate a pose, skipping this frame."
@@ -380,7 +391,7 @@ class PoseEstimationNode(CameraSubscriberNode):
             f"size {self.map_size_with_padding}."
         )
 
-        elevation = Img(dem) if dem is not None else None
+        elevation = Img(dem) if dem is not None else Img(np.zeros(img.shape[0:2]))
         self._map_data = MapData(bbox=bbox, image=Img(img), elevation=elevation)
 
     def _terrain_altitude_callback(self, msg: Altitude) -> None:
@@ -598,8 +609,7 @@ class PoseEstimationNode(CameraSubscriberNode):
             position._geoseries.append(fov._geoseries).to_file(filename)
         except Exception as e:
             self.get_logger().error(
-                f"Could not write file {filename} because of exception:"
-                f"\n{e}\n{traceback.print_exc()}"
+                f"Could not write file {filename} because of exception: {e}"
             )
 
     def publish(self, position: Position) -> None:

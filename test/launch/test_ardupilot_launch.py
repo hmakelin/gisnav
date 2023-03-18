@@ -1,79 +1,85 @@
 """Tests ArduPilot launch"""
-import unittest
 import os
 import time
+import unittest
 from typing import List, Tuple
 
-import rclpy
 import pytest
+import rclpy
+from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
+from geometry_msgs.msg import PoseStamped, Quaternion
+from gisnav_msgs.msg import OrthoImage3D
+from launch_testing.actions import ReadyToTest
+from mavros_msgs.msg import Altitude, HomePosition, MountControl
 from rclpy.node import Node
-from launch import LaunchDescription
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix
+from std_msgs.msg import Float32
+
+from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_testing.actions import ReadyToTest
-from geometry_msgs.msg import PoseStamped, Quaternion
-from mavros_msgs.msg import HomePosition, MountControl, Altitude
-from sensor_msgs.msg import NavSatFix, CameraInfo, Image
-from std_msgs.msg import Float32
-from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
-from gisnav_msgs.msg import OrthoImage3D
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, '../../launch/ardupilot.launch.py')
+    filename = os.path.join(dirname, "../../launch/ardupilot.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
-    return LaunchDescription([
-        ld,
-        ReadyToTest(),
-    ])
+    return LaunchDescription(
+        [
+            ld,
+            ReadyToTest(),
+        ]
+    )
 
 
 class TestArduPilotLaunch(unittest.TestCase):
     """Test that all nodes initialize with correct ROS topics"""
 
     GISNAV_TOPIC_NAMES_AND_TYPES = [
-        ('/gisnav/orthoimage_3d', OrthoImage3D),
-        ('/gisnav/bounding_box', BoundingBox),
-        ('/gisnav/vehicle_geopose', GeoPoseStamped),
-        ('/gisnav/vehicle_geopose/estimate', GeoPoseStamped),
-        ('/gisnav/vehicle_altitude', Altitude),
-        ('/gisnav/vehicle_altitude/estimate', Altitude),
-        ('/gisnav/gimbal_quaternion', Quaternion),
-        ('/gisnav/home_geopoint', GeoPointStamped),
-        ('/gisnav/terrain_altitude', Altitude),
-        ('/gisnav/terrain_geopoint', GeoPointStamped),
-        ('/gisnav/egm96_height', Float32)
+        ("/gisnav/orthoimage_3d", OrthoImage3D),
+        ("/gisnav/bounding_box", BoundingBox),
+        ("/gisnav/vehicle_geopose", GeoPoseStamped),
+        ("/gisnav/vehicle_geopose/estimate", GeoPoseStamped),
+        ("/gisnav/vehicle_altitude", Altitude),
+        ("/gisnav/vehicle_altitude/estimate", Altitude),
+        ("/gisnav/gimbal_quaternion", Quaternion),
+        ("/gisnav/home_geopoint", GeoPointStamped),
+        ("/gisnav/terrain_altitude", Altitude),
+        ("/gisnav/terrain_geopoint", GeoPointStamped),
+        ("/gisnav/egm96_height", Float32),
     ]
     """List of GISNav internal topic names and types"""
 
     CAMERA_TOPIC_NAMES_AND_TYPES = [
-        ('/camera/camera_info', CameraInfo),
-        ('/camera/image_raw', Image)
+        ("/camera/camera_info", CameraInfo),
+        ("/camera/image_raw", Image),
     ]
     """List of camera topic names and types"""
 
     AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
-        ('/mavros/global_position/global', NavSatFix),
-        ('/mavros/local_position/pose', PoseStamped),
-        ('/mavros/home_position/home', HomePosition),
-        ('/mavros/mount_control/command', MountControl),
-        # ('/mavros/gps_input/gps_input', GPSINPUT)  # not currently used - uses UDP socket instead of MAVROS topic
+        ("/mavros/global_position/global", NavSatFix),
+        ("/mavros/local_position/pose", PoseStamped),
+        ("/mavros/home_position/home", HomePosition),
+        ("/mavros/mount_control/command", MountControl),
+        # ('/mavros/gps_input/gps_input', GPSINPUT)  # uses UDP socket instead
     ]
     """List of autopilot topic names and types"""
 
-    TOPIC_NAMES_AND_TYPES = GISNAV_TOPIC_NAMES_AND_TYPES + CAMERA_TOPIC_NAMES_AND_TYPES \
-                            + AUTOPILOT_TOPIC_NAMES_AND_TYPES
+    TOPIC_NAMES_AND_TYPES = (
+        GISNAV_TOPIC_NAMES_AND_TYPES
+        + CAMERA_TOPIC_NAMES_AND_TYPES
+        + AUTOPILOT_TOPIC_NAMES_AND_TYPES
+    )
     """List of all expected topic names and types"""
 
     NODE_NAMES_AND_NAMESPACES = {
-        ('mock_gps_node', '/'),
-        ('bbox_node', '/'),
-        ('map_node', '/'),
-        ('pose_estimation_node', '/'),
-        ('ardupilot_node', '/'),
+        ("mock_gps_node", "/"),
+        ("bbox_node", "/"),
+        ("map_node", "/"),
+        ("pose_estimation_node", "/"),
+        ("ardupilot_node", "/"),
     }
     """List of tuples of node names and namespaces"""
 
@@ -82,12 +88,15 @@ class TestArduPilotLaunch(unittest.TestCase):
         super(TestArduPilotLaunch, self).__init__(*args, **kwargs)
         self.test_node = None
 
-    def _get_names_and_namespaces_within_timeout(self, timeout: int = 5) -> List[Tuple[str, str]]:
+    def _get_names_and_namespaces_within_timeout(
+        self, timeout: int = 5
+    ) -> List[Tuple[str, str]]:
         """Returns node names and namespaces found within timeout period
 
         :param timeout: Timeout in seconds
         :return: List of tuples containing node name and type
-        :raise: :class:`.AssertionError` if names and namespaces are not returned within :param timeout_sec:
+        :raise: :class:`.AssertionError` if names and namespaces are not
+            returned within :param timeout_sec:
         """
         names_and_namespaces = None
         end_time = time.time() + timeout
@@ -95,15 +104,20 @@ class TestArduPilotLaunch(unittest.TestCase):
             rclpy.spin_once(self.test_node, timeout_sec=0.1)
             names_and_namespaces = self.test_node.get_node_names_and_namespaces()
 
-        assert names_and_namespaces is not None, f'Could not get node names and namespaces within {timeout}s timeout.'
+        assert (
+            names_and_namespaces is not None
+        ), f"Could not get node names and namespaces within {timeout}s timeout."
         return names_and_namespaces
 
-    def _get_topic_names_and_types_within_timeout(self, timeout: int = 5) -> List[Tuple[str, str]]:
+    def _get_topic_names_and_types_within_timeout(
+        self, timeout: int = 5
+    ) -> List[Tuple[str, str]]:
         """Returns topic names and types found within timeout period
 
         :param timeout: Timeout in seconds
         :return: List of tuples containing topic name and type
-        :raise: :class:`.AssertionError` if names and types are not returned within :param timeout_sec:
+        :raise: :class:`.AssertionError` if names and types are not returned
+            within :param timeout_sec:
         """
         names_and_types = None
         end_time = time.time() + timeout
@@ -111,7 +125,9 @@ class TestArduPilotLaunch(unittest.TestCase):
             rclpy.spin_once(self.test_node, timeout_sec=0.1)
             names_and_types = self.test_node.get_topic_names_and_types()
 
-        assert names_and_types is not None, f'Could not get topic names and types within {timeout}s timeout.'
+        assert (
+            names_and_types is not None
+        ), f"Could not get topic names and types within {timeout}s timeout."
         return names_and_types
 
     @classmethod
@@ -126,7 +142,7 @@ class TestArduPilotLaunch(unittest.TestCase):
 
     def setUp(self) -> None:
         """Creates a ROS node for testing"""
-        self.test_node = Node('test_node')
+        self.test_node = Node("test_node")
 
     def tearDown(self) -> None:
         """Destroys the ROS node"""
@@ -139,23 +155,32 @@ class TestArduPilotLaunch(unittest.TestCase):
         found_names_and_namespaces = self._get_names_and_namespaces_within_timeout(10)
         found_names, found_namespaces = tuple(zip(*found_names_and_namespaces))
 
-        assert set(names).issubset(found_names), f'Not all nodes ({names}) were discovered ({found_names}).'
+        assert set(names).issubset(
+            found_names
+        ), f"Not all nodes ({names}) were discovered ({found_names})."
         for name, namespace in self.NODE_NAMES_AND_NAMESPACES:
-            self.assertEqual(namespace, dict(found_names_and_namespaces).get(name, None))
+            self.assertEqual(
+                namespace, dict(found_names_and_namespaces).get(name, None)
+            )
 
     def test_topic_names_and_types(self):
-        """Tests that the nodes subscribe to and publish the expected ROS topics"""
+        """Tests that nodes subscribe to and publish the expected ROS topics"""
         names, _ = tuple(zip(*self.TOPIC_NAMES_AND_TYPES))
 
         found_names_and_types = self._get_topic_names_and_types_within_timeout()
         found_names, found_types = tuple(zip(*found_names_and_types))
 
-        assert set(names).issubset(found_names), f'Not all topics ({names}) were discovered ({found_names}).'
+        assert set(names).issubset(
+            found_names
+        ), f"Not all topics ({names}) were discovered ({found_names})."
         for name, type_ in self.TOPIC_NAMES_AND_TYPES:
             types = dict(found_names_and_types).get(name)
             assert types is not None
-            self.assertEqual(type_.__class__.__name__.replace('Metaclass_', ''), types[0].split('/')[-1])
+            self.assertEqual(
+                type_.__class__.__name__.replace("Metaclass_", ""),
+                types[0].split("/")[-1],
+            )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

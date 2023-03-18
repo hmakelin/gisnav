@@ -1,7 +1,7 @@
 # GISNav SITL Simulation Environment
 
-The `docker` folder contains scripts for generating SITL simulation environments for development, testing and 
-demonstration. 
+The `docker` folder contains scripts for generating SITL simulation environments for development, testing and
+demonstration.
 
 The `docker-compose.yaml` file defines the following services:
 
@@ -19,12 +19,12 @@ The `docker-compose.yaml` file defines the following services:
 * `torch-serve`
   * Deep learning service that handles image matching
 * `mapserver`
-  * WMS server with self-hosted [NAIP][2] and [OSM Buildings][3] data covering KSQL airport  
+  * WMS server with self-hosted [NAIP][2] and [OSM Buildings][3] data covering KSQL airport
 * `mapproxy`
   * WMS proxy for existing remote tile-based imagery endpoint. Alternative for `mapserver` when imagery layer needs to cover multiple flight regions (over presumedly multiple test scenarios covering too large an area to self-host).
 * `gisnav`
   * GISNav ROS 2 package for demo purposes
-  * Launches GISNav with PX4 configuration by default. Intended to be used with `px4` service, but 
+  * Launches GISNav with PX4 configuration by default. Intended to be used with `px4` service, but
     Docker command can be changed to launch for `ardupilot`.
 
 [1]: https://github.com/hmakelin/gisnav
@@ -113,7 +113,7 @@ docker compose up mapproxy px4 micro-ros-agent qgc torch-serve
 
 ### Expose `xhost`
 
-If the Gazebo and QGroundControl windows do not appear on your screen soon after running your container you may need to 
+If the Gazebo and QGroundControl windows do not appear on your screen soon after running your container you may need to
 expose your ``xhost`` to your Docker container as described in the [ROS GUI Tutorial][9]:
 
 [9]: http://wiki.ros.org/docker/Tutorials/GUI
@@ -135,12 +135,12 @@ docker compose -f docker-compose.headless.yaml up px4
 
 ### Disable SharedMemory for Fast DDS
 
-> [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7412: open_and_lock_file failed -> Function 
+> [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7412: open_and_lock_file failed -> Function
 > open_port_internal
 
-If you are not able to establish ROS communication between the `mavros` or `micro-ros-agent` container and the host, or 
+If you are not able to establish ROS communication between the `mavros` or `micro-ros-agent` container and the host, or
 receive the above error when using `--network host`, try disabling SharedMemory for Fast DDS **on your host**. You can
-do so by creating an XML configuration (e.g. `disable_shared_memory.xml`) as described in [this comment][11] or 
+do so by creating an XML configuration (e.g. `disable_shared_memory.xml`) as described in [this comment][11] or
 discussion [here][12] and restarting ROS 2 daemon with the new configuration:
 
 [11]: https://github.com/eProsima/Fast-DDS/issues/1698#issuecomment-778039676
@@ -154,18 +154,18 @@ ros2 daemon start
 
 ### Disable AppArmor for ArduPilot SITL
 
-> dbus[33]: The last reference on a connection was dropped without closing the connection. This is a bug in an 
-> application. See dbus_connection_unref() documentation for details. Most likely, the application was supposed to call 
-> dbus_connection_close(), since this is a private connection. D-Bus not built with -rdynamic so unable to print a 
+> dbus[33]: The last reference on a connection was dropped without closing the connection. This is a bug in an
+> application. See dbus_connection_unref() documentation for details. Most likely, the application was supposed to call
+> dbus_connection_close(), since this is a private connection. D-Bus not built with -rdynamic so unable to print a
 > backtrace
 
-**Caution advised**: Possibly needed if using `--network host`: If QGroundControl or Gazebo do not seem to be starting 
-when running the containers, you may need to run them image with `--security-opt apparmor:unconfined` or `--privileged` 
+**Caution advised**: Possibly needed if using `--network host`: If QGroundControl or Gazebo do not seem to be starting
+when running the containers, you may need to run them image with `--security-opt apparmor:unconfined` or `--privileged`
 options.
 
 ### Run shell inside container
 
-If you need to do debugging on the images with GUI applications enabled (e.g. Gazebo inside `px4`), you can use the 
+If you need to do debugging on the images with GUI applications enabled (e.g. Gazebo inside `px4`), you can use the
 following command to run bash inside the container:
 
 ```bash

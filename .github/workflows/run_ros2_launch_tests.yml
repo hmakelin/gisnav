@@ -9,14 +9,15 @@ on:
   # Allows running manually from the Actions tab
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+#env:
+#  REGISTRY: ghcr.io
+#  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   run:
     runs-on: ubuntu-20.04
-    container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+    #container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+    container: ghcr.io/${{ github.repository }}:latest
     defaults:
       run:
         shell: bash

@@ -1,27 +1,29 @@
 """Entry points for ROS 2 nodes
 
-All ROS 2 nodes are defined in dedicated modules to keep individual file size down. They are imported here to package
-namespace for convenience. For example:
+All ROS 2 nodes are defined in dedicated modules to keep individual file size
+down. They are imported here to package namespace for convenience. For example:
 
 .. code-block::
 
     #from gisnav.nodes.pose_estimator_node import PoseEstimatorNode
     from gisnav.nodes import PoseEstimatorNode
 
-Node names are hard-coded inside the static public node entrypoints defined here. Other node initialization arguments
-are provided via ROS 2 launch arguments.
+Node names are hard-coded inside the static public node entrypoints defined
+here. Other node initialization arguments are provided via ROS 2 launch
+arguments.
 """
-import rclpy
 import cProfile
-import pstats
 import io
+import pstats
 
-from .px4_node import PX4Node
+import rclpy
+
 from .ardupilot_node import ArduPilotNode
-from .mock_gps_node import MockGPSNode
-from .map_node import MapNode
 from .bbox_node import BBoxNode
+from .map_node import MapNode
+from .mock_gps_node import MockGPSNode
 from .pose_estimation_node import PoseEstimationNode
+from .px4_node import PX4Node
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -44,13 +46,15 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         node = constructor(*args, **kwargs)
         rclpy.spin(node)
     except KeyboardInterrupt as e:
-        print(f'Keyboard interrupt received:\n{e}')
+        print(f"Keyboard interrupt received:\n{e}")
         if profile is not None:
             assert __debug__
             # Print out cProfile stats
             profile.disable()
             s = io.StringIO()
-            stats = pstats.Stats(profile, stream=s).sort_stats(pstats.SortKey.CUMULATIVE)
+            stats = pstats.Stats(profile, stream=s).sort_stats(
+                pstats.SortKey.CUMULATIVE
+            )
             stats.print_stats(40)
             print(s.getvalue())
     finally:
@@ -61,29 +65,29 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
 
 def run_px4_node():
     """Spins up a :class:`.PX4Node`"""
-    _run(PX4Node, 'px4_node')
+    _run(PX4Node, "px4_node")
 
 
 def run_ardupilot_node():
     """Spins up a :class:`.ArduPilotNode`"""
-    _run(ArduPilotNode, 'ardupilot_node')
+    _run(ArduPilotNode, "ardupilot_node")
 
 
 def run_mock_gps_node():
     """Spins up a :class:`.MockGPSNode`"""
-    _run(MockGPSNode, 'mock_gps_node')
+    _run(MockGPSNode, "mock_gps_node")
 
 
 def run_bbox_node():
     """Spins up a :class:`.BBoxNode`"""
-    _run(BBoxNode, 'bbox_node')
+    _run(BBoxNode, "bbox_node")
 
 
 def run_map_node():
     """Spins up a :class:`.MapNode`"""
-    _run(MapNode, 'map_node')
+    _run(MapNode, "map_node")
 
 
 def run_pose_estimation_node():
     """Spins up a :class:`.PoseEstimationNode`"""
-    _run(PoseEstimationNode, 'pose_estimation_node')
+    _run(PoseEstimationNode, "pose_estimation_node")

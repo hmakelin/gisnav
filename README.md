@@ -7,12 +7,12 @@ https://user-images.githubusercontent.com/22712178/187902004-480397cc-460f-4d57-
 
 GISNav is a ROS 2 package that enables map-based visual navigation for airborne drones **in a simulation environment**.
 
-GISNav provides a *precise* global position by visually comparing frames from the drone's nadir-facing camera to a map 
+GISNav provides a *precise* global position by visually comparing frames from the drone's nadir-facing camera to a map
 of the drone's *approximate* global position retrieved from an onboard GIS system.
 
 # Mock GPS Example
 
-The below steps demonstrate how GISNav enables GNSS-free flight with PX4 Autopilot's [Mission mode][1] in a SITL 
+The below steps demonstrate how GISNav enables GNSS-free flight with PX4 Autopilot's [Mission mode][1] in a SITL
 simulation.
 
 You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
@@ -36,7 +36,7 @@ make -C docker demo
 ```
 
 > **Note**
-> If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your 
+> If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your
 > Docker containers (see e.g. [ROS GUI Tutorial][4]):
 > ```bash
 > for containerId in $(docker ps -f name=docker -q); do
@@ -50,14 +50,14 @@ make -C docker demo
 
 ## Upload flight plan via QGroundControl
 
-Once both the Gazebo and QGroundControl windows have appeared (QGroundControl should show the drone location near San 
-Carlos airport), use QGroundControl to upload the sample `~/ksql_airport_px4.plan` flight plan that is included inside the 
+Once both the Gazebo and QGroundControl windows have appeared (QGroundControl should show the drone location near San
+Carlos airport), use QGroundControl to upload the sample `~/ksql_airport_px4.plan` flight plan that is included inside the
 Docker container, and then start the mission.
 
 ## Simulate GPS failure
 
-Wait until the drone has risen to its final mission altitude. You should see a visualization of the GISNav-estimated 
-field of view projected on the ground appear. You can then try disabling GPS through your [MAVLink Shell][5] 
+Wait until the drone has risen to its final mission altitude. You should see a visualization of the GISNav-estimated
+field of view projected on the ground appear. You can then try disabling GPS through your [MAVLink Shell][5]
 *(accessible e.g. through QGroundControl > Analyze Tools > MAVLink Console)*:
 
 ```
@@ -72,14 +72,14 @@ You can check if PX4 is receiving the mock GPS position estimates by typing the 
 listener sensor_gps
 ```
 
-If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output 
+If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output
 as expected. QGroundControl will most likely show 0 satellites used next to the GPS icon as shown in the demo video.
 
 [5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 
 # Documentation
 
-See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development, 
+See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development,
 for code examples and API documentation, and for contribution guidelines.
 
 [6]: https://hmakelin.github.io/gisnav

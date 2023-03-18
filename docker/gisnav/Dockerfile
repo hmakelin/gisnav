@@ -21,7 +21,8 @@ RUN sudo chmod +x docker/gisnav/entrypoint.sh
 RUN rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     sudo apt-get -y install python3-pip && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt && \
+    pip install -r requirements-dev.txt
 
 # Install GDAL
 RUN sudo apt-get -y install software-properties-common && \

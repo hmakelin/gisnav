@@ -21,14 +21,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Install GISNav developer dependencies
-        run: |
-          cd ~/colcon_ws/src/gisnav
-          python3 -m pip install -r requirements-dev.txt
-
       - name: Build Sphinx docs
         run: |
-          cd ~/colcon_ws
+          cd /home/gisnav/colcon_ws
           source /opt/ros/foxy/setup.bash
           source install/setup.bash
           cd src/gisnav

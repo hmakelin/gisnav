@@ -10,17 +10,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  run:
+  analyze:
     runs-on: ubuntu-20.04
     container: ghcr.io/${{ github.repository }}:latest
     defaults:
       run:
         shell: bash
     steps:
-      - name: Run ROS 2 launch tests
+      - name: Run pre-commit
         run: |
-          cd /home/gisnav/colcon_ws
-          source install/setup.bash
-          cd src/gisnav/test/launch
-          launch_test test_px4_launch.py
-          launch_test test_ardupilot_launch.py
+          cd /home/gisnav/colcon_ws/src/gisnav
+          pre-commit run --all-files

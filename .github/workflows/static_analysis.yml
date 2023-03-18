@@ -1,4 +1,4 @@
-name: Run ROS 2 launch tests
+name: Static analysis
 
 on:
   workflow_run:

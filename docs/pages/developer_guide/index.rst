@@ -41,12 +41,6 @@ it to match your use case.
     test/sitl_tests
 
 .. toctree::
-    :caption: CI
-
-    CI/github_workflows
-    CI/static_analysis
-
-.. toctree::
     :caption: Integrate with your own project
 
     integrate/ros_messaging

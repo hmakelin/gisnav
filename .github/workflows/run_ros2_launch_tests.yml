@@ -24,12 +24,12 @@ jobs:
     steps:
       - name: Install GISNav developer dependencies
         run: |
-          cd ~/colcon_ws/src/gisnav
+          cd /home/gisnav/colcon_ws/src/gisnav
           python3 -m pip install -r requirements-dev.txt
 
       - name: Run ROS 2 launch tests
         run: |
-          cd ~/colcon_ws
+          cd /home/gisnav/colcon_ws
           source install/setup.bash
           cd src/gisnav/test/launch
           launch_test test_px4_launch.py

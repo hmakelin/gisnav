@@ -14,6 +14,8 @@ USER $USERNAME
 
 WORKDIR /home/$USERNAME/colcon_ws/src/gisnav
 COPY --chown=$USERNAME . .
+ENV FASTRTPS_DEFAULT_PROFILES_FILE \
+/home/$USERNAME/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
 
 RUN sudo chmod +x docker/gisnav/entrypoint.sh
 

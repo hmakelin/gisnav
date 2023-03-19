@@ -132,8 +132,8 @@ def setup():
     This most likely means starting supporting services with docker
     """
     print("Starting SITL environment...")
-    os.system("make -C docker up-offboard-sitl-test-px4")
     os.system("docker compose -f docker/docker-compose.yaml up -d gisnav")
+    os.system("make -C docker up-offboard-sitl-test-px4")
 
 
 def cleanup():

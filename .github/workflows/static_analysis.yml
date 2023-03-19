@@ -1,8 +1,6 @@
 name: Static analysis
 
 on:
-  push:
-    branches: [ "*" ]
   workflow_run:
     workflows: [ "Build and upload gisnav Docker image to GHCR" ]
     types:
@@ -14,13 +12,9 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-20.04
-    container: ghcr.io/${{ github.repository }}:latest
     defaults:
       run:
         shell: bash
     steps:
       - name: Run pre-commit
-        run: |
-          export PATH=/usr/lib/gisnav:$PATH
-          cd /opt/colcon_ws/src/gisnav
-          pre-commit run --all-files
+        run: docker run ghcr.io/${{ github.repository }}:latest make test-static

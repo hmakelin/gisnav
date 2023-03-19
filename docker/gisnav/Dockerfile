@@ -49,4 +49,5 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["/opt/colcon_ws/src/gisnav/docker/gisnav/entrypoint.sh"]
+WORKDIR /opt/colcon_ws/src/gisnav
+ENTRYPOINT ["docker/gisnav/entrypoint.sh"]

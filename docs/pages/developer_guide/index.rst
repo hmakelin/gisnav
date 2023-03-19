@@ -12,7 +12,6 @@ it to match your use case.
     :caption: Setup SITL
 
     sitl/prerequisites
-    sitl/docker
     sitl/autopilot
     sitl/qgroundcontrol
     sitl/gis_server
@@ -25,12 +24,12 @@ it to match your use case.
     hil/jetson_pixhawk
 
 .. toctree::
-    :caption: Launch GISNav
+    :caption: Run GISNav
 
-    launch/launch_files
-    launch/run_individual_nodes
+    launch/service_orchestration
+    launch/docker_compose
+    launch/ros2_launch_system
     launch/modify_params
-    launch/orchestrate
 
 .. toctree::
     :caption: Run tests

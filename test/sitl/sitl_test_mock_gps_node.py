@@ -8,12 +8,6 @@ from functools import partial
 from mavsdk import System
 from mavsdk.log_files import LogFilesError, LogFilesResult
 
-DOCKER_CONTAINERS = [
-    "gisnav-mapserver-1",
-    "gisnav-px4-1",
-    "gisnav-micro-ros-agent-1",
-    "gisnav-gisnav-1",
-]
 SYS_ADDR = "udp://0.0.0.0:14550"
 MISSION_FILE = os.path.join(os.path.dirname(__file__), "../assets/ksql_airport.plan")
 MAVLINK_CONNECTION_TIMEOUT_SEC = 30
@@ -137,7 +131,8 @@ def setup():
     This most likely means starting supporting services with docker
     """
     print("Starting SITL environment...")
-    os.system("docker start " + " ".join(DOCKER_CONTAINERS))
+    os.system("make -C docker up-offboard-sitl-test-px4")
+    os.system("docker compose -f docker/docker-compose.yaml up -d gisnav")
 
 
 def cleanup():
@@ -147,8 +142,7 @@ def cleanup():
     so that they won't be left running if the tests fail because of an error)
     """
     print("Shutting down SITL environment...")
-    for container in DOCKER_CONTAINERS:
-        os.system(f"docker kill {container}")
+    os.system("make -C docker down")
 
 
 if __name__ == "__main__":

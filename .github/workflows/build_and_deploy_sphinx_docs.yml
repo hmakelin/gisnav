@@ -23,34 +23,30 @@ jobs:
     steps:
       - name: Build Sphinx docs
         run: |
-          cd /home/gisnav/colcon_ws
-          source /opt/ros/foxy/setup.bash
-          source install/setup.bash
-          cd src/gisnav
-          export PATH=$(dirname $(find ~ -iname sphinx-build -print -quit)):$PATH
-          make -C docs html
-          cd docs/_build/html && touch .nojekyll
+          mkdir docs
+          docker run ghcr.io/${{ github.repository }}:latest make docs
+          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/_build docs
 
       - name: Install node
         run: |
-          sudo apt-get update
-          sudo apt-get -y install curl
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-          sudo apt-get install -y nodejs
+          apt-get update
+          apt-get -y install curl
+          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          apt-get install -y nodejs
 
       - name: Setup pages
         uses: actions/configure-pages@v1
 
       - name: Make "Upload pages artifact" step work with containers
         run: |
-          sudo mkdir -p ${{runner.temp}}
-          sudo mkdir -p /__w/_temp
-          sudo ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
+          mkdir -p ${{runner.temp}}
+          mkdir -p /__w/_temp
+          ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: '/home/gisnav/colcon_ws/src/gisnav/docs/_build/html/'
+          path: 'docs/_build/html/'
 
   deploy:
     needs: build

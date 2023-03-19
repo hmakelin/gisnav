@@ -240,6 +240,7 @@ class MapNode(CameraSubscriberNode):
             try:
                 self.get_logger().error("Connecting to WMS endpoint...")
                 self._wms_client = WebMapService(url, version=version, timeout=timeout)
+                self.connected = True
             except requests.exceptions.ConnectionError as _:  # noqa: F841
                 self.get_logger().error(
                     f"Could not connect to WMS endpoint, trying again in "
@@ -247,7 +248,9 @@ class MapNode(CameraSubscriberNode):
                 )
                 time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY)
 
-        self.connected = True
+        # TODO: any other errors that might prevent connection?
+        #  handle disconnect & reconnect
+        assert self.connected
         self.get_logger().info("WMS client setup complete.")
 
     # region Properties

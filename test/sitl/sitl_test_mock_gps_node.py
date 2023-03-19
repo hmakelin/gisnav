@@ -10,7 +10,8 @@ from mavsdk.log_files import LogFilesError, LogFilesResult
 
 SYS_ADDR = "udp://0.0.0.0:14550"
 MISSION_FILE = os.path.join(os.path.dirname(__file__), "../assets/ksql_airport.plan")
-MAVLINK_CONNECTION_TIMEOUT_SEC = 30
+# PX4 Gazebo container startup is too slow, fix once stable PX4 v1.14 is out
+MAVLINK_CONNECTION_TIMEOUT_SEC = 180
 PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC = 30
 LOG_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "output")
 

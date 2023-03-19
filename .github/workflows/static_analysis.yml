@@ -1,6 +1,8 @@
 name: Static analysis
 
 on:
+  push:
+    branches: [ "*" ]
   workflow_run:
     workflows: [ "Build and upload gisnav Docker image to GHCR" ]
     types:
@@ -19,6 +21,6 @@ jobs:
     steps:
       - name: Run pre-commit
         run: |
-          export PATH=$(python3 -m site --user-base)/lib/gisnav:$PATH
-          cd /home/gisnav/colcon_ws/src/gisnav
+          export PATH=/usr/lib/gisnav:$PATH
+          cd /opt/colcon_ws/src/gisnav
           pre-commit run --all-files

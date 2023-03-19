@@ -1,6 +1,8 @@
 name: Run ROS 2 launch tests
 
 on:
+  push:
+    branches: [ "*" ]
   workflow_run:
     workflows: [ "Build and upload gisnav Docker image to GHCR" ]
     types:
@@ -19,7 +21,7 @@ jobs:
     steps:
       - name: Run ROS 2 launch tests
         run: |
-          cd /home/gisnav/colcon_ws
+          cd /opt/colcon_ws
           source install/setup.bash
           cd src/gisnav/test/launch
           launch_test test_px4_launch.py

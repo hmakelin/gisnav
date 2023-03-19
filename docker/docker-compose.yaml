@@ -68,7 +68,7 @@ services:
     env_file:
       - .env/.x11.env
     environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/home/gisnav/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
       - /dev/dri:/dev/dri
     network_mode: host

@@ -1,60 +1,52 @@
 FROM ros:foxy
 
-ARG USERNAME=gisnav
-ARG UID=1000
-ARG GID=$UID
-
 RUN apt-get update --fix-missing && \
-    apt-get -y dist-upgrade && \
-    apt-get -y install sudo && \
-    groupadd --gid $GID $USERNAME && useradd --uid $UID --gid $GID -m $USERNAME && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
+    apt-get -y dist-upgrade
 
-USER $USERNAME
+COPY . /opt/colcon_ws/src/gisnav/
 
-WORKDIR /home/$USERNAME/colcon_ws/src/gisnav
-COPY --chown=$USERNAME . .
+RUN chmod +x /opt/colcon_ws/src/gisnav/docker/gisnav/entrypoint.sh
+
 ENV FASTRTPS_DEFAULT_PROFILES_FILE \
-/home/$USERNAME/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
-
-RUN sudo chmod +x docker/gisnav/entrypoint.sh
+    /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
 
 # Install GISNav dependencies
-RUN rosdep update && \
+RUN cd /opt/colcon_ws/src/gisnav/ && \
+    rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
-    sudo apt-get -y install python3-pip && \
+    apt-get -y install python3-pip && \
     pip install -r requirements.txt && \
     pip install -r requirements-dev.txt
 
 # Install GDAL
-RUN sudo apt-get -y install software-properties-common && \
-    sudo add-apt-repository ppa:ubuntugis/ppa && \
-    sudo apt-get -y upgrade && \
-    sudo apt-get update && \
-    sudo apt-get -y install gdal-bin libgdal-dev
+RUN cd /opt/colcon_ws/src/gisnav/ && \
+    apt-get -y install software-properties-common && \
+    add-apt-repository ppa:ubuntugis/ppa && \
+    apt-get -y upgrade && \
+    apt-get update && \
+    apt-get -y install gdal-bin libgdal-dev
 
 # Install GeographicLib
-RUN sudo apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
+RUN cd /opt/colcon_ws/src/gisnav/ && \
+    apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
     wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
-    sudo bash ./install_geographiclib_datasets.sh
-
-WORKDIR /home/$USERNAME/colcon_ws/src
+    bash install_geographiclib_datasets.sh
 
 # Custom ROS messages
-RUN git clone https://github.com/hmakelin/gisnav_msgs.git && \
+RUN cd /opt/colcon_ws/src/ && \
+    git clone https://github.com/hmakelin/gisnav_msgs.git && \
     git clone https://github.com/px4/px4_msgs.git
-
-WORKDIR /home/$USERNAME/colcon_ws
 
 # Build
 SHELL ["/bin/bash", "-c"]
-RUN source /opt/ros/foxy/setup.bash && \
+RUN cd /opt/colcon_ws/ && \
+    source /opt/ros/foxy/setup.bash && \
     colcon build
 
 # Upgrade & clean
-RUN sudo apt-get update && \
-    sudo apt-get -y upgrade && \
-    sudo apt-get clean && \
-    sudo rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get -y upgrade && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["src/gisnav/docker/gisnav/entrypoint.sh"]
+ENTRYPOINT ["/opt/colcon_ws/src/gisnav/docker/gisnav/entrypoint.sh"]

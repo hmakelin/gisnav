@@ -23,7 +23,7 @@ jobs:
       - name: Checkout GISNav
         uses: actions/checkout@v3
         with:
-          path: colcon_ws/src/gisnav
+          path: /opt/colcon_ws/src/gisnav
 
       - name: Login to GHCR
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
@@ -34,7 +34,7 @@ jobs:
 
       - name: Build and push gisnav image
         run: |
-          cd colcon_ws/src/gisnav/docker
+          cd /opt/colcon_ws/src/gisnav/docker
           docker compose build gisnav
           docker tag $(docker images -q gisnav) ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

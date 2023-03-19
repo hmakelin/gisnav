@@ -7,8 +7,8 @@ test-sitl:
 
 .PHONY: test-launch
 test-launch:
-	@launch_test src/gisnav/test/launch/test_px4_launch.py
-	@launch_test src/gisnav/test/launch/test_ardupilot_launch.py
+	@launch_test test/launch/test_px4_launch.py
+	@launch_test test/launch/test_ardupilot_launch.py
 # test end
 
 .PHONY: docs

@@ -14,6 +14,7 @@ packages_ = [
     pdata.package_name + ".nodes.base",
     "test",
     "test.launch",
+    "test.sitl",
 ]
 
 setup(

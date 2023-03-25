@@ -3,7 +3,8 @@ SHELL := /bin/bash
 # test
 .PHONY: test-sitl
 test-sitl:
-	@python test/sitl/sitl_test_mock_gps_node.py
+	@python test/sitl/test_sitl.py px4 \
+		|| (echo "SITL test failed, exit code: $$?"; exit 1)
 
 .PHONY: test-launch
 test-launch:

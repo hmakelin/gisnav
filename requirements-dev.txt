@@ -14,6 +14,7 @@ coverage
 
 # SITL tests
 mavsdk
+aiohttp
 
 # .ulog analysis
 jupyter

@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections import deque
 from functools import partial
 from math import atan2, cos, radians, sin, sqrt
 
@@ -207,7 +208,8 @@ class SensorGpsListenerContext(Node):
         self.node_name = node_name
         self.sensor_gps_subscriber = None
         self.vehicle_global_position_subscriber = None
-        self.latitude, self.longitude, self.altitude = None, None, None
+        self.buffer_size = 10  # Adjust the buffer size as needed
+        self.vehicle_global_position_buffer = deque(maxlen=self.buffer_size)
 
     def __enter__(self):
         self.sensor_gps_subscriber = self.create_subscription(
@@ -229,17 +231,25 @@ class SensorGpsListenerContext(Node):
         self.destroy_node()
 
     def sensor_gps_callback(self, message: SensorGps):
-        if not all(
-            v is not None for v in (self.latitude, self.longitude, self.altitude)
-        ):
+        if not self.vehicle_global_position_buffer:
             logger.info("Waiting for GPS reference...")
+            return
+
+        # Find the closest-in-time VehicleGlobalPosition message
+        best_matching_message = min(
+            self.vehicle_global_position_buffer,
+            key=lambda m: abs((message.timestamp - m.timestamp)),
+        )
 
         distance = self.haversine_distance(
-            self.latitude, self.longitude, message.lat * 1e-7, message.lon * 1e-7
+            best_matching_message.lat,
+            best_matching_message.lon,
+            message.lat * 1e-7,
+            message.lon * 1e-7,
         )
 
         # TODO: check not comparing altitude AGL to altitude AMSL?
-        altitude_diff = abs(self.altitude - message.alt * 1e-3)
+        altitude_diff = abs(best_matching_message.alt - message.alt * 1e-3)
 
         if distance <= 10 and altitude_diff <= 10:
             logger.info(
@@ -258,13 +268,7 @@ class SensorGpsListenerContext(Node):
             # )
 
     def vehicle_global_position_callback(self, message: VehicleGlobalPosition):
-        self.latitude, self.longitude = (
-            message.lat,
-            message.lon,
-        )
-
-        # TODO: is this amsl altitude?
-        self.altitude = message.alt
+        self.vehicle_global_position_buffer.append(message)
 
     @staticmethod
     def haversine_distance(lat1, lon1, lat2, lon2) -> float:

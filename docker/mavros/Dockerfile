@@ -2,20 +2,32 @@ FROM ros:foxy
 
 LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 
-ARG USERNAME=gisnav
-ARG UID=1000
-ARG GID=$UID
+RUN apt update --fix-missing && \
+    apt -y dist-upgrade #&& \apt -y install ros-foxy-mavlink
 
-RUN apt-get update --fix-missing && \
-    apt-get install sudo && \
-    groupadd --gid $GID $USERNAME && useradd --uid $UID --gid $GID -m $USERNAME && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME
-USER $USERNAME
+RUN mkdir -p colcon_ws/src && \
+    cd colcon_ws/src && \
+    git clone --branch gimbal-protocol-v2-plugin \
+      https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros
 
-RUN sudo apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
-    cd $HOME && \
-    wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
-    sudo bash ./install_geographiclib_datasets.sh
+SHELL ["/bin/bash", "-c"]
+
+RUN cd colcon_ws && \
+    rosdep install --from-paths src --ignore-src -y && \
+    src/mavros/mavros/scripts/install_geographiclib_datasets.sh
+
+# TODO
+RUN cd colcon_ws && \
+    source /opt/ros/foxy/setup.bash && \
+    sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g'  \
+      src/mavros/mavros_extras/src/plugins/gimbal_control.cpp && \
+    colcon build
+
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt clean
 
 COPY * /
-RUN sudo chmod 755 /disable_shared_memory.xml
+RUN chmod 755 disable_shared_memory.xml && \
+    chmod +x entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

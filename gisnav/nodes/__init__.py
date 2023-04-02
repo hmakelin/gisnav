@@ -18,12 +18,11 @@ import pstats
 
 import rclpy
 
-from .ardupilot_node import ArduPilotNode
+from .autopilot_node import AutopilotNode
 from .bbox_node import BBoxNode
 from .map_node import MapNode
 from .mock_gps_node import MockGPSNode
 from .pose_estimation_node import PoseEstimationNode
-from .px4_node import PX4Node
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -63,14 +62,9 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         rclpy.shutdown()
 
 
-def run_px4_node():
-    """Spins up a :class:`.PX4Node`"""
-    _run(PX4Node, "px4_node")
-
-
-def run_ardupilot_node():
-    """Spins up a :class:`.ArduPilotNode`"""
-    _run(ArduPilotNode, "ardupilot_node")
+def run_autopilot_node():
+    """Spins up a :class:`.AutopilotNode`"""
+    _run(AutopilotNode, "AutopilotNode")
 
 
 def run_mock_gps_node():

@@ -81,7 +81,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: ros2 launch gisnav px4.launch.py
+    command: ros2 launch gisnav base.launch.py
 
   px4:
     build:

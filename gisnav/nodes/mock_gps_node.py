@@ -1,7 +1,6 @@
 """Publishes mock GPS (GNSS) messages"""
 import json
 import socket
-import time
 from datetime import datetime
 from typing import Generic, TypeVar
 
@@ -54,26 +53,14 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
             self.get_parameter("udp_port").get_parameter_value().integer_value
         )
 
-        self._px4_micrortps = (
-            self.get_parameter("px4_micrortps").get_parameter_value().bool_value
-        )
-        if self._px4_micrortps:
-            self._mock_gps_pub = self.create_publisher(
-                SensorGps,
-                messaging.ROS_TOPIC_SENSOR_GPS,
-                QoSPresetProfiles.SENSOR_DATA.value,
-            )
-            self._socket = None
-        else:
-            # TODO: try to get MAVROS to work for GPSINPUT message and get rid
-            #  of UDP socket
-            # self._mock_gps_pub = self.create_publisher(
-            #   GPSINPUT,
-            #   messaging.ROS_TOPIC_GPS_INPUT,
-            #   QoSPresetProfiles.SENSOR_DATA.value
-            # )
-            self._mock_gps_pub = None
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # TODO: try to get MAVROS to work for GPSINPUT message and get rid
+        #  of UDP socket
+        # self._mock_gps_pub = self.create_publisher(
+        #   GPSINPUT,
+        #   messaging.ROS_TOPIC_GPS_INPUT,
+        #   QoSPresetProfiles.SENSOR_DATA.value
+        # )
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,
@@ -204,55 +191,6 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
 
         return msg
 
-    def _generate_sensor_gps(
-        self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp
-    ) -> SensorGps:
-        """Generates a :class:`.SensorGps` message to send over PX4 microRTPS brige
-
-        :param lat: Vehicle latitude
-        :param lon: Vehicle longitude
-        :param altitude_amsl: Vehicle altitude in meters AMSL
-        :param altitude_ellipsoid: Vehicle altitude in meters above WGS 84 ellipsoid
-        :param heading: Vehicle heading in radians
-        :param timestamp: System time in microseconds
-        """
-        msg = SensorGps()
-        msg.timestamp = int(time.time_ns() / 1e3)  # timestamp
-        msg.timestamp_sample = int(timestamp)
-        # msg.device_id = self._generate_device_id()
-        msg.device_id = 0
-        msg.fix_type = 3
-        msg.s_variance_m_s = 10.0  # np.nan
-        msg.c_variance_rad = np.nan
-        msg.lat = int(lat * 1e7)
-        msg.lon = int(lon * 1e7)
-        msg.alt = int(altitude_amsl * 1e3)
-        msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
-        msg.eph = 10.0  # position.eph
-        msg.epv = 3.0  # position.epv
-        msg.hdop = 0.0
-        msg.vdop = 0.0
-        msg.noise_per_ms = 0
-        msg.automatic_gain_control = 0
-        msg.jamming_state = 0
-        msg.jamming_indicator = 0
-        msg.vel_m_s = 0.0  # np.nan
-        msg.vel_n_m_s = 0.0  # np.nan
-        msg.vel_e_m_s = 0.0  # np.nan
-        msg.vel_d_m_s = 0.0  # np.nan
-        msg.cog_rad = np.nan
-        msg.vel_ned_valid = True  # False
-        msg.timestamp_time_relative = 0
-        msg.satellites_used = np.iinfo(np.uint8).max
-        msg.time_utc_usec = msg.timestamp
-        msg.heading = heading
-        msg.heading_offset = 0.0  # np.nan
-        msg.heading_accuracy = np.nan
-        # msg.rtcm_injection_rate = np.nan
-        # msg.selected_rtcm_instance = np.nan
-
-        return msg
-
     def _generate_device_id(self) -> int:
         """Generates a device ID for the outgoing `px4_msgs.SensorGps` message"""
         # For reference, see:
@@ -267,10 +205,8 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
 
     def destroy_node(self) -> None:
         """Closes GPS_INPUT MAVLink UDP socket when node is destroyed"""
-        if not self._px4_micrortps:
-            assert self._socket is not None
-            self.get_logger().info("Closing UDP socket...")
-            self._socket.close()
+        self.get_logger().info("Closing UDP socket...")
+        self._socket.close()
 
         # socket closed - call parent method
         super().destroy_node()

@@ -51,4 +51,24 @@ def generate_launch_description():
             ],
         )
     )
+    ld.add_action(
+        Node(
+            package="gisnav",
+            name="autopilot_node",
+            executable="autopilot_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/autopilot_node.yaml")
+            ],
+        )
+    )
+    ld.add_action(
+        Node(
+            package="gisnav",
+            name="mock_gps_node",
+            executable="mock_gps_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/mock_gps_node.yaml")
+            ],
+        )
+    )
     return ld

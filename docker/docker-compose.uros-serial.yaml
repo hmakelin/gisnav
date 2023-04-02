@@ -1,6 +1,0 @@
-version: "3.4"
-
-services:
-  # Makes micro-ros-agent (uros) middleware connect over serial instead of default UDP
-  micro-ros-agent:
-    command: serial --dev /dev/ttyUSB0 -b 57600

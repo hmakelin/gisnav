@@ -1,4 +1,4 @@
-"""Tests PX4 launch"""
+"""Tests ArduPilot launch"""
 import os
 import time
 import unittest
@@ -7,19 +7,12 @@ from typing import List, Tuple
 import pytest
 import rclpy
 from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion
 from gisnav_msgs.msg import OrthoImage3D
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import Altitude
-from px4_msgs.msg import (
-    GimbalDeviceSetAttitude,
-    SensorGps,
-    VehicleAttitude,
-    VehicleGlobalPosition,
-    VehicleLocalPosition,
-)
+from mavros_msgs.msg import Altitude, HomePosition, MountControl
 from rclpy.node import Node
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
 from launch import LaunchDescription  # type: ignore
@@ -31,7 +24,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../launch/px4.launch.py")
+    filename = os.path.join(dirname, "../../launch/base.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [
@@ -41,7 +34,7 @@ def generate_test_description():
     )
 
 
-class TestPX4Launch(unittest.TestCase):
+class TestArduPilotLaunch(unittest.TestCase):
     """Test that all nodes initialize with correct ROS topics"""
 
     GISNAV_TOPIC_NAMES_AND_TYPES = [
@@ -66,11 +59,11 @@ class TestPX4Launch(unittest.TestCase):
     """List of camera topic names and types"""
 
     AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
-        ("/fmu/out/vehicle_global_position", VehicleGlobalPosition),
-        ("/fmu/out/vehicle_local_position", VehicleLocalPosition),
-        ("/fmu/out/vehicle_attitude", VehicleAttitude),
-        ("/fmu/out/gimbal_device_set_attitude", GimbalDeviceSetAttitude),
-        ("/fmu/in/sensor_gps", SensorGps),
+        ("/mavros/global_position/global", NavSatFix),
+        ("/mavros/local_position/pose", PoseStamped),
+        ("/mavros/home_position/home", HomePosition),
+        ("/mavros/mount_control/command", MountControl),
+        # ('/mavros/gps_input/gps_input', GPSINPUT)  # uses UDP socket instead
     ]
     """List of autopilot topic names and types"""
 
@@ -86,13 +79,13 @@ class TestPX4Launch(unittest.TestCase):
         ("bbox_node", "/"),
         ("map_node", "/"),
         ("pose_estimation_node", "/"),
-        ("px4_node", "/"),
+        ("ardupilot_node", "/"),
     }
     """List of tuples of node names and namespaces"""
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestPX4Launch, self).__init__(*args, **kwargs)
+        super(TestArduPilotLaunch, self).__init__(*args, **kwargs)
         self.test_node = None
 
     def _get_names_and_namespaces_within_timeout(

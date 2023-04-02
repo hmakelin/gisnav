@@ -57,47 +57,21 @@ up-offboard-sitl-dev-%: up-offboard-sitl-middleware-%
 build-offboard-sitl-dev-%: build-offboard-sitl-middleware-%
 	@docker compose build $* torch-serve mapserver qgc
 
-# offboard sitl middleware: micro-ros-agent over UDP if PX4, mavros if Ardupilot
 . PHONY: $(addprefix up-offboard-sitl-middleware-, $(AUTOPILOTS))
 up-offboard-sitl-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose up -d micro-ros-agent; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose up -d mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+	@docker compose up -d mavros
 
 . PHONY: $(addprefix build-offboard-sitl-middleware-, $(AUTOPILOTS))
 build-offboard-sitl-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose build micro-ros-agent; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose build mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+	@docker compose build mavros
 
-# onboard hil middleware: micro-ros-agent over serial port if PX4, mavros if Ardupilot
 . PHONY: $(addprefix up-companion-hil-middleware-, $(AUTOPILOTS))
 up-companion-hil-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.uros-serial.yaml up -d micro-ros-agent; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+	@docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros
 
 . PHONY: $(addprefix build-companion-hil-middleware-, $(AUTOPILOTS))
 build-companion-hil-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.uros-serial.yaml build micro-ros-agent; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+	@docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros
 
 # shortcut for up-demo-px4
 . PHONY: demo

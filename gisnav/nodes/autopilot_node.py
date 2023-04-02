@@ -1,4 +1,4 @@
-"""Module that contains the ArduPilot adapter ROS 2 node."""
+"""Module that contains the autopilot middleware (MAVROS) adapter ROS 2 node."""
 from typing import Optional
 
 import numpy as np
@@ -15,7 +15,7 @@ from .base.base_node import BaseNode
 
 
 class AutopilotNode(BaseNode):
-    """ROS 2 node that acts as an adapter for ArduPilot vis MAVROS"""
+    """ROS 2 node that acts as an adapter for MAVROS"""
 
     ROS_PARAM_DEFAULTS = []
     """List containing ROS parameter name, default value and read_only flag tuples"""

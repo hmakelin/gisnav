@@ -1,7 +1,6 @@
 Mock GPS messages
 ===================================================
-:class:`.MockGPSNode` uses the read-only ROS parameter ``px4_micrortps`` to determine whether to publish a
-:class:`px4_msgs.msg.SensorGps` (PX4) or a :class:`mavros_msgs.msg.GPSINPUT` (ArduPilot)* message from the received
+:class:`.MockGPSNode` uses the :class:`mavros_msgs.msg.GPSINPUT` (ArduPilot)* message from the received
 :class:`geographic_msgs.msg.GeoPoseStamped` and :class:`mavros_msgs.msg.Altitude` messages.
 
 .. note::

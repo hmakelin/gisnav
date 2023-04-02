@@ -57,21 +57,49 @@ up-offboard-sitl-dev-%: up-offboard-sitl-middleware-%
 build-offboard-sitl-dev-%: build-offboard-sitl-middleware-%
 	@docker compose build $* torch-serve mapserver qgc
 
+# offboard sitl middleware: micro-ros-agent over UDP if PX4, mavros if Ardupilot
 . PHONY: $(addprefix up-offboard-sitl-middleware-, $(AUTOPILOTS))
 up-offboard-sitl-middleware-%:
-	@docker compose up -d mavros
+	@if [ "$*" = "px4" ]; then \
+		docker compose up -d mavros; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml up -d mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
 . PHONY: $(addprefix build-offboard-sitl-middleware-, $(AUTOPILOTS))
 build-offboard-sitl-middleware-%:
-	@docker compose build mavros
+	@if [ "$*" = "px4" ]; then \
+		docker compose build mavros; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml build mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
+# TODO: not tested
+# onboard hil middleware: micro-ros-agent over serial port if PX4, mavros if Ardupilot
 . PHONY: $(addprefix up-companion-hil-middleware-, $(AUTOPILOTS))
 up-companion-hil-middleware-%:
-	@docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros
+	@if [ "$*" = "px4" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml up -d mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
+# TODO: not tested
 . PHONY: $(addprefix build-companion-hil-middleware-, $(AUTOPILOTS))
 build-companion-hil-middleware-%:
-	@docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros
+	@if [ "$*" = "px4" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros; \
+	elif [ "$*" = "ardupilot" ]; then \
+		docker compose -f docker-compose.yaml -f docker-compose.mavros-serial.yaml build mavros; \
+	else \
+		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
+	fi
 
 # shortcut for up-demo-px4
 . PHONY: demo

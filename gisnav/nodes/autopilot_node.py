@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from geographic_msgs.msg import GeoPoint, GeoPointStamped, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
-from mavros_msgs.msg import Altitude, HomePosition, MountControl
+from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
@@ -91,11 +91,11 @@ class AutopilotNode(BaseNode):
             self._home_position_callback,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
-        self._mount_control = None
-        self._mount_control_sub = self.create_subscription(
-            MountControl,
-            "/mavros/mount_control/command",
-            self._mount_control_callback,
+        self._gimbal_device_attitude_status = None
+        self._gimbal_device_attitude_status_sub = self.create_subscription(
+            GimbalDeviceAttitudeStatus,
+            "/mavros/gimbal_control/device/attitude_status",
+            self._gimbal_device_attitude_status_callback,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
@@ -138,15 +138,17 @@ class AutopilotNode(BaseNode):
         self._home_position = msg
         self.publish_home_geopoint()
 
-    def _mount_control_callback(self, msg: MountControl) -> None:
-        """Handles latest :class:`mavros_msgs.msg.MountControl` message
+    def _gimbal_device_attitude_status_callback(
+        self, msg: GimbalDeviceAttitudeStatus
+    ) -> None:
+        """Handles latest :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
 
         Calls :meth:`.publish_gimbal_quaternion` because the content of that
         message is affected by an updated :class:`mavros_msgs.msg.MountControl` message.
 
         :param msg: :class:`mavros_msgs.msg.MountControl` message from MAVROS
         """
-        self._mount_control = msg
+        self._gimbal_device_attitude_status = msg
         self.publish_gimbal_quaternion()
 
     # endregion ROS subscriber callbacks
@@ -189,7 +191,7 @@ class AutopilotNode(BaseNode):
                     position=GeoPoint(
                         latitude=latitude, longitude=longitude, altitude=altitude
                     ),
-                    orientation=orientation,
+                    orientation=orientation,  # TODO: is this NED or ENU?
                 ),
             )
         else:
@@ -258,21 +260,26 @@ class AutopilotNode(BaseNode):
             Current implementation assumes camera is facing directly down from
             vehicle body
         """
-        # TODO: assumes static nadir facing camera, do proper implementation
-        if self.vehicle_geopose is not None:
-            vehicle_attitude = Rotation.from_quat(
-                messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation)
-            )
-            gimbal_rpy = vehicle_attitude.as_euler("xyz", degrees=True)
-            gimbal_rpy[1] -= 90
-            gimbal_attitude = Rotation.from_euler("xyz", gimbal_rpy, degrees=True)
-            return messaging.as_ros_quaternion(gimbal_attitude.as_quat())
-        else:
-            self.get_logger().warn(
-                "Vehicle GeoPose unknown, cannot determine gimbal quaternion "
-                "for static camera."
-            )
+        # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
+
+        if self.vehicle_geopose is None or self._gimbal_device_attitude_status is None:
             return None
+
+        # Gimbal roll & pitch/tilt is assumed stabilized so only need yaw/pan
+        yaw_mask = np.array([1, 0, 0, 1])  # TODO: remove assumption
+        vehicle_yaw = (
+            messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation) * yaw_mask
+        )
+
+        gimbal_quaternion_frd = messaging.as_np_quaternion(
+            self._gimbal_device_attitude_status.q
+        )
+        gimbal_quaternion_ned = (
+            vehicle_yaw * gimbal_quaternion_frd
+        )  # TODO: ENU instead of NED? ROS convention?
+        gimbal_quaternion_ned = messaging.as_ros_quaternion(gimbal_quaternion_ned)
+
+        return gimbal_quaternion_ned
 
     @property
     def home_geopoint(self) -> Optional[GeoPointStamped]:

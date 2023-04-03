@@ -1,4 +1,5 @@
 """Module that contains the autopilot middleware (MAVROS) adapter ROS 2 node."""
+import math
 from typing import Optional
 
 import numpy as np
@@ -251,6 +252,47 @@ class AutopilotNode(BaseNode):
             )
             return None
 
+    @staticmethod
+    def _euler_from_quaternion(q):
+        # Convert quaternion to euler angles
+        t0 = 2.0 * (q.w * q.x + q.y * q.z)
+        t1 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        roll = math.atan2(t0, t1)
+
+        t2 = 2.0 * (q.w * q.y - q.z * q.x)
+        t2 = 1.0 if t2 > 1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+
+        t3 = 2.0 * (q.w * q.z + q.x * q.y)
+        t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        yaw = math.atan2(t3, t4)
+
+        return roll, pitch, yaw
+
+    @staticmethod
+    def yaw_from_quaternion(q):
+        t3 = 2.0 * (q.w * q.z + q.x * q.y)
+        t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        yaw_rad = math.atan2(t3, t4)
+
+        # Convert to degrees and normalize to [0, 360)
+        yaw_deg = math.degrees(yaw_rad) % 360
+
+        return yaw_deg
+
+    @staticmethod
+    def quaternion_multiply(q1, q2):
+        w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
+        w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
+
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+        return Quaternion(w=w, x=x, y=y, z=z)
+
     @property
     def gimbal_quaternion(self) -> Optional[Quaternion]:
         """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message
@@ -265,21 +307,26 @@ class AutopilotNode(BaseNode):
         if self.vehicle_geopose is None or self._gimbal_device_attitude_status is None:
             return None
 
-        # Gimbal roll & pitch/tilt is assumed stabilized so only need yaw/pan
-        yaw_mask = np.array([1, 0, 0, 1])  # TODO: remove assumption
-        vehicle_yaw = (
-            messaging.as_np_quaternion(self.vehicle_geopose.pose.orientation) * yaw_mask
-        )
-
-        gimbal_quaternion_frd = messaging.as_np_quaternion(
+        roll, pitch, yaw = self._euler_from_quaternion(
             self._gimbal_device_attitude_status.q
         )
-        gimbal_quaternion_ned = (
-            vehicle_yaw * gimbal_quaternion_frd
-        )  # TODO: ENU instead of NED? ROS convention?
-        gimbal_quaternion_ned = messaging.as_ros_quaternion(gimbal_quaternion_ned)
+        self.get_logger().debug(
+            "Gimbal device set attitude FRD Euler angles "
+            "(roll, pitch, yaw): (%.2f, %.2f, %.2f)"
+            % (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
+        )
 
-        return gimbal_quaternion_ned
+        compound_q = self.quaternion_multiply(
+            self.vehicle_geopose.pose.orientation, self._gimbal_device_attitude_status.q
+        )
+        roll, pitch, yaw = self._euler_from_quaternion(compound_q)
+        self.get_logger().debug(
+            "Compound attitude (NED?) Euler angles "
+            "(roll, pitch, yaw): (%.2f, %.2f, %.2f)"
+            % (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
+        )
+
+        return compound_q
 
     @property
     def home_geopoint(self) -> Optional[GeoPointStamped]:

@@ -293,6 +293,22 @@ class AutopilotNode(BaseNode):
 
         return Quaternion(w=w, x=x, y=y, z=z)
 
+    def apply_vehicle_yaw(self, vehicle_q, gimbal_q):
+        # Extract yaw from vehicle quaternion
+        t3 = 2.0 * (vehicle_q.w * vehicle_q.z + vehicle_q.x * vehicle_q.y)
+        t4 = 1.0 - 2.0 * (vehicle_q.y * vehicle_q.y + vehicle_q.z * vehicle_q.z)
+        yaw_rad = math.atan2(t3, t4)
+
+        # Create a new quaternion with only yaw rotation
+        yaw_q = Quaternion(
+            w=math.cos(yaw_rad / 2), x=0.0, y=0.0, z=math.sin(yaw_rad / 2)
+        )
+
+        # Apply the vehicle yaw rotation to the gimbal quaternion
+        gimbal_yaw_q = self.quaternion_multiply(yaw_q, gimbal_q)
+
+        return gimbal_yaw_q
+
     @property
     def gimbal_quaternion(self) -> Optional[Quaternion]:
         """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message
@@ -316,7 +332,11 @@ class AutopilotNode(BaseNode):
             % (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
         )
 
-        compound_q = self.quaternion_multiply(
+        # compound_q = self.quaternion_multiply(
+        #    self.vehicle_geopose.pose.orientation,
+        #    self._gimbal_device_attitude_status.q
+        # )
+        compound_q = self.apply_vehicle_yaw(
             self.vehicle_geopose.pose.orientation, self._gimbal_device_attitude_status.q
         )
         roll, pitch, yaw = self._euler_from_quaternion(compound_q)

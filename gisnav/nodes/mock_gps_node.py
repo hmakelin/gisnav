@@ -30,13 +30,9 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
     ROS_D_UDP_PORT = 25100
     """MAVProxy GPSInput plugin default port"""
 
-    ROS_D_PX4_MICRORTPS = True
-    """True for PX4 microRTPS bridge, False for ArduPilot MAVROS"""
-
     ROS_PARAM_DEFAULTS = [
         ("udp_ip", ROS_D_UDP_IP, True),
         ("udp_port", ROS_D_UDP_PORT, True),
-        ("px4_micrortps", ROS_D_PX4_MICRORTPS, True),
     ]
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
@@ -117,25 +113,14 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
         :param timestamp: Timestamp for outgoing mock GPS message (e.g. system time)
 
         """
-        if self._px4_micrortps:
-            msg: _MsgType = self._generate_sensor_gps(
-                lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp
-            )
-        else:
-            msg = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
+        msg = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
 
         if msg is not None:
-            if self._px4_micrortps:
-                assert_type(msg, SensorGps)
-                assert self._socket is None
-                self._mock_gps_pub.publish(msg)
-            else:
-                assert_type(msg, dict)
-                assert self._mock_gps_pub is None
-                assert self._socket is not None
-                self._socket.sendto(
-                    f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
-                )
+            assert_type(msg, dict)
+            assert self._socket is not None
+            self._socket.sendto(
+                f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
+            )
         else:
             self.get_logger().info("Could not create GPS message, skipping publishing.")
 

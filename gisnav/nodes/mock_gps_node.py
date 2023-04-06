@@ -1,17 +1,14 @@
 """Publishes mock GPS (GNSS) messages"""
-import json
-import socket
 from datetime import datetime
 from typing import Generic, TypeVar
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
-from mavros_msgs.msg import Altitude  # , GPSINPUT
+from mavros_msgs.msg import GPSINPUT, Altitude
 from px4_msgs.msg import SensorGps
 from rclpy.qos import QoSPresetProfiles
 
-from gisnav.assertions import assert_type
 from gisnav.data import Attitude
 from gisnav.nodes.base.base_node import BaseNode
 
@@ -43,7 +40,6 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
         """
         super().__init__(name)
 
-        # MAVROS only
         self._udp_ip = self.get_parameter("udp_ip").get_parameter_value().string_value
         self._udp_port = (
             self.get_parameter("udp_port").get_parameter_value().integer_value
@@ -51,12 +47,10 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
 
         # TODO: try to get MAVROS to work for GPSINPUT message and get rid
         #  of UDP socket
-        # self._mock_gps_pub = self.create_publisher(
-        #   GPSINPUT,
-        #   messaging.ROS_TOPIC_GPS_INPUT,
-        #   QoSPresetProfiles.SENSOR_DATA.value
-        # )
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._mock_gps_pub = self.create_publisher(
+            GPSINPUT, messaging.ROS_TOPIC_GPS_INPUT, QoSPresetProfiles.SENSOR_DATA.value
+        )
+        # self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,
@@ -116,21 +110,19 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
         msg = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
 
         if msg is not None:
-            assert_type(msg, dict)
-            assert self._socket is not None
-            self._socket.sendto(
-                f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
-            )
+            # assert_type(msg, dict)
+            # assert self._socket is not None
+            # self._socket.sendto(
+            #    f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
+            # )
+            self._mock_gps_pub.publish(msg)
         else:
             self.get_logger().info("Could not create GPS message, skipping publishing.")
 
-    def _generate_gps_input(self, lat, lon, altitude_amsl, heading, timestamp) -> dict:
+    def _generate_gps_input(
+        self, lat, lon, altitude_amsl, heading, timestamp
+    ) -> GPSINPUT:
         """Generates a :class:`.GPSINPUT` message to send over MAVROS
-
-        .. note::
-            Currently the message is sent directly over a UDP socket so the
-            GPS_INPUT is returned as a Python dict, not as a
-            :class:`mavros_msgs.msg.GPSINPUT`
 
         .. seealso:
             `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_  # noqa: E501
@@ -142,56 +134,43 @@ class MockGPSNode(BaseNode, Generic[_MsgType]):
         :param timestamp: System time in microseconds
         :return: MAVLink GPS_INPUT message as Python dict
         """
-        msg = {}
-
-        # Adjust UTC epoch timestamp for estimation delay
-        # int(time.time_ns() / 1e3) - (self._bridge.synchronized_time - timestamp)
-        msg["usec"] = timestamp
-        msg["gps_id"] = 0
-        msg["ignore_flags"] = 56  # vel_horiz + vel_vert + speed_accuracy
-
-        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(msg["usec"] / 1e6))
-        msg["time_week"] = gps_time.week_number
-        msg["time_week_ms"] = int(
-            gps_time.time_of_week * 1e3
-        )  # TODO this implementation accurate only up to 1 second
-        msg["fix_type"] = 3  # 3D position
-        msg["lat"] = int(lat * 1e7)
-        msg["lon"] = int(lon * 1e7)
-        msg["alt"] = altitude_amsl  # ArduPilot Gazebo SITL expects AMSL
-        msg["horiz_accuracy"] = 10.0  # position.eph
-        msg["vert_accuracy"] = 3.0  # position.epv
-        msg["speed_accuracy"] = np.nan  # should be in ignore_flags
-        msg["hdop"] = 0.0
-        msg["vdop"] = 0.0
-        msg["vn"] = np.nan  # should be in ignore_flags
-        msg["ve"] = np.nan  # should be in ignore_flags
-        msg["vd"] = np.nan  # should be in ignore_flags
-        msg["satellites_visible"] = np.iinfo(np.uint8).max
+        header = messaging.create_header("base_link")
+        header.stamp.sec = int(timestamp / 1e6)
+        header.stamp.nanosec = int(((timestamp / 1e6) % 1) * 1e9)
+        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(header.stamp.sec))
 
         # TODO check yaw sign (NED or ENU?)
         yaw = int(np.degrees(heading % (2 * np.pi)) * 100)
         yaw = 36000 if yaw == 0 else yaw  # MAVLink definition 0 := not available
-        msg["yaw"] = yaw
+
+        msg = GPSINPUT(
+            header=header,
+            gps_id=0,
+            ignore_flags=56,  # vel_horiz + vel_vert + speed_accuracy
+            time_week=gps_time.week_number,
+            time_week_ms=int(gps_time.time_of_week * 1e3),
+            fix_type=3,  # 3D position
+            lat=int(lat * 1e7),
+            lon=int(lon * 1e7),
+            alt=altitude_amsl,
+            horiz_accuracy=10.0,  # position.eph
+            vert_accuracy=3.0,  # position.epv
+            speed_accuracy=np.nan,  # should be in ignore_flags
+            hdop=0.0,
+            vdop=0.0,
+            vn=np.nan,  # should be in ignore_flags
+            ve=np.nan,  # should be in ignore_flags
+            vd=np.nan,  # should be in ignore_flags
+            satellites_visible=np.iinfo(np.uint8).max,
+            yaw=yaw,
+        )
 
         return msg
 
-    def _generate_device_id(self) -> int:
-        """Generates a device ID for the outgoing `px4_msgs.SensorGps` message"""
-        # For reference, see:
-        # https://docs.px4.io/main/en/middleware/drivers.html and
-        # https://github.com/PX4/PX4-Autopilot/blob/main/src/drivers/drv_sensor.h
-        # https://docs.px4.io/main/en/gps_compass/
-
-        # DRV_GPS_DEVTYPE_SIM (0xAF) + dev 1 + bus 1 + DeviceBusType_UNKNOWN
-        # = 10101111 00000001 00001 000
-        # = 11469064
-        return 11469064
-
     def destroy_node(self) -> None:
         """Closes GPS_INPUT MAVLink UDP socket when node is destroyed"""
-        self.get_logger().info("Closing UDP socket...")
-        self._socket.close()
+        # self.get_logger().info("Closing UDP socket...")
+        # self._socket.close()
 
         # socket closed - call parent method
         super().destroy_node()

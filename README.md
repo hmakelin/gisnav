@@ -27,7 +27,7 @@ Build the Docker images (may take a long time):
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
-make -C docker build-demo-px4
+make -C gisnav/docker build-demo-px4
 ```
 
 Run GISNav along with supporting services:

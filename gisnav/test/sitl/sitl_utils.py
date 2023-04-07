@@ -40,7 +40,7 @@ class SimConfig:
 
     SYS_ADDR = "udp://0.0.0.0:14550"
     MISSION_FILE = os.path.join(
-        os.path.dirname(__file__), "../../docker/qgc/ksql_airport_px4.plan"
+        os.path.dirname(__file__), "../../../docker/qgc/ksql_airport_px4.plan"
     )
     # PX4 Gazebo container startup is too slow, fix once stable PX4 v1.14 is out
     MAVLINK_CONNECTION_TIMEOUT_SEC = 120

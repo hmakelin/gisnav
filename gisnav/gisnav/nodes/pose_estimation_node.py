@@ -11,11 +11,12 @@ from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geographic_msgs.msg import GeoPoint, GeoPointStamped, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
-from gisnav_msgs.msg import OrthoImage3D
 from mavros_msgs.msg import Altitude
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
+
+from gisnav_msgs.msg import OrthoImage3D
 
 from ..assertions import assert_ndim, assert_shape, assert_type
 from ..data import (

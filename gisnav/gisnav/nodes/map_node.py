@@ -7,7 +7,6 @@ import numpy as np
 import requests
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPointStamped, GeoPoseStamped
-from gisnav_msgs.msg import OrthoImage3D
 from mavros_msgs.msg import Altitude
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
@@ -17,6 +16,8 @@ from rclpy.timer import Timer
 from sensor_msgs.msg import Image
 from shapely.geometry import box
 from std_msgs.msg import Float32
+
+from gisnav_msgs.msg import OrthoImage3D
 
 from ..assertions import assert_len, assert_type
 from ..data import BBox, Img, MapData

@@ -1,6 +1,7 @@
 Autopilots
 ==================================================
-GISNav supports PX4 via the `RTPS/DDS`_ interface and ArduPilot via `MAVROS`_.
+GISNav supports PX4 via both `MAVROS`_ and `RTPS/DDS`_, and ArduPilot via MAVROS
+only.
 
 .. warning::
     ArduPilot is licensed under `GPLv3`_ which is more restrictive than PX4's `BSD`_ license
@@ -77,8 +78,8 @@ vicinity of San Carlos (KSQL) airport:
 
 PX4-ROS 2 bridge topic configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-For GISNav the PX4-ROS 2 bridge must be configured to send the :class:`px4_msgs.msg.GimbalDeviceSetAttitude` message
-and receive the :class:`px4_msgs.msg.SensorGps` message:
+For GISNav the PX4-ROS 2 bridge must be configured receive the
+:class:`px4_msgs.msg.SensorGps` message:
 
 .. tab-set::
 
@@ -90,11 +91,6 @@ and receive the :class:`px4_msgs.msg.SensorGps` message:
 
         .. code-block:: yaml
             :caption: PX4-Autopilot/src/modules/microdds_client/microdds_topics.yaml
-
-            publications:
-
-              - topic: /fmu/out/gimbal_device_set_attitude
-                type: px4_msgs::msg::GimbalDeviceSetAttitude
 
             subscriptions:
 
@@ -116,16 +112,10 @@ and receive the :class:`px4_msgs.msg.SensorGps` message:
              - px4_ros_com_ros2/src/px4_ros_com/templates
            * - .. code-block:: yaml
 
-                    - msg: gimbal_device_set_attitude
-                      send: true
-
                     - msg: sensor_gps
                       receive: true
 
              - .. code-block:: yaml
-
-                    - msg: GimbalDeviceSetAttitude
-                      send: true
 
                     - msg: SensorGps
                       receive: true
@@ -140,6 +130,9 @@ PX4 parameter configuration
 To make GISNav potentially work better, you can adjust the following PX4 parameters either at runtime through the PX4
 shell or the `QGroundControl Parameters screen`_, or before building the simulation in the
 ``~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480`` file :
+
+.. note::
+    The file names have change to "gazebo-classic" in v1.14.
 
 .. _QGroundControl Parameters screen: https://docs.qgroundcontrol.com/master/en/SetupView/Parameters.html
 

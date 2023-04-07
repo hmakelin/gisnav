@@ -44,14 +44,14 @@ services:
     network_mode: host
     volumes:
       - /dev/shm:/dev/shm
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://localhost:14551@14555
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://localhost:14540@14550
 
   qgc:
     build:
       context: qgc
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -66,7 +66,7 @@ services:
       dockerfile: docker/gisnav/Dockerfile
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
@@ -88,7 +88,7 @@ services:
       context: px4
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -103,13 +103,14 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+    command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
   ardupilot:
     build:
       context: ardupilot
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm

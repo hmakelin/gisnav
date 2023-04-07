@@ -1,0 +1,3 @@
+subscriptions:
+  - topic: /fmu/in/sensor_gps
+    type: px4_msgs::msg::SensorGps

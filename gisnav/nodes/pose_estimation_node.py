@@ -1,5 +1,6 @@
 """Module that contains the pose estimation node"""
 import json
+import math
 import pickle
 from typing import Optional, Union, get_args
 
@@ -554,6 +555,48 @@ class PoseEstimationNode(CameraSubscriberNode):
 
         return True
 
+    @staticmethod
+    def off_nadir_angle(q):
+        # Rotated vector
+        rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
+        rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
+        rotated_z = q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z
+
+        # Down direction
+        down_x, down_y, down_z = 0.0, 0.0, -1.0
+
+        # Dot product of rotated vector and down direction
+        dot_product = rotated_x * down_x + rotated_y * down_y + rotated_z * down_z
+
+        # Clamp dot_product to avoid floating-point precision issues
+        dot_product = max(min(dot_product, 1.0), -1.0)
+
+        # Compute the angle between the rotated vector and down direction
+        angle_rad = math.acos(dot_product)
+
+        # Convert the angle to degrees
+        angle_deg = math.degrees(angle_rad)
+
+        return angle_deg
+
+    @staticmethod
+    def _euler_from_quaternion(q):
+        # Convert quaternion to euler angles
+        t0 = 2.0 * (q.w * q.x + q.y * q.z)
+        t1 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+        roll = math.atan2(t0, t1)
+
+        t2 = 2.0 * (q.w * q.y - q.z * q.x)
+        t2 = 1.0 if t2 > 1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+
+        t3 = 2.0 * (q.w * q.z + q.x * q.y)
+        t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        yaw = math.atan2(t3, t4)
+
+        return roll, pitch, yaw
+
     def _camera_roll_or_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera roll or pitch exceeds given limit OR
         camera pitch is unknown
@@ -568,25 +611,24 @@ class PoseEstimationNode(CameraSubscriberNode):
         assert_type(max_pitch, get_args(Union[int, float]))
         pitch = None
         if self._gimbal_quaternion is not None:
-            gimbal_attitude = Attitude(
-                q=messaging.as_np_quaternion(self._gimbal_quaternion), extrinsic=True
+            off_nadir_deg = self.off_nadir_angle(self._gimbal_quaternion) - 90
+            self.get_logger().debug(
+                f"Camera pitch is {off_nadir_deg} degrees off nadir"
             )
-            # TODO: do not assume zero roll - camera attitude handling needs refactoring
-            # +90 degrees to re-center from FRD frame to nadir-facing camera
-            # as origin for max pitch comparison
-            pitch = np.degrees(gimbal_attitude.pitch) + 90
+            roll, pitch, yaw = self._euler_from_quaternion(self._gimbal_quaternion)
+
+            if off_nadir_deg > max_pitch:
+                self.get_logger().warn(
+                    f"Camera pitch {pitch} is above limit {max_pitch}."
+                )
+                return True
+            else:
+                return False
         else:
             self.get_logger().warn(
                 "Gimbal attitude was not available, assuming camera pitch too high."
             )
             return True
-
-        assert pitch is not None
-        if pitch > max_pitch:
-            self.get_logger().warn(f"Camera pitch {pitch} is above limit {max_pitch}.")
-            return True
-
-        return False
 
     def _export_position(
         self, position: GeoPt, fov: GeoTrapezoid, filename: str

@@ -28,14 +28,6 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="px4_node",
-            executable="px4_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/px4_node.yaml")],
-        )
-    )
-    ld.add_action(
-        Node(
-            package="gisnav",
             name="mock_gps_node",
             executable="mock_gps_node",
             parameters=[

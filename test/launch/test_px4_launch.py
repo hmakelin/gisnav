@@ -7,19 +7,13 @@ from typing import List, Tuple
 import pytest
 import rclpy
 from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion
 from gisnav_msgs.msg import OrthoImage3D
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import Altitude
-from px4_msgs.msg import (
-    GimbalDeviceSetAttitude,
-    SensorGps,
-    VehicleAttitude,
-    VehicleGlobalPosition,
-    VehicleLocalPosition,
-)
+from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from px4_msgs.msg import SensorGps
 from rclpy.node import Node
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
 from launch import LaunchDescription  # type: ignore
@@ -66,10 +60,10 @@ class TestPX4Launch(unittest.TestCase):
     """List of camera topic names and types"""
 
     AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
-        ("/fmu/out/vehicle_global_position", VehicleGlobalPosition),
-        ("/fmu/out/vehicle_local_position", VehicleLocalPosition),
-        ("/fmu/out/vehicle_attitude", VehicleAttitude),
-        ("/fmu/out/gimbal_device_set_attitude", GimbalDeviceSetAttitude),
+        ("/mavros/global_position/global", NavSatFix),
+        ("/mavros/local_position/pose", PoseStamped),
+        ("/mavros/home_position/home", HomePosition),
+        ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
         ("/fmu/in/sensor_gps", SensorGps),
     ]
     """List of autopilot topic names and types"""
@@ -86,7 +80,7 @@ class TestPX4Launch(unittest.TestCase):
         ("bbox_node", "/"),
         ("map_node", "/"),
         ("pose_estimation_node", "/"),
-        ("px4_node", "/"),
+        ("autopilot_node", "/"),
     }
     """List of tuples of node names and namespaces"""
 

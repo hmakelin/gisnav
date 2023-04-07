@@ -1,10 +1,9 @@
 """Publishes mock GPS (GNSS) messages"""
-from datetime import datetime
+from typing import Optional
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
-from gps_time import GPSTime
-from mavros_msgs.msg import GPSINPUT, Altitude
+from mavros_msgs.msg import Altitude, HilGPS
 from rclpy.qos import QoSPresetProfiles
 
 from gisnav.data import Attitude
@@ -16,6 +15,9 @@ from . import messaging
 class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
+    ROS_PARAM_DEFAULTS = []
+    """List containing ROS parameter name, default value and read_only flag tuples"""
+
     def __init__(self, name: str):
         """Class initializer
 
@@ -24,7 +26,7 @@ class MockGPSNode(BaseNode):
         super().__init__(name)
 
         self._mock_gps_pub = self.create_publisher(
-            GPSINPUT, messaging.ROS_TOPIC_GPS_INPUT, QoSPresetProfiles.SENSOR_DATA.value
+            HilGPS, messaging.ROS_TOPIC_HIL_GPS, QoSPresetProfiles.SENSOR_DATA.value
         )
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,
@@ -48,13 +50,7 @@ class MockGPSNode(BaseNode):
         """
         self._geopose_estimate = msg
         if self._altitude_estimate is not None:
-            lat, lon = msg.pose.position.latitude, msg.pose.position.longitude
-            alt_amsl = self._altitude_estimate.amsl
-            alt_ellipsoid = msg.pose.position.altitude
-            q = messaging.as_np_quaternion(msg.pose.orientation)
-            yaw = Attitude(q=q).yaw
-            timestamp = messaging.usec_from_header(msg.header)
-            self._publish(lat, lon, alt_amsl, alt_ellipsoid, yaw, timestamp)
+            self._publish()
         else:
             self.get_logger().warn(
                 "Altitude estimate not yet received, skipping publishing mock "
@@ -63,75 +59,56 @@ class MockGPSNode(BaseNode):
 
     def _vehicle_altitude_estimate_callback(self, msg: Altitude) -> None:
         """Handles latest altitude message
-
         :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
         """
         self._altitude_estimate = msg
 
-    def _publish(
-        self, lat, lon, altitude_amsl, altitude_ellipsoid, heading, timestamp
-    ) -> None:
-        """Publishes drone position as a :class:`px4_msgs.msg.SensorGps` message
-
-        :param lat: Vehicle latitude
-        :param lon: Vehicle longitude
-        :param altitude_amsl: Vehicle altitude AMSL
-        :param altitude_ellipsoid: Vehicle altitude above WGS 84 ellipsoid
-        :param heading: Vehicle heading in radians
-        :param timestamp: Timestamp for outgoing mock GPS message (e.g. system time)
-
-        """
-        msg = self._generate_gps_input(lat, lon, altitude_amsl, heading, timestamp)
-
+    def _publish(self) -> None:
+        """Publishes drone position as a :class:`px4_msgs.msg.SensorGps` message"""
+        msg = self._generate_hil_gps()
         if msg is not None:
             self._mock_gps_pub.publish(msg)
         else:
             self.get_logger().info("Could not create GPS message, skipping publishing.")
 
-    def _generate_gps_input(
-        self, lat, lon, altitude_amsl, heading, timestamp
-    ) -> GPSINPUT:
-        """Generates a :class:`.GPSINPUT` message to send over MAVROS
+    def _generate_hil_gps(self) -> Optional[HilGPS]:
+        """Generates a :class:`.HilGPS` message to send over MAVROS
 
-        .. seealso:
-            `GPS_INPUT_IGNORE_FLAGS <https://mavlink.io/en/messages/common.html#GPS_INPUT_IGNORE_FLAGS>`_  # noqa: E501
-
-        :param lat: Vehicle latitude
-        :param lon: Vehicle longitude
-        :param altitude_amsl: Vehicle altitude in meters AMSL
-        :param heading: Vehicle heading in radians
-        :param timestamp: System time in microseconds
-        :return: MAVLink GPS_INPUT message as Python dict
+        :return: MAVLink HilGPS message
         """
-        header = messaging.create_header("base_link")
-        header.stamp.sec = int(timestamp / 1e6)
-        header.stamp.nanosec = int(((timestamp / 1e6) % 1) * 1e9)
-        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(header.stamp.sec))
+        if self._geopose_estimate is not None and self._attitude_estimate is not None:
+            geopose = self._geopose_estimate.pose
+            header = self._geopose_estimate.header
+            alt_amsl = self._altitude_estimate.amsl
+        else:
+            return None
+        # alt_ellipsoid = msg.pose.position.altitude  # TODO: make this right
 
         # TODO check yaw sign (NED or ENU?)
-        yaw = int(np.degrees(heading % (2 * np.pi)) * 100)
+        q = messaging.as_np_quaternion(geopose.orientation)
+        yaw = Attitude(q=q).yaw
+        yaw = int(np.degrees(yaw % (2 * np.pi)) * 100)
         yaw = 36000 if yaw == 0 else yaw  # MAVLink definition 0 := not available
 
-        msg = GPSINPUT(
+        msg = HilGPS(
             header=header,
-            gps_id=0,
-            ignore_flags=56,  # vel_horiz + vel_vert + speed_accuracy
-            time_week=gps_time.week_number,
-            time_week_ms=int(gps_time.time_of_week * 1e3),
             fix_type=3,  # 3D position
-            lat=int(lat * 1e7),
-            lon=int(lon * 1e7),
-            alt=altitude_amsl,
-            horiz_accuracy=10.0,  # position.eph
-            vert_accuracy=3.0,  # position.epv
-            speed_accuracy=np.nan,  # should be in ignore_flags
-            hdop=0.0,
-            vdop=0.0,
-            vn=np.nan,  # should be in ignore_flags
-            ve=np.nan,  # should be in ignore_flags
-            vd=np.nan,  # should be in ignore_flags
+            geo=geopose.position,
+            eph=10,  # position.eph
+            epv=3,  # position.epv
+            vel=np.iinfo(np.uint16).max,
+            vn=0,
+            ve=0,
+            vd=0,
+            cog=np.iinfo(np.uint16).max,
             satellites_visible=np.iinfo(np.uint8).max,
-            yaw=yaw,
         )
+        # id = 0,  # TODO: make id configurable
+        # yaw = yaw
+
+        # this should be wgs 84 ellipsoid altitude
+        msg.geo.altitude = alt_amsl  # todo: fix incoming geopose altitude
+        msg.geo.latitude *= 1e7
+        msg.geo.longitude *= 1e7  # expected by PX4 but not in documentation?
 
         return msg

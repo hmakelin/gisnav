@@ -10,7 +10,7 @@ from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from gisnav_msgs.msg import OrthoImage3D
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import Altitude, HomePosition, MountControl
+from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
@@ -24,7 +24,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../launch/base.launch.py")
+    filename = os.path.join(dirname, "../../launch/ardupilot.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [
@@ -62,7 +62,7 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("/mavros/global_position/global", NavSatFix),
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
-        ("/mavros/mount_control/command", MountControl),
+        ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
         # ('/mavros/gps_input/gps_input', GPSINPUT)  # uses UDP socket instead
     ]
     """List of autopilot topic names and types"""
@@ -79,7 +79,7 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("bbox_node", "/"),
         ("map_node", "/"),
         ("pose_estimation_node", "/"),
-        ("ardupilot_node", "/"),
+        ("autopilot_node", "/"),
     }
     """List of tuples of node names and namespaces"""
 

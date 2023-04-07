@@ -51,7 +51,7 @@ services:
       context: qgc
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -66,7 +66,7 @@ services:
       dockerfile: docker/gisnav/Dockerfile
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
@@ -81,14 +81,14 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: ros2 launch gisnav base.launch.py
+    command: ros2 launch gisnav px4.launch.py
 
   px4:
     build:
       context: px4
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -110,7 +110,7 @@ services:
       context: ardupilot
       dockerfile: Dockerfile
     env_file:
-      - .env/.x11.env
+      - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm

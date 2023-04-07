@@ -55,46 +55,6 @@ All\* default ROS topic names used by GISNav are listed in the :py:mod:`.messagi
     :end-before: # endregion ROS topic names
     :language: python
 
-Autopilot topics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Depending on the launch configuration, :class:`.PX4Node` or :class:`.ArduPilotNode` is launched along with a number of
-other nodes. These two nodes subscribe to your autopilot's specific ROS message types and translate them to a set of
-common GISNav internal message types.
-
-You can see the subscribed topic names and message types in the ``__init__`` methods of the two nodes:
-
-.. note::
-    See :ref:`Remapping ROS 2 topics` to adapt these nodes to your system. For example, you must remap the PX4 topic
-    names from  ``fmu/out/*`` to ``fmu/*/out`` if you are using PX4 v1.13.X instead of v1.14.0-beta1.
-
-    .. _name remapping: https://design.ros2.org/articles/static_remapping.html
-
-.. tab-set::
-
-    .. tab-item:: PX4
-        :selected:
-
-        .. literalinclude:: ../../../../gisnav/nodes/px4_node.py
-            :caption: :py:meth:`.PX4Node.__init__` method
-            :pyobject: PX4Node.__init__
-
-    .. tab-item:: ArduPilot
-
-        .. literalinclude:: ../../../../gisnav/nodes/ardupilot_node.py
-            :caption: :py:meth:`.ArduPilotNode.__init__` method
-            :pyobject: ArduPilotNode.__init__
-
-The parent :class:`.AutopilotNode` defines the common GISNav internal message types that the extending
-:class:`.PX4Node` and :class:`.ArduPilotNode` must implement. The parent class also defines publish methods that the
-extending nodes call when they want to publish the GISNav internal messages. Typically this happens whenever they
-receive a relevant message from the autopilot:
-
-.. literalinclude:: ../../../../gisnav/nodes/base/autopilot_node.py
-    :caption: :class:`.AutopilotNode` public properties and publish hooks
-    :start-after: # region publish hooks
-    :end-before: # endregion publish hooks
-    :language: python
-
 Camera topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 GISNav's nodes use the :class:`.CameraSubscriberNode` abstract base class to subscribe to

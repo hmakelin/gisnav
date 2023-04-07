@@ -7,4 +7,4 @@ launch configurations in the :py:mod:`test.launch` package:
     :caption: Run ROS launch tests
 
     cd ~/colcon_ws
-    launch_test src/gisnav/test/launch/test_launch.py
+    launch_test src/gisnav/test/launch/test_px4_launch.py

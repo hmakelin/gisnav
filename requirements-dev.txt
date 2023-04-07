@@ -21,3 +21,7 @@ jupyter
 git+https://github.com/dronecrew/px4tools.git
 
 pre-commit
+
+# px4 docker image build
+lxml
+types-PyYAML

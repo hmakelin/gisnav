@@ -1,21 +1,26 @@
 Autopilots
 ==================================================
-GISNav supports PX4 and ArduPilot autopilots via `MAVROS`_. Other MAVLink compatible
-software may work too but have not been tested.
+GISNav supports PX4 via both `MAVROS`_ and `RTPS/DDS`_, and ArduPilot via MAVROS
+only.
 
 .. warning::
     ArduPilot is licensed under `GPLv3`_ which is more restrictive than PX4's `BSD`_ license
 
 .. _GPLv3: https://ardupilot.org/dev/docs/license-gplv3.html
 .. _BSD: https://docs.px4.io/main/en/contribute/licenses.html
+.. _RTPS/DDS: https://docs.px4.io/main/en/middleware/micrortps.html
 .. _MAVROS: https://ardupilot.org/dev/docs/ros-connecting.html
 
 Setup PX4
 ___________________________________________________
+**These instructions are written for PX4 version >=1.13.0, <=1.14.0-beta1**
 
-Follow the PX4 instructions to setup your `Ubuntu Development Environment`_.
+Follow the PX4 instructions to setup your `Ubuntu Development Environment`_ with `Fast DDS`_ and `PX4-ROS 2 Bridge`_
+support.
 
 .. _Ubuntu Development Environment: https://docs.px4.io/master/en/simulation/ros_interface.html
+.. _Fast DDS: https://docs.px4.io/main/en/dev_setup/fast-dds-installation.html
+.. _PX4-ROS 2 Bridge: https://docs.px4.io/main/en/ros/ros2_comm.html
 
 Build Gazebo simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -25,15 +30,97 @@ vicinity of San Carlos (KSQL) airport:
 
 .. _PX4 Gazebo simulation: https://docs.px4.io/main/en/simulation/gazebo.html
 
+.. tab-set::
 
-.. code-block:: bash
-    :caption: Run PX4 Gazebo SITL simulation at KSQL airport
+    .. tab-item:: v1.14.0-beta1
+        :selected:
 
-    cd ~/PX4-Autopilot
-    make px4_sitl gazebo_typhoon_h480__ksql_airport
+        .. note::
+            You must `create the micro-ros-agent`_ for the following command to work
+
+        .. _create the micro-ros-agent: https://micro.ros.org/docs/tutorials/core/first_application_linux/
+
+        .. code-block:: bash
+            :caption: Run ``micro-ros-agent``
+
+            cd ~/colcon_ws
+            ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
+
+
+        .. code-block:: bash
+            :caption: Run PX4 Gazebo SITL simulation at KSQL airport
+
+            cd ~/PX4-Autopilot
+            make px4_sitl gazebo_typhoon_h480__ksql_airport
+
+
+    .. tab-item:: v1.13.X
+
+        Run the microRTPS agent in a separate shell:
+
+        .. code-block:: bash
+            :name: Launch microRTPS agent
+            :caption: Run microRTPS agent
+
+            cd ~/colcon_ws
+            micrortps_agent -t UDP
+
+        Then build your simulation:
+
+        .. code-block:: bash
+            :caption: Run PX4 Gazebo SITL simulation at KSQL airport
+
+            cd ~/PX4-Autopilot
+            make px4_sitl_rtps gazebo_typhoon_h480__ksql_airport
 
 .. note::
     The initial build may take several minutes
+
+PX4-ROS 2 bridge topic configuration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+For GISNav the PX4-ROS 2 bridge must be configured receive the
+:class:`px4_msgs.msg.SensorGps` message:
+
+.. tab-set::
+
+    .. tab-item:: v1.14.0-beta1
+        :selected:
+
+        Edit the ``~/PX4-Autopilot/src/modules/microdds_client/microdds_topics.yaml`` file by adding the following
+        entries:
+
+        .. code-block:: yaml
+            :caption: PX4-Autopilot/src/modules/microdds_client/microdds_topics.yaml
+
+            subscriptions:
+
+              - topic: /fmu/in/sensor_gps
+                type: px4_msgs::msg::SensorGps
+
+    .. tab-item:: v1.13.X
+
+        See the `ROS 2 Offboard Control Example`_ for example on how to edit the ``urtps_bridge_topics.yaml`` file in
+        the ``~/PX4-Autopilot/msg/tools`` and ``~/colcon_ws/src/px4_ros_com/templates`` folders. Add the following
+        entries to the files:
+
+        .. _ROS 2 Offboard Control Example: https://docs.px4.io/main/en/ros/ros2_offboard_control.html#ros-2-offboard-control-example
+
+        .. list-table:: ``urtps_bridge_topics.yaml``
+           :header-rows: 1
+
+           * - PX4-Autopilot/msg/tools
+             - px4_ros_com_ros2/src/px4_ros_com/templates
+           * - .. code-block:: yaml
+
+                    - msg: sensor_gps
+                      receive: true
+
+             - .. code-block:: yaml
+
+                    - msg: SensorGps
+                      receive: true
+
+After you have configured the topics, you can :ref:`Build Gazebo simulation` again.
 
 PX4 parameter configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -43,6 +130,9 @@ PX4 parameter configuration
 To make GISNav potentially work better, you can adjust the following PX4 parameters either at runtime through the PX4
 shell or the `QGroundControl Parameters screen`_, or before building the simulation in the
 ``~/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_typhoon_h480`` file :
+
+.. note::
+    The file names have change to "gazebo-classic" in v1.14.
 
 .. _QGroundControl Parameters screen: https://docs.qgroundcontrol.com/master/en/SetupView/Parameters.html
 

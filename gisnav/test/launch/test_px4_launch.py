@@ -25,7 +25,7 @@ from gisnav_msgs.msg import OrthoImage3D
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../../launch/px4.launch.py")
+    filename = os.path.join(dirname, "../../launch/px4.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [

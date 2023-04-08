@@ -1,4 +1,4 @@
-"""Tests ArduPilot launch"""
+"""Tests PX4 launch"""
 import os
 import time
 import unittest
@@ -8,23 +8,24 @@ import pytest
 import rclpy
 from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
-from gisnav_msgs.msg import OrthoImage3D
+from launch import LaunchDescription  # type: ignore
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from px4_msgs.msg import SensorGps
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
-from launch import LaunchDescription  # type: ignore
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from gisnav_msgs.msg import OrthoImage3D
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../launch/ardupilot.launch.py")
+    filename = os.path.join(dirname, "../../../launch/px4.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [
@@ -34,7 +35,7 @@ def generate_test_description():
     )
 
 
-class TestArduPilotLaunch(unittest.TestCase):
+class TestPX4Launch(unittest.TestCase):
     """Test that all nodes initialize with correct ROS topics"""
 
     GISNAV_TOPIC_NAMES_AND_TYPES = [
@@ -63,7 +64,7 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
-        # ('/mavros/gps_input/gps_input', GPSINPUT)  # uses UDP socket instead
+        ("/fmu/in/sensor_gps", SensorGps),
     ]
     """List of autopilot topic names and types"""
 
@@ -85,7 +86,7 @@ class TestArduPilotLaunch(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestArduPilotLaunch, self).__init__(*args, **kwargs)
+        super(TestPX4Launch, self).__init__(*args, **kwargs)
         self.test_node = None
 
     def _get_names_and_namespaces_within_timeout(

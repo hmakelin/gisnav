@@ -14,7 +14,7 @@ The ``docker-compose.yaml`` file defines the following services:
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``px4``             | PX4 Gazebo SITL simulation. Starts `typhoon_h480` model at the KSQL Airport.                  |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mavros``          | MAVROS. Used for ArduPilot SITL.                                                              |
+| ``mavros``          | MAVROS. Used for PX4 and ArduPilot SITL.                                                              |
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``micro-ros-agent`` | Micro-ROS agent. Used for PX4 SITL.                                                           |
 +---------------------+-----------------------------------------------------------------------------------------------+
@@ -60,8 +60,8 @@ Follow these instructions to launch the SITL simulation used in the
 Build
 ^^^^^^^^^^^^^^^^^^^
 
-To build the ``mapserver``, ``px4``,  ``micro-ros-agent``, ``torch-serve``
-and ``gisnav`` services, run the following command:
+To build the ``mapserver``, ``px4``,  ``micro-ros-agent``,  ``mavros``,
+``torch-serve`` and ``gisnav`` services, run the following command:
 
 .. code-block:: bash
 
@@ -75,7 +75,7 @@ Run the PX4 SITL simulation with GISNav:
 
 .. code-block:: bash
 
-    docker compose up mapserver px4 micro-ros-agent torch-serve qgc gisnav
+    docker compose up mapserver px4 micro-ros-agent mavros torch-serve qgc gisnav
 
 
 Shutdown
@@ -156,7 +156,7 @@ Headless mode
 You may want to run Gazebo in headless mode when doing automated testing (e.g., with mavsdk).
 
 .. code-block:: bash
-
+micro
     docker compose -f docker-compose.headless.yaml up px4
 
 

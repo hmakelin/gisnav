@@ -17,7 +17,7 @@ simulation.
 
 You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
 
-[1]: https://docs.px4.io/v1.12/en/flight_modes/mission.html
+[1]: https://docs.px4.io/main/en/flight_modes/mission.html
 [2]: https://docs.docker.com/compose/install/linux/
 [3]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 
@@ -27,7 +27,7 @@ Build the Docker images (may take a long time):
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
-make -C docker build-demo-px4
+make -C gisnav/docker build-demo-px4
 ```
 
 Run GISNav along with supporting services:

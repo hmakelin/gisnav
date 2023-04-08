@@ -19,9 +19,9 @@ docs/_build/
 .coverage*
 
 # SITL test log output (but leave one sample flight log)
-test/sitl/output/
+gisnav/test/sitl/output/
 
 # Jupyter Notebook checkpoints
-test/sitl/ulog_analysis/.ipynb_checkpoints/
+gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 .benchmarks/

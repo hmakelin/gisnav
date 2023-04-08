@@ -7,11 +7,11 @@ defined in this file.
 import os
 
 from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
 from gisnav.data import PackageData
 from gisnav.nodes.base.camera_subscriber_node import CameraSubscriberNode
-from launch import LaunchDescription  # type: ignore
 
 
 def generate_launch_description():

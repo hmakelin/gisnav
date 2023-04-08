@@ -48,10 +48,12 @@ Install GISNav in your ROS 2 Workspace:
     cd ~/colcon_ws
     mkdir -p src && cd "$_"
     git clone https://github.com/hmakelin/gisnav.git
-    git clone https://github.com/hmakelin/gisnav_msgs.git
+    git clone --branch gimbal-protocol-v2-plugin \
+      https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
+    git clone https://github.com/px4/px4_msgs.git
     rosdep update
     rosdep install --from-paths . -y --ignore-src
-    cd gisnav
+    cd gisnav/gisnav
     pip3 install -r requirements.txt
 
 .. note::
@@ -61,7 +63,7 @@ Install GISNav in your ROS 2 Workspace:
     .. _PX4 ROS 2 User Guide: https://docs.px4.io/main/en/ros/ros2_comm.html
 
 Build the GISNav package along with other dependencies you may have in your colcon workspace. If you have already built
-the other dependencies (such as ``px4_msgs`` and ``px4_ros_com`` for PX4 configuration) earlier you may want to skip
+the other dependencies (such as ``px4_msgs`` for PX4 configuration) earlier you may want to skip
 rebuilding them and build GISNav only to save time:
 
 .. tab-set::
@@ -93,5 +95,5 @@ with the following commands:
 .. code-block:: bash
     :caption: Install Python development dependencies
 
-    cd ~/colcon_ws/src/gisnav
+    cd ~/colcon_ws/src/gisnav/gisnav
     python3 -m pip install -r requirements-dev.txt

@@ -52,8 +52,8 @@ class PX4TestEnvironment(SITLEnvironment):
         This most likely means starting supporting services with docker
         """
         logger.info("Starting PX4 SITL simulation environment...")
-        os.system("docker compose -f docker/docker-compose.yaml up -d gisnav")
-        os.system("make -C docker up-offboard-sitl-test-px4")
+        os.system("docker compose -f ../docker/docker-compose.yaml up -d gisnav")
+        os.system("make -C ../docker up-offboard-sitl-test-px4")
 
     @staticmethod
     def cleanup():

@@ -14,6 +14,7 @@ from sitl_utils import (  # GPSDataError,
     CouldNotArmError,
     HealthCheckTimeoutError,
     MavlinkTimeoutError,
+    MissionUploadTimeoutError,
     ROSContext,
     SimConfig,
     SITLEnvironment,
@@ -22,6 +23,7 @@ from sitl_utils import (  # GPSDataError,
     connect_mavlink,
     logger,
     poll_mapserver,
+    upload_mission,
 )
 
 
@@ -52,8 +54,8 @@ class PX4TestEnvironment(SITLEnvironment):
         This most likely means starting supporting services with docker
         """
         logger.info("Starting PX4 SITL simulation environment...")
-        os.system("docker compose -f docker/docker-compose.yaml up -d gisnav")
-        os.system("make -C docker up-offboard-sitl-test-px4")
+        os.system("docker compose -f ../docker/docker-compose.yaml up -d gisnav")
+        os.system("make -C ../docker up-offboard-sitl-test-px4")
 
     @staticmethod
     def cleanup():
@@ -63,7 +65,7 @@ class PX4TestEnvironment(SITLEnvironment):
         so that they won't be left running if the tests fail because of an error)
         """
         logger.info("Shutting down PX4 SITL simulation environment...")
-        os.system("make -C docker down")
+        os.system("make -C ../docker down")
 
     @staticmethod
     async def run():
@@ -121,7 +123,17 @@ class PX4TestEnvironment(SITLEnvironment):
         )
 
         logger.info("Uploading mission...")
-        await drone.mission_raw.upload_mission(mission_import_data.mission_items)
+        try:
+            upload_mission_ = partial(upload_mission, drone)
+            await asyncio.wait_for(
+                upload_mission_(mission_import_data.mission_items),
+                timeout=SimConfig.MISSION_UPLOAD_TIMEOUT_SEC,
+            )
+        except asyncio.TimeoutError as _:  # noqa: F841
+            raise MissionUploadTimeoutError(
+                "Mission upload timed out at "
+                f"{SimConfig.MISSION_UPLOAD_TIMEOUT_SEC} seconds."
+            )
 
         try:
             check_health_ = partial(check_health, drone)

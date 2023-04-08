@@ -18,14 +18,14 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
-from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
 @pytest.mark.launch_test
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../../launch/px4.launch.py")
+    filename = os.path.join(dirname, "../../launch/px4.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [

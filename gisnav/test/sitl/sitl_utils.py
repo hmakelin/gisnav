@@ -4,6 +4,7 @@ import os
 from abc import ABC, abstractmethod
 
 import aiohttp
+import mavsdk
 import rclpy
 from mavsdk import System
 from mavsdk.action import ActionError
@@ -36,19 +37,21 @@ class SimConfig:
     :ivar str WMS_ENDPOINT: The MapServer WMS endpoint URL
     :ivar int GPS_DATA_COLLECTION_INTERVAL_SEC: The interval for collecting
         GPS data in seconds.
+    :ivar int GPS_DATA_COLLECTION_INTERVAL_SEC: The timeout in seconds for
+        uploading the flight mission to the drone
     """
 
     SYS_ADDR = "udp://0.0.0.0:14550"
     MISSION_FILE = os.path.join(
         os.path.dirname(__file__), "../../../docker/qgc/ksql_airport_px4.plan"
     )
-    # PX4 Gazebo container startup is too slow, fix once stable PX4 v1.14 is out
-    MAVLINK_CONNECTION_TIMEOUT_SEC = 120
+    MAVLINK_CONNECTION_TIMEOUT_SEC = 120  # PX4 Gazebo container startup is too slow
     MAPSERVER_POLLING_TIMEOUT_SEC = 10
-    PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC = 30
+    PRE_FLIGHT_HEALTH_CHECK_TIMEOUT_SEC = 60
     LOG_OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "output")
     WMS_ENDPOINT = "http://localhost:80/wms"
     GPS_DATA_COLLECTION_INTERVAL_SEC = 5
+    MISSION_UPLOAD_TIMEOUT_SEC = 120  # PX4 Gazebo container startup is too slow
 
 
 class SITLTestError(Exception):
@@ -73,6 +76,10 @@ class HealthCheckTimeoutError(SITLTestError):
 
 class CouldNotArmError(SITLTestError):
     """Raised when the health checks time out"""
+
+
+class MissionUploadTimeoutError(SITLTestError):
+    """Raised when the mission upload times out"""
 
 
 class ROSContext:
@@ -148,6 +155,28 @@ async def connect_mavlink(drone):
         if state.is_connected:
             logger.info("Connection successful.")
             break
+
+
+async def upload_mission(drone, mission_items):
+    """Connects to drone via MAVLink"""
+    logger.info(
+        f"Uploading mission (timeout {SimConfig.MISSION_UPLOAD_TIMEOUT_SEC} " f"sec)..."
+    )
+    while True:
+        try:
+            await drone.mission_raw.upload_mission(mission_items)
+            break
+            # TODO: confirm result is success
+            # if result is mavsdk.mission_raw.MissionRawResult.Result.SUCCESS:
+            #    break
+        except mavsdk.mission_raw.MissionRawError as e:
+            # TODO: handle this better
+            try_again_sec = 30
+            logger.info(
+                f"Mission upload result: {e}, trying again in {try_again_sec} "
+                f"seconds..."
+            )
+            await asyncio.sleep(try_again_sec)
 
 
 async def check_health(drone):

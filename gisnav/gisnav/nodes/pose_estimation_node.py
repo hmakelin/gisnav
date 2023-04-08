@@ -16,7 +16,7 @@ from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
 
-from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from ..assertions import assert_ndim, assert_shape, assert_type
 from ..data import (

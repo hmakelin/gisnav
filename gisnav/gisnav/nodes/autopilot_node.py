@@ -319,31 +319,34 @@ class AutopilotNode(BaseNode):
             vehicle body
         """
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
+        if self.vehicle_geopose is None:
+            self.get_logger().debug(
+                "Vehicle geopose unknown. Cannot determine gimbal attitude."
+            )
+            return None
 
         if self._gimbal_device_attitude_status is None:
-            if self.vehicle_geopose is not None:
-                # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
-                roll = 0
-                pitch = -85  # do not make it -90 to avoid gimbal lock
-                yaw = 0
-                nadir_facing_rotation = Rotation.from_euler(
-                    "xyz", [roll, pitch, yaw], degrees=True
-                )
-                nadir_facing_quaternion = nadir_facing_rotation.as_quat()
-                nadir_facing_quaternion = Quaternion(
-                    x=nadir_facing_quaternion[0],
-                    y=nadir_facing_quaternion[1],
-                    z=nadir_facing_quaternion[2],
-                    w=nadir_facing_quaternion[3],
-                )
-                gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
-                gimbal_device_attitude_status.q = nadir_facing_quaternion
-            else:
-                return None
+            # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
+            roll = 0
+            pitch = -85  # do not make it -90 to avoid gimbal lock
+            yaw = 0
+            nadir_facing_rotation = Rotation.from_euler(
+                "xyz", [roll, pitch, yaw], degrees=True
+            )
+            nadir_facing_quaternion = nadir_facing_rotation.as_quat()
+            nadir_facing_quaternion = Quaternion(
+                x=nadir_facing_quaternion[0],
+                y=nadir_facing_quaternion[1],
+                z=nadir_facing_quaternion[2],
+                w=nadir_facing_quaternion[3],
+            )
+            gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
+            gimbal_device_attitude_status.q = nadir_facing_quaternion
         else:
             gimbal_device_attitude_status = self._gimbal_device_attitude_status
 
         assert gimbal_device_attitude_status is not None
+        assert self.vehicle_geopose is not None
         roll, pitch, yaw = self._euler_from_quaternion(gimbal_device_attitude_status.q)
         self.get_logger().debug(
             "Gimbal device set attitude FRD Euler angles "

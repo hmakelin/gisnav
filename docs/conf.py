@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath("../gisnav"))
 
 # -- Version information -----------------------------------------------------
 
-package_data = PackageData.parse_package_data(os.path.abspath("../package.xml"))
+package_data = PackageData.parse_package_data(os.path.abspath("../gisnav/package.xml"))
 
 # -- Project information -----------------------------------------------------
 

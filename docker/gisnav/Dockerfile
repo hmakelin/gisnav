@@ -1,6 +1,6 @@
 FROM ros:foxy
 
-RUN apt-get update --fix-missing && \
+RUN apt-get update && \
     apt-get -y dist-upgrade
 
 COPY . /opt/colcon_ws/src/gisnav/
@@ -30,9 +30,13 @@ RUN apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
     wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
     bash install_geographiclib_datasets.sh
 
-# Custom ROS messages
+# Custom ROS messages (px4_msgs and mavros mavlink gimbal protocl v2 support)
 RUN cd /opt/colcon_ws/src/ && \
-    git clone https://github.com/px4/px4_msgs.git
+    git clone https://github.com/px4/px4_msgs.git && \
+    git clone --branch gimbal-protocol-v2-plugin \
+      https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
+    sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g'  \
+      mavros/mavros_extras/src/plugins/gimbal_control.cpp
 
 # Build
 SHELL ["/bin/bash", "-c"]
@@ -47,4 +51,4 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/colcon_ws/src/gisnav/gisnav
-ENTRYPOINT ["docker/gisnav/entrypoint.sh"]
+ENTRYPOINT ["../docker/gisnav/entrypoint.sh"]

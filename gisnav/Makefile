@@ -16,8 +16,3 @@ test-launch:
 test-static:
 	@pre-commit run --all-files
 # test end
-
-.PHONY: docs
-docs:
-	@$(MAKE) -C docs html
-	@cd docs/_build/html && touch .nojekyll  # for GitHub Pages

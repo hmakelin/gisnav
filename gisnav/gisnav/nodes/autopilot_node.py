@@ -321,7 +321,7 @@ class AutopilotNode(BaseNode):
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         if self.vehicle_geopose is None:
             self.get_logger().debug(
-                "Vehicle geopose unknown. Cannot " "determine gimbal attitude."
+                "Vehicle geopose unknown. Cannot determine gimbal attitude."
             )
             return None
 

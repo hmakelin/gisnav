@@ -17,7 +17,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
-from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
 @pytest.mark.launch_test

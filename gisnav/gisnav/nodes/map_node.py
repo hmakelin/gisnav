@@ -17,7 +17,7 @@ from sensor_msgs.msg import Image
 from shapely.geometry import box
 from std_msgs.msg import Float32
 
-from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from ..assertions import assert_len, assert_type
 from ..data import BBox, Img, MapData

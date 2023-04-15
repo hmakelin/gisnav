@@ -59,6 +59,10 @@ over MAVROS"""
 ROS_TOPIC_SENSOR_GPS = "/fmu/in/sensor_gps"
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
 over PX4 microRTPS bridge"""
+
+ROS_TOPIC_HIL_GPS = "/mavros/hil/gps"
+"""Name of ROS topic for outgoing :class:`mavros_msgs.msg.HilGPS` messages
+over MAVROS"""
 # endregion ROS topic names
 
 

@@ -17,3 +17,5 @@ gps-time
 
 # MAVROS WGS84 ellipsoid to AMSL altitude conversion
 pygeodesy
+
+pymavlink

@@ -22,18 +22,6 @@ services:
     network_mode: host
     command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
-  micro-ros-agent:
-    build:
-      context: micro-ros-agent
-      dockerfile: Dockerfile
-    network_mode: host
-    environment:
-      - ROS_DOMAIN_ID=0
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
-    volumes:
-      - /dev/shm:/dev/shm
-    command: udp4 -p 8888
-
   mavros:
     build:
       context: mavros
@@ -44,7 +32,10 @@ services:
     network_mode: host
     volumes:
       - /dev/shm:/dev/shm
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://localhost:14540@14550
+    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
+    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 --param gcs_url:=udp://:14550@localhost:14555
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 #--param gcs_url:=udp://:14550@localhost:14550
+    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 --param gcs_url:=udp://@localhost
 
   qgc:
     build:

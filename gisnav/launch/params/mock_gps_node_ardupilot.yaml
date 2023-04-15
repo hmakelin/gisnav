@@ -1,3 +1,4 @@
 mock_gps_node:
   ros__parameters:
     px4_micrortps: False  # Set to False for ArduPilot MAVROS
+    udp_port: 25100

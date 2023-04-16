@@ -32,10 +32,7 @@ services:
     network_mode: host
     volumes:
       - /dev/shm:/dev/shm
-    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
-    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 --param gcs_url:=udp://:14550@localhost:14555
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 #--param gcs_url:=udp://:14550@localhost:14550
-    #command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557 --param gcs_url:=udp://@localhost
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
     build:

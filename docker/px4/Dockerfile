@@ -21,7 +21,6 @@ RUN pip install lxml && \
 
 # Make initial PX4 build (for faster startup in the future)
 RUN cd PX4-Autopilot && \
-    mv -f /mavlink_receiver.cpp src/modules/mavlink/mavlink_receiver.cpp && \
     DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
 # Apply configuration files

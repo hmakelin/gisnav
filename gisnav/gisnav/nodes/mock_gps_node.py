@@ -1,13 +1,11 @@
 """Publishes mock GPS (GNSS) messages"""
-from typing import Optional
-#import socket
-import json
+from datetime import datetime
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
+from gps_time import GPSTime
 from mavros_msgs.msg import Altitude, HilGPS
 from rclpy.qos import QoSPresetProfiles
-from pymavlink import mavutil
 
 from gisnav.data import Attitude
 from gisnav.nodes.base.base_node import BaseNode
@@ -19,7 +17,7 @@ class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_USE_HIL_GPS = True
-    """Set to False to use GPSINPUT message for ArduPilot MAVROS, 
+    """Set to False to use GPSINPUT message for ArduPilot MAVROS,
     HIL_GPS otherwise (PX4)"""
 
     ROS_PARAM_DEFAULTS = [
@@ -35,12 +33,11 @@ class MockGPSNode(BaseNode):
         super().__init__(name)
         self._hil_gps = self.get_parameter("hil_gps").get_parameter_value().bool_value
 
-        #self._mock_gps_pub = self.create_publisher(
-        #    HilGPS, messaging.ROS_TOPIC_HIL_GPS, QoSPresetProfiles.SENSOR_DATA.value
-        #)
+        # Must match QoS settings with mavros HIL GPS plugin
         self._mock_gps_pub = self.create_publisher(
             HilGPS, messaging.ROS_TOPIC_HIL_GPS, 10
         )
+
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,
             messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
@@ -85,13 +82,14 @@ class MockGPSNode(BaseNode):
 
         :param msg: MAVLink HilGPS message
         """
+        if self._geopose_estimate is None or self._altitude_estimate is None:
+            return None
+
         if self._hil_gps:
-            if self._geopose_estimate is not None and self._altitude_estimate is not None:
-                geopose = self._geopose_estimate.pose
-                header = self._geopose_estimate.header
-                alt_amsl = self._altitude_estimate.amsl
-            else:
-                return None
+            geopose = self._geopose_estimate.pose
+            header = self._geopose_estimate.header
+            alt_amsl = self._altitude_estimate.amsl
+
             # alt_ellipsoid = msg.pose.position.altitude  # TODO: make this right
 
             # TODO check yaw sign (NED or ENU?)
@@ -111,7 +109,7 @@ class MockGPSNode(BaseNode):
                 ve=0,
                 vd=0,
                 cog=np.iinfo(np.uint16).max,
-                satellites_visible=8  # TODO np.iinfo(np.uint8).max,
+                satellites_visible=8,  # TODO np.iinfo(np.uint8).max,
             )
             # id = 0,  # TODO: make id configurable
             # yaw = yaw
@@ -119,6 +117,16 @@ class MockGPSNode(BaseNode):
 
             self._mock_gps_pub.publish(msg)
         else:
+            lat, lon = (
+                self._geopose_estimate.pose.position.latitude,
+                self._geopose_estimate.pose.position.longitude,
+            )
+            altitude_amsl = self._altitude_estimate.amsl
+            self._geopose_estimate.pose.position.altitude
+            q = messaging.as_np_quaternion(self._geopose_estimate.pose.orientation)
+            heading = Attitude(q=q).yaw
+            timestamp = messaging.usec_from_header(self._geopose_estimate.header)
+
             msg = {}
 
             # Adjust UTC epoch timestamp for estimation delay
@@ -127,7 +135,9 @@ class MockGPSNode(BaseNode):
             msg["gps_id"] = 0
             msg["ignore_flags"] = 56  # vel_horiz + vel_vert + speed_accuracy
 
-            gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(msg["usec"] / 1e6))
+            gps_time = GPSTime.from_datetime(
+                datetime.utcfromtimestamp(msg["usec"] / 1e6)
+            )
             msg["time_week"] = gps_time.week_number
             msg["time_week_ms"] = int(
                 gps_time.time_of_week * 1e3

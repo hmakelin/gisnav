@@ -18,20 +18,11 @@ from . import messaging
 class MockGPSNode(BaseNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
-    ROS_D_UDP_HOST = "127.0.0.1"
-    """MAVProxy GPSInput plugin default host"""
-
-    ROS_D_UDP_PORT = 14550  #25100
-    """MAVLink HilGPS (PX4) or GPSInput (ArduPilot) plugin default port"""
-
-    """MAVProxy GPSInput plugin default port"""
     ROS_D_USE_HIL_GPS = True
     """Set to False to use GPSINPUT message for ArduPilot MAVROS, 
     HIL_GPS otherwise (PX4)"""
 
     ROS_PARAM_DEFAULTS = [
-        ("udp_host", ROS_D_UDP_HOST, True),
-        ("udp_port", ROS_D_UDP_PORT, True),
         ("hil_gps", ROS_D_USE_HIL_GPS, True),
     ]
     """List containing ROS parameter name, default value and read_only flag tuples"""
@@ -42,21 +33,14 @@ class MockGPSNode(BaseNode):
         :param name: Node name
         """
         super().__init__(name)
-        self._udp_host = self.get_parameter("udp_host").get_parameter_value().string_value
-        self._udp_port = (
-            self.get_parameter("udp_port").get_parameter_value().integer_value
-        )
-        #self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._hil_gps = self.get_parameter("hil_gps").get_parameter_value().bool_value
-        self._mav = mavutil.mavlink_connection(
-            f"udpout:{self._udp_host}:{self._udp_port}",
-            source_system=1,
-            source_component=mavutil.mavlink.MAV_COMP_ID_GPS,
-        )
 
         #self._mock_gps_pub = self.create_publisher(
         #    HilGPS, messaging.ROS_TOPIC_HIL_GPS, QoSPresetProfiles.SENSOR_DATA.value
         #)
+        self._mock_gps_pub = self.create_publisher(
+            HilGPS, messaging.ROS_TOPIC_HIL_GPS, 10
+        )
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,
             messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
@@ -91,35 +75,6 @@ class MockGPSNode(BaseNode):
         :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
         """
         self._altitude_estimate = msg
-
-    #@staticmethod
-    #def _hil_gps_msg_to_mavlink_dict(hil_gps_msg: HilGPS) -> dict:
-    #    """Converts a MAVROS HilGPS message to a Python dictionary representing
-    #    the underlying MAVLink HIL_GPS message.
-    #
-    #    .. note::
-    #        Used for now because for some reason the MAVROS hil gps callback
-    #        is not triggering for the outgoing messages.
-    #
-    #    :param hil_gps_msg: MAVROS HilGPS message
-    #    :return: Python dictionary representing the MAVLink HIL_GPS message
-    #    """
-    #    mavlink_hil_gps_dict = {
-    #        "time_usec": hil_gps_msg.header.stamp.nanosec // 1000,
-    #        "fix_type": hil_gps_msg.fix_type,
-    #        "lat": int(hil_gps_msg.geo.latitude * 1e7),
-    #        "lon": int(hil_gps_msg.geo.longitude * 1e7),
-    #        "alt": int(hil_gps_msg.geo.altitude * 1e3),
-    #        "eph": hil_gps_msg.eph,
-    #        "epv": hil_gps_msg.epv,
-    #        "vel": hil_gps_msg.vel,
-    #        "vn": hil_gps_msg.vn,
-    #        "ve": hil_gps_msg.ve,
-    #        "vd": hil_gps_msg.vd,
-    #        "cog": hil_gps_msg.cog,
-    #        "satellites_visible": hil_gps_msg.satellites_visible,
-    #    }
-    #    return mavlink_hil_gps_dict
 
     def _send_mavlink_message(self) -> None:
         """Sends a MAVLink HIL_GPS or GPSINPUT message over UDP socket
@@ -162,21 +117,7 @@ class MockGPSNode(BaseNode):
             # yaw = yaw
             msg.geo.altitude = alt_amsl
 
-            self._mav.mav.hil_gps_send(
-                msg.header.stamp.nanosec,
-                msg.fix_type,
-                int(msg.geo.latitude * 1e7),
-                int(msg.geo.longitude * 1e7),
-                int(msg.geo.altitude * 1e3),
-                msg.eph,
-                msg.epv,
-                msg.vel,
-                msg.vn,
-                msg.ve,
-                msg.vd,
-                np.iinfo(np.uint16).max,
-                msg.satellites_visible,
-            )
+            self._mock_gps_pub.publish(msg)
         else:
             msg = {}
 

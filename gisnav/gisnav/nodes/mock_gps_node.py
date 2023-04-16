@@ -4,7 +4,7 @@ from datetime import datetime
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
-from mavros_msgs.msg import Altitude, HilGPS
+from mavros_msgs.msg import GPSINPUT, Altitude, HilGPS
 from rclpy.qos import QoSPresetProfiles
 
 from gisnav.data import Attitude
@@ -34,9 +34,14 @@ class MockGPSNode(BaseNode):
         self._hil_gps = self.get_parameter("hil_gps").get_parameter_value().bool_value
 
         # Must match QoS settings with mavros HIL GPS plugin
-        self._mock_gps_pub = self.create_publisher(
-            HilGPS, messaging.ROS_TOPIC_HIL_GPS, 10
-        )
+        if self._hil_gps:
+            self._mock_gps_pub = self.create_publisher(
+                HilGPS, messaging.ROS_TOPIC_HIL_GPS, 10
+            )
+        else:
+            self._mock_gps_pub = self.create_publisher(
+                GPSINPUT, messaging.ROS_TOPIC_GPS_INPUT, 10
+            )
 
         self._vehicle_geopose_estimate_sub = self.create_subscription(
             GeoPoseStamped,

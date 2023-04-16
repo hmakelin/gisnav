@@ -12,7 +12,7 @@ from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from mavros_msgs.msg import GPSINPUT, Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
@@ -63,7 +63,7 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
-        # ('/mavros/gps_input/gps_input', GPSINPUT)  # uses UDP socket instead
+        ("/mavros/gps_input/gps_input", GPSINPUT),  # uses UDP socket instead
     ]
     """List of autopilot topic names and types"""
 

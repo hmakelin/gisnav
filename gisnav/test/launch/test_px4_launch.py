@@ -12,8 +12,7 @@ from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from px4_msgs.msg import SensorGps
+from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HilGPS, HomePosition
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
@@ -64,7 +63,7 @@ class TestPX4Launch(unittest.TestCase):
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
-        ("/fmu/in/sensor_gps", SensorGps),
+        ("/mavros/hil/gps", HilGPS),
     ]
     """List of autopilot topic names and types"""
 

@@ -33,14 +33,15 @@ class MockGPSNode(BaseNode):
         super().__init__(name)
         self._hil_gps = self.get_parameter("hil_gps").get_parameter_value().bool_value
 
-        # Must match QoS settings with mavros HIL GPS plugin
         if self._hil_gps:
+            # Must match QoS settings with mavros hil plugin
             self._mock_gps_pub = self.create_publisher(
                 HilGPS, messaging.ROS_TOPIC_HIL_GPS, 10
             )
         else:
+            # match QoS settings with mavros gps_input plugin
             self._mock_gps_pub = self.create_publisher(
-                GPSINPUT, messaging.ROS_TOPIC_GPS_INPUT, 10
+                GPSINPUT, messaging.ROS_TOPIC_GPS_INPUT, 1
             )
 
         self._vehicle_geopose_estimate_sub = self.create_subscription(
@@ -114,7 +115,7 @@ class MockGPSNode(BaseNode):
                 ve=0,
                 vd=0,
                 cog=np.iinfo(np.uint16).max,
-                satellites_visible=8,  # TODO np.iinfo(np.uint8).max,
+                satellites_visible=np.iinfo(np.uint8).max,
             )
             # id = 0,  # TODO: make id configurable
             # yaw = yaw
@@ -131,39 +132,30 @@ class MockGPSNode(BaseNode):
             q = messaging.as_np_quaternion(self._geopose_estimate.pose.orientation)
             heading = Attitude(q=q).yaw
             timestamp = messaging.usec_from_header(self._geopose_estimate.header)
-
-            msg = {}
-
-            # Adjust UTC epoch timestamp for estimation delay
-            # int(time.time_ns() / 1e3) - (self._bridge.synchronized_time - timestamp)
-            msg["usec"] = timestamp
-            msg["gps_id"] = 0
-            msg["ignore_flags"] = 56  # vel_horiz + vel_vert + speed_accuracy
-
-            gps_time = GPSTime.from_datetime(
-                datetime.utcfromtimestamp(msg["usec"] / 1e6)
-            )
-            msg["time_week"] = gps_time.week_number
-            msg["time_week_ms"] = int(
-                gps_time.time_of_week * 1e3
-            )  # TODO this implementation accurate only up to 1 second
-            msg["fix_type"] = 3  # 3D position
-            msg["lat"] = int(lat * 1e7)
-            msg["lon"] = int(lon * 1e7)
-            msg["alt"] = altitude_amsl  # ArduPilot Gazebo SITL expects AMSL
-            msg["horiz_accuracy"] = 10.0
-            msg["vert_accuracy"] = 3.0
-            msg["speed_accuracy"] = np.nan  # should be in ignore_flags
-            msg["hdop"] = 0.0
-            msg["vdop"] = 0.0
-            msg["vn"] = np.nan  # should be in ignore_flags
-            msg["ve"] = np.nan  # should be in ignore_flags
-            msg["vd"] = np.nan  # should be in ignore_flags
-            msg["satellites_visible"] = np.iinfo(np.uint8).max
-
-            # TODO check yaw sign (NED or ENU?)
+            gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
             yaw = int(np.degrees(heading % (2 * np.pi)) * 100)
             yaw = 36000 if yaw == 0 else yaw  # MAVLink definition 0 := not available
-            msg["yaw"] = yaw
 
-            # todo: send gpsinput
+            msg = GPSINPUT(
+                header=self._geopose_estimate.header,
+                fix_type=3,
+                gps_id=0,
+                ignore_flags=56,  # vel_horiz + vel_vert + speed_accuracy
+                time_week_ms=int(gps_time.time_of_week * 1e3),  # accurate up to 1 sec
+                time_week=gps_time.week_number,
+                lat=int(lat * 1e7),
+                lon=int(lon * 1e7),
+                alt=altitude_amsl,
+                horiz_accuracy=10.0,
+                vert_accuracy=3.0,
+                speed_accuracy=np.nan,
+                hdop=0.0,
+                vdop=0.0,
+                vn=np.nan,
+                ve=np.nan,
+                vd=np.nan,
+                satellites_visible=np.iinfo(np.uint8).max,
+                yaw=yaw,
+            )
+
+            self._mock_gps_pub.publish(msg)

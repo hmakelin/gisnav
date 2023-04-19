@@ -15,14 +15,14 @@ GPS demo, use the command:
 
 
 Generally, the ``Makefile`` targets follow the
-``<up/down>-<companion/offboard>-<sitl/hil>-<middleware/test/dev>-<px4/ardupilot>``
-scheme, with the ``<middleware/test/dev>`` options being optional:
+``<build>-<onboard/offboard>-<sitl/hil>-<middleware/test/dev>-<px4/ardupilot>``
+scheme, with the ``<build>`` and ``<middleware/test/dev>`` options being optional:
 
 .. code-block:: bash
     :caption: Run a generic GISNav deployment
 
     cd ~/colcon_ws/src/gisnav
-    make -C docker <up/down>-<companion/offboard>-<sitl/hil>-<middleware/dev/test/...>-<px4/ardupilot>
+    make -C docker <build>-<onboard/offboard>-<sitl/hil>-<middleware/dev/test/...>-<px4/ardupilot>
 
 .. warning::
     If your offboard computer (not onboard companion computer like Jetson Nano) is based on ``arm64``, the ``Makefile``
@@ -35,7 +35,7 @@ and the autopilot can be simulated ``onboard`` or ``offboard`` for ``hil`` or
 
 A jargon list explaining each term is provided below.
 
-- ``Onboard``: Refers to anything carried by the drone that would draw power from the drone battery, including the Flight Management Unit (FMU) and the onboard companion computer (e.g., Nvidia Jetson Nano).
+- ``Onboard``: Refers to anything carried by the drone that would draw power from the drone battery, including the Flight Management Unit (FMU) and the onboard companion computer (e.g., Nvidia Jetson Nano). Synonym for companion for the targets in the ``Makefile``.
 - ``Offboard``: Refers to any computer (e.g., a more powerful desktop) that is not carried by the drone and does not draw power from the drone battery.
 - ``FMU``: Flight Management Unit, the onboard flight controller computer board (e.g., Pixhawk).
 - ``Companion``: Refers to the onboard companion computer that is separate from the FMU (e.g., Nvidia Jetson Nano).
@@ -45,5 +45,4 @@ A jargon list explaining each term is provided below.
 - ``Middleware``: Software that sits between the autopilot and GISNav. In HIL, this runs on the same companion as GISNav, although it is not strictly necessary if there are multiple companions.
 - ``Test``: Services that are used to support automated testing.
 - ``Dev``: Services that are used to support development.
-- ``Up``: Targets that spin up Docker Compose services.
-- ``Build``: Targets that build Docker Compose services.
+- ``Build``: Targets that only build Docker Compose services instead of spinning them up.

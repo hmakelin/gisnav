@@ -32,7 +32,7 @@ make -C gisnav/docker build-demo-px4
 
 Run GISNav along with supporting services:
 ```bash
-make -C docker demo
+make -C gisnav/docker demo
 ```
 
 > **Note**

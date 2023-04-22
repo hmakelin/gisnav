@@ -19,9 +19,6 @@ COPY * /
 RUN pip install lxml && \
     python3 merge_xml.py ros_camera.xml PX4-Autopilot/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/typhoon_h480/typhoon_h480.sdf.jinja
 
-# Configure XRCE-DDS bridge
-RUN python3 merge_yaml.py dds_topics.yaml PX4-Autopilot/src/modules/microdds_client/dds_topics.yaml
-
 # Make initial PX4 build (for faster startup in the future)
 RUN cd PX4-Autopilot && \
     DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport

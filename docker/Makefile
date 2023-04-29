@@ -14,7 +14,8 @@
 #		drone and not powered by the drone battery (e.g., a powerful desktop).
 #   - Onboard: Refers to services that run on the drone itself, powered by the
 #		drone's battery, like the FMU and onboard companion computer (e.g.,
-#  		Nvidia Jetson Nano).
+#  		Nvidia Jetson Nano). In the case of GISNav, all onboard services are
+#		intended to run on the companion computer and not e.g. on the FMU.
 #   - Middleware: Software that sits between the autopilot and GISNav, enabling
 #		communication between them.
 #   - QGC: QGroundControl, a ground control station software used to monitor

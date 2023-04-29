@@ -80,6 +80,24 @@ class RVizPublisherNode(BaseNode):
         pose_stamped.pose.position.z = z
         pose_stamped.pose.orientation = geopose_stamped.pose.orientation
 
-        self._pose_stamped_queue.append(pose_stamped)
+        # Update visualization if some time has passed, but not too soon. This
+        # is mainly to prevent the Paths being much shorter in time for nodes
+        # that would otherwise publish at much higher frequency (e.g. actual
+        # GPS at 10 Hz vs GISNav mock GPS at 1 Hz)
+        if len(self._pose_stamped_queue) > 0:
+            if (
+                pose_stamped.header.stamp.sec
+                - self._pose_stamped_queue[-1].header.stamp.sec
+                > 1.0
+            ):
+                self._pose_stamped_queue.append(pose_stamped)
+            else:
+                # Observation is too recent, return
+                return
+        else:
+            # Queue is empty
+            self._pose_stamped_queue.append(pose_stamped)
+
+        assert len(self._pose_stamped_queue) > 0
         self._publish_path()
         self._pose_stamped_publisher.publish(pose_stamped)

@@ -22,6 +22,18 @@ services:
     network_mode: host
     command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
+  micro-ros-agent:
+    build:
+      context: micro-ros-agent
+      dockerfile: Dockerfile
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=0
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    volumes:
+      - /dev/shm:/dev/shm
+    command: udp4 -p 8888
+
   mavros:
     build:
       context: mavros
@@ -130,3 +142,26 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+
+  # Note: build context is repository root
+  rviz:
+    build:
+      context: rviz
+      dockerfile: Dockerfile
+    env_file:
+      - env/x11.env
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    volumes:
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    command: rviz2 -d gisnav_config.rviz

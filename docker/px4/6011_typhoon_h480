@@ -10,7 +10,5 @@ param set-default EKF2_GPS_V_NOISE 3
 param set-default SENS_GPS_MASK 4
 param set-default EKF2_REQ_EPH 10.0
 
-param set-default MAV_USEHILGPS 1
-
 #param set-default EKF2_GPS_CTRL 3
 #param set-default EKF2_GPS_CHECK 12

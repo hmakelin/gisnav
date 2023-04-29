@@ -14,7 +14,9 @@ The ``docker-compose.yaml`` file defines the following services:
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``px4``             | PX4 Gazebo SITL simulation. Starts `typhoon_h480` model at the KSQL Airport.                  |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mavros``          | MAVROS. Used as autopilot middleware.                                                         |
+| ``mavros``          | MAVROS. Used as autopilot middleware (both PX4 and ArduPilot).                                |
++---------------------+-----------------------------------------------------------------------------------------------+
+| ``micro-ros-agent`` | Micro-ROS agent. Used for PX4 SITL for outgoing SensorGps messages.                           |
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``qgc``             | QGroundControl ground control software for controlling simulated drones.                      |
 +---------------------+-----------------------------------------------------------------------------------------------+

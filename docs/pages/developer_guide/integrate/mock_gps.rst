@@ -1,11 +1,14 @@
 Mock GPS messages
 ===================================================
-:class:`.MockGPSNode` uses the :class:`mavros_msgs.msg.GPSINPUT` (ArduPilot)* message from the received
-:class:`geographic_msgs.msg.GeoPoseStamped` and :class:`mavros_msgs.msg.Altitude` messages.
+:class:`.MockGPSNode` creates :class:`mavros_msgs.msg.GPSINPUT` (ArduPilot)*
+and :class:`px4_msgs.msg.SensorGps` (ArduPilot)* message from the received
+:class:`geographic_msgs.msg.GeoPoseStamped` and
+:class:`mavros_msgs.msg.Altitude` messages.
 
 .. note::
-    \* Currently :class:`.MockGPSNode` does not use the MAVROS GPS_INPUT plugin to publish a
-    :class:`mavros_msgs.msg.GPSINPUT` message and publishes the `MAVLink GPS_INPUT`_ message directly over UDP instead
+    \* Currently :class:`.MockGPSNode` does not use the MAVROS GPS_INPUT plugin
+    to publish a :class:`mavros_msgs.msg.GPSINPUT` message and publishes the
+    `MAVLink GPS_INPUT`_ message directly over UDP instead.
 
     .. _MAVLink GPS_INPUT: https://mavlink.io/en/messages/common.html#GPS_INPUT
 

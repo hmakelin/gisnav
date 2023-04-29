@@ -12,7 +12,8 @@ from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
-from mavros_msgs.msg import GPSINPUT, Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from nav_msgs.msg import Path
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
@@ -49,6 +50,10 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("/gisnav/terrain_altitude", Altitude),
         ("/gisnav/terrain_geopoint", GeoPointStamped),
         ("/gisnav/egm96_height", Float32),
+        ("/autopilot_node/pose_stamped", PoseStamped),
+        ("/autopilot_node/path", Path),
+        ("/mock_gps_node/pose_stamped", PoseStamped),
+        ("/mock_gps_node/path", Path),
     ]
     """List of GISNav internal topic names and types"""
 
@@ -63,7 +68,6 @@ class TestArduPilotLaunch(unittest.TestCase):
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
-        ("/mavros/gps_input/gps_input", GPSINPUT),  # uses UDP socket instead
     ]
     """List of autopilot topic names and types"""
 
@@ -172,7 +176,7 @@ class TestArduPilotLaunch(unittest.TestCase):
 
         assert set(names).issubset(
             found_names
-        ), f"Not all topics ({names}) were discovered ({found_names})."
+        ), f"Not all topics were discovered ({set(names).difference(found_names)})."
         for name, type_ in self.TOPIC_NAMES_AND_TYPES:
             types = dict(found_names_and_types).get(name)
             assert types is not None

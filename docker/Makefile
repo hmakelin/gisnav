@@ -51,17 +51,17 @@ build-offboard-sitl-test-%: build-offboard-sitl-middleware-%
 # sitl development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, but excluding GISNav
 . PHONY: $(addprefix offboard-sitl-dev-, $(AUTOPILOTS))
 offboard-sitl-dev-%: offboard-sitl-middleware-%
-	@docker compose up -d $* torch-serve mapserver qgc
+	@docker compose up -d $* torch-serve mapserver qgc rviz
 
 . PHONY: $(addprefix build-offboard-sitl-dev-, $(AUTOPILOTS))
 build-offboard-sitl-dev-%: build-offboard-sitl-middleware-%
-	@docker compose build $* torch-serve mapserver qgc
+	@docker compose build $* torch-serve mapserver qgc rviz
 
 # offboard sitl middleware
 . PHONY: $(addprefix offboard-sitl-middleware-, $(AUTOPILOTS))
 offboard-sitl-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose up -d mavros; \
+		docker compose up -d micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml up -d mavros; \
 	else \
@@ -71,7 +71,7 @@ offboard-sitl-middleware-%:
 . PHONY: $(addprefix build-offboard-sitl-middleware-, $(AUTOPILOTS))
 build-offboard-sitl-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose build mavros; \
+		docker compose build micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml build mavros; \
 	else \
@@ -83,7 +83,7 @@ build-offboard-sitl-middleware-%:
 . PHONY: $(addprefix onboard-hil-middleware-, $(AUTOPILOTS))
 onboard-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
 	else \
@@ -94,7 +94,7 @@ onboard-hil-middleware-%:
 . PHONY: $(addprefix build-onboard-hil-middleware-, $(AUTOPILOTS))
 build-onboard-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
 	else \

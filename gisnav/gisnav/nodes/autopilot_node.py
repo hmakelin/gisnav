@@ -12,13 +12,13 @@ from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32
 
 from . import messaging
-from .base.base_node import BaseNode
+from .base.rviz_publisher_node import RVizPublisherNode
 
 
-class AutopilotNode(BaseNode):
+class AutopilotNode(RVizPublisherNode):
     """ROS 2 node that acts as an adapter for MAVROS"""
 
-    ROS_PARAM_DEFAULTS = []
+    ROS_PARAM_DEFAULTS: list = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
     def __init__(self, name: str) -> None:
@@ -100,6 +100,22 @@ class AutopilotNode(BaseNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
+    @staticmethod
+    def _navsatfix_to_geoposestamped(msg: NavSatFix) -> GeoPoseStamped:
+        # Publish to rviz2 for debugging
+        geopose_stamped = GeoPoseStamped()
+        geopose_stamped.header.stamp = msg.header.stamp
+        geopose_stamped.header.frame_id = "map"
+
+        geopose_stamped.pose.position.longitude = msg.longitude
+        geopose_stamped.pose.position.latitude = msg.latitude
+        geopose_stamped.pose.position.altitude = msg.altitude
+
+        # No orientation information in NavSatFix
+        geopose_stamped.pose.orientation.w = 1.0
+
+        return geopose_stamped
+
     # region ROS subscriber callbacks
     def _vehicle_nav_sat_fix_callback(self, msg: NavSatFix) -> None:
         """Handles latest :class:`mavros_msgs.msg.NavSatFix` message
@@ -115,6 +131,14 @@ class AutopilotNode(BaseNode):
         self.publish_vehicle_altitude()
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.publish_gimbal_quaternion()
+
+        if (
+            self.vehicle_altitude is not None
+            and self.vehicle_altitude.terrain is not np.nan
+        ):
+            # publish to RViz for debugging and visualization
+            geopose_stamped = self._navsatfix_to_geoposestamped(msg)
+            self.publish_rviz(geopose_stamped, self.vehicle_altitude.terrain)
 
     def _vehicle_pose_stamped_callback(self, msg: PoseStamped) -> None:
         """Handles latest :class:`mavros_msgs.msg.PoseStamped` message
@@ -246,6 +270,10 @@ class AutopilotNode(BaseNode):
             return altitude
         else:
             self.get_logger().warn(
+                "NavSatFix and/or terrain Altitude and/or EGM 96 height "
+                "message not yet received, cannot determine vehicle altitude."
+            )
+            self.get_logger().debug(
                 f"NavSatFix {self._vehicle_nav_sat_fix} and/or terrain Altitude "
                 f"{self.terrain_altitude} and/or EGM 96 height {self.egm96_height } "
                 f"message not yet received, cannot determine vehicle altitude."

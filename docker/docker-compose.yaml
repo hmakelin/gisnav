@@ -144,9 +144,9 @@ services:
               capabilities: [ gpu ]
 
   # Note: build context is repository root
-  rviz2:
+  rviz:
     build:
-      context: rviz2
+      context: rviz
       dockerfile: Dockerfile
     env_file:
       - env/x11.env

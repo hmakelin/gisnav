@@ -52,21 +52,6 @@ ROS_TOPIC_EGM96_HEIGHT = "gisnav/egm96_height"
 """ROS publish topic for EGM96 ellipsoid height :class:`std_msgs.msg.Float32`
 message"""
 
-ROS_TOPIC_POSE_STAMPED = "gisnav/pose_stamped"
-"""Name of ROS topic for outgoing :class:`geometry_msgs.msg.PoseStamped`
-messages"""
-
-ROS_TOPIC_PATH = "gisnav/path"
-"""Name of ROS topic for outgoing :class:`nav_msgs.msg.Path` messages"""
-
-ROS_TOPIC_POSE_STAMPED_AP = "gisnav/autopilot/pose_stamped"
-"""Name of ROS topic for outgoing :class:`geometry_msgs.msg.PoseStamped`
-messages for autopilot node"""
-
-ROS_TOPIC_PATH_AP = "gisnav/autopilot/path"
-"""Name of ROS topic for outgoing :class:`nav_msgs.msg.Path` messages for
-autopilot node.´"""
-
 ROS_TOPIC_GPS_INPUT = "/mavros/gps_input/gps_input"
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages
 over MAVROS"""

@@ -1,26 +1,24 @@
 """Module that contains the autopilot middleware (MAVROS) adapter ROS 2 node."""
 import math
-from collections import deque
 from typing import Optional
 
 import numpy as np
 from geographic_msgs.msg import GeoPoint, GeoPointStamped, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from nav_msgs.msg import Path
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32
 
 from . import messaging
-from .base.base_node import BaseNode
+from .base.rviz_publisher_node import RVizPublisherNode
 
 
-class AutopilotNode(BaseNode):
+class AutopilotNode(RVizPublisherNode):
     """ROS 2 node that acts as an adapter for MAVROS"""
 
-    ROS_PARAM_DEFAULTS = []
+    ROS_PARAM_DEFAULTS: list = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
     def __init__(self, name: str) -> None:
@@ -102,26 +100,21 @@ class AutopilotNode(BaseNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
-        # GPS path for rviz2 visualization and debugging
-        self._pose_stamped_publisher = self.create_publisher(
-            PoseStamped,
-            messaging.ROS_TOPIC_POSE_STAMPED_AP,
-            QoSPresetProfiles.SYSTEM_DEFAULT.value,
-        )
-        self._path_publisher = self.create_publisher(
-            Path,
-            messaging.ROS_TOPIC_PATH_AP,
-            QoSPresetProfiles.SYSTEM_DEFAULT.value,
-        )
-        self._nav_msgs: deque = deque(maxlen=100)
+    @staticmethod
+    def _navsatfix_to_posestamped(msg: NavSatFix):
+        # Publish to rviz2 for debugging
+        pose_stamped = PoseStamped()
+        pose_stamped.header.stamp = msg.header.stamp
+        pose_stamped.header.frame_id = "map"
 
-    def _publish_path(self):
-        """Publishes :class:`nav_msgs.msg.Path` for debugging and visualization"""
-        path = Path()
-        path.header.stamp = self.get_clock().now().to_msg()
-        path.header.frame_id = "map"
-        path.poses = list(self._nav_msgs)
-        self._path_publisher.publish(path)
+        pose_stamped.pose.position.x = msg.longitude
+        pose_stamped.pose.position.y = msg.latitude
+        pose_stamped.pose.position.z = msg.altitude
+
+        # No orientation information in NavSatFix
+        pose_stamped.pose.orientation.w = 1.0
+
+        return pose_stamped
 
     # region ROS subscriber callbacks
     def _vehicle_nav_sat_fix_callback(self, msg: NavSatFix) -> None:
@@ -139,19 +132,9 @@ class AutopilotNode(BaseNode):
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.publish_gimbal_quaternion()
 
-        # Publish to rviz2 for debugging
-        pose_stamped = PoseStamped()
-        pose_stamped.header.stamp = msg.header.stamp
-        pose_stamped.header.frame_id = "map"
-
-        pose_stamped.pose.position.x = msg.longitude
-        pose_stamped.pose.position.y = msg.latitude
-        pose_stamped.pose.position.z = msg.altitude
-        pose_stamped.pose.orientation.w = 1.0  # No orientation information in NavSatFix
-
-        self._nav_msgs.append(pose_stamped)
-        self._pose_stamped_publisher.publish(pose_stamped)
-        self._publish_path()
+        # publish to RViz for debugging and visualization
+        pose_stamped = self._navsatfix_to_posestamped(msg)
+        self.publish_rviz(pose_stamped)
 
     def _vehicle_pose_stamped_callback(self, msg: PoseStamped) -> None:
         """Handles latest :class:`mavros_msgs.msg.PoseStamped` message

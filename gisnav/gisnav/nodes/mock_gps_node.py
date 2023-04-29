@@ -12,12 +12,12 @@ from px4_msgs.msg import SensorGps
 from rclpy.qos import QoSPresetProfiles
 
 from gisnav.data import Attitude
-from gisnav.nodes.base.base_node import BaseNode
+from gisnav.nodes.base.rviz_publisher_node import RVizPublisherNode
 
 from . import messaging
 
 
-class MockGPSNode(BaseNode):
+class MockGPSNode(RVizPublisherNode):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_USE_SENSOR_GPS = True

@@ -4,6 +4,6 @@ RUN apt-get update && \
     apt-get -y dist-upgrade && \
     apt-get -y install ros-foxy-rviz2
 
-COPY --chmod=755 disable_shared_memory.xml entrypoint.sh /
+COPY --chmod=755 * /
 
 ENTRYPOINT ["/entrypoint.sh"]

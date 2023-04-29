@@ -164,4 +164,4 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
-    command: rviz2
+    command: rviz2 -d gisnav_config.rviz

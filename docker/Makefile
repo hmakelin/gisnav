@@ -61,7 +61,7 @@ build-offboard-sitl-dev-%: build-offboard-sitl-middleware-%
 . PHONY: $(addprefix offboard-sitl-middleware-, $(AUTOPILOTS))
 offboard-sitl-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose up -d mavros; \
+		docker compose up -d micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml up -d mavros; \
 	else \
@@ -71,7 +71,7 @@ offboard-sitl-middleware-%:
 . PHONY: $(addprefix build-offboard-sitl-middleware-, $(AUTOPILOTS))
 build-offboard-sitl-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose build mavros; \
+		docker compose build micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml build mavros; \
 	else \
@@ -83,7 +83,7 @@ build-offboard-sitl-middleware-%:
 . PHONY: $(addprefix onboard-hil-middleware-, $(AUTOPILOTS))
 onboard-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
 	else \
@@ -94,7 +94,7 @@ onboard-hil-middleware-%:
 . PHONY: $(addprefix build-onboard-hil-middleware-, $(AUTOPILOTS))
 build-onboard-hil-middleware-%:
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
+		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
 	else \

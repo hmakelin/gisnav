@@ -246,6 +246,10 @@ class AutopilotNode(BaseNode):
             return altitude
         else:
             self.get_logger().warn(
+                "NavSatFix and/or terrain Altitude and/or EGM 96 height "
+                "message not yet received, cannot determine vehicle altitude."
+            )
+            self.get_logger().debug(
                 f"NavSatFix {self._vehicle_nav_sat_fix} and/or terrain Altitude "
                 f"{self.terrain_altitude} and/or EGM 96 height {self.egm96_height } "
                 f"message not yet received, cannot determine vehicle altitude."

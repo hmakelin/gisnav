@@ -2,3 +2,7 @@ services:
   # Connects MAVROS over serial instead of default UDP
   mavros:
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=/dev/ttyUSB0:57600
+
+  # Makes micro-ros-agent (uros) middleware connect over serial instead of default UDP
+  micro-ros-agent:
+    command: serial --dev /dev/ttyUSB0 -b 57600

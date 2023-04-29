@@ -22,6 +22,18 @@ services:
     network_mode: host
     command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
+  micro-ros-agent:
+    build:
+      context: micro-ros-agent
+      dockerfile: Dockerfile
+    network_mode: host
+    environment:
+      - ROS_DOMAIN_ID=0
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    volumes:
+      - /dev/shm:/dev/shm
+    command: udp4 -p 8888
+
   mavros:
     build:
       context: mavros

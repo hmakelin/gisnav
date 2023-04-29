@@ -101,20 +101,20 @@ class AutopilotNode(RVizPublisherNode):
         )
 
     @staticmethod
-    def _navsatfix_to_posestamped(msg: NavSatFix):
+    def _navsatfix_to_geoposestamped(msg: NavSatFix) -> GeoPoseStamped:
         # Publish to rviz2 for debugging
-        pose_stamped = PoseStamped()
-        pose_stamped.header.stamp = msg.header.stamp
-        pose_stamped.header.frame_id = "map"
+        geopose_stamped = GeoPoseStamped()
+        geopose_stamped.header.stamp = msg.header.stamp
+        geopose_stamped.header.frame_id = "map"
 
-        pose_stamped.pose.position.x = msg.longitude
-        pose_stamped.pose.position.y = msg.latitude
-        pose_stamped.pose.position.z = msg.altitude
+        geopose_stamped.pose.position.longitude = msg.longitude
+        geopose_stamped.pose.position.latitude = msg.latitude
+        geopose_stamped.pose.position.altitude = msg.altitude
 
         # No orientation information in NavSatFix
-        pose_stamped.pose.orientation.w = 1.0
+        geopose_stamped.pose.orientation.w = 1.0
 
-        return pose_stamped
+        return geopose_stamped
 
     # region ROS subscriber callbacks
     def _vehicle_nav_sat_fix_callback(self, msg: NavSatFix) -> None:
@@ -132,9 +132,13 @@ class AutopilotNode(RVizPublisherNode):
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.publish_gimbal_quaternion()
 
-        # publish to RViz for debugging and visualization
-        pose_stamped = self._navsatfix_to_posestamped(msg)
-        self.publish_rviz(pose_stamped)
+        if (
+            self.vehicle_altitude is not None
+            and self.vehicle_altitude.terrain is not np.nan
+        ):
+            # publish to RViz for debugging and visualization
+            geopose_stamped = self._navsatfix_to_geoposestamped(msg)
+            self.publish_rviz(geopose_stamped, self.vehicle_altitude.terrain)
 
     def _vehicle_pose_stamped_callback(self, msg: PoseStamped) -> None:
         """Handles latest :class:`mavros_msgs.msg.PoseStamped` message

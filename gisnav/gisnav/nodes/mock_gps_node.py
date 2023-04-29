@@ -4,8 +4,7 @@ import socket
 from datetime import datetime
 
 import numpy as np
-from geographic_msgs.msg import GeoPose, GeoPoseStamped
-from geometry_msgs.msg import Pose, PoseStamped
+from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
 from mavros_msgs.msg import Altitude
 from px4_msgs.msg import SensorGps
@@ -116,38 +115,6 @@ class MockGPSNode(RVizPublisherNode):
         # = 11469064
         return 11469064
 
-    @staticmethod
-    def _geopose_to_pose(msg: GeoPose):
-        """
-        Converts :class:`geographic_msgs.msg.GeoPose` to
-        :class:`geometry_msgs.msg.Pose`
-        """
-        pose = Pose()
-
-        pose.position.x = msg.position.longitude
-        pose.position.y = msg.position.latitude
-        pose.position.z = msg.position.altitude
-
-        pose.orientation.x = msg.orientation.x
-        pose.orientation.y = msg.orientation.y
-        pose.orientation.z = msg.orientation.z
-        pose.orientation.w = msg.orientation.w
-
-        return pose
-
-    @classmethod
-    def _geoposestamped_to_posestamped(
-        cls, geopose_stamped: GeoPoseStamped
-    ) -> PoseStamped:
-        """
-        Converts :class:`geographic_msgs.msg.GeoPoseStamped` to
-        :class:`geographic_msgs.msg.PoseStamped`
-        """
-        pose_stamped = PoseStamped()
-        pose_stamped.header = geopose_stamped.header
-        pose_stamped.pose = cls._geopose_to_pose(geopose_stamped.pose)
-        return pose_stamped
-
     def _publish(self) -> None:
         """Sends a HIL_GPS message over MAVROS or a GPSINPUT message over UDP socket"""
         # TODO: handle velocity & position variance estimation better
@@ -237,6 +204,5 @@ class MockGPSNode(RVizPublisherNode):
                 f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
             )
 
-        # Publish pose stamped and path for rviz2, debugging etc.
-        pose_stamped = self._geoposestamped_to_posestamped(self._geopose_estimate)
-        self.publish_rviz(pose_stamped)
+        # Publish pose stamped and terrain altitude and path for rviz2, debugging etc.
+        self.publish_rviz(self._geopose_estimate, self._altitude_estimate.terrain)

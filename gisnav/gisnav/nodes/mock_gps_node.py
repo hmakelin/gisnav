@@ -124,8 +124,8 @@ class MockGPSNode(RVizPublisherNode):
         """
         pose = Pose()
 
-        pose.position.x = msg.position.latitude
-        pose.position.y = msg.position.longitude
+        pose.position.x = msg.position.longitude
+        pose.position.y = msg.position.latitude
         pose.position.z = msg.position.altitude
 
         pose.orientation.x = msg.orientation.x

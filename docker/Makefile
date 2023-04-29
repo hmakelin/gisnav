@@ -49,13 +49,14 @@ AUTOPILOTS := px4 ardupilot
 #   1. The prefix for the target name.
 #   2. The dependency target.
 #   3. The optional Docker Compose override files to include (if any).
-#   4. The Docker Compose services to start or build.
+#   4. The Docker Compose services to start or build - use $$* here for
+#		autopilot, the first '$' is to escape the second '$'.
 define compose_template
 # Create phony targets with the specified prefix for each autopilot
 .PHONY: $(addprefix $(1)-, $(AUTOPILOTS))
 
 # Generate rules for the prefixed targets, depending on the specified dependency target
-$(addprefix $(1)-, $(AUTOPILOTS)): $(1)-%: $(2)-%
+$(addprefix $(1)-, $(AUTOPILOTS)): $(if $(2),$(1)-%: $(2)-%,$(1)-%)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Run Docker Compose with the specified services
@@ -65,7 +66,7 @@ $(addprefix $(1)-, $(AUTOPILOTS)): $(1)-%: $(2)-%
 .PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))
 
 # Generate rules for the build prefixed targets, depending on the specified build dependency target
-$(addprefix build-$(1)-, $(AUTOPILOTS)): build-$(1)-%: build-$(2)-%
+$(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,build-$(1)-%)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services
@@ -133,10 +134,10 @@ $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-comp
 $(eval $(call compose_template,offboard-sitl,offboard-sitl-dev,,qgc))
 
 # SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
-$(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$* torch-serve mapserver))
+$(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve mapserver))
 
 # SITL development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, but excluding GISNav
-$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,qgc torch-serve mapserver))
+$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc torch-serve mapserver))
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))

@@ -24,7 +24,7 @@
 #		its interactions with the world.
 #
 # The target options in the Makefile are as follows:
-#	- onboard-hil-*: Targets for onboard hardware-in-the-loop services,
+#   - onboard-hil-*: Targets for onboard hardware-in-the-loop services,
 #		including GIS server, ROS middleware, and GISNav.
 #   - onboard-sitl-*: Targets for onboard software-in-the-loop services, with
 #		the same services as onboard HIL but using a different middleware

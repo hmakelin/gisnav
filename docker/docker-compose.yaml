@@ -142,3 +142,26 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+
+  # Note: build context is repository root
+  rviz2:
+    build:
+      context: rviz2
+      dockerfile: Dockerfile
+    env_file:
+      - env/x11.env
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
+    volumes:
+      - /dev/dri:/dev/dri
+    network_mode: host
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    command: rviz2

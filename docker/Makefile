@@ -51,11 +51,11 @@ build-offboard-sitl-test-%: build-offboard-sitl-middleware-%
 # sitl development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, but excluding GISNav
 . PHONY: $(addprefix offboard-sitl-dev-, $(AUTOPILOTS))
 offboard-sitl-dev-%: offboard-sitl-middleware-%
-	@docker compose up -d $* torch-serve mapserver qgc
+	@docker compose up -d $* torch-serve mapserver qgc rviz2
 
 . PHONY: $(addprefix build-offboard-sitl-dev-, $(AUTOPILOTS))
 build-offboard-sitl-dev-%: build-offboard-sitl-middleware-%
-	@docker compose build $* torch-serve mapserver qgc
+	@docker compose build $* torch-serve mapserver qgc rviz2
 
 # offboard sitl middleware
 . PHONY: $(addprefix offboard-sitl-middleware-, $(AUTOPILOTS))

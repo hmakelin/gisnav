@@ -1,12 +1,15 @@
 """Publishes mock GPS (GNSS) messages"""
 import json
 import socket
+from collections import deque
 from datetime import datetime
 
 import numpy as np
-from geographic_msgs.msg import GeoPoseStamped
+from geographic_msgs.msg import GeoPose, GeoPoseStamped
+from geometry_msgs.msg import Pose, PoseStamped
 from gps_time import GPSTime
 from mavros_msgs.msg import Altitude
+from nav_msgs.msg import Path
 from px4_msgs.msg import SensorGps
 from rclpy.qos import QoSPresetProfiles
 
@@ -79,6 +82,19 @@ class MockGPSNode(BaseNode):
         self._geopose_estimate = None
         self._altitude_estimate = None
 
+        # gisnav estimated path for rviz2 visualization and debugging
+        self._pose_stamped_publisher = self.create_publisher(
+            PoseStamped,
+            messaging.ROS_TOPIC_POSE_STAMPED,
+            QoSPresetProfiles.SYSTEM_DEFAULT.value,
+        )
+        self._path_publisher = self.create_publisher(
+            Path,
+            messaging.ROS_TOPIC_PATH,
+            QoSPresetProfiles.SYSTEM_DEFAULT.value,
+        )
+        self._nav_msgs: deque = deque(maxlen=100)
+
     def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
         """
         Handles latest geopose estimate
@@ -115,6 +131,40 @@ class MockGPSNode(BaseNode):
         # = 11469064
         return 11469064
 
+    def _geopose_to_pose(self, msg: GeoPose):
+        pose = Pose()
+
+        pose.position.x = msg.position.latitude
+        pose.position.y = msg.position.longitude
+        pose.position.z = msg.position.altitude
+
+        pose.orientation.x = msg.orientation.x
+        pose.orientation.y = msg.orientation.y
+        pose.orientation.z = msg.orientation.z
+        pose.orientation.w = msg.orientation.w
+
+        return pose
+
+    def _geoposestamped_to_posestamped(
+        self, geopose_stamped: GeoPoseStamped
+    ) -> PoseStamped:
+        """
+        Converts :class:`geographic_msgs.msg.GeoPoseStamped` to
+        :class:`geographic_msgs.msg.PoseStamped`
+        """
+        pose_stamped = PoseStamped()
+        pose_stamped.header = geopose_stamped.header
+        pose_stamped.pose = self._geopose_to_pose(geopose_stamped.pose)
+        return pose_stamped
+
+    def _publish_path(self):
+        """Publishes :class:`nav_msgs.msg.Path` for debugging and visualization"""
+        path = Path()
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.header.frame_id = "map"
+        path.poses = list(self._nav_msgs)
+        self._path_publisher.publish(path)
+
     def _publish(self) -> None:
         """Sends a HIL_GPS message over MAVROS or a GPSINPUT message over UDP socket"""
         # TODO: handle velocity & position variance estimation better
@@ -124,6 +174,12 @@ class MockGPSNode(BaseNode):
             or self._altitude_estimate.amsl is np.nan
         ):
             return None
+
+        # Publish pose stamped and path for rviz2, debugging etc.
+        pose_stamped = self._geoposestamped_to_posestamped(self._geopose_estimate)
+        self._pose_stamped_publisher.publish(pose_stamped)
+        self._nav_msgs.append(pose_stamped)
+        self._publish_path()
 
         alt_amsl = self._altitude_estimate.amsl
 

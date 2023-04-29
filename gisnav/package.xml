@@ -28,6 +28,7 @@
   <depend>mavros_msgs</depend>
   <depend>geographic_info</depend>
   <depend>geographic_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>px4_msgs</depend>
   <depend>gisnav_msgs</depend>
   <depend>ros2launch</depend>

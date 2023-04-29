@@ -74,56 +74,51 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 	@docker compose $$(compose_files) build $(4)
 endef
 
-# Define targets below
-
-# onboard HIL middleware targets
-# TODO: not tested
-. PHONY: $(addprefix onboard-hil-middleware-, $(AUTOPILOTS))
-onboard-hil-middleware-%:
+# Separate templates for middleware targets. Currently GISNav needs both
+# micro-ros-agent and mavros for the mock GPS node in PX4 configuratioon, while
+# MAVROS alone is sufficient in ArduPilot configuration. The micro-ros-agent is
+# needed for sending the px4_msgs SensorGps message to PX4.
+define middleware_template
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d micro-ros-agent mavros; \
+		docker compose $(1) up -d micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml up -d mavros; \
+		docker compose $(1) up -d mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
+endef
 
-# TODO: not tested
-. PHONY: $(addprefix build-onboard-hil-middleware-, $(AUTOPILOTS))
-build-onboard-hil-middleware-%:
+define build_middleware_template
 	@if [ "$*" = "px4" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build micro-ros-agent mavros; \
+		docker compose $(1) build micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.serial.yaml build mavros; \
+		docker compose $(1) build mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
+endef
+
+# offboard SITL middleware targets
+offboard-sitl-middleware-%:
+	$(call middleware_template,)
+
+build-offboard-sitl-middleware-%:
+	$(call build_middleware_template,)
 
 # onboard SITL middleware targets
 onboard-sitl-middleware-%: offboard-sitl-middleware-%
+	$(call middleware_template,)
 
 build-onboard-sitl-middleware-%: build-offboard-sitl-middleware-%
+	$(call build_middleware_template,)
 
-# offboard SITL middleware targets
-. PHONY: $(addprefix offboard-sitl-middleware-, $(AUTOPILOTS))
-offboard-sitl-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose up -d micro-ros-agent mavros; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml up -d mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+# onboard HIL middleware targets
+# TODO: not tested
+onboard-hil-middleware-%:
+	$(call middleware_template,-f docker-compose.yaml -f docker-compose.serial.yaml)
 
-. PHONY: $(addprefix build-offboard-sitl-middleware-, $(AUTOPILOTS))
-build-offboard-sitl-middleware-%:
-	@if [ "$*" = "px4" ]; then \
-		docker compose build micro-ros-agent mavros; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose -f docker-compose.yaml -f docker-compose.mavros-sitl-ardupilot.yaml build mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
+build-onboard-hil-middleware-%:
+	$(call build_middleware_template,-f docker-compose.yaml -f docker-compose.serial.yaml)
 
 # onboard HIL services: GIS server, ROS middleware, and GISNav
 $(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))

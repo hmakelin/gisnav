@@ -1,5 +1,5 @@
 # Sphinx
-Sphinx
+Sphinx<7
 pydata-sphinx-theme
 autodocsumm
 docutils>=0.17

@@ -74,54 +74,51 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 	@docker compose $$(compose_files) build $(4)
 endef
 
-# Separate templates for middleware targets. Currently GISNav needs both
-# micro-ros-agent and mavros for the mock GPS node in PX4 configuratioon, while
-# MAVROS alone is sufficient in ArduPilot configuration. The micro-ros-agent is
-# needed for sending the px4_msgs SensorGps message to PX4.
+
+# Define a reusable template for creating Docker Compose middleware targets
+#
+# GISNav needs both micro-ros-agent and mavros for the mock GPS node in PX4
+# configuration, while MAVROS alone is sufficient in ArduPilot configuration,
+# which complicates things just enough to require separate templates.
+#
+# Parameters:
+#   1. The prefix for the target name.
+#   2. The additional Docker Compose options, such as file overrides.
 define middleware_template
+.PHONY: $(1)-% build-$(1)-%
+
+$(1)-%:
+	$$(call run_middleware, $(2), up -d)
+
+build-$(1)-%:
+	$$(call run_middleware, $(2), build)
+endef
+
+# The run_middleware function is a helper function for executing middleware
+# targets with the necessary Docker Compose options.
+#
+# Parameters:
+#   1. Additional Docker Compose options, such as file overrides.
+#   2. The Docker Compose command to execute (either 'up -d' or 'build').
+define run_middleware
 	@if [ "$*" = "px4" ]; then \
-		docker compose $(1) up -d micro-ros-agent mavros; \
+		docker compose $(1) $(2) micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose $(1) up -d mavros; \
+		docker compose $(1) $(2) mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
 endef
 
-define build_middleware_template
-	@if [ "$*" = "px4" ]; then \
-		docker compose $(1) build micro-ros-agent mavros; \
-	elif [ "$*" = "ardupilot" ]; then \
-		docker compose $(1) build mavros; \
-	else \
-		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
-	fi
-endef
-
-# offboard SITL middleware targets
-offboard-sitl-middleware-%:
-	$(call middleware_template,)
-
-build-offboard-sitl-middleware-%:
-	$(call build_middleware_template,)
-
-# onboard SITL middleware targets
-onboard-sitl-middleware-%: offboard-sitl-middleware-%
-	$(call middleware_template,)
-
-build-onboard-sitl-middleware-%: build-offboard-sitl-middleware-%
-	$(call build_middleware_template,)
-
-# onboard HIL middleware targets
-# TODO: not tested
-onboard-hil-middleware-%:
-	$(call middleware_template,-f docker-compose.yaml -f docker-compose.serial.yaml)
-
-build-onboard-hil-middleware-%:
-	$(call build_middleware_template,-f docker-compose.yaml -f docker-compose.serial.yaml)
+# Define middleware targets
+$(eval $(call middleware_template,onboard-hil-middleware,-f docker-compose.yaml -f docker-compose.serial.yaml))
+$(eval $(call middleware_template,onboard-sitl-middleware,))
+$(eval $(call middleware_template,offboard-sitl-middleware,))  # same as onboard
 
 # onboard HIL services: GIS server, ROS middleware, and GISNav
 $(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
+
+$(eval $(call compose_template,build-onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
 
 # onboard SITL services: Same as with HIL but middleware is same as offboard (UDP, not serial)
 $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))

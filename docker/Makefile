@@ -32,7 +32,7 @@
 #   - offboard-sitl-*: Targets for offboard software-in-the-loop services,
 #		including Gazebo simulation and QGroundControl.
 #   - offboard-sitl-test-*: Targets for SITL testing services, which exclude
-#		GISNav and QGC for automated testing scenarios.
+#		GISNav and QGC for automated testing scenarios. Gazebo in headless mode.
 #   - offboard-sitl-dev-*: Targets for SITL development services, including
 #		Gazebo simulation, ROS middleware, mapserver, torch-serve, and QGC, but
 #		excluding GISNav whose development version is assumed to be run locally.
@@ -118,8 +118,6 @@ $(eval $(call middleware_template,offboard-sitl-middleware,))  # same as onboard
 # onboard HIL services: GIS server, ROS middleware, and GISNav
 $(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
 
-$(eval $(call compose_template,build-onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
-
 # onboard SITL services: Same as with HIL but middleware is same as offboard (UDP, not serial)
 $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
 
@@ -129,7 +127,7 @@ $(eval $(call compose_template,offboard-sitl,offboard-sitl-dev,,qgc))
 # SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
 $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve mapserver))
 
-# SITL development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, but excluding GISNav
+# SITL development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, rviz, but excluding GISNav
 $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc torch-serve mapserver rviz))
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav

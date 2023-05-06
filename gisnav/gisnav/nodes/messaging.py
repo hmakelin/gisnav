@@ -72,6 +72,7 @@ def create_header(frame_id: str = "") -> Header:
     :param frame_id: Header frame_id value
     :return: ROS message header
     """
+    # TODO: use rclpy clock to create stamp
     time_ns = time.time_ns()
     sec = int(time_ns / 1e9)
     nanosec = int(time_ns - (1e9 * sec))

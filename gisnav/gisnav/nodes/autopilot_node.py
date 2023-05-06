@@ -185,24 +185,23 @@ class AutopilotNode(RVizPublisherNode):
     def vehicle_geopose(self) -> Optional[GeoPoseStamped]:
         """Vehicle pose as :class:`geographic_msgs.msg.GeoPoseStamped` message
         or None if not available"""
-        if (
-            self._vehicle_nav_sat_fix is not None
-            and self._vehicle_pose_stamped is not None
+
+        @enforce_types(self.get_logger().warn, "Cannot determine vehicle GeoPose")
+        def _vehicle_geopose(
+            vehicle_nav_sat_fix: NavSatFix, vehicle_pose_stamped: PoseStamped
         ):
             # Position
             latitude, longitude = (
-                self._vehicle_nav_sat_fix.latitude,
-                self._vehicle_nav_sat_fix.longitude,
+                vehicle_nav_sat_fix.latitude,
+                vehicle_nav_sat_fix.longitude,
             )
-            altitude = self._vehicle_nav_sat_fix.altitude
+            altitude = vehicle_nav_sat_fix.altitude
 
             # Convert ENU->NED + re-center yaw
             enu_to_ned = Rotation.from_euler("XYZ", np.array([np.pi, 0, np.pi / 2]))
             attitude_ned = (
                 Rotation.from_quat(
-                    messaging.as_np_quaternion(
-                        self._vehicle_pose_stamped.pose.orientation
-                    )
+                    messaging.as_np_quaternion(vehicle_pose_stamped.pose.orientation)
                 )
                 * enu_to_ned.inv()
             )
@@ -221,25 +220,21 @@ class AutopilotNode(RVizPublisherNode):
                     orientation=orientation,  # TODO: is this NED or ENU?
                 ),
             )
-        else:
-            self.get_logger().warn(
-                "NavSatFix and/or PoseStamped message not yet received, cannot "
-                "determine vehicle geopose."
-            )
-            return None
+
+        return _vehicle_geopose(self._vehicle_nav_sat_fix, self._vehicle_pose_stamped)
 
     @property
     def _vehicle_altitude_local(self) -> Optional[float]:
         """Returns z coordinate from :class:`sensor_msgs.msg.PoseStamped` message
         or None if not available"""
-        if self._vehicle_pose_stamped is not None:
-            return self._vehicle_pose_stamped.pose.position.z
-        else:
-            self.get_logger().warn(
-                "VehicleLocalPosition message not yet received, cannot determine "
-                "vehicle local altitude."
-            )
-            return None
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot determine vehicle local altitude"
+        )
+        def _vehicle_altitude_local(vehicle_pose_stamped: PoseStamped):
+            return vehicle_pose_stamped.pose.position.z
+
+        return _vehicle_altitude_local(self._vehicle_pose_stamped)
 
     @property
     def vehicle_altitude(self) -> Optional[Altitude]:
@@ -274,18 +269,6 @@ class AutopilotNode(RVizPublisherNode):
             self.terrain_altitude,
             self._vehicle_altitude_local,
         )
-
-        # else:
-        #    self.get_logger().warn(
-        #        "NavSatFix and/or terrain Altitude and/or EGM 96 height "
-        #        "message not yet received, cannot determine vehicle altitude."
-        #    )
-        #    self.get_logger().debug(
-        #        f"NavSatFix {self._vehicle_nav_sat_fix} and/or terrain Altitude "
-        #        f"{self.terrain_altitude} and/or EGM 96 height {self.egm96_height } "
-        #        f"message not yet received, cannot determine vehicle altitude."
-        #    )
-        #    return None
 
     @staticmethod
     def _euler_from_quaternion(q):
@@ -328,7 +311,8 @@ class AutopilotNode(RVizPublisherNode):
 
         return Quaternion(w=w, x=x, y=y, z=z)
 
-    def apply_vehicle_yaw(self, vehicle_q, gimbal_q):
+    @classmethod
+    def apply_vehicle_yaw(cls, vehicle_q, gimbal_q):
         # Extract yaw from vehicle quaternion
         t3 = 2.0 * (vehicle_q.w * vehicle_q.z + vehicle_q.x * vehicle_q.y)
         t4 = 1.0 - 2.0 * (vehicle_q.y * vehicle_q.y + vehicle_q.z * vehicle_q.z)
@@ -340,7 +324,7 @@ class AutopilotNode(RVizPublisherNode):
         )
 
         # Apply the vehicle yaw rotation to the gimbal quaternion
-        gimbal_yaw_q = self.quaternion_multiply(yaw_q, gimbal_q)
+        gimbal_yaw_q = cls.quaternion_multiply(yaw_q, gimbal_q)
 
         return gimbal_yaw_q
 
@@ -351,74 +335,67 @@ class AutopilotNode(RVizPublisherNode):
 
         .. note::
             Current implementation assumes camera is facing directly down from
-            vehicle body
+            vehicle body if GimbalDeviceAttitudeStatus (MAVLink gimbal protocol v2)
+            is not available.
         """
+
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
-        if self.vehicle_geopose is None:
-            self.get_logger().debug(
-                "Vehicle geopose unknown. Cannot determine gimbal attitude."
+        @enforce_types(self.get_logger().warn, "Cannot determine gimbal Quaternion")
+        def _gimbal_quaternion(
+            vehicle_geopose: GeoPoseStamped,
+            gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
+        ):
+            if gimbal_device_attitude_status is None:
+                # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
+                roll = 0
+                pitch = -85  # do not make it -90 to avoid gimbal lock
+                yaw = 0
+                nadir_facing_rotation = Rotation.from_euler(
+                    "xyz", [roll, pitch, yaw], degrees=True
+                )
+                nadir_facing_quaternion = nadir_facing_rotation.as_quat()
+                nadir_facing_quaternion = Quaternion(
+                    x=nadir_facing_quaternion[0],
+                    y=nadir_facing_quaternion[1],
+                    z=nadir_facing_quaternion[2],
+                    w=nadir_facing_quaternion[3],
+                )
+                gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
+                gimbal_device_attitude_status.q = nadir_facing_quaternion
+
+            assert gimbal_device_attitude_status is not None
+
+            roll, pitch, yaw = AutopilotNode._euler_from_quaternion(
+                gimbal_device_attitude_status.q
             )
-            return None
-
-        if self._gimbal_device_attitude_status is None:
-            # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
-            roll = 0
-            pitch = -85  # do not make it -90 to avoid gimbal lock
-            yaw = 0
-            nadir_facing_rotation = Rotation.from_euler(
-                "xyz", [roll, pitch, yaw], degrees=True
+            compound_q = AutopilotNode.apply_vehicle_yaw(
+                vehicle_geopose.pose.orientation, gimbal_device_attitude_status.q
             )
-            nadir_facing_quaternion = nadir_facing_rotation.as_quat()
-            nadir_facing_quaternion = Quaternion(
-                x=nadir_facing_quaternion[0],
-                y=nadir_facing_quaternion[1],
-                z=nadir_facing_quaternion[2],
-                w=nadir_facing_quaternion[3],
-            )
-            gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
-            gimbal_device_attitude_status.q = nadir_facing_quaternion
-        else:
-            gimbal_device_attitude_status = self._gimbal_device_attitude_status
+            roll, pitch, yaw = AutopilotNode._euler_from_quaternion(compound_q)
 
-        assert gimbal_device_attitude_status is not None
-        assert self.vehicle_geopose is not None
-        roll, pitch, yaw = self._euler_from_quaternion(gimbal_device_attitude_status.q)
-        self.get_logger().debug(
-            "Gimbal device set attitude FRD Euler angles "
-            "(roll, pitch, yaw): (%.2f, %.2f, %.2f)"
-            % (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
-        )
+            return compound_q
 
-        compound_q = self.apply_vehicle_yaw(
-            self.vehicle_geopose.pose.orientation, gimbal_device_attitude_status.q
+        return _gimbal_quaternion(
+            self.vehicle_geopose, self._gimbal_device_attitude_status
         )
-        roll, pitch, yaw = self._euler_from_quaternion(compound_q)
-        self.get_logger().debug(
-            "Compound attitude (NED?) Euler angles "
-            "(roll, pitch, yaw): (%.2f, %.2f, %.2f)"
-            % (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
-        )
-
-        return compound_q
 
     @property
     def home_geopoint(self) -> Optional[GeoPointStamped]:
         """Home position as :class:`geographic_msgs.msg.GeoPointStamped` message
         or None if not available"""
-        if self._home_position is not None:
+
+        @enforce_types(self.get_logger().warn, "Cannot determine home GeoPoint")
+        def _home_geopoint(home_position: GeoPoint):
             return GeoPointStamped(
                 header=messaging.create_header("base_link"),
                 position=GeoPoint(
-                    latitude=self._home_position.geo.latitude,
-                    longitude=self._home_position.geo.longitude,
-                    altitude=self._home_position.geo.altitude,
+                    latitude=home_position.geo.latitude,
+                    longitude=home_position.geo.longitude,
+                    altitude=home_position.geo.altitude,
                 ),
             )
-        else:
-            self.get_logger().warn(
-                "HomePosition message not yet received, cannot determine home geopoint."
-            )
-            return None
+
+        return _home_geopoint(self._home_position)
 
     # endregion computed attributes
 
@@ -466,31 +443,39 @@ class AutopilotNode(RVizPublisherNode):
     # region publish hooks
     def publish_vehicle_geopose(self) -> None:
         """Publishes vehicle :class:`geographic_msgs.msg.GeoPoseStamped`"""
-        if self.vehicle_geopose is not None:
-            self.__vehicle_geopose_pub.publish(self.vehicle_geopose)
-        else:
-            self.get_logger().warn("Vehicle geopose unknown, skipping publishing.")
+
+        @enforce_types(self.get_logger().warn, "Skipping publishing vehicle GeoPose")
+        def _publish_vehicle_geopose(vehicle_geopose: GeoPoseStamped):
+            self.__vehicle_geopose_pub.publish(vehicle_geopose)
+
+        _publish_vehicle_geopose(self.vehicle_geopose)
 
     def publish_vehicle_altitude(self) -> None:
         """Publishes vehicle :class:`mavros_msgs.msg.Altitude`"""
-        if self.vehicle_altitude is not None:
-            self.__vehicle_altitude_pub.publish(self.vehicle_altitude)
-        else:
-            self.get_logger().warn("Vehicle altitude unknown, skipping publishing.")
+
+        @enforce_types(self.get_logger().warn, "Skipping publishing vehicle Altitude")
+        def _publish_vehicle_altitude(vehicle_altitude: Altitude):
+            self.__vehicle_altitude_pub.publish(vehicle_altitude)
+
+        _publish_vehicle_altitude(self.vehicle_altitude)
 
     def publish_gimbal_quaternion(self) -> None:
         """Publishes gimbal :class:`geometry_msgs.msg.Quaternion` orientation"""
+
         # TODO: NED or ENU? ROS convention is ENU but current implementation is NED?
-        if self.gimbal_quaternion is not None:
-            self.__gimbal_quaternion_pub.publish(self.gimbal_quaternion)
-        else:
-            self.get_logger().warn("Gimbal quaternion unknown, skipping publishing.")
+        @enforce_types(self.get_logger().warn, "Skipping publishing gimbal Quaternion")
+        def _publish_gimbal_quaternion(gimbal_quaternion: Quaternion):
+            self.__gimbal_quaternion_pub.publish(gimbal_quaternion)
+
+        _publish_gimbal_quaternion(self.gimbal_quaternion)
 
     def publish_home_geopoint(self) -> None:
         """Publishes home :class:`.geographic_msgs.msg.GeoPointStamped`"""
-        if self.home_geopoint is not None:
+
+        @enforce_types(
+            self.get_logger().warn, "Skipping publishing home GeoPointStamped"
+        )
+        def _publish_home_geopoint(home_geopoint: GeoPointStamped):
             self.__home_geopoint_pub.publish(self.home_geopoint)
-        else:
-            self.get_logger().warn("Home geopoint unknown, skipping publishing.")
 
     # endregion publish hooks

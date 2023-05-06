@@ -476,6 +476,8 @@ class AutopilotNode(RVizPublisherNode):
             self.get_logger().warn, "Skipping publishing home GeoPointStamped"
         )
         def _publish_home_geopoint(home_geopoint: GeoPointStamped):
-            self.__home_geopoint_pub.publish(self.home_geopoint)
+            self.__home_geopoint_pub.publish(home_geopoint)
+
+        _publish_home_geopoint(self.home_geopoint)
 
     # endregion publish hooks

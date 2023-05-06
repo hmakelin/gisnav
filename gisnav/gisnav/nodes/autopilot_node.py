@@ -246,7 +246,7 @@ class AutopilotNode(RVizPublisherNode):
             navsatfix: NavSatFix,
             egm96_height: Float32,
             terrain_altitude: Altitude,
-            vehicle_altitude_local: Optional[Altitude],
+            vehicle_altitude_local: Optional[float],
         ):
             vehicle_altitude_amsl = navsatfix.altitude - egm96_height.data
             vehicle_altitude_terrain = vehicle_altitude_amsl - terrain_altitude.amsl

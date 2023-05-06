@@ -11,6 +11,8 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
+    get_origin,
     get_type_hints,
 )
 
@@ -63,8 +65,27 @@ def enforce_types(
 
             mismatches = []
             for name, value in bound_arguments.arguments.items():
-                if name in type_hints and not isinstance(value, type_hints[name]):
-                    mismatches.append((name, type_hints[name], type(value)))
+                if name in type_hints:
+                    expected_type = type_hints[name]
+                    origin_type = get_origin(expected_type)
+                    type_args = get_args(expected_type)
+
+                    if origin_type is None:
+                        check = isinstance(value, expected_type)
+                    else:
+                        # Subscripted generics like Optional[Altitude]
+                        # (typing.Union[mavros_msgs.msg._altitude.Altitude, NoneType]),
+                        # check that the value matches one (=any) of the type_args
+                        type_matches = (
+                            isinstance(value, expected_arg)
+                            for expected_arg in type_args
+                        )
+
+                        # type_matches is None if no matches above
+                        check = any(type_matches) if type_matches is not None else False
+
+                    if not check:
+                        mismatches.append((name, expected_type, type(value)))
 
             if mismatches:
                 if logger:
@@ -72,7 +93,7 @@ def enforce_types(
                         f"{name} (expected {expected}, got {actual})"
                         for name, expected, actual in mismatches
                     ]
-                    log_msg = f"Type hint mismatches: {', '.join(mismatch_msgs)}"
+                    log_msg = f"Unexpected types: {', '.join(mismatch_msgs)}"
                     if custom_msg:
                         log_msg = f"{custom_msg}: {log_msg}"
                     logger(log_msg)

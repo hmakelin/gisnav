@@ -57,7 +57,7 @@ class AutopilotNode(RVizPublisherNode):
         # Subscribers
         # terrain_altitude and egm96_height properties intended to be used by
         # extending classes -> no name mangling
-        self.terrain_altitude = None
+        self.terrain_altitude: Optional[Altitude] = None
         self.__terrain_altitude_sub = self.create_subscription(
             Altitude,
             messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
@@ -65,7 +65,7 @@ class AutopilotNode(RVizPublisherNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
-        self.egm96_height = None
+        self.egm96_height: Optional[Float32] = None
         self.__egm96_height_sub = self.create_subscription(
             Float32,
             messaging.ROS_TOPIC_EGM96_HEIGHT,
@@ -73,28 +73,28 @@ class AutopilotNode(RVizPublisherNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
-        self._vehicle_nav_sat_fix = None
+        self._vehicle_nav_sat_fix: Optional[NavSatFix] = None
         self._vehicle_nav_sat_fix_sub = self.create_subscription(
             NavSatFix,
             "/mavros/global_position/global",
             self._vehicle_nav_sat_fix_callback,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
-        self._vehicle_pose_stamped = None
+        self._vehicle_pose_stamped: Optional[PoseStamped] = None
         self._vehicle_pose_stamped_sub = self.create_subscription(
             PoseStamped,
             "/mavros/local_position/pose",
             self._vehicle_pose_stamped_callback,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
-        self._home_position = None
+        self._home_position: Optional[HomePosition] = None
         self._home_position_sub = self.create_subscription(
             HomePosition,
             "/mavros/home_position/home",
             self._home_position_callback,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
-        self._gimbal_device_attitude_status = None
+        self._gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus] = None
         self._gimbal_device_attitude_status_sub = self.create_subscription(
             GimbalDeviceAttitudeStatus,
             "/mavros/gimbal_control/device/attitude_status",

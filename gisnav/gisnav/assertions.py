@@ -40,7 +40,8 @@ def enforce_types(
         computed, resulting in cleaner property implementations with less
         boilerplate code.
 
-    :param logger: Optional logging callable that accepts a string message
+    :param logger: Optional logging callable that accepts a string message as
+        input argument
     :param custom_msg: Optional custom messag to prefix to the logging
     :return: The return value of the original method or None if any argument
         does not match the type hints.

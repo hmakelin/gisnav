@@ -1,7 +1,88 @@
 """Common assertions for convenience"""
-from typing import Any, Collection, Sequence, Tuple, Union
+import inspect
+from functools import wraps
+from typing import (
+    Any,
+    Callable,
+    Collection,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+    get_type_hints,
+)
 
 import numpy as np
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def enforce_types(
+    logger: Optional[Callable[[str], Any]] = None, custom_msg: Optional[str] = None
+) -> Callable[[F], F]:
+    """
+    Wrapper function to check if provided arguments match the method's type
+    hints.
+
+    If any of the arguments do not match their corresponding type hints, this
+    decorator optionally logs the mismatches and then returns None without
+    executing the original method. Otherwise, it proceeds to call the original
+    method with the given arguments and keyword arguments.
+
+    .. note::
+        This decorator streamlines computed properties by automating the check
+        for required instance properties with e.g. None values. It eliminates
+        repetitive code and logs warning messages when a property cannot be
+        computed, resulting in cleaner property implementations with less
+        boilerplate code.
+
+    :param logger: Optional logging callable that accepts a string message
+    :param custom_msg: Optional custom messag to prefix to the logging
+    :return: The return value of the original method or None if any argument
+        does not match the type hints.
+    """
+
+    def decorator(method: F) -> F:
+        @wraps(method)
+        def wrapper(*args: Any, **kwargs: Any) -> Union[Any, None]:
+            """
+            This wrapper function validates the provided arguments against the type
+            hints of the wrapped method.
+
+            :param args: Positional arguments passed to the original method.
+            :param kwargs: Keyword arguments passed to the original method.
+            :return: The return value of the original method or None if any argument
+                does not match the type hints.
+            """
+            type_hints = get_type_hints(method)
+            signature = inspect.signature(method)
+            bound_arguments = signature.bind(*args, **kwargs)
+            bound_arguments.apply_defaults()
+
+            mismatches = []
+            for name, value in bound_arguments.arguments.items():
+                if name in type_hints and not isinstance(value, type_hints[name]):
+                    mismatches.append((name, type_hints[name], type(value)))
+
+            if mismatches:
+                if logger:
+                    mismatch_msgs = [
+                        f"{name} (expected {expected}, got {actual})"
+                        for name, expected, actual in mismatches
+                    ]
+                    log_msg = f"Type hint mismatches: {', '.join(mismatch_msgs)}"
+                    if custom_msg:
+                        log_msg = f"{custom_msg}: {log_msg}"
+                    logger(log_msg)
+                return None
+
+            return method(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator
 
 
 def assert_type(value: object, type_: Any) -> None:

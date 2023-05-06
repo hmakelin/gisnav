@@ -11,6 +11,8 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32
 
+from gisnav.assertions import enforce_types
+
 from . import messaging
 from .base.rviz_publisher_node import RVizPublisherNode
 
@@ -243,21 +245,18 @@ class AutopilotNode(RVizPublisherNode):
     def vehicle_altitude(self) -> Optional[Altitude]:
         """Vehicle altitude as :class:`mavros_msgs.msg.Altitude` message or
         None if not available"""
-        if (
-            self._vehicle_nav_sat_fix is not None
-            and self.egm96_height is not None
-            and self.terrain_altitude is not None
+
+        @enforce_types(self.get_logger().warn, "Cannot determine vehicle altitude")
+        def _vehicle_altitude(
+            navsatfix: NavSatFix,
+            egm96_height: Float32,
+            terrain_altitude: Altitude,
+            vehicle_altitude_local: Optional[Altitude],
         ):
-            vehicle_altitude_amsl = (
-                self._vehicle_nav_sat_fix.altitude - self.egm96_height.data
-            )
-            vehicle_altitude_terrain = (
-                vehicle_altitude_amsl - self.terrain_altitude.amsl
-            )
+            vehicle_altitude_amsl = navsatfix.altitude - egm96_height.data
+            vehicle_altitude_terrain = vehicle_altitude_amsl - terrain_altitude.amsl
             local = (
-                self._vehicle_altitude_local
-                if self._vehicle_altitude_local is not None
-                else np.nan
+                vehicle_altitude_local if vehicle_altitude_local is not None else np.nan
             )
             altitude = Altitude(
                 header=messaging.create_header("base_link"),
@@ -268,17 +267,25 @@ class AutopilotNode(RVizPublisherNode):
                 bottom_clearance=np.nan,
             )
             return altitude
-        else:
-            self.get_logger().warn(
-                "NavSatFix and/or terrain Altitude and/or EGM 96 height "
-                "message not yet received, cannot determine vehicle altitude."
-            )
-            self.get_logger().debug(
-                f"NavSatFix {self._vehicle_nav_sat_fix} and/or terrain Altitude "
-                f"{self.terrain_altitude} and/or EGM 96 height {self.egm96_height } "
-                f"message not yet received, cannot determine vehicle altitude."
-            )
-            return None
+
+        return _vehicle_altitude(
+            self._vehicle_nav_sat_fix,
+            self.egm96_height,
+            self.terrain_altitude,
+            self._vehicle_altitude_local,
+        )
+
+        # else:
+        #    self.get_logger().warn(
+        #        "NavSatFix and/or terrain Altitude and/or EGM 96 height "
+        #        "message not yet received, cannot determine vehicle altitude."
+        #    )
+        #    self.get_logger().debug(
+        #        f"NavSatFix {self._vehicle_nav_sat_fix} and/or terrain Altitude "
+        #        f"{self.terrain_altitude} and/or EGM 96 height {self.egm96_height } "
+        #        f"message not yet received, cannot determine vehicle altitude."
+        #    )
+        #    return None
 
     @staticmethod
     def _euler_from_quaternion(q):

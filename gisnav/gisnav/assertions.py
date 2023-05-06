@@ -49,7 +49,7 @@ def enforce_types(
 
     def decorator(method: F) -> F:
         @wraps(method)
-        def wrapper(*args: Any, **kwargs: Any) -> Union[Any, None]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             """
             This wrapper function validates the provided arguments against the type
             hints of the wrapped method.

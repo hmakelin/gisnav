@@ -257,7 +257,7 @@ class AutopilotNode(RVizPublisherNode):
                 header=messaging.create_header("base_link"),
                 amsl=vehicle_altitude_amsl,
                 local=local,  # TODO: home altitude ok?
-                relative=-local,
+                relative=-local,  # TODO: check sign
                 terrain=vehicle_altitude_terrain,
                 bottom_clearance=np.nan,
             )
@@ -382,7 +382,7 @@ class AutopilotNode(RVizPublisherNode):
         or None if not available"""
 
         @enforce_types(self.get_logger().warn, "Cannot determine home GeoPoint")
-        def _home_geopoint(home_position: GeoPoint):
+        def _home_geopoint(home_position: HomePosition):
             return GeoPointStamped(
                 header=messaging.create_header("base_link"),
                 position=GeoPoint(

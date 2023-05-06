@@ -86,6 +86,8 @@ def enforce_types(
                         check = any(type_matches) if type_matches is not None else False
 
                     if not check:
+                        # TODO: debug log level if value is None (expected to
+                        # happen), set warn flag if value is something else?
                         mismatches.append((name, expected_type, type(value)))
 
             if mismatches:

@@ -365,9 +365,6 @@ class AutopilotNode(RVizPublisherNode):
 
             assert gimbal_device_attitude_status is not None
 
-            roll, pitch, yaw = AutopilotNode._euler_from_quaternion(
-                gimbal_device_attitude_status.q
-            )
             compound_q = AutopilotNode.apply_vehicle_yaw(
                 vehicle_geopose.pose.orientation, gimbal_device_attitude_status.q
             )

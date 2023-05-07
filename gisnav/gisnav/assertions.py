@@ -17,13 +17,18 @@ from typing import (
 )
 
 import numpy as np
+from typing_extensions import ParamSpec
 
-F = TypeVar("F", bound=Callable[..., Any])
+#: Original return type of the wrapped method
+T = TypeVar("T")
+
+#: Original param specification of the wrapped method
+P = ParamSpec("P")
 
 
 def enforce_types(
     logger: Optional[Callable[[str], Any]] = None, custom_msg: Optional[str] = None
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
     """
     Wrapper function to check if provided arguments match the method's type
     hints.
@@ -32,6 +37,11 @@ def enforce_types(
     decorator optionally logs the mismatches and then returns None without
     executing the original method. Otherwise, it proceeds to call the original
     method with the given arguments and keyword arguments.
+
+    .. warning::
+        * If the decorated method can also return None after execution you will
+          not be able to tell from the return value whether the method executed
+          or the type narrowing failed.
 
     .. note::
         This decorator streamlines computed properties by automating the check
@@ -47,17 +57,17 @@ def enforce_types(
         does not match the type hints.
     """
 
-    def decorator(method: F) -> F:
+    def decorator(method: Callable[P, T]) -> Callable[P, Optional[T]]:
         @wraps(method)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
             """
             This wrapper function validates the provided arguments against the type
             hints of the wrapped method.
 
             :param args: Positional arguments passed to the original method.
             :param kwargs: Keyword arguments passed to the original method.
-            :return: The return value of the original method or None if any argument
-                does not match the type hints.
+            :return: The return value of the original method or None if any
+                argument does not match the type hints.
             """
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)
@@ -104,7 +114,7 @@ def enforce_types(
 
             return method(*args, **kwargs)
 
-        return cast(F, wrapper)
+        return cast(Callable[P, Optional[T]], wrapper)
 
     return decorator
 

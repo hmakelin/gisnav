@@ -31,7 +31,7 @@ def enforce_types(
 ) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
-    function's type hints.
+    function's type hints *in a ``mypy`` compatible way*.
 
     If any of the arguments do not match their corresponding type hints, this
     decorator optionally logs the mismatches and then returns None without

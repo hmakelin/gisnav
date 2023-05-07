@@ -261,7 +261,6 @@ class BBoxNode(CameraSubscriberNode):
         ):
             altitude_agl = vehicle_altitude.terrain
             if altitude_agl < 0:
-                # TODO: make alt AGL separate decorated property that does validation,clean up from here
                 self.get_logger().warn(
                     f"Altitude AGL {altitude_agl} was negative, skipping mock map data."
                 )
@@ -320,20 +319,20 @@ class BBoxNode(CameraSubscriberNode):
                     f"{translation} were invalid: {e}."
                 ) from e
 
-            try:
-                mock_fixed_camera = FixedCamera(
-                    pose=pose,
-                    image_pair=mock_image_pair,
-                    terrain_altitude_amsl=terrain_altitude.amsl,
-                    terrain_altitude_ellipsoid=terrain_geopoint.position.altitude,
-                    home_position=home_geopoint.position,
-                    timestamp=usec,
-                )
-            except DataValueError:
-                self.get_logger().warn(
-                    "Could not create a valid mock projection of FOV."
-                )
-                return None
+            # try:
+            mock_fixed_camera = FixedCamera(
+                pose=pose,
+                image_pair=mock_image_pair,
+                terrain_altitude_amsl=terrain_altitude.amsl,
+                terrain_altitude_ellipsoid=terrain_geopoint.position.altitude,
+                home_position=home_geopoint.position,
+                timestamp=usec,
+            )
+            # except DataValueError:
+            #    self.get_logger().warn(
+            #        "Could not create a valid mock projection of FOV."
+            #    )
+            #    return None
 
             return mock_fixed_camera.fov.fov.to_crs("epsg:4326").center
 

@@ -30,8 +30,8 @@ def enforce_types(
     logger: Optional[Callable[[str], Any]] = None, custom_msg: Optional[str] = None
 ) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
     """
-    Wrapper function to check if provided arguments match the method's type
-    hints.
+    Function decorator to narrow provided argument types to match the decorated
+    function's type hints.
 
     If any of the arguments do not match their corresponding type hints, this
     decorator optionally logs the mismatches and then returns None without
@@ -41,7 +41,9 @@ def enforce_types(
     .. warning::
         * If the decorated method can also return None after execution you will
           not be able to tell from the return value whether the method executed
-          or the type narrowing failed.
+          or the type narrowing failed. # TODO: the decorator should log a
+          warning or perhaps even raise an error if the decorated function
+          includes a None return type.
 
     .. note::
         This decorator streamlines computed properties by automating the check
@@ -54,15 +56,16 @@ def enforce_types(
         input argument
     :param custom_msg: Optional custom messag to prefix to the logging
     :return: The return value of the original method or None if any argument
-        does not match the type hints.
+        does not match the type hints. Be aware that the original method could
+        also return None after execution.
     """
 
     def decorator(method: Callable[P, T]) -> Callable[P, Optional[T]]:
         @wraps(method)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
             """
-            This wrapper function validates the provided arguments against the type
-            hints of the wrapped method.
+            This wrapper function validates the provided arguments against the
+            type hints of the wrapped method.
 
             :param args: Positional arguments passed to the original method.
             :param kwargs: Keyword arguments passed to the original method.

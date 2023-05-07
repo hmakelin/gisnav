@@ -22,7 +22,7 @@ from typing_extensions import ParamSpec
 #: Original return type of the wrapped method
 T = TypeVar("T")
 
-#: Original param specification of the wrapped method
+#: Param specification of the wrapped method
 P = ParamSpec("P")
 
 

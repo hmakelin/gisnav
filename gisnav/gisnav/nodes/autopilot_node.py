@@ -11,7 +11,12 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32
 
-from gisnav.assertions import enforce_types
+from gisnav.assertions import (
+    enforce_types,
+    ros_max_delay_ms,
+    ros_publish,
+    ros_subscribe,
+)
 
 from . import messaging
 from .base.rviz_publisher_node import RVizPublisherNode
@@ -38,11 +43,6 @@ class AutopilotNode(RVizPublisherNode):
             messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
             QoSPresetProfiles.SENSOR_DATA.value,
         )
-        self.__vehicle_altitude_pub = self.create_publisher(
-            Altitude,
-            messaging.ROS_TOPIC_VEHICLE_ALTITUDE,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
         self.__gimbal_quaternion_pub = self.create_publisher(
             Quaternion,
             messaging.ROS_TOPIC_GIMBAL_QUATERNION,
@@ -57,14 +57,6 @@ class AutopilotNode(RVizPublisherNode):
         # Subscribers
         # terrain_altitude and egm96_height properties intended to be used by
         # extending classes -> no name mangling
-        self.terrain_altitude: Optional[Altitude] = None
-        self.__terrain_altitude_sub = self.create_subscription(
-            Altitude,
-            messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
-            self.__terrain_altitude_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-
         self.egm96_height: Optional[Float32] = None
         self.__egm96_height_sub = self.create_subscription(
             Float32,
@@ -102,6 +94,51 @@ class AutopilotNode(RVizPublisherNode):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
+    @property
+    @ros_max_delay_ms(500)
+    @ros_subscribe(
+        messaging.ROS_TOPIC_TERRAIN_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def terrain_altitude(self) -> Optional[Altitude]:
+        """Altitude of terrain directly under vehicle, or None if unknown or too old"""
+
+    @property
+    @ros_max_delay_ms(500)  # Note: gets published before this check
+    @ros_publish(
+        messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def vehicle_altitude(self) -> Optional[Altitude]:
+        """Altitude of vehicle, or None if unknown or too old"""
+
+        @enforce_types(self.get_logger().warn, "Cannot determine vehicle altitude")
+        def _vehicle_altitude(
+            navsatfix: NavSatFix,
+            egm96_height: Float32,
+            terrain_altitude: Altitude,
+            vehicle_altitude_local: Optional[float],
+        ):
+            vehicle_altitude_amsl = navsatfix.altitude - egm96_height.data
+            vehicle_altitude_terrain = vehicle_altitude_amsl - terrain_altitude.amsl
+            local = (
+                vehicle_altitude_local if vehicle_altitude_local is not None else np.nan
+            )
+            altitude = Altitude(
+                header=messaging.create_header("base_link"),
+                amsl=vehicle_altitude_amsl,
+                local=local,  # TODO: home altitude ok?
+                relative=-local,  # TODO: check sign
+                terrain=vehicle_altitude_terrain,
+                bottom_clearance=np.nan,
+            )
+            return altitude
+
+        return _vehicle_altitude(
+            self._vehicle_nav_sat_fix,
+            self.egm96_height,
+            self.terrain_altitude,
+            self._vehicle_altitude_local,
+        )
+
     @staticmethod
     def _navsatfix_to_geoposestamped(msg: NavSatFix) -> GeoPoseStamped:
         # Publish to rviz2 for debugging
@@ -130,17 +167,16 @@ class AutopilotNode(RVizPublisherNode):
         """
         self._vehicle_nav_sat_fix = msg
         self.publish_vehicle_geopose()
-        self.publish_vehicle_altitude()
+        vehicle_altitude = (
+            self.vehicle_altitude
+        )  # publishes vehicle altitude if available
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.publish_gimbal_quaternion()
 
-        if (
-            self.vehicle_altitude is not None
-            and self.vehicle_altitude.terrain is not np.nan
-        ):
+        if vehicle_altitude is not None and vehicle_altitude.terrain is not np.nan:
             # publish to RViz for debugging and visualization
             geopose_stamped = self._navsatfix_to_geoposestamped(msg)
-            self.publish_rviz(geopose_stamped, self.vehicle_altitude.terrain)
+            self.publish_rviz(geopose_stamped, vehicle_altitude.terrain)
 
     def _vehicle_pose_stamped_callback(self, msg: PoseStamped) -> None:
         """Handles latest :class:`mavros_msgs.msg.PoseStamped` message
@@ -235,40 +271,6 @@ class AutopilotNode(RVizPublisherNode):
             return vehicle_pose_stamped.pose.position.z
 
         return _vehicle_altitude_local(self._vehicle_pose_stamped)
-
-    @property
-    def vehicle_altitude(self) -> Optional[Altitude]:
-        """Vehicle altitude as :class:`mavros_msgs.msg.Altitude` message or
-        None if not available"""
-
-        @enforce_types(self.get_logger().warn, "Cannot determine vehicle altitude")
-        def _vehicle_altitude(
-            navsatfix: NavSatFix,
-            egm96_height: Float32,
-            terrain_altitude: Altitude,
-            vehicle_altitude_local: Optional[float],
-        ):
-            vehicle_altitude_amsl = navsatfix.altitude - egm96_height.data
-            vehicle_altitude_terrain = vehicle_altitude_amsl - terrain_altitude.amsl
-            local = (
-                vehicle_altitude_local if vehicle_altitude_local is not None else np.nan
-            )
-            altitude = Altitude(
-                header=messaging.create_header("base_link"),
-                amsl=vehicle_altitude_amsl,
-                local=local,  # TODO: home altitude ok?
-                relative=-local,  # TODO: check sign
-                terrain=vehicle_altitude_terrain,
-                bottom_clearance=np.nan,
-            )
-            return altitude
-
-        return _vehicle_altitude(
-            self._vehicle_nav_sat_fix,
-            self.egm96_height,
-            self.terrain_altitude,
-            self._vehicle_altitude_local,
-        )
 
     @staticmethod
     def _euler_from_quaternion(q):
@@ -398,19 +400,6 @@ class AutopilotNode(RVizPublisherNode):
 
     # region public properties
     @property
-    def terrain_altitude(self) -> Optional[Altitude]:
-        """Terrain altitude
-
-        Needed by implementing classes to generate vehicle
-        :class:`geographic_msgs.msg.GeoPoseStamped` message
-        """
-        return self.__terrain_altitude
-
-    @terrain_altitude.setter
-    def terrain_altitude(self, value: Optional[Altitude]) -> None:
-        self.__terrain_altitude = value
-
-    @property
     def egm96_height(self) -> Optional[Float32]:
         """EGM96 geoid height
 
@@ -427,9 +416,6 @@ class AutopilotNode(RVizPublisherNode):
     # endregion public properties
 
     # region ROS subscriber callbacks
-    def __terrain_altitude_callback(self, msg: Altitude) -> None:
-        """Handles terrain altitude message"""
-        self.__terrain_altitude = msg
 
     def __egm96_height_callback(self, msg: Float32) -> None:
         """Handles ellipsoid height message"""
@@ -446,15 +432,6 @@ class AutopilotNode(RVizPublisherNode):
             self.__vehicle_geopose_pub.publish(vehicle_geopose)
 
         _publish_vehicle_geopose(self.vehicle_geopose)
-
-    def publish_vehicle_altitude(self) -> None:
-        """Publishes vehicle :class:`mavros_msgs.msg.Altitude`"""
-
-        @enforce_types(self.get_logger().warn, "Skipping publishing vehicle Altitude")
-        def _publish_vehicle_altitude(vehicle_altitude: Altitude):
-            self.__vehicle_altitude_pub.publish(vehicle_altitude)
-
-        _publish_vehicle_altitude(self.vehicle_altitude)
 
     def publish_gimbal_quaternion(self) -> None:
         """Publishes gimbal :class:`geometry_msgs.msg.Quaternion` orientation"""

@@ -166,7 +166,7 @@ class BBoxNode(CameraSubscriberNode):
 
         # No need to call _publish here:
         # Vehicle altitude changes do affect bbox estimate but _publish is
-        # already called in GeoPose callback Altitude message is only
+        # already called in GeoPose callback. Altitude message is only
         # subscribed to because it provides altitude AGL and AMSL unlike GeoPose
         # self._publish()
 
@@ -261,6 +261,7 @@ class BBoxNode(CameraSubscriberNode):
         ):
             altitude_agl = vehicle_altitude.terrain
             if altitude_agl < 0:
+                # TODO: make alt AGL separate decorated property that does validation,clean up from here
                 self.get_logger().warn(
                     f"Altitude AGL {altitude_agl} was negative, skipping mock map data."
                 )

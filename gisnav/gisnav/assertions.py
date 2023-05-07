@@ -17,21 +17,22 @@ from typing import (
 )
 
 import numpy as np
-
-# from typing_extensions import ParamSpec
+from typing_extensions import ParamSpec
 
 #: Original return type of the wrapped method
 T = TypeVar("T")
 
 #: Param specification of the wrapped method
-# P = ParamSpec("P")
-# TODO: using ellipsis (...) for Callable arguments instead of ParamSpec because
-# the decorated function is not expected to have the same ParamSpec. However, should
-# check that the *args are the same length and **kwargs have the same keys?
+P = ParamSpec("P")
+# TODO: using ellipsis (...) for Callable arguments instead of ParamSpec in
+# enforce_types because the decorated function is not expected to have the same
+# ParamSpec. However, should check that the *args are the same length and
+# **kwargs have the same keys?
 
 
 def enforce_types(
-    logger: Optional[Callable[[str], Any]] = None, custom_msg: Optional[str] = None
+    logger_callable: Optional[Callable[[str], Any]] = None,
+    custom_msg: Optional[str] = None,
 ) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
@@ -64,7 +65,7 @@ def enforce_types(
         also return None after execution.
     """
 
-    def decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
+    def inner_decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
         @wraps(method)
         def wrapper(*args, **kwargs) -> Optional[T]:
             """
@@ -108,7 +109,7 @@ def enforce_types(
                         mismatches.append((name, expected_type, type(value)))
 
             if mismatches:
-                if logger:
+                if logger_callable:
                     mismatch_msgs = [
                         f"{name} (expected {expected}, got {actual})"
                         for name, expected, actual in mismatches
@@ -116,14 +117,78 @@ def enforce_types(
                     log_msg = f"Unexpected types: {', '.join(mismatch_msgs)}"
                     if custom_msg:
                         log_msg = f"{custom_msg}: {log_msg}"
-                    logger(log_msg)
+                    logger_callable(log_msg)
                 return None
 
             return method(*args, **kwargs)
 
-        return cast(Callable[..., Optional[T]], wrapper)
+        return cast(Callable[..., Optional[T]], wrapper)  # TODO: cast needed for mypy?
 
-    return decorator
+    return inner_decorator
+
+
+def validate(
+    condition: Callable[[], bool],
+    logger_callable: Optional[Callable[[str], Any]] = None,
+    custom_msg: Optional[str] = None,
+):
+    """
+    A decorator to check an arbitrary condition before executing the wrapped function.
+
+    If the condition is not met, the decorator optinally logs a warning message
+    using the provided logger_callable, and then returns `None`. If the
+    condition is met, the wrapped function is executed as normal.
+
+    .. warning::
+        * If the decorated method can also return None after execution you will
+          not be able to tell from the return value whether the method executed
+          or the validation failed. # TODO: the decorator should log a warning
+          or perhaps even raise an error if the decorated function includes a
+          None return type.
+
+    :param condition: A callable with no arguments that returns a boolean value.
+        The wrapped function will be executed if this condition evaluates to True.
+    :param logger_callable: An optional callable that takes a single string
+        argument, which will be called to log a warning message when the
+        condition fails.
+    :param custom_msg: Optional custom message to prefix to the logging message
+    :return: The inner decorator function that wraps the target function.
+
+    Example usage:
+
+    .. code-block:: python
+
+        import logging
+
+        logging.basicConfig(level=logging.WARNING)
+        logger = logging.getLogger(__name__)
+
+        def my_condition():
+            return False
+
+        @validate(my_condition, logger.warning)
+        def my_function():
+            return "Success"
+
+        result = my_function()
+        print("Function result:", result)
+    """
+
+    def inner_decorator(func: Callable[P, T]):
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
+            if not condition():
+                if logger_callable:
+                    logger_callable(
+                        f"{custom_msg}: Validation failed for function "
+                        f"'{func.__name__}'. Returning 'None'."
+                    )
+                return None
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return inner_decorator
 
 
 def assert_type(value: object, type_: Any) -> None:

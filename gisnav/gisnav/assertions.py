@@ -17,18 +17,22 @@ from typing import (
 )
 
 import numpy as np
-from typing_extensions import ParamSpec
+
+# from typing_extensions import ParamSpec
 
 #: Original return type of the wrapped method
 T = TypeVar("T")
 
 #: Param specification of the wrapped method
-P = ParamSpec("P")
+# P = ParamSpec("P")
+# TODO: using ellipsis (...) for Callable arguments instead of ParamSpec because
+# the decorated function is not expected to have the same ParamSpec. However, should
+# check that the *args are the same length and **kwargs have the same keys?
 
 
 def enforce_types(
     logger: Optional[Callable[[str], Any]] = None, custom_msg: Optional[str] = None
-) -> Callable[[Callable[P, T]], Callable[P, Optional[T]]]:
+) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
     function's type hints *in a ``mypy`` compatible way*.
@@ -54,15 +58,15 @@ def enforce_types(
 
     :param logger: Optional logging callable that accepts a string message as
         input argument
-    :param custom_msg: Optional custom messag to prefix to the logging
+    :param custom_msg: Optional custom message to prefix to the logging
     :return: The return value of the original method or None if any argument
         does not match the type hints. Be aware that the original method could
         also return None after execution.
     """
 
-    def decorator(method: Callable[P, T]) -> Callable[P, Optional[T]]:
+    def decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
         @wraps(method)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
+        def wrapper(*args, **kwargs) -> Optional[T]:
             """
             This wrapper function validates the provided arguments against the
             type hints of the wrapped method.
@@ -117,7 +121,7 @@ def enforce_types(
 
             return method(*args, **kwargs)
 
-        return cast(Callable[P, Optional[T]], wrapper)
+        return cast(Callable[..., Optional[T]], wrapper)
 
     return decorator
 

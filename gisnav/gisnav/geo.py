@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import warnings
 from abc import ABC
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, TypeVar
 
 import numpy as np
 from geopandas import GeoSeries
@@ -36,6 +36,8 @@ class _GeoObject(ABC):
     DEFAULT_CRS = "epsg:4326"
     """Use WGS 84 latitude and longitude by default"""
 
+    G = TypeVar("G", bound="_GeoObject")
+
     @property
     def _geoseries(self) -> GeoSeries:
         return self.__geoseries
@@ -59,10 +61,10 @@ class _GeoObject(ABC):
         """Returns the wrapped shape as a numpy array"""
         return self._geoseries[0].coords[0]
 
-    def to_crs(self, crs: str) -> _GeoObject:  # TODO: return None? Misleading this way
+    def to_crs(self: G, crs: str) -> G:  # TODO: return None? Misleading this way
         """Converts to provided CRS
 
-        :return: The same GeoPt instance transformed to new CRS
+        :return: The same _GeoObject inheriting instance transformed to new CRS
         """
         if self._geoseries.crs != crs:
             self._geoseries = self._geoseries.to_crs(crs)

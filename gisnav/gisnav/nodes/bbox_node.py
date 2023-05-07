@@ -9,11 +9,15 @@ from mavros_msgs.msg import Altitude
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import Image
 
+from gisnav.assertions import enforce_types
+
 from ..data import (
     Attitude,
     BBox,
+    CameraData,
     ContextualMapData,
     DataValueError,
+    Dim,
     FixedCamera,
     ImageData,
     ImagePair,
@@ -53,21 +57,9 @@ class BBoxNode(CameraSubscriberNode):
     ROS_D_MAX_MAP_RADIUS = 400
     """Default maximum map radius for used maps"""
 
-    ROS_D_DEBUG_EXPORT_PROJECTION = ""  # 'projection.json'
-    """Default filename for exporting GeoJSON containing projected field of view
-    (FOV) and FOV center
-
-    Set to '' to disable
-
-    .. note::
-        Exporting the projection as GeoJSON and viewing it in a GIS software may
-        be useful for e.g. debugging
-    """
-
     ROS_PARAM_DEFAULTS = [
         ("gimbal_projection", ROS_D_GIMBAL_PROJECTION, False),
         ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
-        ("export_projection", ROS_D_DEBUG_EXPORT_PROJECTION, False),
     ]
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
@@ -214,18 +206,15 @@ class BBoxNode(CameraSubscriberNode):
         :return: Mock image pair that can be paired with a pose guess to generate
             a FOV guess, or None if not available
         """
-        image_data = self._mock_image_data()
-        map_data = self._mock_map_data(xy)
-        if image_data is None or map_data is None:
-            self.get_logger().warn(
-                "Missing required inputs for generating mock image PAIR."
+
+        @enforce_types(self.get_logger().warn, "Cannot generate mock image pair")
+        def _mock_image_pair(image_data: ImageData, map_data: MapData):
+            contextual_map_data = ContextualMapData(
+                rotation=0, crop=image_data.image.dim, map_data=map_data, mock_data=True
             )
-            return None
-        contextual_map_data = ContextualMapData(
-            rotation=0, crop=image_data.image.dim, map_data=map_data, mock_data=True
-        )
-        image_pair = ImagePair(image_data, contextual_map_data)
-        return image_pair
+            return ImagePair(image_data, contextual_map_data)
+
+        return _mock_image_pair(self._mock_image_data(), self._mock_map_data(xy))
 
     # TODO: make property
     def _mock_image_data(self) -> Optional[ImageData]:
@@ -235,20 +224,18 @@ class BBoxNode(CameraSubscriberNode):
         .. seealso:
             :meth:`._mock_map_data` and :meth:`._mock_image_pair`
         """
-        if self.img_dim is None or self.camera_data is None:
-            self.get_logger().warn(
-                "Missing required camera data or img dim for generating mock "
-                "image data."
-            )
-            return None
 
-        image_data = ImageData(
-            image=Img(np.zeros(self.img_dim)),
-            frame_id="mock_image_data",
-            timestamp=self.usec,
-            camera_data=self.camera_data,
-        )
-        return image_data
+        @enforce_types(self.get_logger().warn, "Cannot generate mock image data")
+        def _mock_image_data(img_dim: Dim, camera_data: CameraData, usec: int):
+            image_data = ImageData(
+                image=Img(np.zeros(img_dim)),
+                frame_id="mock_image_data",
+                timestamp=usec,
+                camera_data=camera_data,
+            )
+            return image_data
+
+        return _mock_image_data(self.img_dim, self.camera_data, self.usec)
 
     def _mock_map_data(self, xy: GeoPt) -> Optional[MapData]:
         """Creates mock :class:`.MapData` for guessing projected FOV needed for
@@ -265,35 +252,34 @@ class BBoxNode(CameraSubscriberNode):
         :return: Mock map data with mock images but with real expected bbox,
             or None if not available
         """
-        if self.camera_data is None or self.map_size_with_padding is None:
-            self.get_logger().warn(
-                "Missing required inputs for generating mock MAP DATA."
-            )
-            return None
 
-        if self._vehicle_altitude is None:
-            self.get_logger().warn(
-                "Cannot determine vehicle altitude AGL, skipping creating mock "
-                "map data"
-            )
-            return None
-        altitude_agl = self._vehicle_altitude.terrain
-        if altitude_agl < 0:
-            self.get_logger().warn(
-                f"Altitude AGL {altitude_agl} was negative, skipping mock map data."
-            )
-            return
+        @enforce_types(self.get_logger().warn, "Cannot generate mock map data")
+        def _mock_map_data(
+            camera_data: CameraData,
+            map_size_with_padding: Dim,
+            vehicle_altitude: Altitude,
+        ):
+            altitude_agl = vehicle_altitude.terrain
+            if altitude_agl < 0:
+                self.get_logger().warn(
+                    f"Altitude AGL {altitude_agl} was negative, skipping mock map data."
+                )
+                return
 
-        # Scaling factor of image pixels := terrain_altitude
-        scaling = (self.map_size_with_padding[0] / 2) / self.camera_data.fx
-        radius = scaling * altitude_agl
+            # Scaling factor of image pixels := terrain_altitude
+            scaling = (map_size_with_padding[0] / 2) / camera_data.fx
+            radius = scaling * altitude_agl
 
-        bbox = GeoSquare(xy, radius)
-        zeros = np.zeros(self.map_size_with_padding)
-        map_data = MapData(
-            bbox=BBox(*bbox.bounds), image=Img(zeros), elevation=Img(zeros)
+            bbox = GeoSquare(xy, radius)
+            zeros = np.zeros(map_size_with_padding)
+            map_data = MapData(
+                bbox=BBox(*bbox.bounds), image=Img(zeros), elevation=Img(zeros)
+            )
+            return map_data
+
+        return _mock_map_data(
+            self.camera_data, self.map_size_with_padding, self._vehicle_altitude
         )
-        return map_data
 
     # endregion
 
@@ -304,91 +290,65 @@ class BBoxNode(CameraSubscriberNode):
         :param xy: Camera position
         :return: Center of the projected FOV, or None if not available
         """
-        if self._gimbal_quaternion is None:
-            self.get_logger().warn(
-                "Gimbal quaternion not available, cannot project gimbal FOV."
-            )
-            return None
-        else:
-            gimbal_attitude = Attitude(
-                q=messaging.as_np_quaternion(self._gimbal_quaternion)
-            )
+
+        @enforce_types(self.get_logger().warn, "Cannot project FOV center")
+        def _fov_center(
+            mock_image_pair: ImagePair,
+            gimbal_quaternion: Quaternion,
+            camera_data: CameraData,
+            terrain_altitude: Altitude,
+            terrain_geopoint: GeoPointStamped,
+            home_geopoint: GeoPointStamped,
+            usec: int,
+        ):
+            gimbal_attitude = Attitude(q=messaging.as_np_quaternion(gimbal_quaternion))
             gimbal_attitude = (
                 gimbal_attitude.to_esd()
             )  # Need coordinates in image frame, not NED
 
-        assert gimbal_attitude is not None
+            assert gimbal_attitude is not None
 
-        if self.camera_data is None:
-            self.get_logger().warn(
-                "Camera data not available, cannot create a mock pose to "
-                "generate a FOV guess."
+            translation = -gimbal_attitude.r @ np.array(
+                [camera_data.cx, camera_data.cy, -camera_data.fx]
             )
-            return None
+            try:
+                pose = Pose(gimbal_attitude.r, translation.reshape((3, 1)))
+            except DataValueError as e:
+                raise Exception(
+                    f"Pose input values: {gimbal_attitude.r}, "
+                    f"{translation} were invalid: {e}."
+                ) from e
 
-        if self._terrain_altitude is None:
-            self.get_logger().warn(
-                "Terrain altitude not available, cannot create a mock pose to "
-                "generate a FOV guess."
-            )
-            return None
-
-        if self._terrain_geopoint is None:
-            self.get_logger().warn(
-                "Terrain geopoint not available, cannot create a mock pose to "
-                "generate a FOV guess."
-            )
-            return None
-
-        if self._home_geopoint is None:
-            self.get_logger().warn(
-                "Home geopoint not available, cannot create a mock pose to "
-                "generate a FOV guess."
-            )
-            return None
-
-        translation = -gimbal_attitude.r @ np.array(
-            [self.camera_data.cx, self.camera_data.cy, -self.camera_data.fx]
-        )
-        try:
-            pose = Pose(gimbal_attitude.r, translation.reshape((3, 1)))
-        except DataValueError as e:
-            self.get_logger().warn(
-                f"Pose input values: {gimbal_attitude.r}, "
-                f"{translation} were invalid: {e}."
-            )
-            return None
-
-        try:
-            assert self._terrain_altitude is not None
-            assert self._terrain_geopoint is not None
-            assert self._home_geopoint is not None
-            mock_fixed_camera = FixedCamera(
-                pose=pose,
-                image_pair=self._mock_image_pair(xy),
-                terrain_altitude_amsl=self._terrain_altitude.amsl,
-                terrain_altitude_ellipsoid=self._terrain_geopoint.position.altitude,
-                home_position=self._home_geopoint.position,
-                timestamp=self.usec,
-            )
-        except DataValueError:
-            self.get_logger().warn("Could not create a valid mock projection of FOV.")
-            return None
-
-        if __debug__:
-            export_projection = (
-                self.get_parameter("export_projection")
-                .get_parameter_value()
-                .string_value
-            )
-            if export_projection != "":
-                self._export_position(
-                    mock_fixed_camera.fov.c,
-                    mock_fixed_camera.fov.fov,
-                    export_projection,
+            try:
+                mock_fixed_camera = FixedCamera(
+                    pose=pose,
+                    image_pair=mock_image_pair,
+                    terrain_altitude_amsl=terrain_altitude.amsl,
+                    terrain_altitude_ellipsoid=terrain_geopoint.position.altitude,
+                    home_position=home_geopoint.position,
+                    timestamp=usec,
                 )
+            except DataValueError:
+                self.get_logger().warn(
+                    "Could not create a valid mock projection of FOV."
+                )
+                return None
 
-        return mock_fixed_camera.fov.fov.to_crs("epsg:4326").center
+            return mock_fixed_camera.fov.fov.to_crs("epsg:4326").center
+
+        try:
+            return _fov_center(
+                self._mock_image_pair(xy),
+                self._gimbal_quaternion,
+                self.camera_data,
+                self._terrain_altitude,
+                self._terrain_geopoint,
+                self._home_geopoint,
+                self.usec,
+            )
+        except DataValueError as e:
+            self.get_logger().warn(str(e))
+            return None
 
     def _publish(self) -> None:
         """Publishes :class:`geographic_msgs.msg.BoundingBox` message
@@ -397,58 +357,62 @@ class BBoxNode(CameraSubscriberNode):
         projected camera field of view is used instead of the vehicle position
         to ensure the field of view is best contained in the new map raster.
         """
-        if self._vehicle_geopose is None:
-            self.get_logger().warn(
-                "Cannot determine vehicle geopose, skipping publishing bbox"
-            )
-            return
 
-        if self._vehicle_altitude is None:
-            self.get_logger().warn(
-                "Cannot determine vehicle altitude above ground, "
-                "skipping publishing bbox"
-            )
-            return None
+        @enforce_types(self.get_logger().warn, "Cannot publish bounding box")
+        def _publish_bbox(
+            vehicle_geopose: GeoPoseStamped,
+            vehicle_altitude: Altitude,
+            camera_data: CameraData,
+            gimbal_projection_enabled: bool,
+        ):
+            geopt = messaging.geopoint_to_geopt(vehicle_geopose.pose.position)
 
-        geopt = messaging.geopoint_to_geopt(self._vehicle_geopose.pose.position)
+            if gimbal_projection_enabled:
+                projected_center = self._guess_fov_center(geopt)
+                if projected_center is None:
+                    self.get_logger().warn(
+                        "Could not project field of view center. Using vehicle "
+                        "position for map center instead."
+                    )
+            else:
+                projected_center = None
 
-        if self._is_gimbal_projection_enabled:
-            assert self._vehicle_geopose is not None
-            projected_center = self._guess_fov_center(geopt)
-            if projected_center is None:
+            map_update_altitude_agl = vehicle_altitude.terrain
+            if map_update_altitude_agl is None:
                 self.get_logger().warn(
-                    "Could not project field of view center. Using vehicle "
-                    "position for map center instead."
+                    "Cannot determine altitude AGL, skipping map update."
                 )
-        else:
-            projected_center = None
-
-        assert self._vehicle_altitude is not None
-        map_update_altitude_agl = self._vehicle_altitude.terrain
-        if map_update_altitude_agl is None:
-            self.get_logger().warn(
-                "Cannot determine altitude AGL, skipping map update."
+                return None
+            if map_update_altitude_agl <= 0:
+                self.get_logger().warn(
+                    f"Map update altitude {map_update_altitude_agl} should be > 0, "
+                    f"skipping map update."
+                )
+                return None
+            max_map_radius = (
+                self.get_parameter("max_map_radius").get_parameter_value().integer_value
             )
-            return None
-        if map_update_altitude_agl <= 0:
-            self.get_logger().warn(
-                f"Map update altitude {map_update_altitude_agl} should be > 0, "
-                f"skipping map update."
+            map_radius = get_dynamic_map_radius(
+                camera_data, max_map_radius, map_update_altitude_agl
             )
-            return None
-        max_map_radius = (
-            self.get_parameter("max_map_radius").get_parameter_value().integer_value
-        )
-        map_radius = get_dynamic_map_radius(
-            self.camera_data, max_map_radius, map_update_altitude_agl
-        )
-        map_candidate = GeoSquare(
-            projected_center if projected_center is not None else geopt, map_radius
-        )
+            map_candidate = GeoSquare(
+                projected_center if projected_center is not None else geopt, map_radius
+            )
 
-        bbox = BBox(*map_candidate.bounds)
-        bbox = BoundingBox(
-            min_pt=GeoPoint(latitude=bbox.bottom, longitude=bbox.left, altitude=np.nan),
-            max_pt=GeoPoint(latitude=bbox.top, longitude=bbox.right, altitude=np.nan),
+            bbox = BBox(*map_candidate.bounds)
+            bbox = BoundingBox(
+                min_pt=GeoPoint(
+                    latitude=bbox.bottom, longitude=bbox.left, altitude=np.nan
+                ),
+                max_pt=GeoPoint(
+                    latitude=bbox.top, longitude=bbox.right, altitude=np.nan
+                ),
+            )
+            self._bounding_box_pub.publish(bbox)
+
+        _publish_bbox(
+            self._vehicle_geopose,
+            self._vehicle_altitude,
+            self.camera_data,
+            self._is_gimbal_projection_enabled,
         )
-        self._bounding_box_pub.publish(bbox)

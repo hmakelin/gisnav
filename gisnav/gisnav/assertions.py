@@ -262,6 +262,7 @@ class ROS:
                         setattr(self, cached_property_name, message)
 
                         # Look for defined callback and execute it
+                        # TODO: make this more efficient
                         for attr_name in dir(self):
                             attr = getattr(self, attr_name)
                             if hasattr(attr, f"__ros_callback_for_{id(wrapper)}"):

@@ -1,6 +1,6 @@
 """A node that publishes bounding box of field of view projected to ground
 from vehicle approximate location"""
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPointStamped, GeoPoseStamped
@@ -256,7 +256,7 @@ class BBoxNode(CameraSubscriberNode):
         @enforce_types(self.get_logger().warn, "Cannot generate mock map data")
         def _mock_map_data(
             camera_data: CameraData,
-            map_size_with_padding: Dim,
+            map_size_with_padding: Tuple[int, int],
             vehicle_altitude: Altitude,
         ):
             altitude_agl = vehicle_altitude.terrain

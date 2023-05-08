@@ -206,9 +206,6 @@ def validate(
 
 
 class ROS:
-    #: Name of attribute in which optional subscribe callback is stored
-    _CALLBACK_FUNC_NAME = "_callback"
-
     # TODO: callback type, use typevar
     @staticmethod
     def subscribe(topic_name: str, qos):

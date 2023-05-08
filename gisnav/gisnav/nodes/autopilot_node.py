@@ -175,30 +175,30 @@ class AutopilotNode(RVizPublisherNode):
     @ROS.publish(
         messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def vehicle_altitude(self) -> Optional[Altitude]:
+    def altitude(self) -> Optional[Altitude]:
         """Altitude of vehicle, or None if unknown or too old"""
 
         @enforce_types(self.get_logger().warn, "Cannot determine vehicle altitude")
-        def _vehicle_altitude(
+        def _altitude(
             nav_sat_fix: NavSatFix,
             egm96_height: Float32,
             terrain_altitude: Altitude,
             altitude_local: Optional[float],
         ):
-            vehicle_altitude_amsl = nav_sat_fix.altitude - egm96_height.data
-            vehicle_altitude_terrain = vehicle_altitude_amsl - terrain_altitude.amsl
+            altitude_amsl = nav_sat_fix.altitude - egm96_height.data
+            altitude_terrain = altitude_amsl - terrain_altitude.amsl
             local = altitude_local if altitude_local is not None else np.nan
             altitude = Altitude(
                 header=messaging.create_header("base_link"),
-                amsl=vehicle_altitude_amsl,
+                amsl=altitude_amsl,
                 local=local,  # TODO: home altitude ok?
                 relative=-local,  # TODO: check sign
-                terrain=vehicle_altitude_terrain,
+                terrain=altitude_terrain,
                 bottom_clearance=np.nan,
             )
             return altitude
 
-        return _vehicle_altitude(
+        return _altitude(
             self.nav_sat_fix,
             self.egm96_height,
             self.terrain_altitude,

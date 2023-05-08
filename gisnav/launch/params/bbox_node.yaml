@@ -2,4 +2,3 @@ bbox_node:
   ros__parameters:
     gimbal_projection: True
     max_map_radius: 1000
-    export_projection: ''

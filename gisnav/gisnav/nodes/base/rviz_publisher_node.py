@@ -30,12 +30,12 @@ class RVizPublisherNode(BaseNode):
         """
         super().__init__(name)
 
-        self._pose_stamped_publisher = self.create_publisher(
+        self.__pose_stamped_publisher = self.create_publisher(
             PoseStamped,
             self.ROS_TOPIC_POSE_STAMPED,
             QoSPresetProfiles.SYSTEM_DEFAULT.value,
         )
-        self._path_publisher = self.create_publisher(
+        self.__path_publisher = self.create_publisher(
             Path,
             self.ROS_TOPIC_PATH,
             QoSPresetProfiles.SYSTEM_DEFAULT.value,
@@ -49,7 +49,7 @@ class RVizPublisherNode(BaseNode):
         path.header.stamp = self.get_clock().now().to_msg()
         path.header.frame_id = "map"
         path.poses = list(self._pose_stamped_queue)
-        self._path_publisher.publish(path)
+        self.__path_publisher.publish(path)
 
     def publish_rviz(self, geopose_stamped: GeoPoseStamped, alt_agl: float) -> None:
         """
@@ -100,4 +100,4 @@ class RVizPublisherNode(BaseNode):
 
         assert len(self._pose_stamped_queue) > 0
         self._publish_path()
-        self._pose_stamped_publisher.publish(pose_stamped)
+        self.__pose_stamped_publisher.publish(pose_stamped)

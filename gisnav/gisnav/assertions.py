@@ -84,6 +84,29 @@ def enforce_types(
             bound_arguments = signature.bind(*args, **kwargs)
             bound_arguments.apply_defaults()
 
+            def _is_generic_instance(value, origin_type, type_args):
+                if origin_type == list:
+                    return isinstance(value, list) and all(
+                        isinstance(element, type_args[0]) for element in value
+                    )
+                elif origin_type == dict:
+                    key_type, value_type = type_args
+                    return isinstance(value, dict) and all(
+                        isinstance(k, key_type) and isinstance(v, value_type)
+                        for k, v in value.items()
+                    )
+                elif origin_type == tuple:
+                    return (
+                        isinstance(value, tuple)
+                        and len(value) == len(type_args)
+                        and all(
+                            isinstance(element, type_arg)
+                            for element, type_arg in zip(value, type_args)
+                        )
+                    )
+                else:
+                    return any(isinstance(value, type_arg) for type_arg in type_args)
+
             mismatches = []
             for name, value in bound_arguments.arguments.items():
                 if name in type_hints:
@@ -94,20 +117,9 @@ def enforce_types(
                     if origin_type is None:
                         check = isinstance(value, expected_type)
                     else:
-                        # Subscripted generics like Optional[Altitude]
-                        # (typing.Union[mavros_msgs.msg._altitude.Altitude, NoneType]),
-                        # check that the value matches one (=any) of the type_args
-                        type_matches = (
-                            isinstance(value, expected_arg)
-                            for expected_arg in type_args
-                        )
-
-                        # type_matches is None if no matches above
-                        check = any(type_matches) if type_matches is not None else False
+                        check = _is_generic_instance(value, origin_type, type_args)
 
                     if not check:
-                        # TODO: debug log level if value is None (expected to
-                        # happen), set warn flag if value is something else?
                         mismatches.append((name, expected_type, type(value)))
 
             if mismatches:

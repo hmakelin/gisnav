@@ -260,8 +260,17 @@ class ROS:
 
                     def _on_message(message):
                         setattr(self, cached_property_name, message)
-                        if hasattr(func, "_callback"):
-                            callback_method = getattr(func, "_callback")
+
+                        # Look for defined callback and execute it
+                        for attr_name in dir(self):
+                            attr = getattr(self, attr_name)
+                            if hasattr(attr, f"__ros_callback_for_{id(wrapper)}"):
+                                callback_method = attr
+                                break
+                        else:
+                            callback_method = None
+
+                        if callback_method:
                             callback_method(self, message)
 
                     optional_type = get_type_hints(func)["return"]
@@ -284,39 +293,20 @@ class ROS:
         return decorator_property
 
     @staticmethod
-    def callback(outer_property):
+    def callback(property_instance: property):
         """
-        A decorator factory that makes the decorated function an inner function
-        of the provided outer property.
+        A decorator to associate a method as a callback for a property created
+        with the :func:`.subscribe` decorator.
 
-        :param outer_property: The outer property that the decorated function will
-            be made an inner function of.
-        :return decorator: The actual decorator that will be applied to the
-            target function.
+        :param property_instance: The instance of the property to associate the
+            callback with.
         """
 
-        def decorator(func):
-            """
-            The actual decorator that takes the target function and attaches
-            it as an inner function to the outer property's getter method.
+        def decorator_callback(func):
+            setattr(func, f"__ros_callback_for_{id(property_instance)}", True)
+            return func
 
-            :param func: The target function to be made an inner function
-                of the outer property's getter method.
-            :return wrapper: The wrapped function with the same functionality
-                as the original function.
-            """
-
-            def wrapper(*args, **kwargs):
-                """A simple pass-through for the decorated function."""
-                return func(*args, **kwargs)
-
-            if not isinstance(outer_property, property):
-                raise TypeError("The outer object must be a property")
-
-            setattr(outer_property.fget, "_callback", wrapper)
-            return wrapper
-
-        return decorator
+        return decorator_callback
 
     # TODO: use default topic name, e.g. "~/message_type"?
     # TODO: add type hints, see subscribe decorator, use TypeVar("M") below?
@@ -414,18 +404,25 @@ class ROS:
                 if message is None:
                     return None
 
-                header_timestamp = message.header.stamp
-                current_timestamp = self.get_clock().now().to_msg()
-                time_diff = _timestamp_diff_in_milliseconds(
-                    header_timestamp, current_timestamp
-                )
-
-                if time_diff > max_time_diff_ms:
-                    self.get_logger().warn(
-                        f"Time difference ({time_diff} ms) exceeded allowed limit "
-                        f"({max_time_diff_ms} ms)."
+                if hasattr(message, "header"):
+                    header_timestamp = message.header.stamp
+                    current_timestamp = self.get_clock().now().to_msg()
+                    time_diff = _timestamp_diff_in_milliseconds(
+                        header_timestamp, current_timestamp
                     )
-                    return None
+
+                    if time_diff > max_time_diff_ms:
+                        self.get_logger().warn(
+                            f"Time difference for message {type(message)} "
+                            f"({time_diff} ms) exceeded allowed limit "
+                            f"({max_time_diff_ms} ms)."
+                        )
+                        return None
+                else:
+                    self.get_logger().warn(
+                        f"Message of type {type(message)} did not have a header. "
+                        f"Assuming it is not too old."
+                    )
 
                 return message
 

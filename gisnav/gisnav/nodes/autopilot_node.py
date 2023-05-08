@@ -23,6 +23,19 @@ class AutopilotNode(RVizPublisherNode):
     ROS_PARAM_DEFAULTS: list = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
+    #: Max delay for messages where updates are not needed nor expected often,
+    #   e.g. home position
+    _DELAY_SLOW_MS = 10000
+
+    #: Max delay for things like global position
+    _DELAY_NORMAL_MS = 2000
+
+    #: Max delay for messages with fast dynamics that go "stale" quickly, e.g.
+    #   local position and attitude. The delay can be a bit higher than is
+    #   intuitive because the vehicle EKF should be able to fuse things with
+    #   fast dynamics with higher lags as long as the timestamps are accurate.
+    _DELAY_FAST_MS = 500
+
     def __init__(self, name: str) -> None:
         """Initializes the ROS 2 node
 
@@ -39,7 +52,7 @@ class AutopilotNode(RVizPublisherNode):
         self.home_position
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_TERRAIN_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -47,7 +60,7 @@ class AutopilotNode(RVizPublisherNode):
         """Altitude of terrain directly under vehicle, or None if unknown or too old"""
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_EGM96_HEIGHT, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -58,7 +71,7 @@ class AutopilotNode(RVizPublisherNode):
         """
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         "/mavros/global_position/global", QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -103,7 +116,7 @@ class AutopilotNode(RVizPublisherNode):
             self.publish_rviz(geopose_stamped, altitude.terrain)
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_FAST_MS)
     @ROS.subscribe("/mavros/local_position/pose", QoSPresetProfiles.SENSOR_DATA.value)
     def pose_stamped(self) -> Optional[PoseStamped]:
         """Vehicle GPS fix, or None if unknown or too old"""
@@ -121,7 +134,7 @@ class AutopilotNode(RVizPublisherNode):
         # self.publish_vehicle_altitude()  # Needed? This is mainly about vehicle pose
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
     @ROS.subscribe("/mavros/home_position/home", QoSPresetProfiles.SENSOR_DATA.value)
     def home_position(self) -> Optional[HomePosition]:
         """Home position, or None if unknown or too old"""
@@ -138,7 +151,7 @@ class AutopilotNode(RVizPublisherNode):
         self.home_geopoint
 
     @property
-    @ROS.max_delay_ms(500)
+    @ROS.max_delay_ms(_DELAY_FAST_MS)
     @ROS.subscribe(
         "/mavros/gimbal_control/device/attitude_status",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -159,7 +172,6 @@ class AutopilotNode(RVizPublisherNode):
         self.gimbal_quaternion
 
     @property
-    @ROS.max_delay_ms(500)  # Note: gets published before this check
     @ROS.publish(
         messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -194,7 +206,6 @@ class AutopilotNode(RVizPublisherNode):
         )
 
     @property
-    @ROS.max_delay_ms(500)
     @ROS.publish(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -238,7 +249,6 @@ class AutopilotNode(RVizPublisherNode):
         return _geopose_stamped(self.nav_sat_fix, self.pose_stamped)
 
     @property
-    @ROS.max_delay_ms(500)
     @ROS.publish(
         messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -334,7 +344,6 @@ class AutopilotNode(RVizPublisherNode):
         )
 
     @property
-    @ROS.max_delay_ms(500)
     @ROS.publish(messaging.ROS_TOPIC_HOME_GEOPOINT, QoSPresetProfiles.SENSOR_DATA.value)
     def home_geopoint(self) -> Optional[GeoPointStamped]:
         """Home position as :class:`geographic_msgs.msg.GeoPointStamped` message

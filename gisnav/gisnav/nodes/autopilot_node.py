@@ -60,11 +60,11 @@ class AutopilotNode(RVizPublisherNode):
         """Altitude of terrain directly under vehicle, or None if unknown or too old"""
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)  # Float32 does not have header
     @ROS.subscribe(
         messaging.ROS_TOPIC_EGM96_HEIGHT, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def egm96_height(self) -> Optional[Altitude]:
+    def egm96_height(self) -> Optional[Float32]:
         """
         Height in meters of EGM96 geoid at vehicle location, or None if unknown
         or too old

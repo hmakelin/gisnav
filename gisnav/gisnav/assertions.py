@@ -193,185 +193,246 @@ def validate(
     return inner_decorator
 
 
-def ros_subscribe(topic_name: str, qos):
-    """
-    A decorator to create a managed attribute (property) that subscribes to a
-    ROS topic with the same type as the property. The property should be an
-    optional type, e.g. Optional[Altitude], where a None value indicates the
-    message has not been received yet.
+class ROS:
+    #: Name of attribute in which optional subscribe callback is stored
+    _CALLBACK_FUNC_NAME = "_callback"
 
-    # TODO: enforce or check optional type
+    # TODO: callback type, use typevar
+    @staticmethod
+    def subscribe(topic_name: str, qos):
+        """
+        A decorator to create a managed attribute (property) that subscribes to a
+        ROS topic with the same type as the property. The property should be an
+        optional type, e.g. Optional[Altitude], where a None value indicates the
+        message has not been received yet.
 
-    Example usage:
+        The decorator also supports defining an optional callback method within
+        the decorated property. This method should be named ``callback`` and can be
+        decorated using the ``@ROS.subscribe.callback`` syntax.
+        # TODO: enforce or check optional type
 
-    .. code-block:: python
+        Example usage:
 
-        from mavros_msgs.msg import Altitude
-        from typing import Optional
+        .. code-block:: python
 
-        from . import messaging
+            from mavros_msgs.msg import Altitude
+            from typing import Optional
 
-        class AutopilotNode:
+            from . import messaging
 
-            ...
+            class AutopilotNode:
+                ...
 
-            @property
-            @ros_subscribe(messaging.ROS_TOPIC_TERRAIN_ALTITUDE, 10)
-            def terrain_altitude(self) -> Optional[Altitude]:
-                pass
+                @property
+                @ROS.subscribe(messaging.ROS_TOPIC_TERRAIN_ALTITUDE, 10)
+                def terrain_altitude(self) -> Optional[Altitude]:
+                    pass
 
+                @ROS.subscribe.callback(terrain_altitude)
+                def terrain_altitude_cb(self, msg: Altitude):
+                    self.get_logger().debug("This is a callback")
 
-    :param topic_name: The name of the ROS topic to subscribe to.
-    :param qos: The Quality of Service settings for the topic subscription.
-    :return: A property that holds the latest message from the specified ROS
-        topic, or None if no messages have been received yet.
-    """
+        In this example, the ``terrain_altitude`` property subscribes to the
+        ``messaging.ROS_TOPIC_TERRAIN_ALTITUDE`` ROS topic, and the
+        ``terrain_altitude`` method decorated with
+        ``@ROS.subscribe.callback(terrain_altitude)`` will be executed every
+        time a new message is received and stored.
 
-    def decorator_property(func):
-        @wraps(func)
-        def wrapper(self):
+        :param topic_name: The name of the ROS topic to subscribe to.
+        :param qos: The Quality of Service settings for the topic subscription.
+        :return: A property that holds the latest message from the specified ROS
+            topic, or None if no messages have been received yet.
+        """
+
+        def decorator_property(func):
+            @wraps(func)
+            def wrapper(self):
+                """
+                Wrapper function for the property.
+
+                :param self: The instance of the class the property belongs to.
+                :return: The value of the property.
+                """
+                cached_property_name = f"_{func.__name__}"
+                cached_subscription_name = f"{cached_property_name}_subscription"
+
+                if not hasattr(wrapper, cached_subscription_name):
+
+                    def _on_message(message):
+                        setattr(self, cached_property_name, message)
+                        if hasattr(func, "_callback"):
+                            callback_method = getattr(func, "_callback")
+                            callback_method(self, message)
+
+                    optional_type = get_type_hints(func)["return"]
+                    topic_type = get_args(optional_type)[
+                        0
+                    ]  # brittle? handle this better
+                    subscription = self.create_subscription(
+                        topic_type,
+                        topic_name,
+                        _on_message,
+                        qos,
+                    )
+                    setattr(wrapper, cached_subscription_name, subscription)
+
+                # return getattr(self, cached_property_name, func(self))
+                return getattr(self, cached_property_name, None)
+
+            return wrapper
+
+        return decorator_property
+
+    @staticmethod
+    def callback(outer_property):
+        """
+        A decorator factory that makes the decorated function an inner function
+        of the provided outer property.
+
+        :param outer_property: The outer property that the decorated function will
+            be made an inner function of.
+        :return decorator: The actual decorator that will be applied to the
+            target function.
+        """
+
+        def decorator(func):
             """
-            Wrapper function for the property.
+            The actual decorator that takes the target function and attaches
+            it as an inner function to the outer property's getter method.
 
-            :param self: The instance of the class the property belongs to.
-            :return: The value of the property.
+            :param func: The target function to be made an inner function
+                of the outer property's getter method.
+            :return wrapper: The wrapped function with the same functionality
+                as the original function.
             """
-            cached_property_name = f"_{func.__name__}"
-            cached_subscription_name = f"{cached_property_name}_subscription"
 
-            if not hasattr(wrapper, cached_subscription_name):
-                optional_type = get_type_hints(func)["return"]
-                topic_type = get_args(optional_type)[0]  # brittle? handle this better
-                subscription = self.create_subscription(
-                    topic_type,
-                    topic_name,
-                    lambda message: setattr(self, cached_property_name, message),
-                    qos,
+            def wrapper(*args, **kwargs):
+                """A simple pass-through for the decorated function."""
+                return func(*args, **kwargs)
+
+            if not isinstance(outer_property, property):
+                raise TypeError("The outer object must be a property")
+
+            setattr(outer_property.fget, "_callback", wrapper)
+            return wrapper
+
+        return decorator
+
+    # TODO: use default topic name, e.g. "~/message_type"?
+    # TODO: add type hints, see subscribe decorator, use TypeVar("M") below?
+    @staticmethod
+    def publish(topic_name: str, qos):
+        """
+        A decorator to create a managed attribute (property) that publishes its
+        value over a ROS topic whenever it's called.
+
+        :param topic_name: The name of the ROS topic to publish to.
+        :param qos: The Quality of Service settings for the topic publishing.
+        :return: A property that publishes its value to the specified ROS topic
+            whenever the property is called
+        """
+
+        def decorator_property(func):
+            @wraps(func)
+            def wrapper(self, *args, **kwargs):
+                """
+                Wrapper function for the property.
+
+                :param self: The instance of the class the property belongs to.
+                :return: The value of the property.
+                """
+                value = func(self, *args, **kwargs)
+                cached_publisher_name = f"_{func.__name__}_publisher"
+
+                if not hasattr(wrapper, cached_publisher_name):
+                    optional_type = get_type_hints(func)["return"]
+                    topic_type = get_args(optional_type)[
+                        0
+                    ]  # brittle? handle this better
+                    publisher = self.__vehicle_altitude_pub = self.create_publisher(
+                        topic_type,
+                        topic_name,
+                        qos,
+                    )
+                    setattr(wrapper, cached_publisher_name, publisher)
+
+                if value is not None:
+                    getattr(wrapper, cached_publisher_name).publish(value)
+
+                return value
+
+            # return property(wrapper)
+            return wrapper
+
+        return decorator_property
+
+    @staticmethod
+    def max_delay_ms(max_time_diff_ms: int):
+        """
+        A decorator that checks the property's ROS header timestamp and compares
+        it to the current clock. If the time difference is larger than what is
+        provided to the decorator (in milliseconds), the decorated function logs a
+        warning and returns None instead.
+
+        :param max_time_diff_ms: Maximum allowed time difference in milliseconds.
+        :return: The wrapped function or method with added timestamp checking. The
+            decorated function returns None if the timestamp is too old.
+        """
+
+        class HasHeader:
+            """
+            Dummy class representing any ROS message class that should have the
+            header attribute
+            """
+
+            header: Header
+
+        M = TypeVar("M", bound=HasHeader)
+
+        def _timestamp_diff_in_milliseconds(ts1, ts2):
+            # Convert the timestamps to milliseconds
+            ts1_ms = ts1.sec * 1000 + ts1.nanosec / 1e6
+            ts2_ms = ts2.sec * 1000 + ts2.nanosec / 1e6
+
+            # Compute the difference between the two timestamps in milliseconds
+            diff_ms = ts2_ms - ts1_ms
+
+            return diff_ms
+
+        def decorator(func: Callable[[Node], M]) -> Callable[[Node], Optional[M]]:
+            @wraps(func)
+            def wrapper(self: Node) -> Optional[M]:
+                """
+                Wrapper function for the property.
+
+                :param self: The instance of the :class:`rclpy.Node` the property
+                    belongs to.
+                :return: The value of the property if the time difference is within
+                    the allowed limit or None otherwise.
+                """
+                message = func(self)
+                if message is None:
+                    return None
+
+                header_timestamp = message.header.stamp
+                current_timestamp = self.get_clock().now().to_msg()
+                time_diff = _timestamp_diff_in_milliseconds(
+                    header_timestamp, current_timestamp
                 )
-                setattr(wrapper, cached_subscription_name, subscription)
 
-            # return getattr(self, cached_property_name, func(self))
-            return getattr(self, cached_property_name, None)
+                if time_diff > max_time_diff_ms:
+                    self.get_logger().warn(
+                        f"Time difference ({time_diff} ms) exceeded allowed limit "
+                        f"({max_time_diff_ms} ms)."
+                    )
+                    return None
 
-        return wrapper
+                return message
 
-    return decorator_property
+            # return property(wrapper)
+            return wrapper
 
-
-# TODO: use default topic name, e.g. "~/message_type"?
-# TODO: add type hints, see subscribe decorator, use TypeVar("M") below?
-def ros_publish(topic_name: str, qos):
-    """
-    A decorator to create a managed attribute (property) that publishes its
-    value over a ROS topic whenever it's called.
-
-    :param topic_name: The name of the ROS topic to publish to.
-    :param qos: The Quality of Service settings for the topic publishing.
-    :return: A property that publishes its value to the specified ROS topic
-        whenever the property is called
-    """
-
-    def decorator_property(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            """
-            Wrapper function for the property.
-
-            :param self: The instance of the class the property belongs to.
-            :return: The value of the property.
-            """
-            value = func(self, *args, **kwargs)
-            cached_publisher_name = f"_{func.__name__}_publisher"
-
-            if not hasattr(wrapper, cached_publisher_name):
-                optional_type = get_type_hints(func)["return"]
-                topic_type = get_args(optional_type)[0]  # brittle? handle this better
-                publisher = self.__vehicle_altitude_pub = self.create_publisher(
-                    topic_type,
-                    topic_name,
-                    qos,
-                )
-                setattr(wrapper, cached_publisher_name, publisher)
-
-            if value is not None:
-                getattr(wrapper, cached_publisher_name).publish(value)
-
-            return value
-
-        # return property(wrapper)
-        return wrapper
-
-    return decorator_property
-
-
-class HasHeader:
-    """
-    Dummy class representing any ROS message class that should have the
-    header attribute
-    """
-
-    header: Header
-
-
-M = TypeVar("M", bound=HasHeader)
-
-
-def ros_max_delay_ms(max_time_diff_ms: int):
-    """
-    A decorator that checks the property's ROS header timestamp and compares
-    it to the current clock. If the time difference is larger than what is
-    provided to the decorator (in milliseconds), the decorated function logs a
-    warning and returns None instead.
-
-    :param max_time_diff_ms: Maximum allowed time difference in milliseconds.
-    :return: The wrapped function or method with added timestamp checking. The
-        decorated function returns None if the timestamp is too old.
-    """
-
-    def _timestamp_diff_in_milliseconds(ts1, ts2):
-        # Convert the timestamps to milliseconds
-        ts1_ms = ts1.sec * 1000 + ts1.nanosec / 1e6
-        ts2_ms = ts2.sec * 1000 + ts2.nanosec / 1e6
-
-        # Compute the difference between the two timestamps in milliseconds
-        diff_ms = ts2_ms - ts1_ms
-
-        return diff_ms
-
-    def decorator(func: Callable[[Node], M]) -> Callable[[Node], Optional[M]]:
-        @wraps(func)
-        def wrapper(self: Node) -> Optional[M]:
-            """
-            Wrapper function for the property.
-
-            :param self: The instance of the :class:`rclpy.Node` the property
-                belongs to.
-            :return: The value of the property if the time difference is within
-                the allowed limit or None otherwise.
-            """
-            message = func(self)
-            if message is None:
-                return None
-
-            header_timestamp = message.header.stamp
-            current_timestamp = self.get_clock().now().to_msg()
-            time_diff = _timestamp_diff_in_milliseconds(
-                header_timestamp, current_timestamp
-            )
-
-            if time_diff > max_time_diff_ms:
-                self.get_logger().warn(
-                    f"Time difference ({time_diff} ms) exceeded allowed limit "
-                    f"({max_time_diff_ms} ms)."
-                )
-                return None
-
-            return message
-
-        # return property(wrapper)
-        return wrapper
-
-    return decorator
+        return decorator
 
 
 def assert_type(value: object, type_: Any) -> None:

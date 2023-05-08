@@ -215,16 +215,14 @@ class ROS:
 
     # TODO: callback type, use typevar
     @staticmethod
-    def subscribe(topic_name: str, qos):
+    def subscribe(topic_name: str, qos, callback=None):
         """
         A decorator to create a managed attribute (property) that subscribes to a
         ROS topic with the same type as the property. The property should be an
         optional type, e.g. Optional[Altitude], where a None value indicates the
-        message has not been received yet.
+        message has not been received yet. The decorator also supports defining
+        an optional callback method.
 
-        The decorator also supports defining an optional callback method within
-        the decorated property. This method should be named ``callback`` and can be
-        decorated using the ``@ROS.subscribe.callback`` syntax.
         # TODO: enforce or check optional type
 
         Example usage:
@@ -244,18 +242,17 @@ class ROS:
                 def terrain_altitude(self) -> Optional[Altitude]:
                     pass
 
-                @ROS.callback(terrain_altitude)
-                def terrain_altitude_cb(self, msg: Altitude):
-                    self.get_logger().debug("This is a callback")
+                def on_message(self, msg: Altitude):
+                    pass
 
         In this example, the ``terrain_altitude`` property subscribes to the
-        ``messaging.ROS_TOPIC_TERRAIN_ALTITUDE`` ROS topic, and the
-        ``terrain_altitude`` method decorated with
-        ``@ROS.subscribe.callback(terrain_altitude)`` will be executed every
-        time a new message is received and stored.
+        ``messaging.ROS_TOPIC_TERRAIN_ALTITUDE`` ROS topic. The ``on_message``
+        callback will be executed every time a new Altitude message is received.
 
         :param topic_name: The name of the ROS topic to subscribe to.
         :param qos: The Quality of Service settings for the topic subscription.
+        :param callback: An optional callback method to be executed when a new
+            message is received.
         :return: A property that holds the latest message from the specified ROS
             topic, or None if no messages have been received yet.
         """
@@ -276,21 +273,8 @@ class ROS:
 
                     def _on_message(message):
                         setattr(self, cached_property_name, message)
-
-                        # Look for defined callback and execute it
-                        # TODO: make this more efficient
-                        for attr_name in dir(self):
-                            attr = getattr(self, attr_name)
-                            # TODO: this hard-coded attr name is also used by callback
-                            #  -> brittle
-                            if hasattr(attr, f"__ros_callback_for_{id(wrapper)}"):
-                                callback_method = attr
-                                break
-                        else:
-                            callback_method = None
-
-                        if callback_method:
-                            callback_method(self, message)
+                        if callback:
+                            callback(self, message)
 
                     optional_type = get_type_hints(func)["return"]
                     topic_type = get_args(optional_type)[
@@ -310,23 +294,6 @@ class ROS:
             return wrapper
 
         return decorator_property
-
-    @staticmethod
-    def callback(property_instance: property):
-        """
-        A decorator to associate a method as a callback for a property created
-        with the :func:`.subscribe` decorator.
-
-        :param property_instance: The instance of the property to associate the
-            callback with.
-        """
-
-        def decorator_callback(func):
-            # TODO: this hard-coded attr name is also used by subscribe -> brittle
-            setattr(func, f"__ros_callback_for_{id(property_instance)}", True)
-            return func
-
-        return decorator_callback
 
     # TODO: use default topic name, e.g. "~/message_type"?
     # TODO: add type hints, see subscribe decorator, use TypeVar("M") below?

@@ -70,15 +70,6 @@ class AutopilotNode(RVizPublisherNode):
         or too old
         """
 
-    @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
-    @ROS.subscribe(
-        "/mavros/global_position/global", QoSPresetProfiles.SENSOR_DATA.value
-    )
-    def nav_sat_fix(self) -> Optional[NavSatFix]:
-        """Vehicle GPS fix, or None if unknown or too old"""
-
-    @ROS.callback(nav_sat_fix)
     def nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for :class:`mavros_msgs.msg.NavSatFix` message
 
@@ -116,12 +107,15 @@ class AutopilotNode(RVizPublisherNode):
             self.publish_rviz(geopose_stamped, altitude.terrain)
 
     @property
-    @ROS.max_delay_ms(_DELAY_FAST_MS)
-    @ROS.subscribe("/mavros/local_position/pose", QoSPresetProfiles.SENSOR_DATA.value)
-    def pose_stamped(self) -> Optional[PoseStamped]:
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        "/mavros/global_position/global",
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=nav_sat_fix_cb,
+    )
+    def nav_sat_fix(self) -> Optional[NavSatFix]:
         """Vehicle GPS fix, or None if unknown or too old"""
 
-    @ROS.callback(pose_stamped)
     def pose_stamped_cb(self, msg: PoseStamped) -> None:
         """Callback for :class:`mavros_msgs.msg.PoseStamped` message
 
@@ -134,12 +128,15 @@ class AutopilotNode(RVizPublisherNode):
         # self.publish_vehicle_altitude()  # Needed? This is mainly about vehicle pose
 
     @property
-    @ROS.max_delay_ms(_DELAY_SLOW_MS)
-    @ROS.subscribe("/mavros/home_position/home", QoSPresetProfiles.SENSOR_DATA.value)
-    def home_position(self) -> Optional[HomePosition]:
-        """Home position, or None if unknown or too old"""
+    @ROS.max_delay_ms(_DELAY_FAST_MS)
+    @ROS.subscribe(
+        "/mavros/local_position/pose",
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=pose_stamped_cb,
+    )
+    def pose_stamped(self) -> Optional[PoseStamped]:
+        """Vehicle GPS fix, or None if unknown or too old"""
 
-    @ROS.callback(home_position)
     def home_position_cb(self, msg: HomePosition) -> None:
         """Callback for :class:`mavros_msgs.msg.HomePosition` message
 
@@ -151,15 +148,15 @@ class AutopilotNode(RVizPublisherNode):
         self.home_geopoint
 
     @property
-    @ROS.max_delay_ms(_DELAY_FAST_MS)
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
     @ROS.subscribe(
-        "/mavros/gimbal_control/device/attitude_status",
+        "/mavros/home_position/home",
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=home_position_cb,
     )
-    def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
-        """Gimbal attitude, or None if unknown or too old"""
+    def home_position(self) -> Optional[HomePosition]:
+        """Home position, or None if unknown or too old"""
 
-    @ROS.callback(gimbal_device_attitude_status)
     def gimbal_device_attitude_status_cb(self, msg: GimbalDeviceAttitudeStatus) -> None:
         """Callback for :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
 
@@ -170,6 +167,16 @@ class AutopilotNode(RVizPublisherNode):
             from MAVROS
         """
         self.gimbal_quaternion
+
+    @property
+    @ROS.max_delay_ms(_DELAY_FAST_MS)
+    @ROS.subscribe(
+        "/mavros/gimbal_control/device/attitude_status",
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=gimbal_device_attitude_status_cb,
+    )
+    def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
+        """Gimbal attitude, or None if unknown or too old"""
 
     @property
     @ROS.publish(

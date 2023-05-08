@@ -37,6 +37,7 @@ P = ParamSpec("P")
 def enforce_types(
     logger_callable: Optional[Callable[[str], Any]] = None,
     custom_msg: Optional[str] = None,
+    return_value_on_fail: Optional[Any] = None,
 ) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
@@ -64,6 +65,8 @@ def enforce_types(
     :param logger: Optional logging callable that accepts a string message as
         input argument
     :param custom_msg: Optional custom message to prefix to the logging
+    :param return_value_on_fail: Optional custom return value to replace default
+        None if the types narrowing fails
     :return: The return value of the original method or None if any argument
         does not match the type hints. Be aware that the original method could
         also return None after execution.
@@ -134,7 +137,7 @@ def enforce_types(
                     if custom_msg:
                         log_msg = f"{custom_msg}: {log_msg}"
                     logger_callable(log_msg)
-                return None
+                return return_value_on_fail
 
             return method(*args, **kwargs)
 

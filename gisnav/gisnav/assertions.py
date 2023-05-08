@@ -208,6 +208,11 @@ def validate(
 
 
 class ROS:
+    """
+    Decorators to get boilerplate code out of the Nodes to make it easier to
+    see what comes in, what goes out, and what gets transformed.
+    """
+
     # TODO: callback type, use typevar
     @staticmethod
     def subscribe(topic_name: str, qos):
@@ -239,7 +244,7 @@ class ROS:
                 def terrain_altitude(self) -> Optional[Altitude]:
                     pass
 
-                @ROS.subscribe.callback(terrain_altitude)
+                @ROS.callback(terrain_altitude)
                 def terrain_altitude_cb(self, msg: Altitude):
                     self.get_logger().debug("This is a callback")
 
@@ -276,6 +281,8 @@ class ROS:
                         # TODO: make this more efficient
                         for attr_name in dir(self):
                             attr = getattr(self, attr_name)
+                            # TODO: this hard-coded attr name is also used by callback
+                            #  -> brittle
                             if hasattr(attr, f"__ros_callback_for_{id(wrapper)}"):
                                 callback_method = attr
                                 break
@@ -315,6 +322,7 @@ class ROS:
         """
 
         def decorator_callback(func):
+            # TODO: this hard-coded attr name is also used by subscribe -> brittle
             setattr(func, f"__ros_callback_for_{id(property_instance)}", True)
             return func
 

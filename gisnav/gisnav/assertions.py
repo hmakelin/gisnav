@@ -17,6 +17,8 @@ from typing import (
 )
 
 import numpy as np
+from rcl_interfaces.msg import ParameterDescriptor
+from rclpy.exceptions import ParameterAlreadyDeclaredException
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
@@ -438,6 +440,60 @@ class ROS:
 
             # return property(wrapper)
             return wrapper
+
+        return decorator
+
+    def parameters(params):
+        """
+        A decorator that declares ROS parameters for a given class.
+
+        .. warning::
+            The parameters declared by this decorator will not be available
+            until after class instantiation. Do not try to use them in the
+            __init__ method.
+
+        :param params: A list of tuples containing ROS parameter name,
+            default value, and optional read-only flag.
+        :type params: List[Tuple[str, Union[int, float, str, bool, List[str]], bool]]
+
+        Example usage:
+
+        .. code-block:: python
+
+            @ROS.parameters([
+                ("param1", 1, True),
+                ("param2", 2),
+                ("param3", "default_value"),
+            ])
+            class MyClass(Node):
+                pass
+
+        """
+
+        def decorator(cls: Node):
+            @wraps(cls)
+            def wrapped_class(*args, **kwargs):
+                instance = cls(*args, **kwargs)
+                for param_tuple in params:
+                    param, default_value, *extras = param_tuple
+                    read_only = extras[0] if extras else False
+                    descriptor = ParameterDescriptor(read_only=read_only)
+
+                    try:
+                        instance.declare_parameter(param, default_value, descriptor)
+                        instance.get_logger().info(
+                            f'Using default value "{default_value}" for ROS '
+                            f'parameter "{param}".'
+                        )
+                    except ParameterAlreadyDeclaredException:
+                        value = instance.get_parameter(param).value
+                        instance.get_logger().info(
+                            f'ROS parameter "{param}" already declared with '
+                            f'value "{value}".'
+                        )
+                return instance
+
+            return wrapped_class
 
         return decorator
 

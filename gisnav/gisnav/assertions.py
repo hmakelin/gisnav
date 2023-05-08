@@ -359,7 +359,7 @@ class ROS:
                     topic_type = get_args(optional_type)[
                         0
                     ]  # brittle? handle this better
-                    publisher = self.__vehicle_altitude_pub = self.create_publisher(
+                    publisher = self.create_publisher(
                         topic_type,
                         topic_name,
                         qos,

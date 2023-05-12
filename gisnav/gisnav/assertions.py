@@ -5,6 +5,7 @@ from typing import (
     Any,
     Callable,
     Collection,
+    List,
     Optional,
     Sequence,
     Tuple,
@@ -208,6 +209,48 @@ def validate(
         return wrapper
 
     return inner_decorator
+
+
+def cache_if(predicate):
+    """
+    A decorator to cache the return value of a property or method, storing the result
+    with the same name as the decorated member but with a leading underscore. The
+    decorator takes a callable (predicate function) as input that determines whether
+    the method will be executed or if the cached value will be returned instead.
+
+    :param predicate: A callable that takes the instance as its only argument and
+        returns a boolean, indicating whether the method/property should be
+        executed or if the cached value should be returned.
+    :type predicate: callable
+
+    :Usage:
+
+    class MyClass:
+        @property
+        @cache_if(some_predicate_function)
+        def my_property(self):
+            # Your implementation
+
+        @cache_if(lambda self: some_condition)
+        def my_method(self, *args, **kwargs):
+            # Your implementation
+
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            cache_attr = f"_{func.__name__}"
+            if hasattr(self, cache_attr) and predicate(self):
+                return getattr(self, cache_attr)
+            else:
+                result = func(self, *args, **kwargs)
+                setattr(self, cache_attr, result)
+                return result
+
+        return wrapper
+
+    return decorator
 
 
 class ROS:
@@ -421,7 +464,8 @@ class ROS:
 
         return decorator
 
-    def parameters(params):
+    @staticmethod
+    def parameters(params: List[Tuple[str, Any, bool]]):
         """
         A decorator that declares ROS parameters for a given class.
 

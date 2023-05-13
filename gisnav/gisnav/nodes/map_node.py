@@ -23,111 +23,7 @@ from ..assertions import ROS, assert_len, assert_type, cache_if, enforce_types
 from . import messaging
 from .base.camera_subscriber_node import CameraSubscriberNode
 
-ROS_D_URL = "http://127.0.0.1:80/wms"
-"""Default WMS URL"""
 
-ROS_D_VERSION = "1.3.0"
-"""Default WMS version"""
-
-ROS_D_TIMEOUT = 10
-"""Default WMS GetMap request timeout in seconds"""
-
-ROS_D_PUBLISH_RATE = 1
-"""Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
-
-ROS_D_LAYERS = ["imagery"]
-"""Default WMS GetMap request layers parameter for image raster
-
-.. note::
-    The combined layers should cover the flight area of the vehicle at high
-    resolution. Typically this list would have just one layer for high
-    resolution aerial or satellite imagery.
-"""
-
-ROS_D_DEM_LAYERS = ["osm-buildings-dem"]
-"""Default WMS GetMap request layers parameter for DEM raster
-
-.. note::
-    This is an optional elevation layer that makes the pose estimation more
-    accurate especially when flying at low altitude. It should be a grayscale
-    raster with pixel values corresponding meters relative to origin. Origin
-    can be whatever system is used (e.g. USGS DEM uses NAVD 88).
-"""
-
-ROS_D_STYLES = [""]
-"""Default WMS GetMap request styles parameter for image raster
-
-.. note::
-    Must be same length as :py:attr:`.ROS_D_LAYERS`. Use empty strings for
-    server default styles.
-"""
-
-ROS_D_DEM_STYLES = [""]
-"""Default WMS GetMap request styles parameter for DEM raster
-
-.. note::
-    Must be same length as :py:attr:`.ROS_D_DEM_LAYERS`. Use empty strings
-    for server default styles.
-"""
-
-ROS_D_SRS = "EPSG:4326"
-"""Default WMS GetMap request SRS parameter"""
-
-ROS_D_IMAGE_FORMAT = "image/jpeg"
-"""Default WMS GetMap request image format"""
-
-ROS_D_IMAGE_TRANSPARENCY = False
-"""Default WMS GetMap request image transparency
-
-.. note::
-    Not supported by jpeg format
-"""
-
-ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
-"""Overlap ration between FOV and current map, under which a new map will
-be requested."""
-
-ROS_D_MAX_MAP_RADIUS = 1000
-"""Max radius for circle inside the maps (half map side length)"""
-
-ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
-"""Default delay in seconds for throttling WMS GetMap requests
-
-.. note::
-    TODO: ROS_D_MAP_UPDATE_UPDATE_DELAY not currently used but could be
-    useful (old param from basenode)
-
-When the camera is mounted on a gimbal and is not static, this delay should
-be set quite low to ensure that whenever camera field of view is moved to
-some other location, the map update request will follow very soon after.
-The field of view of the camera projected on ground generally moves
-*much faster* than the vehicle itself.
-
-.. note::
-    This parameter provides a hard upper limit for WMS GetMap request
-    frequency. Even if this parameter is set low, WMS GetMap requests will
-    likely be much less frequent because they will throttled by the
-    conditions set in :meth:`._should_request_new_map`.
-"""
-
-
-@ROS.parameters(
-    [
-        ("url", ROS_D_URL, True),
-        ("version", ROS_D_VERSION, True),
-        ("timeout", ROS_D_TIMEOUT, True),
-        ("publish_rate", ROS_D_PUBLISH_RATE, True),
-        ("layers", ROS_D_LAYERS, False),
-        ("styles", ROS_D_STYLES, False),
-        ("dem_layers", ROS_D_DEM_LAYERS, False),
-        ("dem_styles", ROS_D_DEM_STYLES, False),
-        ("srs", ROS_D_SRS, False),
-        ("transparency", ROS_D_IMAGE_TRANSPARENCY, False),
-        ("format", ROS_D_IMAGE_FORMAT, False),
-        ("map_overlap_update_threshold", ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
-        ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
-    ]
-)
 class MapNode(CameraSubscriberNode):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic
 
@@ -167,12 +63,116 @@ class MapNode(CameraSubscriberNode):
     ROS_PARAM_DEFAULTS = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
+    ROS_D_URL = "http://127.0.0.1:80/wms"
+    """Default WMS URL"""
+
+    ROS_D_VERSION = "1.3.0"
+    """Default WMS version"""
+
+    ROS_D_TIMEOUT = 10
+    """Default WMS GetMap request timeout in seconds"""
+
+    ROS_D_PUBLISH_RATE = 1
+    """Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
+
+    ROS_D_LAYERS = ["imagery"]
+    """Default WMS GetMap request layers parameter for image raster
+
+    .. note::
+        The combined layers should cover the flight area of the vehicle at high
+        resolution. Typically this list would have just one layer for high
+        resolution aerial or satellite imagery.
+    """
+
+    ROS_D_DEM_LAYERS = ["osm-buildings-dem"]
+    """Default WMS GetMap request layers parameter for DEM raster
+
+    .. note::
+        This is an optional elevation layer that makes the pose estimation more
+        accurate especially when flying at low altitude. It should be a grayscale
+        raster with pixel values corresponding meters relative to origin. Origin
+        can be whatever system is used (e.g. USGS DEM uses NAVD 88).
+    """
+
+    ROS_D_STYLES = [""]
+    """Default WMS GetMap request styles parameter for image raster
+
+    .. note::
+        Must be same length as :py:attr:`.ROS_D_LAYERS`. Use empty strings for
+        server default styles.
+    """
+
+    ROS_D_DEM_STYLES = [""]
+    """Default WMS GetMap request styles parameter for DEM raster
+
+    .. note::
+        Must be same length as :py:attr:`.ROS_D_DEM_LAYERS`. Use empty strings
+        for server default styles.
+    """
+
+    ROS_D_SRS = "EPSG:4326"
+    """Default WMS GetMap request SRS parameter"""
+
+    ROS_D_IMAGE_FORMAT = "image/jpeg"
+    """Default WMS GetMap request image format"""
+
+    ROS_D_IMAGE_TRANSPARENCY = False
+    """Default WMS GetMap request image transparency
+
+    .. note::
+        Not supported by jpeg format
+    """
+
+    ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
+    """Overlap ration between FOV and current map, under which a new map will
+    be requested."""
+
+    ROS_D_MAX_MAP_RADIUS = 1000
+    """Max radius for circle inside the maps (half map side length)"""
+
+    ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
+    """Default delay in seconds for throttling WMS GetMap requests
+
+    .. note::
+        TODO: ROS_D_MAP_UPDATE_UPDATE_DELAY not currently used but could be
+        useful (old param from basenode)
+
+    When the camera is mounted on a gimbal and is not static, this delay should
+    be set quite low to ensure that whenever camera field of view is moved to
+    some other location, the map update request will follow very soon after.
+    The field of view of the camera projected on ground generally moves
+    *much faster* than the vehicle itself.
+
+    .. note::
+        This parameter provides a hard upper limit for WMS GetMap request
+        frequency. Even if this parameter is set low, WMS GetMap requests will
+        likely be much less frequent because they will throttled by the
+        conditions set in :meth:`._should_request_new_map`.
+    """
+
+    @ROS.setup_node(
+        [
+            ("url", ROS_D_URL, True),
+            ("version", ROS_D_VERSION, True),
+            ("timeout", ROS_D_TIMEOUT, True),
+            ("publish_rate", ROS_D_PUBLISH_RATE, True),
+            ("layers", ROS_D_LAYERS, False),
+            ("styles", ROS_D_STYLES, False),
+            ("dem_layers", ROS_D_DEM_LAYERS, False),
+            ("dem_styles", ROS_D_DEM_STYLES, False),
+            ("srs", ROS_D_SRS, False),
+            ("transparency", ROS_D_IMAGE_TRANSPARENCY, False),
+            ("format", ROS_D_IMAGE_FORMAT, False),
+            ("map_overlap_update_threshold", ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
+            ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
+        ]
+    )
     def __init__(self, name: str):
         """Class initializer
 
         :param name: Node name
         """
-        super().__init__(name)
+        # super().__init__(name)  # Handled by setup_node decorator
 
         # Calling these decorated properties the first time will setup
         # subscriptions to the appropriate ROS topics

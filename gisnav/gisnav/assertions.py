@@ -470,9 +470,11 @@ class ROS:
         return decorator
 
     @staticmethod
-    def parameters(params: List[Tuple[str, Any, bool]]):
+    def setup_node(params: List[Tuple[str, Any, bool]]):
         """
-        A decorator that declares ROS parameters for a given class.
+        A decorator that declares ROS parameters for a given class. The parent
+        Node initialization is handled inside this decorator, so the child node
+        should not call the parent initializer.
 
         .. warning::
             The parameters declared by this decorator will not be available
@@ -487,40 +489,55 @@ class ROS:
 
         .. code-block:: python
 
-            @ROS.parameters([
-                ("param1", 1, True),
-                ("param2", 2),
-                ("param3", "default_value"),
-            ])
             class MyClass(Node):
-                pass
+
+                @ROS.setup_node([
+                    ("param1", 1, True),
+                    ("param2", 2),
+                    ("param3", "default_value"),
+                ])
+                def __init__(self):
+                    # Handled by decorator - do not call parent constructor here
+                    # super().__init__("my_node")
+                    pass
 
         """
 
-        def decorator(cls: Node):
-            @wraps(cls)
-            def wrapped_class(*args, **kwargs):
-                instance = cls(*args, **kwargs)
+        def decorator(initializer):
+            @wraps(initializer)
+            def wrapped_function(node_instance, *args, **kwargs):
+                # TODO: assumes name is first arg, brittle, make into kwarg?
+                Node.__init__(
+                    node_instance,
+                    node_name=args[0],
+                    *args[1:],
+                    **kwargs,
+                    allow_undeclared_parameters=True,
+                    automatically_declare_parameters_from_overrides=True,
+                )
                 for param_tuple in params:
                     param, default_value, *extras = param_tuple
                     read_only = extras[0] if extras else False
                     descriptor = ParameterDescriptor(read_only=read_only)
 
                     try:
-                        instance.declare_parameter(param, default_value, descriptor)
-                        instance.get_logger().info(
+                        node_instance.declare_parameter(
+                            param, default_value, descriptor
+                        )
+                        node_instance.get_logger().info(
                             f'Using default value "{default_value}" for ROS '
                             f'parameter "{param}".'
                         )
                     except ParameterAlreadyDeclaredException:
-                        value = instance.get_parameter(param).value
-                        instance.get_logger().info(
+                        value = node_instance.get_parameter(param).value
+                        node_instance.get_logger().info(
                             f'ROS parameter "{param}" already declared with '
                             f'value "{value}".'
                         )
-                return instance
 
-            return wrapped_class
+                return initializer(node_instance, *args, **kwargs)
+
+            return wrapped_function
 
         return decorator
 

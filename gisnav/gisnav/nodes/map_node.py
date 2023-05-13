@@ -350,13 +350,13 @@ class MapNode(CameraSubscriberNode):
         self.orthoimage_3d
 
     @property
-    @ROS.max_delay_ms(2000)
+    # @ROS.max_delay_ms(2000) - bounding box has no header
     @ROS.subscribe(
         messaging.ROS_TOPIC_BOUNDING_BOX,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=bounding_box_cb,
     )
-    def bounding_box(self) -> BoundingBox:
+    def bounding_box(self) -> Optional[BoundingBox]:
         """
         Geographical bounding box of area to retrieve a map for, or None if not
         available or too old

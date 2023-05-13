@@ -213,35 +213,40 @@ def validate(
 
 def cache_if(predicate):
     """
-    A decorator to cache the return value of a property or method, storing the result
+    A decorator to cache the return value of a property, storing the result
     with the same name as the decorated member but with a leading underscore. The
     decorator takes a callable (predicate function) as input that determines whether
-    the method will be executed or if the cached value will be returned instead.
+    the property method will be executed or if the cached value will be returned
+    instead.
+
+    .. warning::
+        You cannot use the property or method you are wrapping inside the
+        predicate directly. If you need to use the cached value of the property
+        you are wrapping inside the predicate, access the cached private
+        attribute directly to prevent infinite recursion (e.g. self._my_property
+        instead of self.my_property).
+
+    Example usage:
+
+    .. code-block:: python
+
+        class MyClass:
+            @property
+            @cache_if(some_predicate_function)
+            def my_property(self):
+                # Your implementation
 
     :param predicate: A callable that takes the instance as its only argument and
-        returns a boolean, indicating whether the method/property should be
-        executed or if the cached value should be returned.
+        returns a boolean, indicating whether the property should be
+        evaluated (True) or if the cached value should be returned (False)
     :type predicate: callable
-
-    :Usage:
-
-    class MyClass:
-        @property
-        @cache_if(some_predicate_function)
-        def my_property(self):
-            # Your implementation
-
-        @cache_if(lambda self: some_condition)
-        def my_method(self, *args, **kwargs):
-            # Your implementation
-
     """
 
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             cache_attr = f"_{func.__name__}"
-            if hasattr(self, cache_attr) and predicate(self):
+            if hasattr(self, cache_attr) and not predicate(self):
                 return getattr(self, cache_attr)
             else:
                 result = func(self, *args, **kwargs)

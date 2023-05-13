@@ -11,9 +11,10 @@ from mavros_msgs.msg import Altitude
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from pygeodesy.geoids import GeoidPGM
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo
 from shapely.geometry import box
 from std_msgs.msg import Float32
 
@@ -21,10 +22,9 @@ from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from ..assertions import ROS, assert_len, assert_type, cache_if, enforce_types
 from . import messaging
-from .base.camera_subscriber_node import CameraSubscriberNode
 
 
-class MapNode(CameraSubscriberNode):
+class MapNode(Node):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic
 
     Downloads and stores orthophoto and optional DEM (together called orthoimage)
@@ -59,9 +59,14 @@ class MapNode(CameraSubscriberNode):
     connection error
     """
 
-    # TODO: remove once all nodes have @ROS.parameters decoration
-    ROS_PARAM_DEFAULTS = []
-    """List containing ROS parameter name, default value and read_only flag tuples"""
+    _DELAY_SLOW_MS = 10000
+    """
+    Max delay for messages where updates are not needed nor expected often,
+    e.g. home position
+    """
+
+    _DELAY_NORMAL_MS = 2000
+    """Max delay for things like global position"""
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
     """Default WMS URL"""
@@ -179,6 +184,7 @@ class MapNode(CameraSubscriberNode):
         self.bounding_box
         self.geopose
         self.home_geopoint
+        self.camera_info
 
         publish_rate = (
             self.get_parameter("publish_rate").get_parameter_value().integer_value
@@ -284,31 +290,36 @@ class MapNode(CameraSubscriberNode):
         """
 
         @enforce_types(self.get_logger().warn, "Cannot determine padding bounding box")
-        def _bounding_box_with_padding_for_geopoint(geopoint: GeoPoint) -> BoundingBox:
+        def _bounding_box_with_padding_for_geopoint(
+            geopoint: GeoPointStamped,
+        ) -> BoundingBox:
             """Adds 10 meters of padding to GeoPoint on both sides"""
             # Approximate conversions
             padding = 10.0
-            lat_degree_meter = 111045.0  # meters
-            lon_degree_meter = 111045.0 * np.cos(np.radians(geopoint.latitude))
+            meters_in_degree = 111045.0  # at 0 latitude
+            lat_degree_meter = meters_in_degree
+            lon_degree_meter = meters_in_degree * np.cos(
+                np.radians(geopoint.position.latitude)
+            )
 
             delta_lat = padding / lat_degree_meter
             delta_lon = padding / lon_degree_meter
 
             bounding_box = BoundingBox()
 
-            bounding_box.min_corner = GeoPoint()
-            bounding_box.min_corner.latitude = geopoint.latitude - delta_lat
-            bounding_box.min_corner.longitude = geopoint.longitude - delta_lon
+            bounding_box.min_pt = GeoPoint()
+            bounding_box.min_pt.latitude = geopoint.position.latitude - delta_lat
+            bounding_box.min_pt.longitude = geopoint.position.longitude - delta_lon
 
-            bounding_box.max_corner = GeoPoint()
-            bounding_box.max_corner.latitude = geopoint.latitude + delta_lat
-            bounding_box.max_corner.longitude = geopoint.longitude + delta_lon
+            bounding_box.max_pt = GeoPoint()
+            bounding_box.max_pt.latitude = geopoint.position.latitude + delta_lat
+            bounding_box.max_pt.longitude = geopoint.position.longitude + delta_lon
 
             return bounding_box
 
-        @enforce_types(self.get_logger().warm, "Cannot request feature")
+        @enforce_types(self.get_logger().warn, "Cannot request feature")
         def _request_dem_height_for_local_origin(
-            home_geopoint: GeoPoint,
+            home_geopoint: GeoPointStamped,
         ) -> Optional[float]:
             layers, styles = (
                 self.get_parameter("layers").get_parameter_value().string_array_value,
@@ -350,6 +361,39 @@ class MapNode(CameraSubscriberNode):
         self.orthoimage_3d
 
     @property
+    # @ROS.max_delay_ms(2000) - camera info has no header
+    @ROS.subscribe("camera/camera_info", QoSPresetProfiles.SENSOR_DATA.value)
+    def camera_info(self) -> Optional[CameraInfo]:
+        """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
+
+    @property
+    def _orthoimage_size(self) -> Optional[Tuple[int, int]]:
+        """
+        Padded map size tuple (height, width) or None if the information
+        is not available.
+
+        Because the deep learning models used for predicting matching keypoints
+        or poses between camera image frames and map rasters are not assumed to
+        be rotation invariant in general, the orthoimage rasters are rotated
+        based on camera yaw so that they align with the camera images. To keep
+        the scale of the raster after rotation unchanged, black corners would
+        appear unless padding is used. Retrieved maps therefore have to be
+        squares with the side lengths matching the diagonal of the camera frames
+        so that scale is preserved and no black corners appear in the rasters
+        after arbitrary 2D rotation. The height and width will both be equal to
+        the diagonal of the declared camera frame dimensions.
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot determine orthoimage size")
+        def _orthoimage_size(camera_info: CameraInfo):
+            diagonal = int(
+                np.ceil(np.sqrt(camera_info.width**2 + camera_info.height**2))
+            )
+            return diagonal, diagonal
+
+        return _orthoimage_size(self.camera_info)
+
+    @property
     # @ROS.max_delay_ms(2000) - bounding box has no header
     @ROS.subscribe(
         messaging.ROS_TOPIC_BOUNDING_BOX,
@@ -373,7 +417,7 @@ class MapNode(CameraSubscriberNode):
         self.terrain_geopoint_stamped
 
     @property
-    @ROS.max_delay_ms(400)
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -383,11 +427,11 @@ class MapNode(CameraSubscriberNode):
         """Vehicle GeoPoseStamped, or None if not available or too old"""
 
     @property
-    @ROS.max_delay_ms(400)
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_HOME_GEOPOINT, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def home_geopoint(self) -> Optional[GeoPoseStamped]:
+    def home_geopoint(self) -> Optional[GeoPointStamped]:
         """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
@@ -403,7 +447,6 @@ class MapNode(CameraSubscriberNode):
         )
         def _terrain_altitude(
             terrain_altitude_amsl: float,
-            terrain_altitude_agl: float,
             terrain_altitude_at_home_amsl: float,
         ):
             terrain_altitude = Altitude(
@@ -411,14 +454,13 @@ class MapNode(CameraSubscriberNode):
                 amsl=terrain_altitude_amsl,
                 local=terrain_altitude_at_home_amsl,
                 relative=terrain_altitude_at_home_amsl,
-                terrain=terrain_altitude_agl,
-                bottom_clearance=terrain_altitude_agl,
+                terrain=0.0,
+                bottom_clearance=0.0,
             )
             return terrain_altitude
 
         return _terrain_altitude(
             self.terrain_altitude_amsl,
-            self.terrain_altitude_agl,
             self._terrain_altitude_at_home_amsl,
         )
 
@@ -453,9 +495,7 @@ class MapNode(CameraSubscriberNode):
             )
             return geopoint_stamped
 
-        return _terrain_geopoint_stamped(
-            self.geopose_stamped, self.terrain_altitude_ellipsoid
-        )
+        return _terrain_geopoint_stamped(self.geopose, self.terrain_altitude_ellipsoid)
 
     @property
     @ROS.publish(
@@ -473,7 +513,7 @@ class MapNode(CameraSubscriberNode):
             )
             return Float32(data=_egm96_height)
 
-        return _egm96_height(self.geopose_stamped)
+        return _egm96_height(self.geopose)
 
     def _request_orthoimage_for_bounding_box(
         self, bounding_box: BoundingBox
@@ -490,7 +530,7 @@ class MapNode(CameraSubscriberNode):
         :param bounding_box: BoundingBox to request the orthoimage for
         """
 
-        @enforce_types(self.get_logger().warm, "Cannot request orthoimage")
+        @enforce_types(self.get_logger().warn, "Cannot request orthoimage")
         def _request_orthoimage_for_bounding_box(
             bounding_box: BoundingBox, size: Tuple[int, int]
         ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -554,9 +594,7 @@ class MapNode(CameraSubscriberNode):
             assert img.ndim == dem.ndim == 3
             return img, dem
 
-        return _request_orthoimage_for_bounding_box(
-            bounding_box, self.map_size_with_padding
-        )
+        return _request_orthoimage_for_bounding_box(bounding_box, self._orthoimage_size)
 
     def _should_request_orthoimage(self) -> bool:
         """Returns True if a new orthoimage (including DEM) should be requested
@@ -610,7 +648,7 @@ class MapNode(CameraSubscriberNode):
         """Outgoing orthoimage and elevation raster pair"""
 
         bounding_box = self.bounding_box
-        map = self._request_orthoimage(bounding_box, self.map_size_with_padding)
+        map = self._request_orthoimage_for_bounding_box(bounding_box)
         if map is not None:
             img, dem = map
             # TODO: use np.frombuffer, not CvBridge
@@ -631,11 +669,9 @@ class MapNode(CameraSubscriberNode):
         """
 
         @enforce_types(self.get_logger().warn, "Cannot generate terrain altitude AMSL")
-        def _terrain_altitude_amsl(
-            geopose_stamped: GeoPoseStamped, home_geopoint: GeoPointStamped
-        ):
+        def _terrain_altitude_amsl(geopose_stamped: GeoPoseStamped):
             terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
-                geopose_stamped.position
+                geopose_stamped.pose.position
             )
 
             if terrain_altitude_amsl is None:
@@ -648,13 +684,13 @@ class MapNode(CameraSubscriberNode):
                     "for local origin..."
                 )
                 terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
-                    geopose_stamped.position,
+                    geopose_stamped.pose.position,
                     True,  # TODO: ground track orthoimage, not local origin orthoimage?
                 )
 
             return terrain_altitude_amsl
 
-        return _terrain_altitude_amsl(self.geopose, self.home_geopoint)
+        return _terrain_altitude_amsl(self.geopose)
 
     @property
     def terrain_altitude_ellipsoid(self) -> Optional[float]:
@@ -675,9 +711,7 @@ class MapNode(CameraSubscriberNode):
             )
             return terrain_altitude_ellipsoid
 
-        return _terrain_altitude_ellipsoid(
-            self.terrain_altitude_amsl, self.geopose_stamped
-        )
+        return _terrain_altitude_ellipsoid(self.terrain_altitude_amsl, self.geopose)
 
     @property
     def _home_altitude_amsl(self) -> Optional[float]:
@@ -802,10 +836,6 @@ class MapNode(CameraSubscriberNode):
         self.get_logger().info(f"GetFeatureInfo response: {feature_info}")
         return feature_info  # TODO: parse feature_info, check format from above message
 
-    def image_callback(self, msg: Image) -> None:
-        """Receives :class:`sensor_msgs.msg.Image` message"""
-        # Do nothing - enforced by CameraSubscriberNode parent
-
     def _dem_height_at_geopoint(self, geopoint: Optional[GeoPoint]) -> Optional[float]:
         """
         Raw DEM height in meters from cached DEM if available, or None if not
@@ -851,12 +881,11 @@ class MapNode(CameraSubscriberNode):
             if _is_geopoint_inside_bounding_box(geopoint, orthoimage.bbox):
                 # Normalized coordinates of the GeoPoint in the BoundingBox
                 bounding_box = orthoimage.bbox
-                u = (geopoint.longitude - bounding_box.min_corner.longitude) / (
-                    bounding_box.max_corner.longitude
-                    - bounding_box.min_corner.longitude
+                u = (geopoint.longitude - bounding_box.min_pt.longitude) / (
+                    bounding_box.max_pt.longitude - bounding_box.min_pt.longitude
                 )
-                v = (geopoint.latitude - bounding_box.min_corner.latitude) / (
-                    bounding_box.max_corner.latitude - bounding_box.min_corner.latitude
+                v = (geopoint.latitude - bounding_box.min_pt.latitude) / (
+                    bounding_box.max_pt.latitude - bounding_box.min_pt.latitude
                 )
 
                 # Pixel coordinates in the DEM image
@@ -904,5 +933,5 @@ class MapNode(CameraSubscriberNode):
 
         dem_height = self._dem_height_at_geopoint(geopoint)
         return _terrain_altitude_amsl(
-            dem_height, self._dem_height_at_local_origin, self.home_geopoint
+            dem_height, self.dem_height_at_local_origin, self.home_geopoint
         )

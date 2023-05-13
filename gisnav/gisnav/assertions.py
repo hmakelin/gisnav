@@ -507,6 +507,8 @@ class ROS:
             @wraps(initializer)
             def wrapped_function(node_instance, *args, **kwargs):
                 # TODO: assumes name is first arg, brittle, make into kwarg?
+
+                # Call rclpy Node constructor
                 Node.__init__(
                     node_instance,
                     node_name=args[0],
@@ -535,7 +537,8 @@ class ROS:
                             f'value "{value}".'
                         )
 
-                return initializer(node_instance, *args, **kwargs)
+                # Call child constructor after declaring params
+                initializer(node_instance, *args, **kwargs)
 
             return wrapped_function
 

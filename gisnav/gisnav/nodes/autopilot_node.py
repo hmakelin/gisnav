@@ -20,7 +20,7 @@ from .base.rviz_publisher_node import RVizPublisherNode
 class AutopilotNode(RVizPublisherNode):
     """ROS 2 node that acts as an adapter for MAVROS"""
 
-    # TODO: remove once all nodes have @ROS.parameters decoration
+    # TODO: remove once all nodes have @ROS.setup_node decoration
     ROS_PARAM_DEFAULTS: list = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 

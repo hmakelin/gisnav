@@ -5,6 +5,7 @@ from typing import (
     Any,
     Callable,
     Collection,
+    List,
     Optional,
     Sequence,
     Tuple,
@@ -37,6 +38,7 @@ P = ParamSpec("P")
 def enforce_types(
     logger_callable: Optional[Callable[[str], Any]] = None,
     custom_msg: Optional[str] = None,
+    return_value_on_fail: Optional[Any] = None,
 ) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
@@ -64,6 +66,8 @@ def enforce_types(
     :param logger: Optional logging callable that accepts a string message as
         input argument
     :param custom_msg: Optional custom message to prefix to the logging
+    :param return_value_on_fail: Optional custom return value to replace default
+        None if the types narrowing fails
     :return: The return value of the original method or None if any argument
         does not match the type hints. Be aware that the original method could
         also return None after execution.
@@ -134,7 +138,7 @@ def enforce_types(
                     if custom_msg:
                         log_msg = f"{custom_msg}: {log_msg}"
                     logger_callable(log_msg)
-                return None
+                return return_value_on_fail
 
             return method(*args, **kwargs)
 
@@ -205,6 +209,53 @@ def validate(
         return wrapper
 
     return inner_decorator
+
+
+def cache_if(predicate):
+    """
+    A decorator to cache the return value of a property, storing the result
+    with the same name as the decorated member but with a leading underscore. The
+    decorator takes a callable (predicate function) as input that determines whether
+    the property method will be executed or if the cached value will be returned
+    instead.
+
+    .. warning::
+        You cannot use the property or method you are wrapping inside the
+        predicate directly. If you need to use the cached value of the property
+        you are wrapping inside the predicate, access the cached private
+        attribute directly to prevent infinite recursion (e.g. self._my_property
+        instead of self.my_property).
+
+    Example usage:
+
+    .. code-block:: python
+
+        class MyClass:
+            @property
+            @cache_if(some_predicate_function)
+            def my_property(self):
+                # Your implementation
+
+    :param predicate: A callable that takes the instance as its only argument and
+        returns a boolean, indicating whether the property should be
+        evaluated (True) or if the cached value should be returned (False)
+    :type predicate: callable
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            cache_attr = f"_{func.__name__}"
+            if hasattr(self, cache_attr) and not predicate(self):
+                return getattr(self, cache_attr)
+            else:
+                result = func(self, *args, **kwargs)
+                setattr(self, cache_attr, result)
+                return result
+
+        return wrapper
+
+    return decorator
 
 
 class ROS:
@@ -418,9 +469,12 @@ class ROS:
 
         return decorator
 
-    def parameters(params):
+    @staticmethod
+    def setup_node(params: List[Tuple[str, Any, bool]]):
         """
-        A decorator that declares ROS parameters for a given class.
+        A decorator that declares ROS parameters for a given class. The parent
+        Node initialization is handled inside this decorator, so the child node
+        should not call the parent initializer.
 
         .. warning::
             The parameters declared by this decorator will not be available
@@ -435,40 +489,58 @@ class ROS:
 
         .. code-block:: python
 
-            @ROS.parameters([
-                ("param1", 1, True),
-                ("param2", 2),
-                ("param3", "default_value"),
-            ])
             class MyClass(Node):
-                pass
+
+                @ROS.setup_node([
+                    ("param1", 1, True),
+                    ("param2", 2),
+                    ("param3", "default_value"),
+                ])
+                def __init__(self):
+                    # Handled by decorator - do not call parent constructor here
+                    # super().__init__("my_node")
+                    pass
 
         """
 
-        def decorator(cls: Node):
-            @wraps(cls)
-            def wrapped_class(*args, **kwargs):
-                instance = cls(*args, **kwargs)
+        def decorator(initializer):
+            @wraps(initializer)
+            def wrapped_function(node_instance, *args, **kwargs):
+                # TODO: assumes name is first arg, brittle, make into kwarg?
+
+                # Call rclpy Node constructor
+                Node.__init__(
+                    node_instance,
+                    node_name=args[0],
+                    *args[1:],
+                    **kwargs,
+                    allow_undeclared_parameters=True,
+                    automatically_declare_parameters_from_overrides=True,
+                )
                 for param_tuple in params:
                     param, default_value, *extras = param_tuple
                     read_only = extras[0] if extras else False
                     descriptor = ParameterDescriptor(read_only=read_only)
 
                     try:
-                        instance.declare_parameter(param, default_value, descriptor)
-                        instance.get_logger().info(
+                        node_instance.declare_parameter(
+                            param, default_value, descriptor
+                        )
+                        node_instance.get_logger().info(
                             f'Using default value "{default_value}" for ROS '
                             f'parameter "{param}".'
                         )
                     except ParameterAlreadyDeclaredException:
-                        value = instance.get_parameter(param).value
-                        instance.get_logger().info(
+                        value = node_instance.get_parameter(param).value
+                        node_instance.get_logger().info(
                             f'ROS parameter "{param}" already declared with '
                             f'value "{value}".'
                         )
-                return instance
 
-            return wrapped_class
+                # Call child constructor after declaring params
+                initializer(node_instance, *args, **kwargs)
+
+            return wrapped_function
 
         return decorator
 

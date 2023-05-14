@@ -1,15 +1,17 @@
 MAP
-  NAME "GISNav OGC WMS"
+  NAME "gisnav_wms"
   PROJECTION
     "init=epsg:4326"
   END
   EXTENT -122.3153963 37.4973779 -122.1845578 37.5650967
   WEB
     METADATA
-        "wms_title"           "GISNav WMS NAIP Imagery"
+        "wms_title"           "GISNav WMS"
+        "wms_abstract"        "GISNav simulation maps for KSQL airport area"
         "wms_onlineresource"  "http://localhost:80/wms"
         "wms_srs"             "EPSG:3857 EPSG:4326"
-        "wms_enable_request"  "GetMap GetCapabilities"
+        "wms_enable_request"  "GetMap GetFeatureInfo GetCapabilities"
+        "wms_feature_info_mime_type" "text/plain"
     END
   END
   LAYER
@@ -19,6 +21,13 @@ MAP
     PROJECTION
       "init=epsg:26910"
     END
+    METADATA
+      "wms_title"       "NAIP Imagery"
+      "wms_abstract"    "National Agriculture Imagery Program (NAIP) imagery"
+      "gml_include_items" "all" # Enable GetFeatureInfo requests
+    END
+    TEMPLATE "/etc/mapserver/rgb_template.html"  # Enable GetFeatureInfo requests
+    TOLERANCE 1
   END
   LAYER
     NAME          "osm-buildings"
@@ -27,6 +36,13 @@ MAP
     PROJECTION
       "init=epsg:4326"
     END
+    METADATA
+      "wms_title"       "OSM Buildings"
+      "wms_abstract"    "OpenStreetMap Buildings height rasters"
+      "gml_include_items" "all" # Enable GetFeatureInfo requests
+    END
+    TEMPLATE "/etc/mapserver/dem_template.html"  # Enable GetFeatureInfo requests
+    TOLERANCE 1
   END
   LAYER
     NAME          "usgs-dem"
@@ -35,6 +51,13 @@ MAP
     PROJECTION
       "init=epsg:4326"
     END
+    METADATA
+      "wms_title"       "USGS DEM"
+      "wms_abstract"    "USGS Digital Elevation Model (DEM) rasters"
+      "gml_include_items" "all" # Enable GetFeatureInfo requests
+    END
+    TEMPLATE "/etc/mapserver/dem_template.html"  # Enable GetFeatureInfo requests
+    TOLERANCE 1
   END
   LAYER
     NAME          "osm-buildings-dem"
@@ -43,5 +66,12 @@ MAP
     PROJECTION
       "init=epsg:4326"
     END
+    METADATA
+      "wms_title"       "OSM Buildings USGS DEM"
+      "wms_abstract"    "OSM Buildings and USGS DEM overlay rasters"
+      "gml_include_items" "all" # Enable GetFeatureInfo requests
+    END
+    TEMPLATE "/etc/mapserver/dem_template.html"  # Enable GetFeatureInfo requests
+    TOLERANCE 1
   END
 END

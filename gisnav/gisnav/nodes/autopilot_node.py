@@ -20,6 +20,7 @@ from .base.rviz_publisher_node import RVizPublisherNode
 class AutopilotNode(RVizPublisherNode):
     """ROS 2 node that acts as an adapter for MAVROS"""
 
+    # TODO: remove once all nodes have @ROS.setup_node decoration
     ROS_PARAM_DEFAULTS: list = []
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
@@ -79,32 +80,14 @@ class AutopilotNode(RVizPublisherNode):
 
         :param msg: :class:`mavros_msgs.msg.NavSatFix` message from MAVROS
         """
-
-        def _navsatfix_to_geoposestamped(msg: NavSatFix) -> GeoPoseStamped:
-            # Publish to rviz2 for debugging
-            geopose_stamped = GeoPoseStamped()
-            geopose_stamped.header.stamp = msg.header.stamp
-            geopose_stamped.header.frame_id = "map"
-
-            geopose_stamped.pose.position.longitude = msg.longitude
-            geopose_stamped.pose.position.latitude = msg.latitude
-            geopose_stamped.pose.position.altitude = msg.altitude
-
-            # No orientation information in NavSatFix
-            geopose_stamped.pose.orientation.w = 1.0
-
-            return geopose_stamped
-
-        self.geopose_stamped
-        altitude = self.altitude
-
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.gimbal_quaternion
 
-        if altitude is not None and altitude.terrain is not np.nan:
-            # publish to RViz for debugging and visualization
-            geopose_stamped = _navsatfix_to_geoposestamped(msg)
+        @enforce_types(self.get_logger().warn, "Cannot publish to RViz")
+        def _publish_rviz(geopose_stamped: GeoPoseStamped, altitude: Altitude):
             self.publish_rviz(geopose_stamped, altitude.terrain)
+
+        _publish_rviz(self.geopose_stamped, self.altitude)
 
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)

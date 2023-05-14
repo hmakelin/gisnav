@@ -1,6 +1,7 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
-from typing import IO, Optional, Tuple, get_args
+import xml.etree.ElementTree as ET
+from typing import IO, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -11,32 +12,31 @@ from mavros_msgs.msg import Altitude
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from pygeodesy.geoids import GeoidPGM
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo
 from shapely.geometry import box
 from std_msgs.msg import Float32
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import assert_len, assert_type
-from ..data import BBox, Img, MapData
-from ..geo import GeoPt, GeoSquare, get_dynamic_map_radius
+from ..assertions import ROS, assert_len, assert_type, cache_if, enforce_types
 from . import messaging
-from .base.camera_subscriber_node import CameraSubscriberNode
 
 
-class MapNode(CameraSubscriberNode):
+class MapNode(Node):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic
 
-    Downloads and stores orthoimage and optional DEM from WMS for location of
-    projected camera field of view.
+    Downloads and stores orthophoto and optional DEM (together called orthoimage)
+    from WMS for location of projected camera field of view.
 
     Subscribes to :class:`.CameraInfo` and :class:`.FOV` messages to determine
-    bounding box for next map to be cached. Requests new map whenever FOV overlap
-    with current cached map gets too small. Publishes a :class:`.OrthoImage3D`
-    with a high-resolution image and an optional digital elevation model (DEM)
-    that can be used for pose estimation.
+    bounding box for next orthoimage to be cached. Requests new map whenever
+    ground-projected FOV overlap with bounding box of current cached orthoimage
+    gets too small. Publishes a :class:`.OrthoImage3D`with a high-resolution
+    orthophoto and an optional digital elevation model (DEM) that can be used
+    for pose estimation.
 
     .. warning::
         ``OWSLib`` *as of version 0.25.0* uses the Python ``requests`` library
@@ -50,6 +50,24 @@ class MapNode(CameraSubscriberNode):
         to avoid a direct dependency to ``requests``. They are therefore
         handled as unexpected errors.
     """  # noqa: E501
+
+    # Altitude in meters used for DEM request to get local origin elevation
+    _DEM_REQUEST_ALTITUDE = 100
+
+    _WMS_CONNECTION_ATTEMPT_DELAY_SEC = 10
+    """
+    Delay in seconds until a new WMS connection is attempted in case of
+    connection error
+    """
+
+    _DELAY_SLOW_MS = 10000
+    """
+    Max delay for messages where updates are not needed nor expected often,
+    e.g. home position
+    """
+
+    _DELAY_NORMAL_MS = 2000
+    """Max delay for things like global position"""
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
     """Default WMS URL"""
@@ -138,251 +156,55 @@ class MapNode(CameraSubscriberNode):
         conditions set in :meth:`._should_request_new_map`.
     """
 
-    # Altitude in meters used for DEM request to get local origin elevation
-    _DEM_REQUEST_ALTITUDE = 100
-
-    _WMS_CONNECTION_ATTEMPT_DELAY = 10
-    """Delay in seconds until a new WMS connection is attempted in case of
-    connection error"""
-
-    ROS_PARAM_DEFAULTS = [
-        ("url", ROS_D_URL, True),
-        ("version", ROS_D_VERSION, True),
-        ("timeout", ROS_D_TIMEOUT, True),
-        ("publish_rate", ROS_D_PUBLISH_RATE, True),
-        ("layers", ROS_D_LAYERS, False),
-        ("styles", ROS_D_STYLES, False),
-        ("dem_layers", ROS_D_DEM_LAYERS, False),
-        ("dem_styles", ROS_D_DEM_STYLES, False),
-        ("srs", ROS_D_SRS, False),
-        ("transparency", ROS_D_IMAGE_TRANSPARENCY, False),
-        ("format", ROS_D_IMAGE_FORMAT, False),
-        ("map_overlap_update_threshold", ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
-        ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
-    ]
-    """List containing ROS parameter name, default value and read_only flag tuples"""
-
+    @ROS.setup_node(
+        [
+            ("url", ROS_D_URL, True),
+            ("version", ROS_D_VERSION, True),
+            ("timeout", ROS_D_TIMEOUT, True),
+            ("publish_rate", ROS_D_PUBLISH_RATE, True),
+            ("layers", ROS_D_LAYERS, False),
+            ("styles", ROS_D_STYLES, False),
+            ("dem_layers", ROS_D_DEM_LAYERS, False),
+            ("dem_styles", ROS_D_DEM_STYLES, False),
+            ("srs", ROS_D_SRS, False),
+            ("transparency", ROS_D_IMAGE_TRANSPARENCY, False),
+            ("format", ROS_D_IMAGE_FORMAT, False),
+            ("map_overlap_update_threshold", ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
+            ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
+        ]
+    )
     def __init__(self, name: str):
         """Class initializer
 
         :param name: Node name
         """
-        super().__init__(name)
+        # super().__init__(name)  # Handled by setup_node decorator
 
-        # Publishers
-        self._terrain_altitude_pub = self.create_publisher(
-            Altitude,
-            messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._egm96_height_pub = self.create_publisher(
-            Float32,
-            messaging.ROS_TOPIC_EGM96_HEIGHT,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._terrain_geopoint_pub = self.create_publisher(
-            GeoPointStamped,
-            messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._ortho_image_3d_msg = (
-            None  # This outgoing message is on a timer, needs to be stored
-        )
-        self._ortho_image_3d_pub = self.create_publisher(
-            OrthoImage3D,
-            messaging.ROS_TOPIC_ORTHOIMAGE,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-
-        # Subscribers
-        self._bounding_box = None
-        self._bounding_box_sub = self.create_subscription(
-            BoundingBox,
-            messaging.ROS_TOPIC_BOUNDING_BOX,
-            self._bounding_box_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._vehicle_geopose = None
-        self._vehicle_geopose_sub = self.create_subscription(
-            GeoPoseStamped,
-            messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
-            self._vehicle_geopose_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._home_geopoint = None
-        self._home_geopoint_sub = self.create_subscription(
-            GeoPointStamped,
-            messaging.ROS_TOPIC_HOME_GEOPOINT,
-            self._home_geopoint_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
+        # Calling these decorated properties the first time will setup
+        # subscriptions to the appropriate ROS topics
+        self.bounding_box
+        self.geopose
+        self.home_geopoint
+        self.camera_info
 
         publish_rate = (
             self.get_parameter("publish_rate").get_parameter_value().integer_value
         )
         self._publish_timer = self._create_publish_timer(publish_rate)
-        self._ortho_image_3d_msg = None
-
-        # For map update timer / DEM requests
-        self._origin_dem_altitude = None
-        self._home_dem = None  # dem map data
-        self._map_data = None
 
         # TODO: make configurable / use shared folder home path instead
         self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
 
+        # TODO: refactor out CvBridge and use np.frombuffer instead
         self._cv_bridge = CvBridge()
 
-        url = self.get_parameter("url").get_parameter_value().string_value
-        version = self.get_parameter("version").get_parameter_value().string_value
-        timeout = self.get_parameter("timeout").get_parameter_value().integer_value
-        self.connected = False  # TODO: handle disconnects, declare property
-        while not self.connected:
-            try:
-                self.get_logger().error("Connecting to WMS endpoint...")
-                self._wms_client = WebMapService(url, version=version, timeout=timeout)
-                self.connected = True
-            except requests.exceptions.ConnectionError as _:  # noqa: F841
-                self.get_logger().error(
-                    f"Could not connect to WMS endpoint, trying again in "
-                    f"{self._WMS_CONNECTION_ATTEMPT_DELAY}s..."
-                )
-                time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY)
-
-        # TODO: any other errors that might prevent connection?
-        #  handle disconnect & reconnect
-        assert self.connected
-        self.get_logger().info("WMS client setup complete.")
-
-    # region Properties
-    @property
-    def _publish_timer(self) -> Timer:
-        """:class:`gisnav_msgs.msg.OrthoImage3D` publish and map update timer"""
-        return self.__publish_timer
-
-    @_publish_timer.setter
-    def _publish_timer(self, value: Timer) -> None:
-        assert_type(value, Timer)
-        self.__publish_timer = value
-
-    @property
-    def _map_data(self) -> Optional[MapData]:
-        """Stored map data"""
-        return self.__map_data
-
-    @_map_data.setter
-    def _map_data(self, value: MapData) -> None:
-        self.__map_data = value
-
-    @property
-    def _ortho_image_3d_msg(self) -> Optional[OrthoImage3D]:
-        """:class:`gisnav_msgs.msg.OrthoImage3D` message to publish"""
-        return self.__ortho_image_3d_msg
-
-    @_ortho_image_3d_msg.setter
-    def _ortho_image_3d_msg(self, value: Optional[OrthoImage3D]) -> None:
-        assert_type(value, get_args(Optional[OrthoImage3D]))
-        self.__ortho_image_3d_msg = value
-
-    @property
-    def _origin_dem_altitude(self) -> Optional[float]:
-        """Elevation layer (DEM) altitude at local frame origin"""
-        return self.__origin_dem_altitude
-
-    @_origin_dem_altitude.setter
-    def _origin_dem_altitude(self, value: Optional[float]) -> None:
-        assert_type(value, get_args(Optional[float]))
-        self.__origin_dem_altitude = value
-
-    # region rclpy subscriber callbacks
-    def _vehicle_geopose_callback(self, msg: GeoPoseStamped) -> None:
-        """Stores :class:`geographic_msgs.msg.GeoPoseStamped` message"""
-        self._vehicle_geopose = msg
-
-        # Needed by autopilot node to publish vehicle/home GeoPose with
-        # ellipsoid altitude
-        height = self._egm96.height(
-            msg.pose.position.latitude, msg.pose.position.longitude
-        )
-        height_msg = Float32(data=height)
-        self._egm96_height_pub.publish(height_msg)
-
-    def _home_geopoint_callback(self, msg: GeoPointStamped) -> None:
-        """Stores :class:`geographic_msgs.msg.GeoPointStamped` message"""
-        self._home_geopoint = msg
-
-    def _bounding_box_callback(self, msg: BoundingBox) -> None:
-        """Stores :class:`geograhpic_msgs.msg.BoundingBox` message"""
-        self._bounding_box = msg
-
-        bbox = BBox(
-            msg.min_pt.longitude,
-            msg.min_pt.latitude,
-            msg.max_pt.longitude,
-            msg.max_pt.latitude,
-        )
-        if self._should_request_new_map(bbox):
-            if self.map_size_with_padding is not None:
-                map = self._get_map(bbox, self.map_size_with_padding)
-                if map is not None:
-                    img, dem = map
-                    self._map_data = MapData(
-                        bbox=bbox, image=Img(img), elevation=Img(dem)
-                    )
-                    self._ortho_image_3d_msg = self._create_msg(bbox, img, dem)
-                else:
-                    self.get_logger().warn(
-                        "Could not get new map - will not update map data nor "
-                        "orthoimage message."
-                    )
-            else:
-                self.get_logger().warn(
-                    f"Cannot request new map, could not determine size "
-                    f"({self.map_size_with_padding}) parameter for GetMap request."
-                )
-
-    def image_callback(self, msg: Image) -> None:
-        """Receives :class:`sensor_msgs.msg.Image` message"""
-        # Do nothing - enforced by CameraSubscriberNode parent
-
-    # endregion rclpy subscriber callbacks
-
-    def _should_request_new_map(self, bbox: BBox) -> bool:
-        """Returns True if a new map should be requested
-
-        This check is made to avoid retrieving a new map that is almost the same
-        as the previous map. Relaxing map update constraints should not improve
-        accuracy of position estimates unless the map is so old that the field of
-        view either no longer completely fits inside (vehicle has moved away or
-        camera is looking in other direction) or is too small compared to the
-        size of the map (vehicle altitude has significantly decreased).
-
-        :param bbox: Bounding box of latest containing camera field of view
-        :return: True if new map should be requested
-        """
-        if self._bounding_box is not None:
-            if self._ortho_image_3d_msg is not None:
-                bbox_previous = messaging.bounding_box_to_bbox(
-                    self._ortho_image_3d_msg.bbox
-                )
-                threshold = (
-                    self.get_parameter("map_overlap_update_threshold")
-                    .get_parameter_value()
-                    .double_value
-                )
-                bbox1, bbox2 = box(*bbox), box(*bbox_previous)
-                ratio1 = bbox1.intersection(bbox2).area / bbox1.area
-                ratio2 = bbox2.intersection(bbox1).area / bbox2.area
-                ratio = min(ratio1, ratio2)
-                if ratio < threshold:
-                    return True
-            else:
-                return True
-        else:
-            return False
+        # TODO: WMS connection handle disconnects, declare property
+        self._connected = False
+        self._connect_wms()
 
     def _create_publish_timer(self, publish_rate: int) -> Timer:
-        """Returns a timer to publish :class:`gisnav_msgs.msg.OrthoImage3D`
+        """
+        Returns a timer to publish :attr:`.orthoimage_3d` to ROS
 
         :param publish_rate: Publishing rate for the timer (in Hz)
         :return: The :class:`.Timer` instance
@@ -393,66 +215,577 @@ class MapNode(CameraSubscriberNode):
             )
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
-        timer = self.create_timer(1 / publish_rate, self._update_and_publish)
+        timer = self.create_timer(1 / publish_rate, self.publish)
         return timer
 
-    def _get_map(
-        self, bbox: BBox, size: Tuple[int, int]
-    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Sends GetMap request to WMS for image and DEM layers and returns
-        them as a tuple, or None if not available
+    @property
+    def _publish_timer(self) -> Timer:
+        """:class:`gisnav_msgs.msg.OrthoImage3D` publish and map update timer"""
+        return self.__publish_timer
 
-        Returns zero raster as DEM if no DEM layer is available.
+    @_publish_timer.setter
+    def _publish_timer(self, value: Timer) -> None:
+        self.__publish_timer = value
+
+    def publish(self):
+        """
+        Publish :attr:`.orthoimage_3d` (:attr:`.terrain_altitude` and
+        :attr:`.terrain_geopoint_stamped` are also published but that
+        publish is triggered by callbacks since the messages are smaller and
+        can be published more oftern)
+        """
+        self.orthoimage_3d
+
+    def _connect_wms(self) -> None:
+        """Connects to WMS server"""
+        url = self.get_parameter("url").get_parameter_value().string_value
+        version = self.get_parameter("version").get_parameter_value().string_value
+        timeout = self.get_parameter("timeout").get_parameter_value().integer_value
+        while not self.connected:
+            try:
+                self.get_logger().info("Connecting to WMS endpoint...")
+                self._wms_client = WebMapService(url, version=version, timeout=timeout)
+                self.connected = True
+            except requests.exceptions.ConnectionError as _:  # noqa: F841
+                self.get_logger().error(
+                    f"Could not connect to WMS endpoint, trying again in "
+                    f"{self._WMS_CONNECTION_ATTEMPT_DELAY_SEC} seconds..."
+                )
+                time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY_SEC)
+
+        # TODO: any other errors that might prevent connection?
+        #  handle disconnect & reconnect
+        self.get_logger().info("WMS client setup complete.")
+
+    @property
+    def connected(self) -> bool:
+        """True if connected to WMS server"""
+        return self._connected
+
+    @connected.setter
+    def connected(self, value: bool) -> None:
+        self._connected = value
+
+    def _bounding_box_with_padding_for_geopoint(
+        self, geopoint: Union[GeoPoint, GeoPointStamped]
+    ):
+        """Adds 100 meters of padding to GeoPoint on both sides"""
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot determine bounding box with padding"
+        )
+        def _bounding_box_with_padding_for_geopoint(
+            geopoint: GeoPoint,
+        ) -> BoundingBox:
+            # Approximate conversions
+            padding = 100.0
+            meters_in_degree = 111045.0  # at 0 latitude
+            lat_degree_meter = meters_in_degree
+            lon_degree_meter = meters_in_degree * np.cos(np.radians(geopoint.latitude))
+
+            delta_lat = padding / lat_degree_meter
+            delta_lon = padding / lon_degree_meter
+
+            bounding_box = BoundingBox()
+
+            bounding_box.min_pt = GeoPoint()
+            bounding_box.min_pt.latitude = geopoint.latitude - delta_lat
+            bounding_box.min_pt.longitude = geopoint.longitude - delta_lon
+
+            bounding_box.max_pt = GeoPoint()
+            bounding_box.max_pt.latitude = geopoint.latitude + delta_lat
+            bounding_box.max_pt.longitude = geopoint.longitude + delta_lon
+
+            return bounding_box
+
+        if isinstance(geopoint, GeoPointStamped):
+            geopoint = geopoint.position
+        return _bounding_box_with_padding_for_geopoint(geopoint)
+
+    def _should_update_dem_height_at_local_origin(self):
+        # TODO: Update if local frame changes
+        if self._dem_height_at_local_origin is None:
+            return True
+
+    @property
+    @cache_if(_should_update_dem_height_at_local_origin)
+    def dem_height_at_local_origin(self) -> Optional[float]:
+        """
+        Elevation layer (DEM) height in meters at local frame origin
+
+        DEM values are expected to be requested for (1) the vehicle's current
+        position, and (2) the local frame origin. DEM value for the local frame
+        origin is needed to determine the AMSL height of the DEM, which may
+        be expressed in some other vertical datum. Since the local frame origin
+        generally is not inside :attr:`.orthoimage_3d`, a separate request
+        retrieving DEM height for local frame origin using a WMS GetFeatureInfo
+        request is implemnted here (this has a bit of latency but is OK for the
+        given use case of retrieving it typically only once and then caching it).
+
+        .. note::
+            Assumes home GeoPoint is also the local frame origin.
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot request feature")
+        def _request_dem_height_for_local_origin(
+            home_geopoint: GeoPointStamped,
+        ) -> Optional[float]:
+            dem_layers, dem_styles = (
+                self.get_parameter("dem_layers")
+                .get_parameter_value()
+                .string_array_value,
+                self.get_parameter("dem_styles")
+                .get_parameter_value()
+                .string_array_value,
+            )
+            assert_len(dem_styles, len(dem_layers))
+
+            srs = self.get_parameter("srs").get_parameter_value().string_value
+            format_ = self.get_parameter("format").get_parameter_value().string_value
+
+            bounding_box = self._bounding_box_with_padding_for_geopoint(home_geopoint)
+            bbox = messaging.bounding_box_to_bbox(bounding_box)
+
+            self.get_logger().info("Requesting new orthoimage")
+            height = self._get_feature_info(
+                dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
+            )
+            if height is None:
+                self.get_logger().error("Could not get DEM height from GIS server")
+
+            return height
+
+        return _request_dem_height_for_local_origin(self.home_geopoint)
+
+    def bounding_box_cb(self, msg: BoundingBox) -> None:
+        """Callback for :class:`geographic_msgs.msg.BoundingBox` messages"""
+
+        # Request new if needed and publish
+        self.orthoimage_3d
+
+    @property
+    # @ROS.max_delay_ms(2000) - camera info has no header
+    @ROS.subscribe("camera/camera_info", QoSPresetProfiles.SENSOR_DATA.value)
+    def camera_info(self) -> Optional[CameraInfo]:
+        """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
+
+    @property
+    def _orthoimage_size(self) -> Optional[Tuple[int, int]]:
+        """
+        Padded map size tuple (height, width) or None if the information
+        is not available.
+
+        Because the deep learning models used for predicting matching keypoints
+        or poses between camera image frames and map rasters are not assumed to
+        be rotation invariant in general, the orthoimage rasters are rotated
+        based on camera yaw so that they align with the camera images. To keep
+        the scale of the raster after rotation unchanged, black corners would
+        appear unless padding is used. Retrieved maps therefore have to be
+        squares with the side lengths matching the diagonal of the camera frames
+        so that scale is preserved and no black corners appear in the rasters
+        after arbitrary 2D rotation. The height and width will both be equal to
+        the diagonal of the declared camera frame dimensions.
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot determine orthoimage size")
+        def _orthoimage_size(camera_info: CameraInfo):
+            diagonal = int(
+                np.ceil(np.sqrt(camera_info.width**2 + camera_info.height**2))
+            )
+            return diagonal, diagonal
+
+        return _orthoimage_size(self.camera_info)
+
+    @property
+    # @ROS.max_delay_ms(2000) - bounding box has no header
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_BOUNDING_BOX,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=bounding_box_cb,
+    )
+    def bounding_box(self) -> Optional[BoundingBox]:
+        """
+        Geographical bounding box of area to retrieve a map for, or None if not
+        available or too old
+        """
+
+    def geopose_cb(self, msg: GeoPoseStamped) -> None:
+        """Callback for :class:`geographic_msgs.msg.GeoPoseStamped` message"""
+        # Needed by autopilot node to publish vehicle/home GeoPoseStamped with
+        # ellipsoid altitude
+        self.egm96_height
+
+        # Publish terrain altitude and geopose
+        self.terrain_altitude
+        self.terrain_geopoint_stamped
+
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=geopose_cb,
+    )
+    def geopose(self) -> Optional[GeoPoseStamped]:
+        """Vehicle GeoPoseStamped, or None if not available or too old"""
+
+    @property
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_HOME_GEOPOINT, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def home_geopoint(self) -> Optional[GeoPointStamped]:
+        """Home position GeoPointStamped, or None if not available or too old"""
+
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def terrain_altitude(self) -> Optional[Altitude]:
+        """Altitude of terrain directly under drone, or None if not available"""
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot generate terrain altitude message"
+        )
+        def _terrain_altitude(
+            terrain_altitude_amsl: float,
+            terrain_altitude_at_home_amsl: float,
+        ):
+            terrain_altitude = Altitude(
+                header=messaging.create_header("base_link"),
+                amsl=terrain_altitude_amsl,
+                local=terrain_altitude_at_home_amsl,
+                relative=terrain_altitude_at_home_amsl,
+                terrain=0.0,
+                bottom_clearance=0.0,
+            )
+            return terrain_altitude
+
+        return _terrain_altitude(
+            self.terrain_altitude_amsl,
+            self._terrain_altitude_at_home_amsl,
+        )
+
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def terrain_geopoint_stamped(self) -> Optional[GeoPointStamped]:
+        """
+        Vehicle ground track as :class:`geographic_msgs.msg.GeoPointStamped`
+        message, or None if not available
+
+        Complementary to the Altitude message, includes lat and lon in atomic
+        message
+        """
+
+        @enforce_types(
+            self.get_logger().warn,
+            "Cannot generate terrain altitude GeoPointStamped message",
+        )
+        def _terrain_geopoint_stamped(
+            geopose_stamped: GeoPoseStamped, terrain_altitude_ellipsoid: float
+        ):
+            geopoint_stamped = GeoPointStamped(
+                header=messaging.create_header("base_link"),
+                position=GeoPoint(
+                    latitude=geopose_stamped.pose.position.latitude,
+                    longitude=geopose_stamped.pose.position.longitude,
+                    altitude=terrain_altitude_ellipsoid,
+                ),
+            )
+            return geopoint_stamped
+
+        return _terrain_geopoint_stamped(self.geopose, self.terrain_altitude_ellipsoid)
+
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_EGM96_HEIGHT,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def egm96_height(self) -> Optional[Float32]:
+        """EGM96 geoid height at current location, or None if not available"""
+
+        @enforce_types(self.get_logger().warn, "Cannot generate EGM96 geoid height")
+        def _egm96_height(geopose_stamped: GeoPoseStamped):
+            _egm96_height = self._egm96.height(
+                geopose_stamped.pose.position.latitude,
+                geopose_stamped.pose.position.longitude,
+            )
+            return Float32(data=_egm96_height)
+
+        return _egm96_height(self.geopose)
+
+    def _request_orthoimage_for_bounding_box(
+        self, bounding_box: BoundingBox
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Sends GetMap request to GIS WMS for image and DEM layers and returns
+        :attr:`.orthoimage_3d` attribute.
+
+        Assumes zero raster as DEM if no DEM layer is available.
 
         TODO: Currently no support for separate arguments for imagery and height
         layers. Assumes height layer is available at same CRS as imagery layer.
 
-        :param bbox: Bounding box of the map (left, bottom, right, top)
-        :param size: Map raster resolution (height, width)
-        :return: Tuple of imagery and DEM rasters, or None if not available
+        :param bounding_box: BoundingBox to request the orthoimage for
         """
-        assert_type(bbox, BBox)
-        assert_type(size, tuple)
 
-        layers, styles = (
-            self.get_parameter("layers").get_parameter_value().string_array_value,
-            self.get_parameter("styles").get_parameter_value().string_array_value,
+        @enforce_types(self.get_logger().warn, "Cannot request orthoimage")
+        def _request_orthoimage_for_bounding_box(
+            bounding_box: BoundingBox, size: Tuple[int, int]
+        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+            layers, styles = (
+                self.get_parameter("layers").get_parameter_value().string_array_value,
+                self.get_parameter("styles").get_parameter_value().string_array_value,
+            )
+            assert_len(styles, len(layers))
+            assert all(isinstance(x, str) for x in layers)
+            assert all(isinstance(x, str) for x in styles)
+
+            dem_layers, dem_styles = (
+                self.get_parameter("dem_layers")
+                .get_parameter_value()
+                .string_array_value,
+                self.get_parameter("dem_styles")
+                .get_parameter_value()
+                .string_array_value,
+            )
+            assert_len(dem_styles, len(dem_layers))
+            assert all(isinstance(x, str) for x in dem_layers)
+            assert all(isinstance(x, str) for x in dem_styles)
+
+            srs = self.get_parameter("srs").get_parameter_value().string_value
+            format_ = self.get_parameter("format").get_parameter_value().string_value
+            transparency = (
+                self.get_parameter("transparency").get_parameter_value().bool_value
+            )
+
+            bbox = messaging.bounding_box_to_bbox(bounding_box)
+
+            self.get_logger().info("Requesting new orthoimage")
+            img: np.ndarray = self._get_map(
+                layers, styles, srs, bbox, size, format_, transparency
+            )
+            if img is None:
+                self.get_logger().error("Could not get orthoimage from GIS server")
+                return None
+
+            dem: Optional[np.ndarray] = None
+            if len(dem_layers) > 0 and dem_layers[0]:
+                self.get_logger().info("Requesting new DEM")
+                dem = self._get_map(
+                    dem_layers,
+                    dem_styles,
+                    srs,
+                    bbox,
+                    size,
+                    format_,
+                    transparency,
+                    grayscale=True,
+                )
+                if dem is not None and dem.ndim == 2:
+                    dem = np.expand_dims(dem, axis=2)
+            else:
+                # Assume flat (:=zero) terrain if no DEM layer provided
+                self.get_logger().debug(
+                    "No DEM layer provided, assuming flat (=zero) elevation model."
+                )
+                dem = np.zeros_like(img)
+
+            # TODO: handle dem is None from _get_map call
+            assert img is not None and dem is not None
+            assert img.ndim == dem.ndim == 3
+            return img, dem
+
+        return _request_orthoimage_for_bounding_box(bounding_box, self._orthoimage_size)
+
+    def _should_request_orthoimage(self) -> bool:
+        """Returns True if a new orthoimage (including DEM) should be requested
+        from onboard GIS
+
+        This check is made to avoid retrieving a new orthoimage that is almost
+        the same as the previous orthoimage. Relaxing orthoimage update constraints
+        should not improve accuracy of position estimates unless the orthoimage
+        is so old that the field of view either no longer completely fits inside
+        (vehicle has moved away or camera is looking in other direction) or is
+        too small compared to the size of the orthoimage (vehicle altitude has
+        significantly decreased).
+
+        :return: True if new orthoimage should be requested from onboard GIS
+        """
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot determine if orthoimage overlap is too low"
         )
-        assert_len(styles, len(layers))
-        assert all(isinstance(x, str) for x in layers)
-        assert all(isinstance(x, str) for x in styles)
+        def _orthoimage_overlap_is_too_low(
+            new_bounding_box: BoundingBox, old_orthoimage: OrthoImage3D
+        ) -> bool:
+            bbox = messaging.bounding_box_to_bbox(new_bounding_box)
+            bbox_previous = messaging.bounding_box_to_bbox(old_orthoimage.bbox)
+            threshold = (
+                self.get_parameter("map_overlap_update_threshold")
+                .get_parameter_value()
+                .double_value
+            )
+            bbox1, bbox2 = box(*bbox), box(*bbox_previous)
+            ratio1 = bbox1.intersection(bbox2).area / bbox1.area
+            ratio2 = bbox2.intersection(bbox1).area / bbox2.area
+            ratio = min(ratio1, ratio2)
+            if ratio > threshold:
+                return False
 
-        dem_layers, dem_styles = (
-            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
-            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
+            return True
+
+        # Access self._orthoimage_3d directly to prevent recursion since this is
+        # used as @cache_if predicate for self.orthoimage_3d
+        # Cast None to False (assume bounding box not yet available)
+        return (
+            bool(_orthoimage_overlap_is_too_low(self.bounding_box, self._orthoimage_3d))
+            or not self._orthoimage_3d
         )
-        assert_len(dem_styles, len(dem_layers))
-        assert all(isinstance(x, str) for x in dem_layers)
-        assert all(isinstance(x, str) for x in dem_styles)
 
-        srs = self.get_parameter("srs").get_parameter_value().string_value
-        format_ = self.get_parameter("format").get_parameter_value().string_value
-        transparency = (
-            self.get_parameter("transparency").get_parameter_value().bool_value
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_ORTHOIMAGE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    @cache_if(_should_request_orthoimage)
+    def orthoimage_3d(self) -> Optional[OrthoImage3D]:
+        """Outgoing orthoimage and elevation raster pair"""
+
+        # TODO: log messages for what's going on, or split into multiple methods
+        bounding_box = self.bounding_box
+        if self.bounding_box is None:
+            geopose = self.geopose
+            if geopose is None:
+                geopoint = self.home_geopoint
+            else:
+                geopoint = self.geopose.pose.position
+            bounding_box = self._bounding_box_with_padding_for_geopoint(geopoint)
+
+        map = self._request_orthoimage_for_bounding_box(bounding_box)
+        if map is not None:
+            img, dem = map
+            # TODO: use np.frombuffer, not CvBridge
+            return OrthoImage3D(
+                bbox=bounding_box,
+                img=self._cv_bridge.cv2_to_imgmsg(img, encoding="passthrough"),
+                dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="passthrough")
+                # dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="mono8")
+            )  # TODO: need to use mono16? 255 meters max?
+        else:
+            return None
+
+    @property
+    def terrain_altitude_amsl(self) -> Optional[float]:
+        """
+        Altitude of terrain directly under drone above mean sea level AMSL in
+        meters, or None if not available
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot generate terrain altitude AMSL")
+        def _terrain_altitude_amsl(geopose_stamped: GeoPoseStamped):
+            terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
+                geopose_stamped.pose.position
+            )
+
+            if terrain_altitude_amsl is None:
+                # Probably have not received bbox yet so no map_data, try the
+                # data that was retrieved for local position origin instead
+                # (assume we are at starting position)
+                self.get_logger().warn(
+                    "Could not get terrain altitude amsl for position from map "
+                    "data for publishing geopoint, trying DEM which is intended "
+                    "for local origin..."
+                )
+                terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
+                    geopose_stamped.pose.position,
+                    True,  # TODO: ground track orthoimage, not local origin orthoimage?
+                )
+
+            return terrain_altitude_amsl
+
+        return _terrain_altitude_amsl(self.geopose)
+
+    @property
+    def terrain_altitude_ellipsoid(self) -> Optional[float]:
+        """
+        Altitude of terrain directly under drone above WGS84 ellipsoid in meters,
+        or None if not available
+        """
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot generate terrain ellipsoidal altitude"
+        )
+        def _terrain_altitude_ellipsoid(
+            terrain_altitude_amsl: float, geopose_stamped: GeoPoseStamped
+        ):
+            terrain_altitude_ellipsoid = terrain_altitude_amsl + self._egm96.height(
+                geopose_stamped.pose.position.latitude,
+                geopose_stamped.pose.position.longitude,
+            )
+            return terrain_altitude_ellipsoid
+
+        return _terrain_altitude_ellipsoid(self.terrain_altitude_amsl, self.geopose)
+
+    @property
+    def _home_altitude_amsl(self) -> Optional[float]:
+        """
+        Home position altitude above mean sea level (AMLS) in meters, or None
+        if not available
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot generate home altitude AMSL")
+        def _home_altitude_amsl(home_geopoint: GeoPointStamped):
+            home_altitude_amsl = home_geopoint.position.altitude - self._egm96.height(
+                home_geopoint.position.latitude,
+                home_geopoint.position.longitude,
+            )
+            return home_altitude_amsl
+
+        return _home_altitude_amsl(self.home_geopoint)
+
+    @property
+    def _terrain_altitude_at_home_amsl(self) -> Optional[float]:
+        """
+        Terrain altitude above mean sea level (AMSL) at home position, or None
+        if not available
+
+        # TODO: check if this definition is correct
+        """
+
+        @enforce_types(
+            self.get_logger().warn,
+            "Cannot generate terrain altitude AMSL at home position",
+        )
+        def _terrain_altitude_at_home_amsl(
+            home_altitude_amsl: float, terrain_altitude_amsl: float
+        ):
+            # TODO: this is wrong? Need terrain altitude AMSL at home position as input?
+            terrain_altitude_at_home_amsl = (
+                terrain_altitude_amsl - home_altitude_amsl
+                if terrain_altitude_amsl is not None and home_altitude_amsl is not None
+                else None
+            )
+            return terrain_altitude_at_home_amsl
+
+        return _terrain_altitude_at_home_amsl(
+            self._home_altitude_amsl, self.terrain_altitude_amsl
         )
 
+    def _get_map(
+        self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
+    ) -> Optional[np.ndarray]:
+        """Sends WMS GetMap request and returns numpy array"""
         self.get_logger().info(
-            f"Requesting orthoimage and DEM for\n"
-            f"bbox: {bbox},\n"
-            f"layers: {layers},\n"
-            f"styles: {styles},\n"
-            f"DEM layers: {dem_layers},\n"
-            f"DEM styles: {dem_styles},\n"
-            f"SRS: {srs},\n"
-            f"size: {size},\n"
-            f"transparency: {transparency},\n"
-            f"format: {format_}."
+            f"Sending GetMap request for bbox: {bbox}, layers: {layers}."
         )
-
-        # Do not handle possible requests library related exceptions here
-        # (see class docstring)
         try:
-            self.get_logger().info("Requesting orthoimage...")
+            # Do not handle possible requests library related exceptions here
+            # (see class docstring)
             img: IO = self._wms_client.getmap(
                 layers=layers,
                 styles=styles,
@@ -464,333 +797,185 @@ class MapNode(CameraSubscriberNode):
             )
         except ServiceException as se:
             self.get_logger().error(
-                f"GetMap request for orthoimage ran into an unexpected exception: {se}"
+                f"GetMap request for image ran into an unexpected exception: {se}"
             )
             return None
         finally:
-            self.get_logger().info("Orthoimage request complete.")
-        img_ = self._read_img(img)
+            self.get_logger().debug("Image request complete.")
 
-        dem = None
-        if len(dem_layers) > 0 and dem_layers[0]:
-            try:
-                self.get_logger().info("Requesting DEM...")
-                dem = self._wms_client.getmap(
-                    layers=dem_layers,
-                    styles=dem_styles,
-                    srs=srs,
-                    bbox=bbox,
-                    size=size,
-                    format=format_,
-                    transparent=transparency,
-                )
-            except ServiceException as se:
+        def _read_img(img: IO, grayscale: bool = False) -> np.ndarray:
+            """Reads image bytes and returns numpy array
+
+            :param img: Image bytes buffer
+            :param grayscale: True if buffer represents grayscale image
+            :return: Image as np.ndarray
+            """
+            img = np.frombuffer(img.read(), np.uint8)  # TODO: make DEM uint16?
+            img = (
+                cv2.imdecode(img, cv2.IMREAD_UNCHANGED)
+                if not grayscale
+                else cv2.imdecode(img, cv2.IMREAD_GRAYSCALE)
+            )
+            assert_type(img, np.ndarray)
+            return img
+
+        return _read_img(img, grayscale)
+
+    def _get_feature_info(
+        self, layers, styles, srs, bbox, size, format_, xy
+    ) -> Optional[float]:
+        @enforce_types(self.get_logger().warn, "Cannot extract DEM height from GML")
+        def _extract_dem_height_from_gml(gml_bytes: bytes) -> Optional[float]:
+            """Extracts DEM height value from GML returned from WMS endpoint"""
+            # Split the binary string into lines using '\n\n' as a separator
+            binary_lines = gml_bytes.split(b"\n\n")
+
+            # Decode each binary line into a regular string
+            decoded_lines = [line.decode("utf-8") for line in binary_lines]
+
+            # Join the decoded lines back into a single string
+            gml_data = "\n".join(decoded_lines)
+
+            root = ET.fromstring(gml_data)
+
+            # Find the "value_0" element and extract its value
+            # TODO: handle not finding the value
+            height_element = root.find(".//value_0")
+            if height_element is not None and height_element.text is not None:
+                return float(height_element.text)
+            else:
                 self.get_logger().error(
-                    f"GetMap request for DEM ran into an unexpected exception: {se}"
+                    'DEM height ("value_0" element) not found in GetFeatureInfo '
+                    "response"
                 )
                 return None
-            finally:
-                self.get_logger().info("DEM request complete.")
-            dem = self._read_img(dem, True)
-        else:
-            # Assume flat (:=zero) terrain if no DEM layer provided
-            self.get_logger().debug(
-                "No DEM layer provided, assuming flat (=zero) elevation model."
-            )
-            dem = np.zeros_like(img_)
 
-        return img_, dem
-
-    @staticmethod
-    def _read_img(img: IO, grayscale: bool = False) -> np.ndarray:
-        """Reads image bytes and returns numpy array
-
-        :return: Image as np.ndarray
-        """
-        img = np.frombuffer(img.read(), np.uint8)
-        img = (
-            cv2.imdecode(img, cv2.IMREAD_UNCHANGED)
-            if not grayscale
-            else cv2.imdecode(img, cv2.IMREAD_GRAYSCALE)
+        """Sends WMS GetFeatureInfo request and returns float value"""
+        self.get_logger().info(
+            f"Sending GetFeatureInfo request for xy: {bbox}, xy {xy}, layers: {layers}."
         )
-        assert_type(img, np.ndarray)
-        # assert_ndim(img, 3)
-        return img
+        try:
+            # Do not handle possible requests library related exceptions here
+            # (see class docstring)
+            feature_info: IO = self._wms_client.getfeatureinfo(
+                layers=layers,
+                styles=styles,
+                srs=srs,
+                bbox=bbox,
+                size=size,
+                format=format_,
+                query_layers=layers,
+                info_format="application/vnd.ogc.gml",
+                xy=xy,
+            )
 
-    def _create_msg(self, bbox: BBox, img: np.ndarray, dem: np.ndarray) -> OrthoImage3D:
-        """Stores :class:`.OrthoImage3D message for later publication
+        except ServiceException as se:
+            self.get_logger().error(
+                f"GetFeatureInfo request ran into an unexpected exception: {se}"
+            )
+            return None
+        finally:
+            self.get_logger().debug("GetFeatureInfo request complete.")
 
-        :param bbox: The bounding box for the two maps
-        :param img: The high resolution image
-        :param dem: The DEM raster
+        dem_height = _extract_dem_height_from_gml(feature_info.read())
+        return dem_height
+
+    def _dem_height_at_geopoint(self, geopoint: Optional[GeoPoint]) -> Optional[float]:
         """
-        return OrthoImage3D(
-            bbox=messaging.bbox_to_bounding_box(bbox),
-            img=self._cv_bridge.cv2_to_imgmsg(img, encoding="passthrough"),
-            dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="passthrough")
-            # dem=self._cv_bridge.cv2_to_imgmsg(dem, encoding="mono8")
-        )  # TODO: need to use mono16? 255 meters max?
+        Raw DEM height in meters from cached DEM if available, or None if not
+        available
 
-    def _terrain_altitude_at_position(
-        self, position: Optional[GeoPt], local_origin: bool = False
-    ) -> Optional[float]:
-        """Raw terrain altitude from DEM if available, or None if not available
+        .. note::
+            The vertical datum for the USGS DEM is NAVD 88. Other DEMs may
+            have other vertical data, this method is agnostic to but assumes
+            the units are meters. **Within the flight mission area the vertical
+            datum of the DEM is assumed to be flat**.
 
-        :param position: Position to query
-        :param local_origin: True to use :py:attr:`._home_dem` (retrieved
-            specifically for local frame origin)
+        :param geopoint: Position to query
         :return: Raw altitude in DEM coordinate frame and units
         """
-        map_data = self._map_data if not local_origin else self._home_dem
-        if map_data is not None and position is not None:
-            elevation = map_data.elevation.arr
-            bbox = map_data.bbox
-            polygon = box(*bbox)
-            point = position._geoseries[0]
 
-            if polygon.contains(point):
-                h, w = elevation.shape[0:2]
-                assert h, w == self._img_dim
-                left, bottom, right, top = bbox
-                x = w * (position.lon - left) / (right - left)
-                y = h * (position.lat - bottom) / (top - bottom)
-                try:
-                    dem_elevation = elevation[int(np.floor(y)), int(np.floor(x))]
-                except IndexError:
-                    # TODO: might be able to handle this
-                    self.get_logger().warn(
-                        "Position seems to be outside current elevation raster, "
-                        "cannot compute terrain altitude."
-                    )
-                    return None
-
-                return float(dem_elevation)
+        @enforce_types(
+            self.get_logger().warn,
+            "Cannot determine if geopoint is inside bounding box",
+        )
+        def _is_geopoint_inside_bounding_box(
+            geopoint: GeoPoint, bounding_box: BoundingBox
+        ) -> bool:
+            if (
+                geopoint.latitude <= bounding_box.max_pt.latitude
+                and geopoint.latitude >= bounding_box.min_pt.latitude
+                and geopoint.longitude >= bounding_box.min_pt.longitude
+                and geopoint.longitude <= bounding_box.max_pt.longitude
+            ):
+                return True
             else:
-                # Should not happen
-                self.get_logger().warn(
-                    "Did not have elevation raster for current location or local "
-                    "frame origin altitude was unknwon, cannot compute terrain "
-                    "altitude."
+                return False
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot determine terrain altitude at position"
+        )
+        def _dem_height_at_geopoint(
+            orthoimage: OrthoImage3D, geopoint: GeoPoint
+        ) -> Optional[float]:
+            dem = self._cv_bridge.imgmsg_to_cv2(
+                orthoimage.dem, desired_encoding="passthrough"
+            )  # TODO: 255 meters max? use np.uint16
+
+            if _is_geopoint_inside_bounding_box(geopoint, orthoimage.bbox):
+                # Normalized coordinates of the GeoPoint in the BoundingBox
+                bounding_box = orthoimage.bbox
+                u = (geopoint.longitude - bounding_box.min_pt.longitude) / (
+                    bounding_box.max_pt.longitude - bounding_box.min_pt.longitude
                 )
+                v = (geopoint.latitude - bounding_box.min_pt.latitude) / (
+                    bounding_box.max_pt.latitude - bounding_box.min_pt.latitude
+                )
+
+                # Pixel coordinates in the DEM image
+                x_pixel = int(u * (orthoimage.dem.width - 1))
+                y_pixel = int(v * (orthoimage.dem.height - 1))
+
+                # DEM height at the pixel coordinates
+                dem_altitude = dem[y_pixel, x_pixel]
+                return float(dem_altitude)
+            else:
                 return None
 
-        self.get_logger().warn(
-            "Map data or position not provided, cannot determine DEM elevation."
-        )
-        return None
+        return _dem_height_at_geopoint(self.orthoimage_3d, geopoint)
 
-    def _terrain_altitude_amsl_at_position(
-        self, position: Optional[GeoPt], local_origin: bool = False
-    ):
-        """Terrain altitude in meters AMSL accroding to DEM if available, or
+    def _terrain_altitude_amsl_at_geopoint(
+        self, geopoint: Optional[GeoPoint], local_origin: bool = False
+    ) -> Optional[float]:
+        """Terrain altitude in meters AMSL according to DEM if available, or
         None if not available
 
-        :param position: Position to query
-        :param local_origin: Set to True to use :py:attr:`._home_dem` instead
-            of :py:attr:`._map_data`
+        :param geopoint: GeoPoint to query
+        :param local_origin: True to use :py:attr:`._home_dem` (retrieved
+            specifically for local frame origin).
         :return: Terrain altitude AMSL in meters at position
         """
-        dem_elevation = self._terrain_altitude_at_position(position, local_origin)
-        if (
-            dem_elevation is not None
-            and self._origin_dem_altitude is not None
-            and self._home_geopoint is not None
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot compute terrain altitude AMSL at position"
+        )
+        def _terrain_altitude_amsl(
+            dem_meters: float,
+            dem_meters_origin: float,
+            home_geopoint: GeoPointStamped,
         ):
-            elevation_relative = dem_elevation - self._origin_dem_altitude
+            elevation_relative = dem_meters - dem_meters_origin
             elevation_amsl = (
                 elevation_relative
-                + self._home_geopoint.position.altitude
+                + home_geopoint.position.altitude
                 - self._egm96.height(
-                    self._home_geopoint.position.latitude,
-                    self._home_geopoint.position.longitude,
+                    home_geopoint.position.latitude,
+                    home_geopoint.position.longitude,
                 )
             )
             return float(elevation_amsl)
 
-        return None
-
-    def _should_request_dem_for_local_frame_origin(self) -> bool:
-        """Returns True if a new map should be requested to determine elevation
-        value for local frame origin
-
-        DEM value for local frame origin is needed if elevation layer is used
-        in order to determine absolute altitude of altitude estimates (GISNav
-        estimates altitude against DEM, or assumes altitude at 0 if no DEM is
-        provided).
-
-        :return: True if new map should be requested
-        """
-        # TODO: re-request if home position/local frame origin has changed?
-        #  currently they are assumed equal
-        if self._origin_dem_altitude is not None:
-            self.get_logger().debug(
-                "Not requesting DEM because origin_dem_altitude is already set."
-            )
-            return False
-
-        if self._home_geopoint is None:
-            self.get_logger().debug(
-                "Not requesting DEM because local_frame_origin is not available."
-            )
-            return False
-
-        if self.camera_data is None:
-            self.get_logger().debug(
-                "Not requesting DEM because camera_data is not available."
-            )
-            return False
-
-        return True
-
-    def _publish_terrain_altitude(self) -> None:
-        """Publishes terrain altitude at current position"""
-        terrain_altitude_amsl = None
-        if self._vehicle_geopose is not None and self._home_geopoint is not None:
-            xy = GeoPt(
-                x=self._vehicle_geopose.pose.position.longitude,
-                y=self._vehicle_geopose.pose.position.latitude,
-            )
-            terrain_altitude_amsl = self._terrain_altitude_amsl_at_position(xy)
-            if terrain_altitude_amsl is None:
-                # Probably have not received bbox yet so no map_data, try the
-                # data that was retrieved for local position origin instead
-                # (assume we are at starting position)
-                self.get_logger().warn(
-                    "Could not get terrain altitude amsl for position from map "
-                    "data for publishing geopoint, trying DEM which is intended "
-                    "for local origin..."
-                )
-                terrain_altitude_amsl = self._terrain_altitude_amsl_at_position(
-                    xy, True
-                )
-
-            # TODO: redundant in autopilot.py snapshot, remove the bridge eventually
-            assert self._home_geopoint is not None
-            home_altitude_amsl = (
-                self._home_geopoint.position.altitude
-                - self._egm96.height(
-                    self._home_geopoint.position.latitude,
-                    self._home_geopoint.position.longitude,
-                )
-            )
-            terrain_altitude_agl = 0.0
-            if terrain_altitude_amsl is not None:
-                terrain_altitude_ellipsoid = terrain_altitude_amsl + self._egm96.height(
-                    self._vehicle_geopose.pose.position.latitude,
-                    self._vehicle_geopose.pose.position.longitude,
-                )
-            else:
-                terrain_altitude_ellipsoid = None
-
-            terrain_altitude_home = (
-                terrain_altitude_amsl - home_altitude_amsl
-                if terrain_altitude_amsl is not None and home_altitude_amsl is not None
-                else None
-            )
-
-            if (
-                terrain_altitude_amsl is not None
-                and terrain_altitude_home is not None
-                and terrain_altitude_agl is not None
-            ):
-                terrain_altitude_msg = Altitude(
-                    header=messaging.create_header("base_link"),
-                    amsl=terrain_altitude_amsl,
-                    local=terrain_altitude_home,
-                    relative=terrain_altitude_home,
-                    terrain=terrain_altitude_agl,
-                    bottom_clearance=terrain_altitude_agl,
-                )
-                self._terrain_altitude_pub.publish(terrain_altitude_msg)
-
-                # Also publish geopoint message, includes lat and lon in atomic message
-                if terrain_altitude_ellipsoid is not None:
-                    geopoint_msg = GeoPointStamped(
-                        header=messaging.create_header("base_link"),
-                        position=GeoPoint(
-                            latitude=xy.lat,
-                            longitude=xy.lon,
-                            altitude=terrain_altitude_ellipsoid,
-                        ),
-                    )
-                    self._terrain_geopoint_pub.publish(geopoint_msg)
-                else:
-                    self.get_logger().warn(
-                        "Terrain altitude ellipsoid was None so skipping publishing."
-                    )
-            else:
-                self.get_logger().warn(
-                    f"Some altitude values were None so skipping publishing altitude "
-                    f"({terrain_altitude_amsl}, {terrain_altitude_home}, "
-                    f"{terrain_altitude_agl})."
-                )
-        else:
-            self.get_logger().warn(
-                "Could not determine vehicle or home position, skipping "
-                "publishing terrain altitude"
-            )
-
-    def _update_and_publish(self) -> None:
-        """Updates map and publishes :class:`gisnav_msgs.msg.OrthoImage3d`
-        and terrain :class:`mavros_msgs.msg.Altitude`
-
-        Additionally requests DEM for home (assumed local frame origin) if needed (see
-        :meth:`._should_request_dem_for_local_frame_origin).
-
-        Calls :meth:`._request_new_map` if the center and altitude coordinates
-        for the new map raster are available and the :meth:`._should_request_new_map`
-        check passes.
-        """
-        if self._should_request_dem_for_local_frame_origin():
-            assert self._home_geopoint is not None
-            assert self.camera_data is not None
-            max_map_radius = (
-                self.get_parameter("max_map_radius").get_parameter_value().integer_value
-            )
-            map_radius = get_dynamic_map_radius(
-                self.camera_data, max_map_radius, self._DEM_REQUEST_ALTITUDE
-            )
-            if map_radius <= 0:
-                self.get_logger().warn(
-                    f"Could not determine valid map radius ({map_radius}), "
-                    f"skipping requesting DEM for home."
-                )
-            else:
-                assert -180 <= abs(self._home_geopoint.position.longitude) <= 180
-                assert -90 <= abs(self._home_geopoint.position.latitude) <= 90
-                assert_type(map_radius, float)
-                xy = GeoPt(
-                    x=self._home_geopoint.position.longitude,
-                    y=self._home_geopoint.position.latitude,
-                )
-                map_candidate = GeoSquare(xy, map_radius)
-
-                bbox = BBox(*map_candidate.bounds)
-                if self.map_size_with_padding is not None:
-                    self.get_logger().info(
-                        "Requesting DEM for home/local frame origin (assumed same!)."
-                    )
-                    img, dem = self._get_map(bbox, self.map_size_with_padding)
-                    self._home_dem = MapData(
-                        bbox=bbox, image=Img(img), elevation=Img(dem)
-                    )
-
-                    # TODO: assumes that this local_frame_origin is the starting
-                    #  location, same that was used for the request --> not
-                    #  strictly true even if it works for the simulation
-                    if self._origin_dem_altitude is None:
-                        if self._home_geopoint is not None:
-                            self._origin_dem_altitude = (
-                                self._terrain_altitude_at_position(
-                                    xy, local_origin=True
-                                )
-                            )
-                else:
-                    self.get_logger().warn(
-                        "Required map size unknown, skipping requesting DEM for home."
-                    )
-
-        if self._ortho_image_3d_msg is not None:
-            self._ortho_image_3d_pub.publish(self._ortho_image_3d_msg)
-
-        self._publish_terrain_altitude()
+        dem_height = self._dem_height_at_geopoint(geopoint)
+        return _terrain_altitude_amsl(
+            dem_height, self.dem_height_at_local_origin, self.home_geopoint
+        )

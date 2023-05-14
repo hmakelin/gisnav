@@ -118,19 +118,6 @@ class PoseEstimationNode(Node):
         self.geopose
         self.home_geopoint
 
-        # region publishers
-        self._geopose_pub = self.create_publisher(
-            GeoPoseStamped,
-            messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._altitude_pub = self.create_publisher(
-            Altitude,
-            messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        # endregion publishers
-
     @property
     @ROS.subscribe(messaging.ROS_TOPIC_ORTHOIMAGE, QoSPresetProfiles.SENSOR_DATA.value)
     def orthoimage_3d(self) -> Optional[OrthoImage3D]:
@@ -192,6 +179,24 @@ class PoseEstimationNode(Node):
     )
     def home_geopoint(self) -> Optional[GeoPointStamped]:
         """Home position GeoPointStamped, or None if not available or too old"""
+
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
+        """Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`
+        message or None if not available"""
+        raise NotImplementedError  # TODO
+
+    @property
+    @ROS.publish(
+        messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def altitude_estimate(self) -> Optional[Altitude]:
+        """Altitude estimate of vehicle, or None if unknown or too old"""
 
     @property
     def _altitude_scaling(self) -> Optional[float]:

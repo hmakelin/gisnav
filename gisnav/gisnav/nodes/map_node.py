@@ -1,7 +1,7 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
 import xml.etree.ElementTree as ET
-from typing import IO, Optional, Tuple
+from typing import IO, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -266,6 +266,42 @@ class MapNode(Node):
     def connected(self, value: bool) -> None:
         self._connected = value
 
+    def _bounding_box_with_padding_for_geopoint(
+        self, geopoint: Union[GeoPoint, GeoPointStamped]
+    ):
+        """Adds 100 meters of padding to GeoPoint on both sides"""
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot determine bounding box with padding"
+        )
+        def _bounding_box_with_padding_for_geopoint(
+            geopoint: GeoPoint,
+        ) -> BoundingBox:
+            # Approximate conversions
+            padding = 100.0
+            meters_in_degree = 111045.0  # at 0 latitude
+            lat_degree_meter = meters_in_degree
+            lon_degree_meter = meters_in_degree * np.cos(np.radians(geopoint.latitude))
+
+            delta_lat = padding / lat_degree_meter
+            delta_lon = padding / lon_degree_meter
+
+            bounding_box = BoundingBox()
+
+            bounding_box.min_pt = GeoPoint()
+            bounding_box.min_pt.latitude = geopoint.latitude - delta_lat
+            bounding_box.min_pt.longitude = geopoint.longitude - delta_lon
+
+            bounding_box.max_pt = GeoPoint()
+            bounding_box.max_pt.latitude = geopoint.latitude + delta_lat
+            bounding_box.max_pt.longitude = geopoint.longitude + delta_lon
+
+            return bounding_box
+
+        if isinstance(geopoint, GeoPointStamped):
+            geopoint = geopoint.position
+        return _bounding_box_with_padding_for_geopoint(geopoint)
+
     def _should_update_dem_height_at_local_origin(self):
         # TODO: Update if local frame changes
         if self._dem_height_at_local_origin is None:
@@ -290,34 +326,6 @@ class MapNode(Node):
             Assumes home GeoPoint is also the local frame origin.
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot determine padding bounding box")
-        def _bounding_box_with_padding_for_geopoint(
-            geopoint: GeoPointStamped,
-        ) -> BoundingBox:
-            """Adds 10 meters of padding to GeoPoint on both sides"""
-            # Approximate conversions
-            padding = 10.0
-            meters_in_degree = 111045.0  # at 0 latitude
-            lat_degree_meter = meters_in_degree
-            lon_degree_meter = meters_in_degree * np.cos(
-                np.radians(geopoint.position.latitude)
-            )
-
-            delta_lat = padding / lat_degree_meter
-            delta_lon = padding / lon_degree_meter
-
-            bounding_box = BoundingBox()
-
-            bounding_box.min_pt = GeoPoint()
-            bounding_box.min_pt.latitude = geopoint.position.latitude - delta_lat
-            bounding_box.min_pt.longitude = geopoint.position.longitude - delta_lon
-
-            bounding_box.max_pt = GeoPoint()
-            bounding_box.max_pt.latitude = geopoint.position.latitude + delta_lat
-            bounding_box.max_pt.longitude = geopoint.position.longitude + delta_lon
-
-            return bounding_box
-
         @enforce_types(self.get_logger().warn, "Cannot request feature")
         def _request_dem_height_for_local_origin(
             home_geopoint: GeoPointStamped,
@@ -335,7 +343,7 @@ class MapNode(Node):
             srs = self.get_parameter("srs").get_parameter_value().string_value
             format_ = self.get_parameter("format").get_parameter_value().string_value
 
-            bounding_box = _bounding_box_with_padding_for_geopoint(home_geopoint)
+            bounding_box = self._bounding_box_with_padding_for_geopoint(home_geopoint)
             bbox = messaging.bounding_box_to_bbox(bounding_box)
 
             self.get_logger().info("Requesting new orthoimage")
@@ -569,8 +577,8 @@ class MapNode(Node):
             if len(dem_layers) > 0 and dem_layers[0]:
                 self.get_logger().info("Requesting new DEM")
                 dem = self._get_map(
-                    layers,
-                    styles,
+                    dem_layers,
+                    dem_styles,
                     srs,
                     bbox,
                     size,
@@ -578,6 +586,8 @@ class MapNode(Node):
                     transparency,
                     grayscale=True,
                 )
+                if dem is not None and dem.ndim == 2:
+                    dem = np.expand_dims(dem, axis=2)
             else:
                 # Assume flat (:=zero) terrain if no DEM layer provided
                 self.get_logger().debug(
@@ -585,6 +595,7 @@ class MapNode(Node):
                 )
                 dem = np.zeros_like(img)
 
+            # TODO: handle dem is None from _get_map call
             assert img is not None and dem is not None
             assert img.ndim == dem.ndim == 3
             return img, dem
@@ -607,9 +618,9 @@ class MapNode(Node):
         """
 
         @enforce_types(
-            self.get_logger().warn, "Cannot determine if orthoimage should be updated"
+            self.get_logger().warn, "Cannot determine if orthoimage overlap is too low"
         )
-        def _should_request_orthoimage(
+        def _orthoimage_overlap_is_too_low(
             new_bounding_box: BoundingBox, old_orthoimage: OrthoImage3D
         ) -> bool:
             bbox = messaging.bounding_box_to_bbox(new_bounding_box)
@@ -631,7 +642,10 @@ class MapNode(Node):
         # Access self._orthoimage_3d directly to prevent recursion since this is
         # used as @cache_if predicate for self.orthoimage_3d
         # Cast None to False (assume bounding box not yet available)
-        return bool(_should_request_orthoimage(self.bounding_box, self._orthoimage_3d))
+        return (
+            bool(_orthoimage_overlap_is_too_low(self.bounding_box, self._orthoimage_3d))
+            or not self._orthoimage_3d
+        )
 
     @property
     @ROS.publish(
@@ -642,7 +656,16 @@ class MapNode(Node):
     def orthoimage_3d(self) -> Optional[OrthoImage3D]:
         """Outgoing orthoimage and elevation raster pair"""
 
+        # TODO: log messages for what's going on, or split into multiple methods
         bounding_box = self.bounding_box
+        if self.bounding_box is None:
+            geopose = self.geopose
+            if geopose is None:
+                geopoint = self.home_geopoint
+            else:
+                geopoint = self.geopose.pose.position
+            bounding_box = self._bounding_box_with_padding_for_geopoint(geopoint)
+
         map = self._request_orthoimage_for_bounding_box(bounding_box)
         if map is not None:
             img, dem = map
@@ -880,10 +903,10 @@ class MapNode(Node):
             geopoint: GeoPoint, bounding_box: BoundingBox
         ) -> bool:
             if (
-                geopoint.latitude <= bounding_box.top_left.latitude
-                and geopoint.latitude >= bounding_box.bottom_right.latitude
-                and geopoint.longitude >= bounding_box.top_left.longitude
-                and geopoint.longitude <= bounding_box.top_right.longitude
+                geopoint.latitude <= bounding_box.max_pt.latitude
+                and geopoint.latitude >= bounding_box.min_pt.latitude
+                and geopoint.longitude >= bounding_box.min_pt.longitude
+                and geopoint.longitude <= bounding_box.max_pt.longitude
             ):
                 return True
             else:
@@ -915,7 +938,7 @@ class MapNode(Node):
 
                 # DEM height at the pixel coordinates
                 dem_altitude = dem[y_pixel, x_pixel]
-                return dem_altitude
+                return float(dem_altitude)
             else:
                 return None
 

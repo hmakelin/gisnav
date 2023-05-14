@@ -15,7 +15,7 @@ from mavros_msgs.msg import Altitude
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
@@ -51,6 +51,14 @@ class PoseEstimationNode(Node):
 
     _DELAY_NORMAL_MS = 2000
     """Max delay for things like global position"""
+
+    _DELAY_FAST_MS = 500
+    """
+    Max delay for messages with fast dynamics that go "stale" quickly, e.g. local
+    position and attitude. The delay can be a bit higher than is intuitive because
+    the vehicle EKF should be able to fuse things with fast dynamics with higher
+    delay as long as the timestamps are accurate.
+    """
 
     # _IMAGE_ENCODING = "bgr8"
     # """
@@ -181,6 +189,102 @@ class PoseEstimationNode(Node):
         """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
+    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
+    def camera_info(self) -> Optional[CameraInfo]:
+        """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
+
+    def _image_callback(self, msg: Image) -> None:
+        """Handles latest :class:`sensor_msgs.msg.Image` message
+
+        :param msg: The :class:`sensor_msgs.msg.Image` message
+        """
+        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
+
+        # Check that image dimensions match declared dimensions
+        if self.img_dim is not None:
+            cv_img_shape = cv_image.shape[0:2]
+            assert cv_img_shape == self.img_dim, (
+                f"Converted cv_image shape {cv_img_shape} did not match "
+                f"declared image shape {self.img_dim}."
+            )
+
+        if self.camera_data is None:
+            self.get_logger().warn("Camera data not yet available, skipping frame.")
+            return None
+
+        image_data = ImageData(
+            image=Img(cv_image),
+            frame_id=msg.header.frame_id,
+            timestamp=self.usec,
+            camera_data=self.camera_data,
+        )
+
+        if self._should_estimate():
+            assert self._map_data is not None
+            assert self.camera_data is not None
+            assert hasattr(
+                self._map_data, "image"
+            ), "Map data unexpectedly did not contain the image data."
+
+            # TODO: check below assertion in _should_estimate?
+            assert self._contextual_map_data is not None
+            contextual_map_data: ContextualMapData = self._contextual_map_data
+            image_pair = ImagePair(image_data, contextual_map_data)
+
+            # region pose estimation request
+            # TODO: timeout, connection errors, exceptions etc.
+            pose_estimator_endpoint = (
+                self.get_parameter("pose_estimator_endpoint")
+                .get_parameter_value()
+                .string_value
+            )
+            r = requests.post(
+                pose_estimator_endpoint,
+                data={
+                    "query": pickle.dumps(image_pair.qry.image.arr),
+                    "reference": pickle.dumps(image_pair.ref.image.arr),
+                    "k": pickle.dumps(self.camera_data.k),
+                    "elevation": pickle.dumps(image_pair.ref.map_data.elevation.arr),
+                },
+            )
+            if r.status_code == 200:
+                # TODO: should return None if the length of these is 0?
+                data = json.loads(r.text)
+                if "r" in data and "t" in data:
+                    pose = np.asarray(data.get("r")), np.asarray(data.get("t"))
+                else:
+                    self.get_logger().warn(
+                        f"Could not estimate pose, returned text {r.text}"
+                    )
+                    return None
+            else:
+                self.get_logger().warn(
+                    f"Could not estimate pose, status code {r.status_code}"
+                )
+                return None
+            # endregion pose estimation request
+
+            if pose is not None:
+                pose_ = Pose(*pose)
+                self._post_process_pose(pose_, image_pair)
+            else:
+                self.get_logger().warn(
+                    "Could not estimate a pose, skipping this frame."
+                )
+                return None
+
+    @property
+    @ROS.max_delay_ms(_DELAY_FAST_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_IMAGE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_image_callback,
+    )
+    def image(self) -> Optional[Image]:
+        """Raw image data from vehicle camera for pose estimation"""
+
+    @property
     @ROS.publish(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -197,6 +301,7 @@ class PoseEstimationNode(Node):
     )
     def altitude_estimate(self) -> Optional[Altitude]:
         """Altitude estimate of vehicle, or None if unknown or too old"""
+        raise NotImplementedError  # TODO
 
     @property
     def _altitude_scaling(self) -> Optional[float]:
@@ -316,86 +421,6 @@ class PoseEstimationNode(Node):
             return False
 
         return True
-
-    def image_callback(self, msg: Image) -> None:
-        """Handles latest :class:`sensor_msgs.msg.Image` message
-
-        :param msg: The :class:`sensor_msgs.msg.Image` message
-        """
-        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
-
-        # Check that image dimensions match declared dimensions
-        if self.img_dim is not None:
-            cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self.img_dim, (
-                f"Converted cv_image shape {cv_img_shape} did not match "
-                f"declared image shape {self.img_dim}."
-            )
-
-        if self.camera_data is None:
-            self.get_logger().warn("Camera data not yet available, skipping frame.")
-            return None
-
-        image_data = ImageData(
-            image=Img(cv_image),
-            frame_id=msg.header.frame_id,
-            timestamp=self.usec,
-            camera_data=self.camera_data,
-        )
-
-        if self._should_estimate():
-            assert self._map_data is not None
-            assert self.camera_data is not None
-            assert hasattr(
-                self._map_data, "image"
-            ), "Map data unexpectedly did not contain the image data."
-
-            # TODO: check below assertion in _should_estimate?
-            assert self._contextual_map_data is not None
-            contextual_map_data: ContextualMapData = self._contextual_map_data
-            image_pair = ImagePair(image_data, contextual_map_data)
-
-            # region pose estimation request
-            # TODO: timeout, connection errors, exceptions etc.
-            pose_estimator_endpoint = (
-                self.get_parameter("pose_estimator_endpoint")
-                .get_parameter_value()
-                .string_value
-            )
-            r = requests.post(
-                pose_estimator_endpoint,
-                data={
-                    "query": pickle.dumps(image_pair.qry.image.arr),
-                    "reference": pickle.dumps(image_pair.ref.image.arr),
-                    "k": pickle.dumps(self.camera_data.k),
-                    "elevation": pickle.dumps(image_pair.ref.map_data.elevation.arr),
-                },
-            )
-            if r.status_code == 200:
-                # TODO: should return None if the length of these is 0?
-                data = json.loads(r.text)
-                if "r" in data and "t" in data:
-                    pose = np.asarray(data.get("r")), np.asarray(data.get("t"))
-                else:
-                    self.get_logger().warn(
-                        f"Could not estimate pose, returned text {r.text}"
-                    )
-                    return None
-            else:
-                self.get_logger().warn(
-                    f"Could not estimate pose, status code {r.status_code}"
-                )
-                return None
-            # endregion pose estimation request
-
-            if pose is not None:
-                pose_ = Pose(*pose)
-                self._post_process_pose(pose_, image_pair)
-            else:
-                self.get_logger().warn(
-                    "Could not estimate a pose, skipping this frame."
-                )
-                return None
 
     def _post_process_pose(self, pose: Pose, image_pair: ImagePair) -> None:
         """Handles estimated pose

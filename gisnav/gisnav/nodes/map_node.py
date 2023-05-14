@@ -361,8 +361,8 @@ class MapNode(Node):
         self.orthoimage_3d
 
     @property
-    # @ROS.max_delay_ms(2000) - camera info has no header
-    @ROS.subscribe("camera/camera_info", QoSPresetProfiles.SENSOR_DATA.value)
+    # @ROS.max_delay_ms(2000) - camera info has no header (?)
+    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
 

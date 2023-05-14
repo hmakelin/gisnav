@@ -63,6 +63,12 @@ over MAVROS"""
 ROS_TOPIC_SENSOR_GPS = "/fmu/in/sensor_gps"
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
 over PX4 DDS bridge"""
+
+ROS_TOPIC_CAMERA_INFO = "camera/camera_info"
+"""Name of ROS topic for :class:`sensor_msgs.msg.CameraInfo` messages"""
+
+ROS_TOPIC_IMAGE = "camera/image_raw"
+"""Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
 # endregion ROS topic names
 
 

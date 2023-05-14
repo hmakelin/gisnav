@@ -12,13 +12,14 @@ from cv_bridge import CvBridge
 from geographic_msgs.msg import GeoPoint, GeoPointStamped, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
 from mavros_msgs.msg import Altitude
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import assert_ndim, assert_shape, assert_type
+from ..assertions import ROS, assert_type
 from ..data import (
     Attitude,
     ContextualMapData,
@@ -27,16 +28,14 @@ from ..data import (
     ImageData,
     ImagePair,
     Img,
-    MapData,
     Pose,
     Position,
 )
 from ..geo import GeoPt, GeoTrapezoid
 from . import messaging
-from .base.camera_subscriber_node import CameraSubscriberNode
 
 
-class PoseEstimationNode(CameraSubscriberNode):
+class PoseEstimationNode(Node):
     """Estimates and publishes pose between two images
 
     Compares images from :class:`sensor_msgs.msg.Image` message to maps from
@@ -44,9 +43,20 @@ class PoseEstimationNode(CameraSubscriberNode):
     :class:`geographic_msgs.msg.GeoPoseStamped`.
     """
 
-    # Encoding of input video (input to CvBridge) e.g. gscam2 only supports
-    # bgr8 so this is used to override encoding in image header
-    _IMAGE_ENCODING = "bgr8"
+    _DELAY_SLOW_MS = 10000
+    """
+    Max delay for messages where updates are not needed nor expected often,
+    e.g. home position
+    """
+
+    _DELAY_NORMAL_MS = 2000
+    """Max delay for things like global position"""
+
+    # _IMAGE_ENCODING = "bgr8"
+    # """
+    # Encoding of input video (input to CvBridge) e.g. gscam2 only supports bgr8
+    # so this is used to override encoding in image header
+    # """
 
     ROS_D_POSE_ESTIMATOR_ENDPOINT = "http://localhost:8090/predictions/loftr"
     """Default pose estimator endpoint URL"""
@@ -74,83 +84,39 @@ class PoseEstimationNode(CameraSubscriberNode):
     """Magnitude of allowed attitude deviation of estimate from expectation in
     degrees"""
 
-    ROS_PARAM_DEFAULTS = [
-        ("pose_estimator_endpoint", ROS_D_POSE_ESTIMATOR_ENDPOINT, True),
-        ("max_pitch", ROS_D_MISC_MAX_PITCH, False),
-        ("min_match_altitude", ROS_D_MISC_MIN_MATCH_ALTITUDE, False),
-        (
-            "attitude_deviation_threshold",
-            ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD,
-            False,
-        ),
-        ("export_position", ROS_D_DEBUG_EXPORT_POSITION, False),
-    ]
-    """List containing ROS parameter name, default value and read_only flag tuples"""
-
+    @ROS.setup_node(
+        [
+            ("pose_estimator_endpoint", ROS_D_POSE_ESTIMATOR_ENDPOINT, True),
+            ("max_pitch", ROS_D_MISC_MAX_PITCH, False),
+            ("min_match_altitude", ROS_D_MISC_MIN_MATCH_ALTITUDE, False),
+            (
+                "attitude_deviation_threshold",
+                ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD,
+                False,
+            ),
+            ("export_position", ROS_D_DEBUG_EXPORT_POSITION, False),
+        ]
+    )
     def __init__(self, name: str) -> None:
         """Node initializer
 
         :param name: Node name
         """
-        super().__init__(name)
+        # super().__init__(name)  # Handled by @setup_node decorator
         self._package_share_dir = get_package_share_directory("gisnav")
-
-        self._map_data = None
 
         # Converts image_raw to cv2 compatible image
         self._cv_bridge = CvBridge()
 
-        # region subscribers
-        self._orthoimage_3d = None
-        self._orthoimage_3d_sub = self.create_subscription(
-            OrthoImage3D,
-            messaging.ROS_TOPIC_ORTHOIMAGE,
-            self._orthoimage_3d_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._terrain_altitude = None
-        self._terrain_altitude_sub = self.create_subscription(
-            Altitude,
-            messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
-            self._terrain_altitude_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._terrain_geopoint = None
-        self._terrain_geopoint_sub = self.create_subscription(
-            GeoPointStamped,
-            messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
-            self._terrain_geopoint_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._vehicle_altitude = None
-        self._vehicle_altitude_sub = self.create_subscription(
-            Altitude,
-            messaging.ROS_TOPIC_VEHICLE_ALTITUDE,
-            self._vehicle_altitude_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._gimbal_quaternion = None
-        self._gimbal_quaternion_sub = self.create_subscription(
-            Quaternion,
-            messaging.ROS_TOPIC_GIMBAL_QUATERNION,
-            self._gimbal_quaternion_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._vehicle_geopose = None
-        self._vehicle_geopose_sub = self.create_subscription(
-            GeoPoseStamped,
-            messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
-            self._vehicle_geopose_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._home_geopoint = None
-        self._home_geopoint_sub = self.create_subscription(
-            GeoPointStamped,
-            messaging.ROS_TOPIC_HOME_GEOPOINT,
-            self._home_geopoint_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        # endregion subscribers
+        # Calling these decorated properties the first time will setup
+        # subscriptions to the appropriate ROS topics
+        self.orthoimage_3d
+        self.terrain_altitude
+        self.terrain_geopoint
+        self.altitude
+        self.gimbal_quaternion
+        self.geopose
+        self.home_geopoint
 
         # region publishers
         self._geopose_pub = self.create_publisher(
@@ -166,13 +132,66 @@ class PoseEstimationNode(CameraSubscriberNode):
         # endregion publishers
 
     @property
-    def _map_data(self) -> Optional[MapData]:
-        """Stored map data"""
-        return self.__map_data
+    @ROS.subscribe(messaging.ROS_TOPIC_ORTHOIMAGE, QoSPresetProfiles.SENSOR_DATA.value)
+    def orthoimage_3d(self) -> Optional[OrthoImage3D]:
+        """Input orthoimage and elevation raster pair for pose estimation"""
 
-    @_map_data.setter
-    def _map_data(self, value: MapData) -> None:
-        self.__map_data = value
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_TERRAIN_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def terrain_altitude(self) -> Optional[Altitude]:
+        """Altitude of terrain directly under vehicle, or None if unknown or too old"""
+
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def terrain_geopoint(self) -> Optional[GeoPointStamped]:
+        """
+        Vehicle ground track as :class:`geographic_msgs.msg.GeoPointStamped`
+        message, or None if not available
+
+        Complementary to the terrain Altitude message, includes lat and lon in
+        atomic message
+        """
+
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def altitude(self) -> Optional[Altitude]:
+        """Altitude of vehicle, or None if unknown or too old"""
+
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def gimbal_quaternion(self) -> Optional[Quaternion]:
+        """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message
+        or None if not available
+        """
+
+    @property
+    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def geopose(self) -> Optional[GeoPoseStamped]:
+        """Vehicle GeoPoseStamped, or None if not available or too old"""
+
+    @property
+    @ROS.max_delay_ms(_DELAY_SLOW_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_HOME_GEOPOINT, QoSPresetProfiles.SENSOR_DATA.value
+    )
+    def home_geopoint(self) -> Optional[GeoPointStamped]:
+        """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
     def _altitude_scaling(self) -> Optional[float]:
@@ -372,74 +391,6 @@ class PoseEstimationNode(CameraSubscriberNode):
                     "Could not estimate a pose, skipping this frame."
                 )
                 return None
-
-    def _orthoimage_3d_callback(self, msg: OrthoImage3D) -> None:
-        """Handles latest :class:`gisnav_msgs.msg.OrthoImage3D` message
-
-        :param msg: Latest :class:`gisnav_msgs.msg.OrthoImage3D` message
-        """
-        bbox = messaging.bounding_box_to_bbox(msg.bbox)
-        img = self._cv_bridge.imgmsg_to_cv2(msg.img, desired_encoding="passthrough")
-        dem = self._cv_bridge.imgmsg_to_cv2(msg.dem, desired_encoding="passthrough")
-        assert_type(img, np.ndarray)
-        assert_ndim(dem, 2)
-        assert_shape(dem, img.shape[0:2])
-
-        assert self.map_size_with_padding is not None
-
-        # Should already have camera info so map_size_with_padding should not be None
-        assert img.shape[0:2] == self.map_size_with_padding, (
-            f"Decoded map {img.shape[0:2]} is not of specified "
-            f"size {self.map_size_with_padding}."
-        )
-
-        elevation = Img(dem) if dem is not None else Img(np.zeros(img.shape[0:2]))
-        self._map_data = MapData(bbox=bbox, image=Img(img), elevation=elevation)
-
-    def _terrain_altitude_callback(self, msg: Altitude) -> None:
-        """Handles latest terrain :class:`mavros_msgs.msg.Altitude` message
-
-        :param msg: Latest terrain :class:`mavros_msgs.msg.Altitude` message
-        """
-        self._terrain_altitude = msg
-
-    def _home_geopoint_callback(self, msg: GeoPointStamped) -> None:
-        """Receives home :class:`geographic_msgs.msg.GeoPointStamped` message
-
-        :param msg: Latest home :class:`geographic_msgs.msg.GeoPointStamped` message
-        """
-        self._home_geopoint = msg
-
-    def _terrain_geopoint_callback(self, msg: GeoPointStamped) -> None:
-        """Receives terrain :class:`geographic_msgs.msg.GeoPointStamped` message
-
-        :param msg: Latest terrain :class:`geographic_msgs.msg.GeoPointStamped` message
-        """
-        self._terrain_geopoint = msg
-
-    def _vehicle_altitude_callback(self, msg: Altitude) -> None:
-        """Receives vehicle :class:`mavros_msgs.msg.Altitude` message
-
-        :param msg: Latest vehicle :class:`mavros_msgs.msg.Altitude` message
-        """
-        self._vehicle_altitude = msg
-
-    def _gimbal_quaternion_callback(self, msg: Quaternion) -> None:
-        """Receives gimbal :class:`geometry_msgs.msg.Quaternion` message
-
-        .. warning::
-            This could be gimbal set attitude, not actual attitude
-
-        :param msg: Latest gimbal :class:`geometry_msgs.msg.Quaternion` message
-        """
-        self._gimbal_quaternion = msg
-
-    def _vehicle_geopose_callback(self, msg: GeoPoseStamped) -> None:
-        """Receives vehicle :class:`geographic_msgs.msg.GeoPoseStamped` message
-
-        :param msg: Latest vehicle :class:`geographic_msgs.msg.GeoPoseStamped` message
-        """
-        self._vehicle_geopose = msg
 
     def _post_process_pose(self, pose: Pose, image_pair: ImagePair) -> None:
         """Handles estimated pose

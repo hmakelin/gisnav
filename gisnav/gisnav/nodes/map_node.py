@@ -1,5 +1,6 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
+import xml.etree.ElementTree as ET
 from typing import IO, Optional, Tuple
 
 import cv2
@@ -321,12 +322,6 @@ class MapNode(Node):
         def _request_dem_height_for_local_origin(
             home_geopoint: GeoPointStamped,
         ) -> Optional[float]:
-            layers, styles = (
-                self.get_parameter("layers").get_parameter_value().string_array_value,
-                self.get_parameter("styles").get_parameter_value().string_array_value,
-            )
-            assert_len(styles, len(layers))
-
             dem_layers, dem_styles = (
                 self.get_parameter("dem_layers")
                 .get_parameter_value()
@@ -345,7 +340,7 @@ class MapNode(Node):
 
             self.get_logger().info("Requesting new orthoimage")
             height = self._get_feature_info(
-                layers, styles, srs, bbox, (3, 3), format_, xy=(1, 1)
+                dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
             )
             if height is None:
                 self.get_logger().error("Could not get DEM height from GIS server")
@@ -806,14 +801,40 @@ class MapNode(Node):
     def _get_feature_info(
         self, layers, styles, srs, bbox, size, format_, xy
     ) -> Optional[float]:
+        @enforce_types(self.get_logger().warn, "Cannot extract DEM height from GML")
+        def _extract_dem_height_from_gml(gml_bytes: bytes) -> Optional[float]:
+            """Extracts DEM height value from GML returned from WMS endpoint"""
+            # Split the binary string into lines using '\n\n' as a separator
+            binary_lines = gml_bytes.split(b"\n\n")
+
+            # Decode each binary line into a regular string
+            decoded_lines = [line.decode("utf-8") for line in binary_lines]
+
+            # Join the decoded lines back into a single string
+            gml_data = "\n".join(decoded_lines)
+
+            root = ET.fromstring(gml_data)
+
+            # Find the "value_0" element and extract its value
+            # TODO: handle not finding the value
+            height_element = root.find(".//value_0")
+            if height_element is not None and height_element.text is not None:
+                return float(height_element.text)
+            else:
+                self.get_logger().error(
+                    'DEM height ("value_0" element) not found in GetFeatureInfo '
+                    "response"
+                )
+                return None
+
         """Sends WMS GetFeatureInfo request and returns float value"""
         self.get_logger().info(
-            f"Sending GetFeature request for xy: {bbox}, xy {xy}, layers: {layers}."
+            f"Sending GetFeatureInfo request for xy: {bbox}, xy {xy}, layers: {layers}."
         )
         try:
             # Do not handle possible requests library related exceptions here
             # (see class docstring)
-            feature_info = self._wms_client.getfeatureinfo(
+            feature_info: IO = self._wms_client.getfeatureinfo(
                 layers=layers,
                 styles=styles,
                 srs=srs,
@@ -821,7 +842,7 @@ class MapNode(Node):
                 size=size,
                 format=format_,
                 query_layers=layers,
-                info_format="text/xml",
+                info_format="application/vnd.ogc.gml",
                 xy=xy,
             )
 
@@ -833,8 +854,8 @@ class MapNode(Node):
         finally:
             self.get_logger().debug("GetFeatureInfo request complete.")
 
-        self.get_logger().info(f"GetFeatureInfo response: {feature_info}")
-        return feature_info  # TODO: parse feature_info, check format from above message
+        dem_height = _extract_dem_height_from_gml(feature_info.read())
+        return dem_height
 
     def _dem_height_at_geopoint(self, geopoint: Optional[GeoPoint]) -> Optional[float]:
         """

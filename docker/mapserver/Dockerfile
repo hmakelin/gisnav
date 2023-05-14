@@ -9,7 +9,8 @@ ARG OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
 ENV NAIP_GDOWN_ID=${NAIP_GDOWN_ID}
 ENV OSM_GDOWN_ID=${OSM_GDOWN_ID}
 
-COPY mapfiles/mapserver.map /etc/mapserver/mapserver.map
+COPY mapfiles/ /etc/mapserver/
+COPY templates/ /etc/mapserver/
 
 RUN /etc/mapserver/setup_mapserver.sh
 

@@ -51,9 +51,6 @@ class MapNode(Node):
         handled as unexpected errors.
     """  # noqa: E501
 
-    # Altitude in meters used for DEM request to get local origin elevation
-    _DEM_REQUEST_ALTITUDE = 100
-
     _WMS_CONNECTION_ATTEMPT_DELAY_SEC = 10
     """
     Delay in seconds until a new WMS connection is attempted in case of

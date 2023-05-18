@@ -480,16 +480,6 @@ class PoseEstimationNode(Node):
             bottom_clearance=position.altitude.agl,
         )
 
-    # @property
-    # def _altitude_scaling(self) -> Optional[float]:
-    #    """Returns camera focal length divided by camera altitude in meters"""
-    #
-    #    @enforce_types(self.get_logger().warn, "Cannot determine altitude scaling")
-    #    def _altitude_scaling(camera_info: CameraInfo, altitude: Altitude):
-    #        return camera_info.k[0] / altitude.terrain  # TODO: assumes fx == fy
-    #
-    #    return _altitude_scaling(self.camera_info, self.altitude)
-
     @property
     def _r_guess(self) -> Optional[np.ndarray]:
         """Gimbal rotation matrix guess"""
@@ -505,49 +495,6 @@ class PoseEstimationNode(Node):
             return gimbal_attitude.r
 
         return _r_guess(self.gimbal_quaternion)
-
-    @property
-    def _contextual_map_data(self) -> Optional[ContextualMapData]:
-        """Returns contextual (rotated) map data for pose estimation
-
-        :return: Rotated map with associated metadata, or None if not available
-        """
-        # Get cropped and rotated map
-        if self._gimbal_quaternion is not None:
-            gimbal_attitude = Attitude(
-                q=messaging.as_np_quaternion(self._gimbal_quaternion), extrinsic=True
-            )
-            roll = gimbal_attitude.roll
-            camera_yaw = gimbal_attitude.yaw
-            if abs(roll) > np.pi / 2:
-                # Assume camera pitch (NED frame) is lower than -90 degrees
-                # A naive interpretation of the Euler angles would assume the
-                # camera (and the vehicle) is upside down cause the map being
-                # rotated incorrectly by 180 degrees compared to what is needed
-                # for pose estimation This might happen e.g. if gimbal has been
-                # pointing straight down nadir and vehicle body has suddenly
-                # gained additional negative pitch before gimbal has had time
-                # to stabilize
-                self.get_logger().debug(
-                    "Gimbal absolute Euler roll angle over 90 degrees: assuming "
-                    "gimbal is not upside down and that gimbal absolute pitch "
-                    "is over 90 degrees instead."
-                )
-                camera_yaw = (camera_yaw + np.pi / 2) % (2 * np.pi)
-            assert_type(camera_yaw, float)
-            assert (
-                -2 * np.pi <= camera_yaw <= 2 * np.pi
-            ), f"Unexpected gimbal yaw value: {camera_yaw} ([-2*pi, 2*pi] expected)."
-        else:
-            self.get_logger().warn("Camera yaw unknown, cannot estimate pose.")
-            return None
-
-        return ContextualMapData(
-            rotation=camera_yaw,
-            map_data=self._map_data,
-            crop=self.img_dim,
-            altitude_scaling=self._altitude_scaling,
-        )
 
     def _post_process_pose(self, pose: Pose, image_pair: ImagePair) -> Position:
         """Handles estimated pose
@@ -612,31 +559,34 @@ class PoseEstimationNode(Node):
         # self.publish(fixed_camera.position)
         return fixed_camera.position
 
-    def _get_pose(self, inputs: PoseEstimationInputs) -> Optional[Pose]:
-        """Performs call to pose estimation service and returns Pose"""
+    def _get_pose(self, inputs: PoseEstimationInputs) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Performs call to pose estimation service and returns pose as (r, t) tuple,
+        or None if not available
+        """
         pose_estimator_endpoint = (
             self.get_parameter("pose_estimator_endpoint")
             .get_parameter_value()
             .string_value
         )
-        r = requests.post(
+        response = requests.post(
             pose_estimator_endpoint,
             data=inputs,
         )
 
-        if r.status_code == 200:
+        if response.status_code == 200:
             # TODO: should return None if the length of these is 0?
-            data = json.loads(r.text)
+            data = json.loads(response.text)
             if "r" in data and "t" in data:
-                np.asarray(data.get("r")), np.asarray(data.get("t"))
+                return np.asarray(data.get("r")), np.asarray(data.get("t"))
             else:
                 self.get_logger().warn(
-                    f"Could not estimate pose, returned text {r.text}"
+                    f"Could not estimate pose, returned text {response.text}"
                 )
                 return None
         else:
             self.get_logger().warn(
-                f"Could not estimate pose, status code {r.status_code}"
+                f"Could not estimate pose, status code {response.status_code}"
             )
             return None
 

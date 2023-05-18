@@ -2,7 +2,7 @@
 import json
 import math
 from dataclasses import dataclass
-from typing import Optional, TypedDict, Union, get_args
+from typing import Optional, Tuple, TypedDict, Union, get_args
 
 import cv2
 import numpy as np
@@ -286,20 +286,37 @@ class PoseEstimationNode(Node):
             query: np.ndarray
             reference: np.ndarray
             elevation: np.ndarray  # elevation reference
-            k: np.ndarray
+            k: np.ndarray  # camera intrinsics of shape (3, 3)
 
         @dataclass(frozen=True)
         class _PoseEstimationContext:
-            """Context for post-processing the estimated :class:`geometry_msgs.msg.Pose` into a :class:`geographic_msgs.msg.GeoPose`"""
+            """
+            Required context for post-processing an estimated
+            :class:`geometry_msgs.msg.Pose` into a :class:`geographic_msgs.msg.GeoPose`
+            """
 
             gimbal_quaternion: Quaternion  # for camera yaw
-            altitude: Altitude  # self._altitude_scaling? Scaling can only be computed after pose estimation?
+            altitude: Altitude  # self._altitude_scaling? Scaling can only be computed after pose estimation? should not be required here as its estimated from the FOV?
 
         @enforce_types(self.get_logger().warn, "Cannot get pose estimation context")
         def _get_context(gimbal_quaternion: Quaternion, altitude: Altitude):
             return _PoseEstimationContext(
                 gimbal_quaternion=gimbal_quaternion, altitude=altitude
             )
+
+        @enforce_types(
+            self.get_logger().warn,
+            "Cannot get transformation matrix from pixel to WGS84 coordinates",
+        )
+        def _get_geotransformation_matrix(pixel_coords, geo_coords):
+            # Convert lists to numpy arrays
+            pixel_coords = np.float32(pixel_coords)
+            geo_coords = np.float32(geo_coords)
+
+            # Compute transformation matrix
+            M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
+
+            return M
 
         @enforce_types(
             self.get_logger().warn, "Cannot preprocess pose estimation inputs"
@@ -309,18 +326,68 @@ class PoseEstimationNode(Node):
         ) -> _PoseEstimationInputs:
             """Rotate and crop and orthoimage stack to align with query image"""
 
-            def _rotate_image(image, degrees):
-                # Image can have any number of channels
+            def _get_rotation_matrix(image: np.ndarray, degrees: float) -> np.ndarray:
                 height, width = image.shape[:2]
                 cx, cy = width // 2, height // 2
                 r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-                return cv2.warpAffine(image, r, (width, height))
+                return r
 
-            def _center_crop(image, crop_height, crop_width):
-                height, width = image.shape[:2]
-                y1 = (height - crop_height) // 2
-                x1 = (width - crop_width) // 2
-                return image[y1 : y1 + crop_height, x1 : x1 + crop_width]
+            def _get_translation_matrix(dx, dy):
+                t = np.float32([[1, 0, dx], [0, 1, dy]])
+                return t
+
+            def _get_affine_matrix(
+                image: np.ndarray, degrees: float, crop_height: int, crop_width: int
+            ):
+                """
+                Creates affine transformation that rotates around center and then
+                center-crops an image
+                """
+                r = _get_rotation_matrix(image, degrees)
+                dx = (image.shape[1] - crop_width) // 2
+                dy = (image.shape[0] - crop_height) // 2
+                t = _get_translation_matrix(dx, dy)
+
+                # Combine the rotation and translation to get the final affine transformation matrix
+                affine_matrix = np.dot(t, np.vstack([r, [0, 0, 1]]))
+                return affine_matrix
+
+            def _rotate_and_crop_image(
+                image: np.ndarray, degrees: float, shape: Tuple[int, int]
+            ) -> Tuple[np.ndarray, np.ndarray]:
+                """
+                Rotates around center and then center-crops image
+
+                :return: Tuple of rotated and cropped image, and used affine
+                    transformation matrix
+                """
+                # Image can have any number of channels
+                affine = _get_affine_matrix(image, degrees, *crop_shape)
+                return cv2.warpAffine(image, affine[:2, :], crop_shape), affine
+
+            def _get_yaw_pitch_degrees_from_quaternion(
+                quaternion,
+            ) -> Tuple[float, float]:
+                """
+                To avoid gimbal lock when facing nadir (pitch -90 degrees in NED),
+                assume roll is zero (stabilized gimbal)
+                """
+                # Unpack quaternion
+                x = quaternion.x
+                y = quaternion.y
+                z = quaternion.z
+                w = quaternion.w
+
+                # Calculate yaw and pitch directly from the quaternion to
+                # avoid gimbal lock. Assumption: roll is zero.
+                yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+                pitch = np.arcsin(2.0 * (w * y - z * x))
+
+                # Convert yaw and pitch from radians to degrees
+                yaw_degrees = yaw * 180.0 / np.pi
+                pitch_degrees = pitch * 180.0 / np.pi
+
+                return yaw_degrees, pitch_degrees
 
             query_array = self._cv_bridge.imgmsg_to_cv2(
                 image, desired_encoding="passthrough"
@@ -333,12 +400,17 @@ class PoseEstimationNode(Node):
             )
 
             # Rotate and crop orthoimage stack
+            yaw_degrees, _ = _get_yaw_pitch_degrees_from_quaternion(
+                context.gimbal_quaternion
+            )
+            crop_shape = query_array.shape[0:2]
             orthoimage_stack = np.dstack((orthoimage, dem))
-            rotated_orthoimage_stack = _rotate_image(orthoimage_stack)
-            cropped_orthoimage_stack = _center_crop(rotated_orthoimage_stack)
+            orthoimage_stack, affine = _rotate_and_crop_image(
+                orthoimage_stack, yaw_degrees, *crop_shape
+            )
 
-            reference_array = cropped_orthoimage_stack[:, :, 0:2]
-            elevation_array = cropped_orthoimage_stack[:, :, 3]
+            reference_array = orthoimage_stack[:, :, 0:2]
+            elevation_array = orthoimage_stack[:, :, 3]
 
             pre_processed_inputs: _PoseEstimationInputs = {
                 "query": query_array,
@@ -355,7 +427,6 @@ class PoseEstimationNode(Node):
             self.camera_info,
         )
 
-        # region pose estimation request
         # TODO: timeout, connection errors, exceptions etc.
         pose_estimator_endpoint = (
             self.get_parameter("pose_estimator_endpoint")
@@ -383,6 +454,39 @@ class PoseEstimationNode(Node):
             )
             return None
         # endregion pose estimation request
+
+        @enforce_types(self.get_logger().warn, "Cannot post process output")
+        def _post_process_outputs(pose: Pose) -> GeoPose:
+            def translate_keypoints(keypoints, dx, dy):
+                translated_keypoints = []
+                for x, y in keypoints:
+                    translated_keypoints.append((x + dx, y + dy))
+                return translated_keypoints
+
+            def rotate_keypoints(keypoints, degrees, cx, cy):
+                degrees = -degrees  # Invert angle for reverse rotation
+                radians = math.radians(degrees)
+                cos = math.cos(radians)
+                sin = math.sin(radians)
+                rotated_keypoints = []
+                for x, y in keypoints:
+                    x_rot = (x - cx) * cos - (y - cy) * sin + cx
+                    y_rot = (x - cx) * sin + (y - cy) * cos + cy
+                    rotated_keypoints.append((x_rot, y_rot))
+                return rotated_keypoints
+
+            # Assume you have a list of keypoints in the rotated and cropped stack
+            keypoints_rotated_cropped = [(50, 50), (25, 25)]
+
+            # Translate keypoints back to the rotated (uncropped) image
+            dy, dx = (height - crop_height) // 2, (width - crop_width) // 2
+            keypoints_rotated = translate_keypoints(keypoints_rotated_cropped, dx, dy)
+
+            # Rotate keypoints back to the original image
+            cx, cy = width // 2, height // 2
+            rotate_keypoints(keypoints_rotated, angle, cx, cy)
+
+            # TODO: keypoints_original to geopose
 
         if pose is not None:
             pose_ = Pose(*pose)
@@ -419,15 +523,15 @@ class PoseEstimationNode(Node):
             bottom_clearance=position.altitude.agl,
         )
 
-    @property
-    def _altitude_scaling(self) -> Optional[float]:
-        """Returns camera focal length divided by camera altitude in meters"""
-
-        @enforce_types(self.get_logger().warn, "Cannot determine altitude scaling")
-        def _altitude_scaling(camera_info: CameraInfo, altitude: Altitude):
-            return camera_info.k[0] / altitude.terrain  # TODO: assumes fx == fy
-
-        return _altitude_scaling(self.camera_info, self.altitude)
+    # @property
+    # def _altitude_scaling(self) -> Optional[float]:
+    #    """Returns camera focal length divided by camera altitude in meters"""
+    #
+    #    @enforce_types(self.get_logger().warn, "Cannot determine altitude scaling")
+    #    def _altitude_scaling(camera_info: CameraInfo, altitude: Altitude):
+    #        return camera_info.k[0] / altitude.terrain  # TODO: assumes fx == fy
+    #
+    #    return _altitude_scaling(self.camera_info, self.altitude)
 
     @property
     def _r_guess(self) -> Optional[np.ndarray]:

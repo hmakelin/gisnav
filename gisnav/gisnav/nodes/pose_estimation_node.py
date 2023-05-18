@@ -1,8 +1,8 @@
 """Module that contains the pose estimation node"""
 import json
 import math
-import pickle
-from typing import Optional, Union, get_args
+from dataclasses import dataclass
+from typing import Optional, TypedDict, Union, get_args
 
 import cv2
 import numpy as np
@@ -19,7 +19,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import ROS, assert_type
+from ..assertions import ROS, assert_type, cache_if, enforce_types
 from ..data import (
     Attitude,
     ContextualMapData,
@@ -69,12 +69,6 @@ class PoseEstimationNode(Node):
     ROS_D_POSE_ESTIMATOR_ENDPOINT = "http://localhost:8090/predictions/loftr"
     """Default pose estimator endpoint URL"""
 
-    ROS_D_DEBUG_EXPORT_POSITION = ""  # 'position.json'
-    """Default filename for exporting GeoJSON containing estimated FOV and position
-
-    Set to '' to disable
-    """
-
     ROS_D_MISC_MAX_PITCH = 30
     """Default maximum camera pitch from nadir in degrees for attempting to
     estimate pose against reference map
@@ -102,7 +96,6 @@ class PoseEstimationNode(Node):
                 ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD,
                 False,
             ),
-            ("export_position", ROS_D_DEBUG_EXPORT_POSITION, False),
         ]
     )
     def __init__(self, name: str) -> None:
@@ -195,84 +188,28 @@ class PoseEstimationNode(Node):
         """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
 
     def _image_callback(self, msg: Image) -> None:
-        """Handles latest :class:`sensor_msgs.msg.Image` message
-
-        :param msg: The :class:`sensor_msgs.msg.Image` message
         """
-        cv_image = self._cv_bridge.imgmsg_to_cv2(msg, self._IMAGE_ENCODING)
+        Callback for :class:`sensor_msgs.msg.Image` messages
 
-        # Check that image dimensions match declared dimensions
-        if self.img_dim is not None:
-            cv_img_shape = cv_image.shape[0:2]
-            assert cv_img_shape == self.img_dim, (
-                f"Converted cv_image shape {cv_img_shape} did not match "
-                f"declared image shape {self.img_dim}."
+        :param msg: The latest :class:`sensor_msgs.msg.Image` message
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot validate received image")
+        def _image_callback(img: np.ndarray, camera_info: CameraInfo):
+            img_shape = img.shape[0:2]
+            declared_shape = (camera_info.height, camera_info.width)
+            assert img_shape == declared_shape, (
+                f"Converted image shape {img_shape} did not match declared image "
+                f"shape ({declared_shape})."
             )
 
-        if self.camera_data is None:
-            self.get_logger().warn("Camera data not yet available, skipping frame.")
-            return None
+            self.geopose_stamped_estimate
+            self.altitude_estimate
 
-        image_data = ImageData(
-            image=Img(cv_image),
-            frame_id=msg.header.frame_id,
-            timestamp=self.usec,
-            camera_data=self.camera_data,
-        )
-
-        if self._should_estimate():
-            assert self._map_data is not None
-            assert self.camera_data is not None
-            assert hasattr(
-                self._map_data, "image"
-            ), "Map data unexpectedly did not contain the image data."
-
-            # TODO: check below assertion in _should_estimate?
-            assert self._contextual_map_data is not None
-            contextual_map_data: ContextualMapData = self._contextual_map_data
-            image_pair = ImagePair(image_data, contextual_map_data)
-
-            # region pose estimation request
-            # TODO: timeout, connection errors, exceptions etc.
-            pose_estimator_endpoint = (
-                self.get_parameter("pose_estimator_endpoint")
-                .get_parameter_value()
-                .string_value
-            )
-            r = requests.post(
-                pose_estimator_endpoint,
-                data={
-                    "query": pickle.dumps(image_pair.qry.image.arr),
-                    "reference": pickle.dumps(image_pair.ref.image.arr),
-                    "k": pickle.dumps(self.camera_data.k),
-                    "elevation": pickle.dumps(image_pair.ref.map_data.elevation.arr),
-                },
-            )
-            if r.status_code == 200:
-                # TODO: should return None if the length of these is 0?
-                data = json.loads(r.text)
-                if "r" in data and "t" in data:
-                    pose = np.asarray(data.get("r")), np.asarray(data.get("t"))
-                else:
-                    self.get_logger().warn(
-                        f"Could not estimate pose, returned text {r.text}"
-                    )
-                    return None
-            else:
-                self.get_logger().warn(
-                    f"Could not estimate pose, status code {r.status_code}"
-                )
-                return None
-            # endregion pose estimation request
-
-            if pose is not None:
-                pose_ = Pose(*pose)
-                self._post_process_pose(pose_, image_pair)
-            else:
-                self.get_logger().warn(
-                    "Could not estimate a pose, skipping this frame."
-                )
-                return None
+        img = self._cv_bridge.imgmsg_to_cv2(
+            msg, desired_encoding="passthrough"
+        )  # self._IMAGE_ENCODING)
+        _image_callback(img, self.camera_info)
 
     @property
     @ROS.max_delay_ms(_DELAY_FAST_MS)
@@ -284,15 +221,187 @@ class PoseEstimationNode(Node):
     def image(self) -> Optional[Image]:
         """Raw image data from vehicle camera for pose estimation"""
 
+    def _should_estimate_geopose(self) -> bool:
+        """Determines whether :attr:`.geopose_stamped_estimate` should be called
+
+        Match should be attempted if (1) a reference map has been retrieved,
+        (2) camera roll or pitch is not too high (e.g. facing horizon instead
+        of nadir), and (3) drone is not flying too low.
+
+        :return: True if pose estimation be attempted
+        """
+
+        @enforce_types(self.get_logger().warn, "Cannot estimate pose")
+        def _should_estimate(orthoimage_3d: OrthoImage3D, altitude: Altitude):
+            # Check condition (2) - whether ca_vehicle_altitudemera roll/pitch is too large
+            max_pitch = (
+                self.get_parameter("max_pitch").get_parameter_value().integer_value
+            )
+            if self._camera_roll_or_pitch_too_high(max_pitch):
+                self.get_logger().warn(
+                    f"Camera roll or pitch not available or above limit {max_pitch}. "
+                    f"Skipping pose estimation."
+                )
+                return False
+
+            # Check condition (3) - whether vehicle altitude is too low
+            min_alt = (
+                self.get_parameter("min_match_altitude")
+                .get_parameter_value()
+                .integer_value
+            )
+            assert min_alt > 0
+            if altitude.terrain is np.nan:
+                self.get_logger().warn(
+                    "Cannot determine altitude AGL, skipping map update."
+                )
+                return False
+            if altitude.terrain < min_alt:
+                self.get_logger().warn(
+                    f"Assumed altitude {altitude.terrain} was lower "
+                    f"than minimum threshold for matching ({min_alt}) or could not "
+                    f"be determined. Skipping pose estimation."
+                )
+                return False
+
+            return True
+
+        return bool(_should_estimate(self.orthoimage_3d, self.altitude))
+
     @property
     @ROS.publish(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
+    @cache_if(_should_estimate_geopose)
     def geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
-        """Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`
-        message or None if not available"""
-        raise NotImplementedError  # TODO
+        """
+        Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`
+        message or None if not available
+        """
+
+        class _PoseEstimationInputs(TypedDict):
+            """Input data for pose estimation service call"""
+
+            query: np.ndarray
+            reference: np.ndarray
+            elevation: np.ndarray  # elevation reference
+            k: np.ndarray
+
+        @dataclass(frozen=True)
+        class _PoseEstimationContext:
+            """Context for post-processing the estimated :class:`geometry_msgs.msg.Pose` into a :class:`geographic_msgs.msg.GeoPose`"""
+
+            gimbal_quaternion: Quaternion  # for camera yaw
+            altitude: Altitude  # self._altitude_scaling? Scaling can only be computed after pose estimation?
+
+        @enforce_types(self.get_logger().warn, "Cannot get pose estimation context")
+        def _get_context(gimbal_quaternion: Quaternion, altitude: Altitude):
+            return _PoseEstimationContext(
+                gimbal_quaternion=gimbal_quaternion, altitude=altitude
+            )
+
+        @enforce_types(
+            self.get_logger().warn, "Cannot preprocess pose estimation inputs"
+        )
+        def _pre_process_inputs(
+            image: Image, orthoimage: OrthoImage3D, camera_info: CameraInfo
+        ) -> _PoseEstimationInputs:
+            """Rotate and crop and orthoimage stack to align with query image"""
+
+            def _rotate_image(image, degrees):
+                # Image can have any number of channels
+                height, width = image.shape[:2]
+                cx, cy = width // 2, height // 2
+                r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
+                return cv2.warpAffine(image, r, (width, height))
+
+            def _center_crop(image, crop_height, crop_width):
+                height, width = image.shape[:2]
+                y1 = (height - crop_height) // 2
+                x1 = (width - crop_width) // 2
+                return image[y1 : y1 + crop_height, x1 : x1 + crop_width]
+
+            query_array = self._cv_bridge.imgmsg_to_cv2(
+                image, desired_encoding="passthrough"
+            )
+            orthoimage = self._cv_bridge.imgmsg_to_cv2(
+                orthoimage.img, desired_encoding="passthrough"
+            )
+            dem = self._cv_bridge.imgmsg_to_cv2(
+                orthoimage.dem, desired_encoding="passthrough"
+            )
+
+            # Rotate and crop orthoimage stack
+            orthoimage_stack = np.dstack((orthoimage, dem))
+            rotated_orthoimage_stack = _rotate_image(orthoimage_stack)
+            cropped_orthoimage_stack = _center_crop(rotated_orthoimage_stack)
+
+            reference_array = cropped_orthoimage_stack[:, :, 0:2]
+            elevation_array = cropped_orthoimage_stack[:, :, 3]
+
+            pre_processed_inputs: _PoseEstimationInputs = {
+                "query": query_array,
+                "reference": reference_array,
+                "elevation": elevation_array,
+                "k": camera_info.k.reshape((3, 3)),
+            }
+            return pre_processed_inputs
+
+        context: _get_context(self.gimbal_quaternion, self.altitude)
+        inputs = _pre_process_inputs(
+            self.image,
+            self.orthoimage_3d,
+            self.camera_info,
+        )
+
+        # region pose estimation request
+        # TODO: timeout, connection errors, exceptions etc.
+        pose_estimator_endpoint = (
+            self.get_parameter("pose_estimator_endpoint")
+            .get_parameter_value()
+            .string_value
+        )
+        r = requests.post(
+            pose_estimator_endpoint,
+            data=inputs,
+        )
+
+        if r.status_code == 200:
+            # TODO: should return None if the length of these is 0?
+            data = json.loads(r.text)
+            if "r" in data and "t" in data:
+                pose = np.asarray(data.get("r")), np.asarray(data.get("t"))
+            else:
+                self.get_logger().warn(
+                    f"Could not estimate pose, returned text {r.text}"
+                )
+                return None
+        else:
+            self.get_logger().warn(
+                f"Could not estimate pose, status code {r.status_code}"
+            )
+            return None
+        # endregion pose estimation request
+
+        if pose is not None:
+            pose_ = Pose(*pose)
+            position = self._post_process_pose(pose_, image_pair)
+        else:
+            self.get_logger().warn("Could not estimate a pose, skipping this frame.")
+            return None
+
+        return GeoPoseStamped(
+            header=messaging.create_header("base_link"),
+            pose=GeoPose(
+                position=GeoPoint(
+                    latitude=position.lat,
+                    longitude=position.lon,
+                    altitude=position.altitude.ellipsoid,
+                ),
+                orientation=messaging.as_ros_quaternion(position.attitude.q),
+            ),
+        )
 
     @property
     @ROS.publish(
@@ -301,38 +410,40 @@ class PoseEstimationNode(Node):
     )
     def altitude_estimate(self) -> Optional[Altitude]:
         """Altitude estimate of vehicle, or None if unknown or too old"""
-        raise NotImplementedError  # TODO
+        return Altitude(
+            header=messaging.create_header("base_link"),
+            amsl=position.altitude.amsl,
+            local=position.altitude.home,
+            relative=position.altitude.home,
+            terrain=position.altitude.agl,
+            bottom_clearance=position.altitude.agl,
+        )
 
     @property
     def _altitude_scaling(self) -> Optional[float]:
         """Returns camera focal length divided by camera altitude in meters"""
-        if self.camera_data is not None and self._vehicle_altitude is not None:
-            return (
-                self.camera_data.fx / self._vehicle_altitude.terrain
-            )  # TODO: assumes fx == fy
-        else:
-            self.get_logger().warn(
-                "Could not estimate elevation scale because camera focal length "
-                "and/or vehicle altitude is unknown."
-            )
-            return None
+
+        @enforce_types(self.get_logger().warn, "Cannot determine altitude scaling")
+        def _altitude_scaling(camera_info: CameraInfo, altitude: Altitude):
+            return camera_info.k[0] / altitude.terrain  # TODO: assumes fx == fy
+
+        return _altitude_scaling(self.camera_info, self.altitude)
 
     @property
     def _r_guess(self) -> Optional[np.ndarray]:
         """Gimbal rotation matrix guess"""
-        if self._gimbal_quaternion is None:
-            self.get_logger().warn(
-                "Gimbal set attitude not available, will not provide pose guess."
-            )
-            return None
-        else:
+
+        @enforce_types(self.get_logger().warn, "Cannot determine rotation matrix guess")
+        def _r_guess(self, gimbal_quaternion) -> np.ndarray:
             gimbal_attitude = Attitude(
-                q=messaging.as_np_quaternion(self._gimbal_quaternion)
+                q=messaging.as_np_quaternion(self.gimbal_quaternion)
             )
             gimbal_attitude = (
                 gimbal_attitude.to_esd()
             )  # Need coordinates in image frame, not NED
             return gimbal_attitude.r
+
+        return _r_guess(self.gimbal_quaternion)
 
     @property
     def _contextual_map_data(self) -> Optional[ContextualMapData]:
@@ -377,52 +488,7 @@ class PoseEstimationNode(Node):
             altitude_scaling=self._altitude_scaling,
         )
 
-    def _should_estimate(self) -> bool:
-        """Determines whether :meth:`._estimate` should be called
-
-        Match should be attempted if (1) a reference map has been retrieved,
-        (2) camera roll or pitch is not too high (e.g. facing horizon instead
-        of nadir), and (3) drone is not flying too low.
-
-        :return: True if pose estimation be attempted
-        """
-        # Check condition (1) - that MapData exists
-        if self._map_data is None:
-            self.get_logger().warn(
-                "No reference map available. Skipping pose estimation."
-            )
-            return False
-
-        # Check condition (2) - whether camera roll/pitch is too large
-        max_pitch = self.get_parameter("max_pitch").get_parameter_value().integer_value
-        if self._camera_roll_or_pitch_too_high(max_pitch):
-            self.get_logger().warn(
-                f"Camera roll or pitch not available or above limit {max_pitch}. "
-                f"Skipping pose estimation."
-            )
-            return False
-
-        # Check condition (3) - whether vehicle altitude is too low
-        min_alt = (
-            self.get_parameter("min_match_altitude").get_parameter_value().integer_value
-        )
-        assert min_alt > 0
-        if self._vehicle_altitude is None or self._vehicle_altitude.terrain is np.nan:
-            self.get_logger().warn(
-                "Cannot determine altitude AGL, skipping map update."
-            )
-            return False
-        if self._vehicle_altitude.terrain < min_alt:
-            self.get_logger().warn(
-                f"Assumed altitude {self._vehicle_altitude.terrain} was lower "
-                f"than minimum threshold for matching ({min_alt}) or could not "
-                f"be determined. Skipping pose estimation."
-            )
-            return False
-
-        return True
-
-    def _post_process_pose(self, pose: Pose, image_pair: ImagePair) -> None:
+    def _post_process_pose(self, pose: Pose, image_pair: ImagePair) -> Position:
         """Handles estimated pose
 
         :param pose: Pose result from pose estimation node worker
@@ -482,16 +548,8 @@ class PoseEstimationNode(Node):
             cv2.imshow("Projected FOV", img)
             cv2.waitKey(1)
 
-            # Export GeoJSON
-            export_geojson = (
-                self.get_parameter("export_position").get_parameter_value().string_value
-            )
-            if export_geojson != "":
-                self._export_position(
-                    fixed_camera.position.xy, fixed_camera.fov.fov, export_geojson
-                )
-
-        self.publish(fixed_camera.position)
+        # self.publish(fixed_camera.position)
+        return fixed_camera.position
 
     def _is_valid_estimate(
         self, fixed_camera: FixedCamera, r_guess_: np.ndarray
@@ -611,30 +669,6 @@ class PoseEstimationNode(Node):
                 "Gimbal attitude was not available, assuming camera pitch too high."
             )
             return True
-
-    def _export_position(
-        self, position: GeoPt, fov: GeoTrapezoid, filename: str
-    ) -> None:
-        """Exports the computed position and field of view into a GeoJSON file
-
-        .. note::
-            The GeoJSON file is not used by the node but can be accessed by
-            GIS software to visualize the data it contains
-
-        :param position: Computed camera position or projected principal point
-            for gimbal projection
-        :param: fov: Field of view of camera projected to ground
-        :param filename: Name of file to write into
-        """
-        assert_type(position, GeoPt)
-        assert_type(fov, GeoTrapezoid)
-        assert_type(filename, str)
-        try:
-            position._geoseries.append(fov._geoseries).to_file(filename)
-        except Exception as e:
-            self.get_logger().error(
-                f"Could not write file {filename} because of exception: {e}"
-            )
 
     def publish(self, position: Position) -> None:
         """Publishes estimated position over ROS topic

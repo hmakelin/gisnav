@@ -1,6 +1,7 @@
 """Module that contains the pose estimation node"""
 import json
 import math
+import pickle
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import List, Optional, Tuple, TypedDict, Union, get_args
@@ -388,7 +389,7 @@ class PoseEstimationNode(Node):
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
 
-            reference_array = orthoimage_stack[:, :, 0:2]
+            reference_array = orthoimage_stack[:, :, 0:3]
             elevation_array = orthoimage_stack[:, :, 3]
 
             pre_processed_inputs: PoseEstimationNode.PoseEstimationInputs = {
@@ -417,7 +418,6 @@ class PoseEstimationNode(Node):
             "Cannot get determine whether pose estimate is valid",
         )
         def _is_valid_pose_estimate(
-            self,
             pose: Pose,
             context: PoseEstimationNode._PoseEstimationContext,
             intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
@@ -483,10 +483,9 @@ class PoseEstimationNode(Node):
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
         context: _PoseEstimationContext,
     ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:
-        """Handles estimated pose
-
-        :param pose: Pose result from pose estimation node worker
-        :param image_pair: Image pair input from which pose was estimated
+        """
+        Post process estimated pose to vehicle GeoPoint, Altitude and gimbal
+        Quaternion estimates
         """
 
         @enforce_types(
@@ -571,7 +570,6 @@ class PoseEstimationNode(Node):
         """
 
         context = self._pose_estimation_context
-        assert context is not None
         preprocess_results = self._pre_process_geopose_inputs(
             self.image, self.orthoimage_3d, self.camera_info, context
         )
@@ -582,7 +580,7 @@ class PoseEstimationNode(Node):
             return None
 
         inputs, intermediate_outputs = preprocess_results
-        pose = self._get_pose(inputs)
+        pose = self._get_pose(inputs, context)
 
         if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
             self.get_logger().warn(
@@ -601,6 +599,7 @@ class PoseEstimationNode(Node):
                 altitude,
                 gimbal_quaternion,
             ) = post_processed_pose  # TODO: uaternion might be in ESD and not NED
+
             return GeoPoseStamped(
                 header=messaging.create_header("base_link"),
                 pose=GeoPose(
@@ -775,7 +774,9 @@ class PoseEstimationNode(Node):
         affine = cls._get_affine_matrix(image, degrees, *shape)
         return cv2.warpAffine(image, affine[:2, :], shape), affine
 
-    def _get_pose(self, inputs: PoseEstimationInputs) -> Optional[Pose]:
+    def _get_pose(
+        self, inputs: PoseEstimationInputs, context: _PoseEstimationContext
+    ) -> Optional[Pose]:
         """
         Performs call to pose estimation service and returns pose as (r, t) tuple,
         or None if not available
@@ -809,7 +810,7 @@ class PoseEstimationNode(Node):
         )
         response = requests.post(
             pose_estimator_endpoint,
-            data=inputs,
+            data={k: pickle.dumps(v) for k, v in inputs.items()},
         )
 
         # TODO: timeout, connection errors, exceptions etc.
@@ -818,6 +819,20 @@ class PoseEstimationNode(Node):
             data = json.loads(response.text)
             if "r" in data and "t" in data:
                 r, t = np.asarray(data.get("r")), np.asarray(data.get("t"))
+
+                if __debug__:
+                    # Visualize projected FOV estimate
+                    h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
+                    src_pts = create_src_corners(*inputs.get("query").shape[0:2])
+                    fov_pix = cv2.perspectiveTransform(src_pts, np.inv(h))
+                    ref_img = context.orthoimage.img
+                    map_with_fov = cv2.polylines(
+                        ref_img.copy(), [np.int32(fov_pix)], True, 255, 3, cv2.LINE_AA
+                    )
+
+                    img: np.ndarray = np.vstack((map_with_fov, img))
+                    cv2.imshow("Projected FOV", img)
+                    cv2.waitKey(1)
 
                 # Convert from camera intrinsic to world coordinate system
                 # (cv2.solvePnPRansac returns pose in camera intrinsic frame)

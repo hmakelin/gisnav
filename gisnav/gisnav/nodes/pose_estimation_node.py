@@ -204,7 +204,7 @@ class PoseEstimationNode(Node):
         """Altitude of vehicle, or None if unknown or too old"""
 
     @property
-    #@ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -230,7 +230,7 @@ class PoseEstimationNode(Node):
         """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
-    #@ROS.max_delay_ms(_DELAY_SLOW_MS) - looks like the gst plugin (configuration issue?) does not set timestamp
+    # @ROS.max_delay_ms(_DELAY_SLOW_MS) - gst plugin config does not enable timestamp?
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
@@ -253,7 +253,7 @@ class PoseEstimationNode(Node):
                 )
 
             self.geopose_stamped_estimate
-            #self.altitude_estimate  # TODO enable
+            # self.altitude_estimate  # TODO enable
 
         img = self._cv_bridge.imgmsg_to_cv2(
             msg, desired_encoding="passthrough"
@@ -262,7 +262,7 @@ class PoseEstimationNode(Node):
         _image_callback(img, self.camera_info)
 
     @property
-    #@ROS.max_delay_ms(_DELAY_FAST_MS) - gst plugin config does not enable timestamp?
+    # @ROS.max_delay_ms(_DELAY_FAST_MS) - gst plugin config does not enable timestamp?
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -319,12 +319,12 @@ class PoseEstimationNode(Node):
         return bool(_should_estimate(self.altitude))
 
     def _pre_process_geopose_inputs(
-            self,
-            image: Image,
-            orthoimage: OrthoImage3D,
-            camera_info: CameraInfo,
-            context: _PoseEstimationContext,
-        ) -> Tuple[PoseEstimationInputs, _PoseEstimationIntermediateOutputs]:
+        self,
+        image: Image,
+        orthoimage: OrthoImage3D,
+        camera_info: CameraInfo,
+        context: _PoseEstimationContext,
+    ) -> Optional[Tuple[PoseEstimationInputs, _PoseEstimationIntermediateOutputs]]:
         @enforce_types(
             self.get_logger().warn, "Cannot preprocess pose estimation inputs"
         )
@@ -332,8 +332,13 @@ class PoseEstimationNode(Node):
             image: Image,
             orthoimage: OrthoImage3D,
             camera_info: CameraInfo,
-            context: self._PoseEstimationContext,
-        ) -> Tuple[self.PoseEstimationInputs, self._PoseEstimationIntermediateOutputs]:
+            context: PoseEstimationNode._PoseEstimationContext,
+        ) -> Optional[
+            Tuple[
+                PoseEstimationNode.PoseEstimationInputs,
+                PoseEstimationNode._PoseEstimationIntermediateOutputs,
+            ]
+        ]:
             """Rotate and crop and orthoimage stack to align with query image"""
 
             def _get_yaw_pitch_degrees_from_quaternion(
@@ -377,36 +382,45 @@ class PoseEstimationNode(Node):
             camera_yaw_degrees, _ = _get_yaw_pitch_degrees_from_quaternion(
                 context.gimbal_quaternion
             )
-            crop_shape = query_array.shape[0:2]
+            crop_shape: Tuple[int, int] = query_array.shape[0:2]
             orthoimage_stack = np.dstack((orthophoto, dem))
             orthoimage_stack, affine = self._rotate_and_crop_image(
-                orthoimage_stack, camera_yaw_degrees, tuple(crop_shape)
+                orthoimage_stack, camera_yaw_degrees, crop_shape
             )
 
             reference_array = orthoimage_stack[:, :, 0:2]
             elevation_array = orthoimage_stack[:, :, 3]
 
-            pre_processed_inputs: self.PoseEstimationInputs = {
+            pre_processed_inputs: PoseEstimationNode.PoseEstimationInputs = {
                 "query": query_array,
                 "reference": reference_array,
                 "elevation": elevation_array,
                 "k": camera_info.k.reshape((3, 3)),
             }
-            intermediate_outputs = self._PoseEstimationIntermediateOutputs(
-                affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
+            intermediate_outputs = (
+                PoseEstimationNode._PoseEstimationIntermediateOutputs(
+                    affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
+                )
             )
             return pre_processed_inputs, intermediate_outputs
 
         return _pre_process_inputs(image, orthoimage, camera_info, context)
 
-    def _is_valid_pose_estimate(self, pose: Pose, context: _PoseEstimationContext):
-
+    def _is_valid_pose_estimate(
+        self,
+        pose: Pose,
+        context: _PoseEstimationContext,
+        intermediate_outputs: _PoseEstimationIntermediateOutputs,
+    ):
         @enforce_types(
             self.get_logger().warn,
             "Cannot get determine whether pose estimate is valid",
         )
         def _is_valid_pose_estimate(
-            self, pose: Pose, context: self._PoseEstimationContext
+            self,
+            pose: Pose,
+            context: PoseEstimationNode._PoseEstimationContext,
+            intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
         ) -> bool:
             """Returns True if the estimate is valid
 
@@ -436,7 +450,7 @@ class PoseEstimationNode(Node):
                 r_guess = Rotation.from_matrix(r_guess)
                 # Adjust for map rotation
                 camera_yaw = Rotation.from_euler(
-                    "xyz", [0, 0, context.camera_yaw_degrees], degrees=True
+                    "xyz", [0, 0, intermediate_outputs.camera_yaw_degrees], degrees=True
                 )
                 r_guess *= camera_yaw
 
@@ -454,21 +468,21 @@ class PoseEstimationNode(Node):
 
                 if magnitude > threshold:
                     self.get_logger().warn(
-                        f"Estimated rotation difference to expected was too high (magnitude "
-                        f"{np.degrees(magnitude)})."
+                        f"Estimated rotation difference to expected was too high "
+                        f"(magnitude {np.degrees(magnitude)})."
                     )
                     return False
 
                 return True
 
-        return _is_valid_pose_estimate(pose, context)
+        return _is_valid_pose_estimate(pose, context, intermediate_outputs)
 
     def _post_process_pose(
-            self,
-            pose: Pose,
-            intermediate_outputs: _PoseEstimationIntermediateOutputs,
-            context: _PoseEstimationContext,
-        ) -> Optional[Tuple[GeoPoint, Altitude]]:
+        self,
+        pose: Pose,
+        intermediate_outputs: _PoseEstimationIntermediateOutputs,
+        context: _PoseEstimationContext,
+    ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:
         """Handles estimated pose
 
         :param pose: Pose result from pose estimation node worker
@@ -481,8 +495,8 @@ class PoseEstimationNode(Node):
         )
         def _compute_geopoint_altitude_attitude(
             pose: Pose,
-            context: self._PoseEstimationContext,
-            intermediate_outputs: self._PoseEstimationIntermediateOutputs,
+            context: PoseEstimationNode._PoseEstimationContext,
+            intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
         ) -> Optional[Tuple[GeoPoint, Altitude]]:
             """
             Estimates camera GeoPoint (WGS84 coordinates + altitude in meters
@@ -496,18 +510,14 @@ class PoseEstimationNode(Node):
             """
             geotransform = self._get_geotransformation_matrix(context.orthoimage)
             t = np.array([pose.position.x, pose.position.y, pose.position.z])
-            t_wgs84 = (
-                geotransform @ np.inv(intermediate_outputs.affine_transform) @ t
-            )
+            t_wgs84 = geotransform @ np.inv(intermediate_outputs.affine_transform) @ t
 
             lon, lat = t_wgs84.squeeze()[1::-1]
             alt = t_wgs84[2]
 
-            attitude = self._estimate_attitude(pose.orientation)
-
             altitude = Altitude(
                 monotonic=None,
-                amsl=alt + context.altitude.amsl,
+                amsl=alt + context.terrain_altitude.amsl,
                 local=None,  # TODO
                 relative=None,  # TODO
                 terrain=alt,
@@ -519,9 +529,34 @@ class PoseEstimationNode(Node):
                 longitude=lon,
             )
 
-            return geopoint, altitude, attitude
+            return geopoint, altitude
 
-        return _compute_geopoint_altitude_attitude(pose, context, intermediate_outputs)
+        geopoint_and_altitude = _compute_geopoint_altitude_attitude(
+            pose, context, intermediate_outputs
+        )
+        if geopoint_and_altitude is not None:
+            r = messaging.quaternion_to_rotation_matrix(pose.orientation)
+
+            # Rotation matrix is assumed to be in cv2.solvePnPRansac world
+            # coordinate system (ESU axes), need to convert to NED axes after
+            # reverting rotation and cropping
+            r = (
+                self._esu_to_ned_matrix
+                @ np.inv(intermediate_outputs.affine_transform)
+                @ r
+            )
+            quaternion = messaging.rotation_matrix_to_quaternion(r)
+            return geopoint_and_altitude + (quaternion,)
+        else:
+            return None
+
+    @property
+    def _esu_to_ned_matrix(self):
+        """Transforms from ESU to NED axes"""
+        transformation_matrix = np.array(
+            [[0, 1, 0], [1, 0, 0], [0, 0, -1]]  # E->N  # S->E  # U->D
+        )
+        return transformation_matrix
 
     @property
     @ROS.publish(
@@ -536,6 +571,7 @@ class PoseEstimationNode(Node):
         """
 
         context = self._pose_estimation_context
+        assert context is not None
         preprocess_results = self._pre_process_geopose_inputs(
             self.image, self.orthoimage_3d, self.camera_info, context
         )
@@ -548,26 +584,36 @@ class PoseEstimationNode(Node):
         inputs, intermediate_outputs = preprocess_results
         pose = self._get_pose(inputs)
 
-        if not self._is_valid_pose_estimate(pose, context):
+        if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
             self.get_logger().warn(
                 "Pose estimate did not pass post-processing validity check, "
                 "skipping this frame."
             )
             return None
 
-        geopoint, altitude, attitude = self._post_process_pose(
-            pose, inputs, intermediate_outputs, context
+        post_processed_pose = self._post_process_pose(
+            pose, intermediate_outputs, context
         )
 
-        return GeoPoseStamped(
-            header=messaging.create_header("base_link"),
-            pose=GeoPose(
-                position=geopoint,
-                orientation=messaging.as_ros_quaternion(attitude.q),
-            ),
-        )
+        if post_processed_pose:
+            (
+                geopoint,
+                altitude,
+                gimbal_quaternion,
+            ) = post_processed_pose  # TODO: uaternion might be in ESD and not NED
+            return GeoPoseStamped(
+                header=messaging.create_header("base_link"),
+                pose=GeoPose(
+                    position=geopoint,
+                    orientation=gimbal_quaternion,
+                ),
+            )
+        else:
+            self.get_logger().warn(
+                "Could not complete post-processing for pose estimation"
+            )
+            return None
 
-    @staticmethod
     def _estimate_attitude(self, quaternion: Quaternion) -> Attitude:
         """Estimates gimbal (not vehicle) attitude in NED frame
 
@@ -578,9 +624,11 @@ class PoseEstimationNode(Node):
         :return: Gimbal attitude in NED frame
         """
         # Convert estimated rotation to attitude quaternion for publishing
-        #rT = r.T
-        #assert not np.isnan(rT).any()
-        gimbal_estimated_attitude = Rotation.from_quat(quaternion)  # rotated map pixel frame
+        # rT = r.T
+        # assert not np.isnan(rT).any()
+        gimbal_estimated_attitude = Rotation.from_quat(
+            quaternion
+        )  # rotated map pixel frame
 
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1])
@@ -592,9 +640,7 @@ class PoseEstimationNode(Node):
             [-rotvec[1], rotvec[0], rotvec[2]]
         )
 
-        return Attitude(
-            gimbal_estimated_attitude.as_quat()
-        )
+        return Attitude(gimbal_estimated_attitude.as_quat())
 
     @property
     @ROS.publish(
@@ -708,7 +754,7 @@ class PoseEstimationNode(Node):
         dy = (image.shape[0] - crop_height) // 2
         t = cls._get_translation_matrix(dx, dy)
 
-        # Combine the rotation and translation to get the final affine transformation matrix
+        # Combine rotation and translation to get the final affine transformation
         affine_matrix = np.dot(t, np.vstack([r, [0, 0, 1]]))
         return affine_matrix
 
@@ -771,9 +817,14 @@ class PoseEstimationNode(Node):
             # TODO: should return None if the length of these is 0?
             data = json.loads(response.text)
             if "r" in data and "t" in data:
-                pose = _matrices_to_pose(
-                    np.asarray(data.get("r")), np.asarray(data.get("t"))
-                )
+                r, t = np.asarray(data.get("r")), np.asarray(data.get("t"))
+
+                # Convert from camera intrinsic to world coordinate system
+                # (cv2.solvePnPRansac returns pose in camera intrinsic frame)
+                r_world = r.T
+                t_world = r_world @ t
+
+                pose = _matrices_to_pose(r_world, t_world)
                 return pose
             else:
                 self.get_logger().warn(
@@ -859,12 +910,12 @@ class PoseEstimationNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         pitch = None
-        if self._gimbal_quaternion is not None:
-            off_nadir_deg = self.off_nadir_angle(self._gimbal_quaternion) - 90
+        if self.gimbal_quaternion is not None:
+            off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion) - 90
             self.get_logger().debug(
                 f"Camera pitch is {off_nadir_deg} degrees off nadir"
             )
-            roll, pitch, yaw = self._euler_from_quaternion(self._gimbal_quaternion)
+            roll, pitch, yaw = self._euler_from_quaternion(self.gimbal_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

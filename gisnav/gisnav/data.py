@@ -489,7 +489,9 @@ class FixedCamera:
         # Convert estimated rotation to attitude quaternion for publishing
         rT = self.pose.r.T
         assert not np.isnan(rT).any()
-        gimbal_estimated_attitude = Rotation.from_matrix(rT).inv()  # rotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(
+            rT
+        ).inv()  # rotated map pixel frame
 
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1])

@@ -5,6 +5,7 @@ from typing import Union
 import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPointStamped
 from geometry_msgs.msg import Quaternion
+from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
 from ..assertions import assert_shape, assert_type
@@ -171,3 +172,33 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
         msg.max_pt.longitude,
         msg.max_pt.latitude,
     )
+
+
+def quaternion_to_rotation_matrix(q):
+    """Convert a ROS2 geometry_msgs Quaternion to a numpy rotation matrix."""
+    # Construct a rotation object from ROS2 geometry_msgs
+    rotation = Rotation.from_quat([q.x, q.y, q.z, q.w])
+
+    # Convert the rotation object to a rotation matrix
+    rotation_matrix = rotation.as_matrix()
+
+    return rotation_matrix
+
+
+def rotation_matrix_to_quaternion(matrix):
+    """Convert a numpy rotation matrix to a ROS2 geometry_msgs Quaternion."""
+
+    # Construct a rotation object from the rotation matrix
+    rotation = Rotation.from_matrix(matrix)
+
+    # Convert the rotation object to a quaternion
+    quat = rotation.as_quat()
+
+    # Create a ROS2 geometry_msgs Quaternion message
+    q = Quaternion()
+    q.x = quat[0]
+    q.y = quat[1]
+    q.z = quat[2]
+    q.w = quat[3]
+
+    return q

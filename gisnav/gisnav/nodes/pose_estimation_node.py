@@ -87,7 +87,7 @@ class PoseEstimationNode(Node):
         orthoimage: OrthoImage3D
         gimbal_quaternion: Quaternion
         terrain_altitude: Altitude
-        terrain_geopoint: GeoPoint
+        terrain_geopoint: GeoPointStamped
 
     _DELAY_SLOW_MS = 10000
     """
@@ -230,7 +230,7 @@ class PoseEstimationNode(Node):
         """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
-    @ROS.max_delay_ms(_DELAY_SLOW_MS)
+    #@ROS.max_delay_ms(_DELAY_SLOW_MS) - looks like the gst plugin (configuration issue?) does not set timestamp
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
@@ -252,22 +252,17 @@ class PoseEstimationNode(Node):
                     f"shape ({declared_shape})."
                 )
 
-            self.get_logger().error("img callback 3")
-
             self.geopose_stamped_estimate
-            self.altitude_estimate
+            #self.altitude_estimate  # TODO enable
 
-        self.get_logger().error("img callback")
         img = self._cv_bridge.imgmsg_to_cv2(
             msg, desired_encoding="passthrough"
         )  # self._IMAGE_ENCODING)
 
-        self.get_logger().error("img callback 3")
-
         _image_callback(img, self.camera_info)
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    #@ROS.max_delay_ms(_DELAY_FAST_MS) - gst plugin config does not enable timestamp?
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -402,7 +397,7 @@ class PoseEstimationNode(Node):
             )
             return pre_processed_inputs, intermediate_outputs
 
-        return _preprocess_inputs(image, orthoimage, camera_info, context)
+        return _pre_process_inputs(image, orthoimage, camera_info, context)
 
     def _is_valid_pose_estimate(self, pose: Pose, context: _PoseEstimationContext):
 
@@ -519,7 +514,7 @@ class PoseEstimationNode(Node):
                 bottom_clearance=alt,
             )
             geopoint = GeoPoint(
-                altitude=alt + context.terrain_geopoint.altitude,
+                altitude=alt + context.terrain_geopoint.position.altitude,
                 latitude=lat,
                 longitude=lon,
             )
@@ -617,7 +612,7 @@ class PoseEstimationNode(Node):
             orthoimage: OrthoImage3D,
             gimbal_quaternion: Quaternion,
             terrain_altitude: Altitude,
-            terrain_geopoint: GeoPoint,
+            terrain_geopoint: GeoPointStamped,
         ):
             return self._PoseEstimationContext(
                 orthoimage=orthoimage,

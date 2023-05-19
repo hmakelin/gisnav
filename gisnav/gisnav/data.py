@@ -484,16 +484,12 @@ class FixedCamera:
     def _estimate_attitude(self) -> Attitude:
         """Estimates gimbal (not vehicle) attitude in NED frame
 
-        .. note::
-            Stabilized gimbal *actual* (not set) attitude relative to vehicle
-            body frame not always known so it is currently not computed.
-
         :return: Gimbal attitude in NED frame
         """
         # Convert estimated rotation to attitude quaternion for publishing
         rT = self.pose.r.T
         assert not np.isnan(rT).any()
-        gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(rT).inv()  # rotated map pixel frame
 
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1])

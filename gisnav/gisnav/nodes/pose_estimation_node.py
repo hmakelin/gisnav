@@ -204,7 +204,7 @@ class PoseEstimationNode(Node):
         """Altitude of vehicle, or None if unknown or too old"""
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    #@ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
         messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -366,7 +366,7 @@ class PoseEstimationNode(Node):
             query_array = self._cv_bridge.imgmsg_to_cv2(
                 image, desired_encoding="passthrough"
             )
-            orthoimage = self._cv_bridge.imgmsg_to_cv2(
+            orthophoto = self._cv_bridge.imgmsg_to_cv2(
                 orthoimage.img, desired_encoding="passthrough"
             )
             dem = self._cv_bridge.imgmsg_to_cv2(
@@ -378,9 +378,9 @@ class PoseEstimationNode(Node):
                 context.gimbal_quaternion
             )
             crop_shape = query_array.shape[0:2]
-            orthoimage_stack = np.dstack((orthoimage, dem))
+            orthoimage_stack = np.dstack((orthophoto, dem))
             orthoimage_stack, affine = self._rotate_and_crop_image(
-                orthoimage_stack, camera_yaw_degrees, *crop_shape
+                orthoimage_stack, camera_yaw_degrees, tuple(crop_shape)
             )
 
             reference_array = orthoimage_stack[:, :, 0:2]
@@ -392,7 +392,7 @@ class PoseEstimationNode(Node):
                 "elevation": elevation_array,
                 "k": camera_info.k.reshape((3, 3)),
             }
-            intermediate_outputs: self._PoseEstimationIntermediateOutputs(
+            intermediate_outputs = self._PoseEstimationIntermediateOutputs(
                 affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
             )
             return pre_processed_inputs, intermediate_outputs
@@ -713,7 +713,6 @@ class PoseEstimationNode(Node):
         return affine_matrix
 
     @classmethod
-    @lru_cache(1)
     def _rotate_and_crop_image(
         cls, image: np.ndarray, degrees: float, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:

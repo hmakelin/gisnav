@@ -927,17 +927,18 @@ class PoseEstimationNode(Node):
         pitch = None
         if self.gimbal_quaternion is not None:
             off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion) - 90
-            self.get_logger().debug(
-                f"Camera pitch is {off_nadir_deg} degrees off nadir"
-            )
-            roll, pitch, yaw = self._euler_from_quaternion(self.gimbal_quaternion)
+
+            #roll, pitch, yaw = self._euler_from_quaternion(self.gimbal_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(
-                    f"Camera pitch {pitch} is above limit {max_pitch}."
+                    f"Camera is {off_nadir_deg} degrees off nadir and above limit {max_pitch}."
                 )
                 return True
             else:
+                self.get_logger().debug(
+                    f"Camera pitch is {off_nadir_deg} degrees off nadir"
+                )
                 return False
         else:
             self.get_logger().warn(

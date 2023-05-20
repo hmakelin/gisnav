@@ -520,6 +520,7 @@ class PoseEstimationNode(Node):
                 self.get_logger().warn(
                     "Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude"
                 )
+                return None
 
             lon, lat = t_wgs84.squeeze()[1::-1]
             alt = t_wgs84[2]
@@ -849,7 +850,7 @@ class PoseEstimationNode(Node):
                 if __debug__:
                     # Visualize projected FOV estimate
                     h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
-                    src_pts = create_src_corners(*inputs.get("query").shape[0:2])
+                    src_pts = create_src_corners(*inputs.get("query").shape[0:2][::-1])  # cv2 flips axis order
                     try:
                         fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
                         ref_img = inputs.get("reference")

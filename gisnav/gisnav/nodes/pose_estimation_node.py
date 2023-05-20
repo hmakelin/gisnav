@@ -889,7 +889,7 @@ class PoseEstimationNode(Node):
             return None
 
     @classmethod
-    @lru_cache(1)
+    # @lru_cache(1) TODO use own cache_if or cachetools from pypi
     def _bounding_box_perimeter_meters(cls, bounding_box: BoundingBox) -> float:
         """Returns the length of the bounding box perimeter in meters"""
         width_meters = cls.haversine_distance(
@@ -935,16 +935,16 @@ class PoseEstimationNode(Node):
         # Convert quaternion to euler angles
         t0 = 2.0 * (q.w * q.x + q.y * q.z)
         t1 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
-        roll = math.atan2(t0, t1)
+        roll = math.arctan2(t0, t1)
 
         t2 = 2.0 * (q.w * q.y - q.z * q.x)
         t2 = 1.0 if t2 > 1.0 else t2
         t2 = -1.0 if t2 < -1.0 else t2
-        pitch = math.asin(t2)
+        pitch = math.arcsin(t2)
 
         t3 = 2.0 * (q.w * q.z + q.x * q.y)
         t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw = math.atan2(t3, t4)
+        yaw = math.arctan2(t3, t4)
 
         return roll, pitch, yaw
 
@@ -992,6 +992,6 @@ class PoseEstimationNode(Node):
             np.sin(delta_lat / 2) ** 2
             + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(delta_lon / 2) ** 2
         )
-        c = 2 * np.atan2(np.sqrt(a), np.sqrt(1 - a))
+        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 
         return R * c

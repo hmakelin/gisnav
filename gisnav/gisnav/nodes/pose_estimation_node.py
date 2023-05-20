@@ -509,7 +509,10 @@ class PoseEstimationNode(Node):
             """
             geotransform = self._get_geotransformation_matrix(context.orthoimage)
             t = np.array([pose.position.x, pose.position.y, pose.position.z])
-            t_wgs84 = geotransform @ np.inv(intermediate_outputs.affine_transform) @ t
+            try:
+                t_wgs84 = geotransform @ np.linalg.inv(intermediate_outputs.affine_transform) @ t
+            except np.linalg.LinAlgError as _:  # noqa: F841
+                self.get_logger().warn("Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude")
 
             lon, lat = t_wgs84.squeeze()[1::-1]
             alt = t_wgs84[2]
@@ -539,11 +542,16 @@ class PoseEstimationNode(Node):
             # Rotation matrix is assumed to be in cv2.solvePnPRansac world
             # coordinate system (ESU axes), need to convert to NED axes after
             # reverting rotation and cropping
-            r = (
-                self._esu_to_ned_matrix
-                @ np.inv(intermediate_outputs.affine_transform)
-                @ r
-            )
+            try:
+                r = (
+                    self._esu_to_ned_matrix
+                    @ np.linalg.inv(intermediate_outputs.affine_transform)
+                    @ r
+                )
+            except np.linalg.LinAlgError as _:  # noqa: F841
+                self.get_logger().warn("Cropping and rotation was non-invertible, canot estimate GeoPoint and Altitude.")
+                return None
+
             quaternion = messaging.rotation_matrix_to_quaternion(r)
             return geopoint_and_altitude + (quaternion,)
         else:
@@ -824,15 +832,18 @@ class PoseEstimationNode(Node):
                     # Visualize projected FOV estimate
                     h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
                     src_pts = create_src_corners(*inputs.get("query").shape[0:2])
-                    fov_pix = cv2.perspectiveTransform(src_pts, np.inv(h))
-                    ref_img = context.orthoimage.img
-                    map_with_fov = cv2.polylines(
-                        ref_img.copy(), [np.int32(fov_pix)], True, 255, 3, cv2.LINE_AA
-                    )
+                    try:
+                        fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
+                        ref_img = context.orthoimage.img
+                        map_with_fov = cv2.polylines(
+                            ref_img.copy(), [np.int32(fov_pix)], True, 255, 3, cv2.LINE_AA
+                        )
 
-                    img: np.ndarray = np.vstack((map_with_fov, img))
-                    cv2.imshow("Projected FOV", img)
-                    cv2.waitKey(1)
+                        img: np.ndarray = np.vstack((map_with_fov, img))
+                        cv2.imshow("Projected FOV", img)
+                        cv2.waitKey(1)
+                    except np.linalg.LinAlgError as _:  # noqa: F841
+                        self.get_logger().debug("H was non invertible, cannot visualize.")
 
                 # Convert from camera intrinsic to world coordinate system
                 # (cv2.solvePnPRansac returns pose in camera intrinsic frame)

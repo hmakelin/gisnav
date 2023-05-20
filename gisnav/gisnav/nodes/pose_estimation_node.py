@@ -454,9 +454,7 @@ class PoseEstimationNode(Node):
                 )
                 r_guess *= camera_yaw
 
-                r_estimate = Rotation.from_matrix(
-                    messaging.quaternion_to_rotation_matrix(pose.orientation)
-                )
+                r_estimate = Rotation.from_matrix(messaging.quaternion_to_rotation_matrix(pose.orientation))
 
                 magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 
@@ -511,15 +509,9 @@ class PoseEstimationNode(Node):
             geotransform = self._get_geotransformation_matrix(context.orthoimage)
             t = np.array([pose.position.x, pose.position.y, pose.position.z])
             try:
-                t_wgs84 = (
-                    geotransform
-                    @ np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ t
-                )
+                t_wgs84 = geotransform @ np.linalg.inv(intermediate_outputs.affine_transform) @ t
             except np.linalg.LinAlgError as _:  # noqa: F841
-                self.get_logger().warn(
-                    "Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude"
-                )
+                self.get_logger().warn("Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude")
 
             lon, lat = t_wgs84.squeeze()[1::-1]
             alt = t_wgs84[2]
@@ -556,9 +548,7 @@ class PoseEstimationNode(Node):
                     @ r
                 )
             except np.linalg.LinAlgError as _:  # noqa: F841
-                self.get_logger().warn(
-                    "Cropping and rotation was non-invertible, canot estimate GeoPoint and Altitude."
-                )
+                self.get_logger().warn("Cropping and rotation was non-invertible, canot estimate GeoPoint and Altitude.")
                 return None
 
             quaternion = messaging.rotation_matrix_to_quaternion(r)
@@ -723,12 +713,12 @@ class PoseEstimationNode(Node):
         ]
 
     @classmethod
-    @lru_cache(1)
+    #@lru_cache(1)  # TODO: cache this use predicate decorator to update
     def _get_geotransformation_matrix(cls, orthoimage: OrthoImage3D):
         """
         Transform orthoimage frame pixel coordinates to WGS84 lon, lat coordinates
         """
-        pixel_coords = create_src_corners(orthoimage.height, orthoimage.width)
+        pixel_coords = create_src_corners(orthoimage.img.height, orthoimage.img.width)
         geo_coords = cls._boundingbox_to_geo_coords(orthoimage.bbox)
 
         pixel_coords = np.float32(pixel_coords).squeeze()
@@ -737,7 +727,7 @@ class PoseEstimationNode(Node):
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
         # Scaling of z-axis from orthoimage raster native units to meters
-        bounding_box_perimeter_native = 2 * orthoimage.height + 2 * orthoimage.width
+        bounding_box_perimeter_native = 2 * orthoimage.img.height + 2 * orthoimage.img.width
         bounding_box_perimeter_meters = cls._bounding_box_perimeter_meters(
             orthoimage.bbox
         )
@@ -846,21 +836,14 @@ class PoseEstimationNode(Node):
                         fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
                         ref_img = inputs.get("reference")
                         map_with_fov = cv2.polylines(
-                            ref_img.copy(),
-                            [np.int32(fov_pix)],
-                            True,
-                            255,
-                            3,
-                            cv2.LINE_AA,
+                            ref_img.copy(), [np.int32(fov_pix)], True, 255, 3, cv2.LINE_AA
                         )
 
                         img: np.ndarray = np.vstack((map_with_fov, inputs.get("query")))
                         cv2.imshow("Projected FOV", img)
                         cv2.waitKey(1)
                     except np.linalg.LinAlgError as _:  # noqa: F841
-                        self.get_logger().debug(
-                            "H was non invertible, cannot visualize."
-                        )
+                        self.get_logger().debug("H was non invertible, cannot visualize.")
 
                 # Convert from camera intrinsic to world coordinate system
                 # (cv2.solvePnPRansac returns pose in camera intrinsic frame)
@@ -954,8 +937,6 @@ class PoseEstimationNode(Node):
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.gimbal_quaternion is not None:
             off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion) - 90
-
-            # roll, pitch, yaw = self._euler_from_quaternion(self.gimbal_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

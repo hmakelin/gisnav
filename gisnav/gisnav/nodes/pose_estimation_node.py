@@ -3,7 +3,6 @@ import json
 import math
 import pickle
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import List, Optional, Tuple, TypedDict, Union, get_args
 
 import cv2
@@ -774,7 +773,7 @@ class PoseEstimationNode(Node):
         t = cls._get_translation_matrix(dx, dy)
 
         # Combine rotation and translation to get the final affine transformation
-        affine_matrix = np.dot(t, np.vstack([r, [0, 0, 1]]))
+        affine_matrix = np.dot(np.vstack([t, [0, 0, 1]]), np.vstack([r, [0, 0, 1]]))
         return affine_matrix, r, t
 
     @classmethod
@@ -850,7 +849,9 @@ class PoseEstimationNode(Node):
                 if __debug__:
                     # Visualize projected FOV estimate
                     h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
-                    src_pts = create_src_corners(*inputs.get("query").shape[0:2][::-1])  # cv2 flips axis order
+                    src_pts = create_src_corners(
+                        *inputs.get("query").shape[0:2][::-1]
+                    )  # cv2 flips axis order
                     try:
                         fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
                         ref_img = inputs.get("reference")

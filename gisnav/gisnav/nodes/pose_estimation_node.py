@@ -522,13 +522,13 @@ class PoseEstimationNode(Node):
                 return None
 
             lon, lat = t_wgs84.squeeze()[1::-1]
-            alt = t_wgs84[2]
+            alt = float(t_wgs84[2])
 
             altitude = Altitude(
-                monotonic=None,
+                monotonic=0.0,  # TODO
                 amsl=alt + context.terrain_altitude.amsl,
-                local=None,  # TODO
-                relative=None,  # TODO
+                local=0.0,  # TODO
+                relative=0.0,  # TODO
                 terrain=alt,
                 bottom_clearance=alt,
             )

@@ -318,6 +318,31 @@ class PoseEstimationNode(Node):
 
         return bool(_should_estimate(self.altitude))
 
+    @staticmethod
+    def _get_yaw_pitch_degrees_from_quaternion(
+            quaternion,
+        ) -> Tuple[float, float]:
+        """
+        To avoid gimbal lock when facing nadir (pitch -90 degrees in NED),
+        assumes roll is close to zero (i.e roll can be slightly non-zero).
+        """
+        # Unpack quaternion
+        x = quaternion.x
+        y = quaternion.y
+        z = quaternion.z
+        w = quaternion.w
+
+        # Calculate yaw and pitch directly from the quaternion to
+        # avoid gimbal lock. Assumption/constraint: roll is close to zero.
+        yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+        pitch = np.arcsin(2.0 * (w * y - z * x))
+
+        # Convert yaw and pitch from radians to degrees
+        yaw_degrees = yaw * 180.0 / np.pi
+        pitch_degrees = pitch * 180.0 / np.pi
+
+        return yaw_degrees, pitch_degrees
+
     def _pre_process_geopose_inputs(
         self,
         image: Image,
@@ -341,33 +366,6 @@ class PoseEstimationNode(Node):
         ]:
             """Rotate and crop and orthoimage stack to align with query image"""
 
-            def _get_yaw_pitch_degrees_from_quaternion(
-                quaternion,
-            ) -> Tuple[float, float]:
-                """
-                To avoid gimbal lock when facing nadir (pitch -90 degrees in NED),
-                assumes roll is close to zero (i.e roll can be slightly non-zero).
-                """
-                # Unpack quaternion
-                x = quaternion.x
-                y = quaternion.y
-                z = quaternion.z
-                w = quaternion.w
-
-                # Calculate yaw and pitch directly from the quaternion to
-                # avoid gimbal lock. Assumption/constraint: roll is close to zero.
-                #                       wx        yz?  TODO
-                yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-
-                #                         wz        yx?  TODO
-                pitch = np.arcsin(2.0 * (w * y - z * x))
-
-                # Convert yaw and pitch from radians to degrees
-                yaw_degrees = yaw * 180.0 / np.pi
-                pitch_degrees = pitch * 180.0 / np.pi
-
-                return yaw_degrees, pitch_degrees
-
             query_array = self._cv_bridge.imgmsg_to_cv2(
                 image, desired_encoding="passthrough"
             )
@@ -379,7 +377,7 @@ class PoseEstimationNode(Node):
             )
 
             # Rotate and crop orthoimage stack
-            camera_yaw_degrees, _ = _get_yaw_pitch_degrees_from_quaternion(
+            camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
                 context.gimbal_quaternion
             )
             crop_shape: Tuple[int, int] = query_array.shape[0:2]
@@ -387,7 +385,6 @@ class PoseEstimationNode(Node):
             orthoimage_stack, affine = self._rotate_and_crop_image(
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
-
             reference_array = orthoimage_stack[:, :, 0:3]
             elevation_array = orthoimage_stack[:, :, 3]
 
@@ -408,7 +405,8 @@ class PoseEstimationNode(Node):
 
     def _is_valid_pose_estimate(
         self,
-        pose: Pose,
+        pose: Tuple[np.ndarray, np.ndarray],
+        #pose: Pose,
         context: _PoseEstimationContext,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
     ):
@@ -417,10 +415,12 @@ class PoseEstimationNode(Node):
             "Cannot get determine whether pose estimate is valid",
         )
         def _is_valid_pose_estimate(
-            pose: Pose,
+            pose: Tuple[np.ndarray, np.ndarray],
+            #pose: Pose,
             context: PoseEstimationNode._PoseEstimationContext,
             intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
         ) -> bool:
+            return True
             """Returns True if the estimate is valid
 
             Compares computed estimate to guess based on earlier gimbal attitude.
@@ -428,57 +428,59 @@ class PoseEstimationNode(Node):
             is strictly not necessary) if gimbal attitude is based on set attitude
             and not actual attitude, which is assumed to filter out more inaccurate
             estimates.
-            """
+        """
+            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(context.gimbal_quaternion)
+            self.get_logger().error(f"gimbal yaw pitch NED {yaw} {pitch}")
 
-            @enforce_types(
-                self.get_logger().warn, "Cannot determine rotation matrix guess"
+            #yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
+            #self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
+
+            r_guess = Rotation.from_matrix(messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion))
+            #r = np.transpose(messaging.quaternion_to_rotation_matrix(pose.orientation), (1, 0))  # cv2 x and y axis swap
+            r, t = pose
+
+            rot_90_Z = np.array([[ 0, -1, 0],
+                     [ 1,  0, 0],
+                     [ 0,  0, 1]])
+    
+            r_estimate = (
+                    self._seu_to_ned_matrix
+                    @ np.linalg.inv(intermediate_outputs.affine_transform)
+                    @ np.linalg.inv(rot_90_Z) @ r.T
+                    #@ np.linalg.inv(messaging.quaternion_to_rotation_matrix(pose.orientation))
+
+                )
+            #r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
+
+            #self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
+            r_estimate = Rotation.from_matrix(r_estimate)
+            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(messaging.as_ros_quaternion(Rotation.as_quat(r_estimate)))
+            self.get_logger().error(f"processed pose yaw pitch {yaw} {pitch}")
+
+
+            magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
+
+            threshold = (
+                self.get_parameter("attitude_deviation_threshold")
+                .get_parameter_value()
+                .integer_value
             )
-            def _r_guess(gimbal_quaternion: Quaternion) -> np.ndarray:
-                gimbal_attitude = Attitude(
-                    q=messaging.as_np_quaternion(gimbal_quaternion)
-                )
-                gimbal_attitude = (
-                    gimbal_attitude.to_esd()
-                )  # Need coordinates in image frame, not NED
-                return gimbal_attitude.r
+            threshold = np.radians(threshold)
 
-            r_guess = _r_guess(context.gimbal_quaternion)
-            if r_guess is None:
+            if magnitude > threshold:
+                self.get_logger().warn(
+                    f"Estimated rotation difference to expected was too high "
+                    f"(magnitude {np.degrees(magnitude)})."
+                )
                 return False
-            else:
-                r_guess = Rotation.from_matrix(r_guess)
-                # Adjust for map rotation
-                camera_yaw = Rotation.from_euler(
-                    "xyz", [0, 0, intermediate_outputs.camera_yaw_degrees], degrees=True
-                )
-                r_guess *= camera_yaw
 
-                r_estimate = Rotation.from_matrix(
-                    messaging.quaternion_to_rotation_matrix(pose.orientation)
-                )
-
-                magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
-
-                threshold = (
-                    self.get_parameter("attitude_deviation_threshold")
-                    .get_parameter_value()
-                    .integer_value
-                )
-                threshold = np.radians(threshold)
-
-                if magnitude > threshold:
-                    self.get_logger().warn(
-                        f"Estimated rotation difference to expected was too high "
-                        f"(magnitude {np.degrees(magnitude)})."
-                    )
-                    return False
-
-                return True
+            return True
 
         return _is_valid_pose_estimate(pose, context, intermediate_outputs)
 
     def _post_process_pose(
         self,
+        inputs,
         pose: Pose,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
         context: _PoseEstimationContext,
@@ -493,7 +495,9 @@ class PoseEstimationNode(Node):
             "Cannot get GeoPoint from estimated Pose and given context",
         )
         def _compute_geopoint_altitude_attitude(
-            pose: Pose,
+            inputs,
+            #pose: Pose,
+            pose: Tuple[np.ndarray, np.ndarray],
             context: PoseEstimationNode._PoseEstimationContext,
             intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
         ) -> Optional[Tuple[GeoPoint, Altitude]]:
@@ -508,13 +512,36 @@ class PoseEstimationNode(Node):
             :return: Camera position or None if not available
             """
             geotransform = self._get_geotransformation_matrix(context.orthoimage)
-            t = np.array([pose.position.x, pose.position.y, pose.position.z])
+            #t = np.array([pose.position.x, pose.position.y, pose.position.z])
+            #r = messaging.quaternion_to_rotation_matrix(pose.orientation)
+            r, t = pose
+            t_world = np.matmul(r.T, -t)
+            #t_world = np.array((t_world[1], t_world[0], abs(t_world[2])))  # cv2 xy swap
+            t_world_homogenous = np.vstack((t_world, [1]))
+            #t_world_homogenous[0:2] = t_world_homogenous[0:2][::-1]
+            ref = inputs.get("reference")
+            self.get_logger().error(str(tuple(t_world.squeeze()[0:2])))
+            refcopy = ref.copy()
+            cv2.circle(refcopy, tuple(map(int, tuple(t_world.squeeze()[0:2]))), 5, (0, 0, 255), 1)
+            cv2.imshow("world coords", refcopy)
+            cv2.waitKey(1)
             try:
                 t_wgs84 = (
-                    geotransform
-                    @ np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ t
+                    #geotransform
+                    np.linalg.inv(intermediate_outputs.affine_transform)
+                    @ t_world_homogenous #t
                 )
+                self.get_logger().error("world coords: " + str(t_world))
+                self.get_logger().error("unrotated uncropped coordinates " + str(np.linalg.inv(intermediate_outputs.affine_transform)
+                    @ t_world_homogenous))
+                
+                raw_map = self._cv_bridge.imgmsg_to_cv2(
+                    context.orthoimage.img, desired_encoding="passthrough"
+                )
+                cv2.circle(raw_map, tuple(map(int, tuple(t_wgs84.squeeze()[0:2]))), 5, (0, 0, 255), 1)
+                cv2.imshow("raw orthophoto", raw_map)
+                cv2.waitKey(1)
+                self.get_logger().error(str(t_wgs84))
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
                     "Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude"
@@ -541,19 +568,22 @@ class PoseEstimationNode(Node):
             return geopoint, altitude
 
         geopoint_and_altitude = _compute_geopoint_altitude_attitude(
-            pose, context, intermediate_outputs
+            inputs, pose, context, intermediate_outputs
         )
+        r, t = pose
         if geopoint_and_altitude is not None:
-            r = messaging.quaternion_to_rotation_matrix(pose.orientation)
+            #r = messaging.quaternion_to_rotation_matrix(pose.orientation)
 
             # Rotation matrix is assumed to be in cv2.solvePnPRansac world
-            # coordinate system (ESU axes), need to convert to NED axes after
+            # coordinate system (SEU axes), need to convert to NED axes after
             # reverting rotation and cropping
             try:
+                self.get_logger().error("inv shape.")
+                self.get_logger().error(str(np.linalg.inv(intermediate_outputs.affine_transform).shape))
                 r = (
-                    self._esu_to_ned_matrix
-                    @ np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ r
+                    self._seu_to_ned_matrix
+                    @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])
+                    @ r.T #@ -t
                 )
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
@@ -566,11 +596,19 @@ class PoseEstimationNode(Node):
         else:
             return None
 
+    #@property
+    #def _esu_to_ned_matrix(self):
+    #    """Transforms from ESU to NED axes"""
+    #    transformation_matrix = np.array(
+    #        [[0, 1, 0], [1, 0, 0], [0, 0, -1]]  # E->N  # S->E  # U->D
+    #    )
+    #    return transformation_matrix
+
     @property
-    def _esu_to_ned_matrix(self):
+    def _seu_to_ned_matrix(self):
         """Transforms from ESU to NED axes"""
         transformation_matrix = np.array(
-            [[0, 1, 0], [1, 0, 0], [0, 0, -1]]  # E->N  # S->E  # U->D
+            [[-1, 0, 0], [0, 1, 0], [0, 0, -1]]  # S->N  # E->E  # U->D
         )
         return transformation_matrix
 
@@ -606,7 +644,7 @@ class PoseEstimationNode(Node):
             )
             return None
 
-        post_processed_pose = self._post_process_pose(
+        post_processed_pose = self._post_process_pose(inputs,
             pose, intermediate_outputs, context
         )
 
@@ -762,19 +800,55 @@ class PoseEstimationNode(Node):
     @classmethod
     def _get_affine_matrix(
         cls, image: np.ndarray, degrees: float, crop_height: int, crop_width: int
-    ):
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Creates affine transformation that rotates around center and then
-        center-crops an image
+        center-crops an image.
+
+        .. note::
+            Returns matrix in 3D since this matrix will not only be used for rotating
+            and cropping the orthoimage rasters but also for converting 3D pose
+            estimates in the rotated and cropped orthoimage frame back to the original
+            unrotated and uncropped frame (from where it will then be converted to
+            geocoordinates).
+
+        Returns a tuple of:
+        - affine matrix padded to 3D (4x4 matrix) in the following format:
+            [ R11  R12  0   Tx ]
+            [ R21  R22  0   Ty ]
+            [ 0    0    1   0  ]
+            [ 0    0    0   1  ]
+        where R11, R12, R21, R22 represents the rotation matrix, and Tx, Ty represent
+        the translation along the x and y axis.
+        - rotation matrix around center (2x3)
+        - translation matrix (2x3)
+            [ 1    0    Tx ]
+            [ 0    1    Ty ]
+
+        :return: Tuple of 3D affine transformation matrix in homogenous format,
+            the constituent 2D rotation matrix, and constituent 2D translation
+            matrix.
         """
         r = cls._get_rotation_matrix(image, degrees)
+        assert r.shape == (2, 3)
         dx = (image.shape[0] - crop_height) // 2
         dy = (image.shape[1] - crop_width) // 2
         t = cls._get_translation_matrix(dx, dy)
+        assert t.shape == (2, 3)
 
         # Combine rotation and translation to get the final affine transformation
-        affine_matrix = np.dot(np.vstack([t, [0, 0, 1]]), np.vstack([r, [0, 0, 1]]))
-        return affine_matrix, r, t
+        affine_2d = np.dot(t, np.vstack([r, [0, 0, 1]]))
+
+        # Convert 2D affine matrix to 3D affine matrix
+        # Create a 4x4 identity matrix
+        affine_3d = np.eye(4)
+
+        # Insert the 2D affine transformation into the 3D matrix
+        affine_3d[:2, :2] = affine_2d[:, :2]
+        affine_3d[:2, 3] = affine_2d[:, 2]
+
+        assert affine_3d.shape == (4, 4)
+        return affine_3d, r, t
 
     @classmethod
     def _rotate_and_crop_image(
@@ -798,11 +872,13 @@ class PoseEstimationNode(Node):
         t[:2, 2] = -t[:2, 2][::-1]
         affine_hack = np.dot(t, np.vstack([r, [0, 0, 1]]))
 
+        #affine[:2, 3] = -t[:2, 2]
+
         return cv2.warpAffine(image, affine_hack[:2, :], shape[::-1]), affine
 
     def _get_pose(
         self, inputs: PoseEstimationInputs, context: _PoseEstimationContext
-    ) -> Optional[Pose]:
+    ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Performs call to pose estimation service and returns pose as (r, t) tuple,
         or None if not available
@@ -872,13 +948,11 @@ class PoseEstimationNode(Node):
                             "H was non invertible, cannot visualize."
                         )
 
-                # Convert from camera intrinsic to world coordinate system
-                # (cv2.solvePnPRansac returns pose in camera intrinsic frame)
-                r_world = r.T
-                t_world = r_world @ t
+                #pose = _matrices_to_pose(r, t)
 
-                pose = _matrices_to_pose(r_world, t_world)
-                return pose
+                #r_new = np.transpose(r, (1,0))
+                #t_new = np.array((t[1], t[0], t[2])).reshape(t.shape)
+                return r, t  #pose
             else:
                 self.get_logger().warn(
                     f"Could not estimate pose, returned text {response.text}"

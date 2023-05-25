@@ -800,7 +800,7 @@ class PoseEstimationNode(Node):
     @classmethod
     def _get_affine_matrix(
         cls, image: np.ndarray, degrees: float, crop_height: int, crop_width: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> np.ndarray:
         """
         Creates affine transformation that rotates around center and then
         center-crops an image.
@@ -812,22 +812,16 @@ class PoseEstimationNode(Node):
             unrotated and uncropped frame (from where it will then be converted to
             geocoordinates).
 
-        Returns a tuple of:
-        - affine matrix padded to 3D (4x4 matrix) in the following format:
+        Returns affine matrix padded to 3D (4x4 matrix) in the following format:
             [ R11  R12  0   Tx ]
             [ R21  R22  0   Ty ]
             [ 0    0    1   0  ]
             [ 0    0    0   1  ]
         where R11, R12, R21, R22 represents the rotation matrix, and Tx, Ty represent
         the translation along the x and y axis.
-        - rotation matrix around center (2x3)
-        - translation matrix (2x3)
-            [ 1    0    Tx ]
-            [ 0    1    Ty ]
 
-        :return: Tuple of 3D affine transformation matrix in homogenous format,
-            the constituent 2D rotation matrix, and constituent 2D translation
-            matrix.
+        :return: The affine transformation matrix in homogenous format as masked
+            numpy array. Masking for use in 2D operations (e.g. cv2.warpAffine).
         """
         r = cls._get_rotation_matrix(image, degrees)
         assert r.shape == (2, 3)
@@ -848,7 +842,16 @@ class PoseEstimationNode(Node):
         affine_3d[:2, 3] = affine_2d[:, 2]
 
         assert affine_3d.shape == (4, 4)
-        return affine_3d, r, t
+
+        # Translation hack to make cv2.warpAffine warp the image into the top left
+        # corner so that the output size argument of cv2.warpAffine acts as a
+        # center-crop - should not affect anything else
+        t[:2, 2] = -t[:2, 2][::-1]
+        affine_hack = np.dot(t, np.vstack([r, [0, 0, 1]]))
+
+        affine_3d[:2, :2] = affine_hack[:2, :2]
+        affine_3d[:2, 3] = affine_hack[:2, 2]
+        return affine_3d
 
     @classmethod
     def _rotate_and_crop_image(
@@ -864,17 +867,10 @@ class PoseEstimationNode(Node):
             transformation matrix
         """
         # Image can have any number of channels
-        affine, r, t = cls._get_affine_matrix(image, degrees, *shape)
-
-        # Translation hack to make cv2.warpAffine warp the image into the top left
-        # corner so that the output size argument of cv2.warpAffine acts as a
-        # center-crop - should not affect anything else
-        t[:2, 2] = -t[:2, 2][::-1]
-        affine_hack = np.dot(t, np.vstack([r, [0, 0, 1]]))
-
-        #affine[:2, 3] = -t[:2, 2]
-
-        return cv2.warpAffine(image, affine_hack[:2, :], shape[::-1]), affine
+        affine = cls._get_affine_matrix(image, degrees, *shape)
+        affine_2d = np.delete(affine, 2, 1)
+        affine_2d = affine_2d[:2, :]
+        return cv2.warpAffine(image, affine_2d, shape[::-1]), affine
 
     def _get_pose(
         self, inputs: PoseEstimationInputs, context: _PoseEstimationContext

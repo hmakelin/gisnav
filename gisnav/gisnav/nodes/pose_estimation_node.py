@@ -526,7 +526,7 @@ class PoseEstimationNode(Node):
             cv2.imshow("world coords", refcopy)
             cv2.waitKey(1)
             try:
-                t_wgs84 = (
+                t_unrotated_uncropped = (
                     #geotransform
                     np.linalg.inv(intermediate_outputs.affine_transform)
                     @ t_world_homogenous #t
@@ -538,18 +538,26 @@ class PoseEstimationNode(Node):
                 raw_map = self._cv_bridge.imgmsg_to_cv2(
                     context.orthoimage.img, desired_encoding="passthrough"
                 )
-                cv2.circle(raw_map, tuple(map(int, tuple(t_wgs84.squeeze()[0:2]))), 5, (0, 0, 255), 1)
+                cv2.circle(raw_map, tuple(map(int, tuple(t_unrotated_uncropped.squeeze()[0:2]))), 5, (0, 0, 255), 1)
                 cv2.imshow("raw orthophoto", raw_map)
                 cv2.waitKey(1)
-                self.get_logger().error(str(t_wgs84))
+                self.get_logger().error(str(t_unrotated_uncropped))
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
                     "Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude"
                 )
                 return None
+            
+            self.get_logger().error(f"SHAPES: {geotransform.shape} {t_unrotated_uncropped.shape}")
 
+            # ESD (cv2 x is width) to SEU (numpy array y is south)
+            t_unrotated_uncropped = np.array((t_unrotated_uncropped[1], t_unrotated_uncropped[0], -t_unrotated_uncropped[2]))
+            self.get_logger().error(f"geotransform: {geotransform}")
+            t_wgs84 = geotransform @ t_unrotated_uncropped
+            self.get_logger().error(f"t_wgs84: {t_wgs84}")
             lon, lat = t_wgs84.squeeze()[1::-1]
             alt = float(t_wgs84[2])
+            self.get_logger().error(f"WGS 84 coords: {lon} {lat} {alt}")
 
             altitude = Altitude(
                 monotonic=0.0,  # TODO
@@ -757,7 +765,7 @@ class PoseEstimationNode(Node):
             (min_lon, max_lat),
             (min_lon, min_lat),
             (max_lon, min_lat),
-            (max_lon, min_lat),
+            (max_lon, max_lat),
         ]
 
     @classmethod
@@ -845,7 +853,7 @@ class PoseEstimationNode(Node):
 
         # Translation hack to make cv2.warpAffine warp the image into the top left
         # corner so that the output size argument of cv2.warpAffine acts as a
-        # center-crop - should not affect anything else
+        # center-crop
         t[:2, 2] = -t[:2, 2][::-1]
         affine_hack = np.dot(t, np.vstack([r, [0, 0, 1]]))
 

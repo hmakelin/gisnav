@@ -550,8 +550,8 @@ class PoseEstimationNode(Node):
             
             self.get_logger().error(f"SHAPES: {geotransform.shape} {t_unrotated_uncropped.shape}")
 
-            # ESD (cv2 x is width) to SEU (numpy array y is south)
-            t_unrotated_uncropped = np.array((t_unrotated_uncropped[1], t_unrotated_uncropped[0], -t_unrotated_uncropped[2]))
+            # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might be flipped because cv2)
+            t_unrotated_uncropped = np.array((t_unrotated_uncropped[1], t_unrotated_uncropped[0], -t_unrotated_uncropped[2], t_unrotated_uncropped[3]))
             self.get_logger().error(f"geotransform: {geotransform}")
             t_wgs84 = geotransform @ t_unrotated_uncropped
             self.get_logger().error(f"t_wgs84: {t_wgs84}")
@@ -781,6 +781,10 @@ class PoseEstimationNode(Node):
         geo_coords = np.float32(geo_coords)
 
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
+
+        # Insert z dimensions
+        M = np.insert(M, 1, 0, axis=1)
+        M = np.insert(M, 2, 0, axis=0)
 
         # Scaling of z-axis from orthoimage raster native units to meters
         bounding_box_perimeter_native = (

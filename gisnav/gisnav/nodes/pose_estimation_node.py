@@ -554,8 +554,8 @@ class PoseEstimationNode(Node):
             t_unrotated_uncropped = np.array((t_unrotated_uncropped[1], t_unrotated_uncropped[0], -t_unrotated_uncropped[2], t_unrotated_uncropped[3]))
             self.get_logger().error(f"geotransform: {geotransform}")
             t_wgs84 = geotransform @ t_unrotated_uncropped
-            self.get_logger().error(f"t_wgs84: {t_wgs84}")
-            lon, lat = t_wgs84.squeeze()[1::-1]
+            self.get_logger().error(f"t_wgs84: {t_wgs84[1],t_wgs84[0]}")
+            lat, lon = t_wgs84.squeeze()[1::-1]
             alt = float(t_wgs84[2])
             self.get_logger().error(f"WGS 84 coords: {lon} {lat} {alt}")
 
@@ -778,12 +778,12 @@ class PoseEstimationNode(Node):
         geo_coords = cls._boundingbox_to_geo_coords(orthoimage.bbox)
 
         pixel_coords = np.float32(pixel_coords).squeeze()
-        geo_coords = np.float32(geo_coords)
+        geo_coords = np.float32(geo_coords).squeeze()
 
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
         # Insert z dimensions
-        M = np.insert(M, 1, 0, axis=1)
+        M = np.insert(M, 2, 0, axis=1)
         M = np.insert(M, 2, 0, axis=0)
 
         # Scaling of z-axis from orthoimage raster native units to meters

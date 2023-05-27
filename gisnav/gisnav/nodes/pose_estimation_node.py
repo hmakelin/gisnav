@@ -253,7 +253,7 @@ class PoseEstimationNode(Node):
                 )
 
             self.geopose_stamped_estimate
-            # self.altitude_estimate  # TODO enable
+            self.altitude_estimate
 
         img = self._cv_bridge.imgmsg_to_cv2(
             msg, desired_encoding="passthrough"
@@ -625,11 +625,22 @@ class PoseEstimationNode(Node):
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @cache_if(_should_estimate_geopose)
     def geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
+        estimate = self._geopose_stamped_estimate
+        if estimate is not None:
+            return estimate[0]
+        else:
+            return estimate
+
+
+    @property
+    @cache_if(_should_estimate_geopose)
+    def _geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
         """
         Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`
         message or None if not available
+
+        :return: GeoPoseStamped and Altitude tuple
         """
 
         context = self._pose_estimation_context
@@ -669,7 +680,7 @@ class PoseEstimationNode(Node):
                     position=geopoint,
                     orientation=gimbal_quaternion,
                 ),
-            )
+            ), altitude
         else:
             self.get_logger().warn(
                 "Could not complete post-processing for pose estimation"
@@ -711,7 +722,11 @@ class PoseEstimationNode(Node):
     )
     def altitude_estimate(self) -> Optional[Altitude]:
         """Altitude estimate of vehicle, or None if unknown or too old"""
-        raise NotImplementedError
+        estimate = self._geopose_stamped_estimate
+        if estimate is not None:
+            return estimate[1]
+        else:
+            return estimate
 
     @property
     def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:

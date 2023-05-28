@@ -36,13 +36,13 @@ P = ParamSpec("P")
 
 
 def narrow_types(
-    node_instance: Optional[Node] = None,
+    instance: Optional[Node] = None,
     return_value: Optional[Any] = None,
 ) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
     """
     Function decorator to narrow provided argument types to match the decorated
-    method's type hints *in a ``mypy`` compatible way*. Can also be used to 
-    *enforce* types at runtime. Can be used on an instance method, or a static 
+    method's type hints *in a ``mypy`` compatible way*. Can also be used to
+    *enforce* types at runtime. Can be used on an instance method, or a static
     method if the ``node_instance`` argument is provided (None by default).
 
     If any of the arguments do not match their corresponding type hints, this
@@ -67,7 +67,7 @@ def narrow_types(
         is used to wrap e.g. a static or class method.
     :param return_value: Optional custom return value to replace default
         None if the types narrowing fails
-    :return: The return value of the original method or parameter 
+    :return: The return value of the original method or parameter
         ``return_value`` if any argument does not match the type hints.
     """
 

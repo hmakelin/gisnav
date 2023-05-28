@@ -316,12 +316,8 @@ class MapNode(Node):
             Assumes home GeoPoint is also the local frame origin.
         """
         dem_layers, dem_styles = (
-            self.get_parameter("dem_layers")
-            .get_parameter_value()
-            .string_array_value,
-            self.get_parameter("dem_styles")
-            .get_parameter_value()
-            .string_array_value,
+            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
+            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
         )
         assert_len(dem_styles, len(dem_layers))
 
@@ -460,6 +456,7 @@ class MapNode(Node):
         Complementary to the Altitude message, includes lat and lon in atomic
         message
         """
+
         @narrow_types
         def _terrain_geopoint_stamped(
             geopose_stamped: GeoPoseStamped, terrain_altitude_ellipsoid: float
@@ -518,12 +515,8 @@ class MapNode(Node):
         assert all(isinstance(x, str) for x in styles)
 
         dem_layers, dem_styles = (
-            self.get_parameter("dem_layers")
-            .get_parameter_value()
-            .string_array_value,
-            self.get_parameter("dem_styles")
-            .get_parameter_value()
-            .string_array_value,
+            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
+            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
         )
         assert_len(dem_styles, len(dem_layers))
         assert all(isinstance(x, str) for x in dem_layers)
@@ -634,7 +627,9 @@ class MapNode(Node):
                 geopoint = self.geopose.pose.position
             bounding_box = self._bounding_box_with_padding_for_geopoint(geopoint)
 
-        map = self._request_orthoimage_for_bounding_box(bounding_box, self._orthoimage_size)
+        map = self._request_orthoimage_for_bounding_box(
+            bounding_box, self._orthoimage_size
+        )
         if map is not None:
             img, dem = map
             # TODO: use np.frombuffer, not CvBridge

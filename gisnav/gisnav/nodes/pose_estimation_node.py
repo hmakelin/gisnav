@@ -381,10 +381,8 @@ class PoseEstimationNode(Node):
             "elevation": elevation_array,
             "k": camera_info.k.reshape((3, 3)),
         }
-        intermediate_outputs = (
-            PoseEstimationNode._PoseEstimationIntermediateOutputs(
-                affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
-            )
+        intermediate_outputs = PoseEstimationNode._PoseEstimationIntermediateOutputs(
+            affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
         )
         return pre_processed_inputs, intermediate_outputs
 
@@ -667,7 +665,6 @@ class PoseEstimationNode(Node):
 
     @property
     def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:
-
         @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,

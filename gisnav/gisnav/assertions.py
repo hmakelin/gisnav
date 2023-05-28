@@ -38,6 +38,39 @@ P = ParamSpec("P")
 def narrow_types(
     arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
 ):
+    """
+    Function decorator to narrow provided argument types to match the decorated
+    method's type hints *in a ``mypy`` compatible way*. Can also be used to
+    *enforce* types at runtime. Can be used on an instance method, or a static
+    method if the ``node_instance`` argument is provided (None by default).
+
+    If any of the arguments do not match their corresponding type hints, this
+    decorator logs the mismatches and then returns None without executing the
+    original method. Otherwise, it proceeds to call the original method with
+    the given arguments and keyword argumwhich is a more exotic use case).ents.
+
+    .. warning::
+        * If the decorated method can also return None after execution you will
+          not be able to tell from the return value whether the method executed
+          or the type narrowing failed. In this case, you specify a different
+          return value using the optional input argument.
+
+    .. note::
+        This decorator is mainly used to streamline computed properties by
+        automating the check for required instance properties with e.g. None
+        values. It eliminates repetitive code and logs warning messages when a
+        property cannot be computed, resulting in cleaner property
+        implementations with less boilerplate code.
+
+    :param arg: Node instance that provides the logger if this decorator
+        is used to wrap e.g. a static or class method, of the wrapped method
+        if this wraps an instance method
+    :param return_value: Optional custom return value to replace default
+        None if the types narrowing fails
+    :return: The return value of the original method or parameter
+        ``return_value`` if any argument does not match the type hints.
+    """
+
     instance: Optional[Node] = None if not isinstance(arg, Node) else arg
     method: Optional[Callable] = arg if not isinstance(arg, Node) else None
 

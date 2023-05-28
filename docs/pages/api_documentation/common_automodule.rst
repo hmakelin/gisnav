@@ -15,6 +15,7 @@ assertions
    :undoc-members:
    :special-members: __init__
    :show-inheritance:
+   :exclude-members: P
 
 data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

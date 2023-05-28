@@ -484,16 +484,14 @@ class FixedCamera:
     def _estimate_attitude(self) -> Attitude:
         """Estimates gimbal (not vehicle) attitude in NED frame
 
-        .. note::
-            Stabilized gimbal *actual* (not set) attitude relative to vehicle
-            body frame not always known so it is currently not computed.
-
         :return: Gimbal attitude in NED frame
         """
         # Convert estimated rotation to attitude quaternion for publishing
         rT = self.pose.r.T
         assert not np.isnan(rT).any()
-        gimbal_estimated_attitude = Rotation.from_matrix(rT)  # rotated map pixel frame
+        gimbal_estimated_attitude = Rotation.from_matrix(
+            rT
+        ).inv()  # rotated map pixel frame
 
         gimbal_estimated_attitude *= Rotation.from_rotvec(
             self.image_pair.ref.rotation * np.array([0, 0, 1])
@@ -725,6 +723,8 @@ class DataValueError(ValueError):
 def create_src_corners(h: int, w: int) -> np.ndarray:
     """Helper function that returns image corner pixel coordinates in a numpy array.
 
+    Returns: top-left, bottom-left, bottom-right, top-right
+
     :param h: Source image height
     :param w: Source image width
     :return: Source image corner pixel coordinates
@@ -734,6 +734,6 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     assert (
         h > 0 and w > 0
     ), f"Height {h} and width {w} are both expected to be positive."
-    return np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(
+    return np.float32([[0, 0], [h - 1, 0], [h - 1, w - 1], [0, w - 1]]).reshape(
         -1, 1, 2
     )

@@ -62,6 +62,8 @@ class LoFTRHandler(BaseHandler):
         mkp_qry = mkp_qry[valid, :]
         mkp_ref = mkp_ref[valid, :]
 
+        print(f"{np.amax(mkp_ref, axis=0)} {np.amax(mkp_ref, axis=1)}")
+
         if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
             return [{}]  # Not enough matching keypoints found
 
@@ -74,7 +76,7 @@ class LoFTRHandler(BaseHandler):
             x, y = np.transpose(
                 np.floor(mkp_ref).astype(int)
             )  # do floor first before converting to int
-            z_values = elevation[y, x].reshape(-1, 1)  # y axis first
+            z_values = elevation[y, x].reshape(-1, 1)  # y axis first  # TODO: correct?
 
         mkp2_3d = np.hstack((mkp_ref, z_values))
 

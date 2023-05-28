@@ -253,7 +253,7 @@ class SensorGpsListenerContext(Node):
             key=lambda m: abs((message.timestamp - m.timestamp)),
         )
 
-        distance = self.haversine_distance(
+        distance = haversine_distance(
             best_matching_message.lat,
             best_matching_message.lon,
             message.lat * 1e-7,
@@ -282,19 +282,19 @@ class SensorGpsListenerContext(Node):
     def vehicle_global_position_callback(self, message: VehicleGlobalPosition):
         self.vehicle_global_position_buffer.append(message)
 
-    @staticmethod
-    def haversine_distance(lat1, lon1, lat2, lon2) -> float:
-        R = 6371000  # Radius of the Earth in meters
-        lat1_rad, lon1_rad = radians(lat1), radians(lon1)
-        lat2_rad, lon2_rad = radians(lat2), radians(lon2)
 
-        delta_lat = lat2_rad - lat1_rad
-        delta_lon = lon2_rad - lon1_rad
+def haversine_distance(lat1, lon1, lat2, lon2) -> float:
+    R = 6371000  # Radius of the Earth in meters
+    lat1_rad, lon1_rad = radians(lat1), radians(lon1)
+    lat2_rad, lon2_rad = radians(lat2), radians(lon2)
 
-        a = (
-            sin(delta_lat / 2) ** 2
-            + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
-        )
-        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    delta_lat = lat2_rad - lat1_rad
+    delta_lon = lon2_rad - lon1_rad
 
-        return R * c
+    a = (
+        sin(delta_lat / 2) ** 2
+        + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
+    )
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    return R * c

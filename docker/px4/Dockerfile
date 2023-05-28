@@ -27,7 +27,7 @@ RUN cd PX4-Autopilot && \
     DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
 # Apply configuration files
-RUN cat 6011_typhoon_h480 >> PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
+#RUN cat 6011_typhoon_h480 >> PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
 
 RUN rm -rf /var/lib/apt/lists/* && \
     apt clean

@@ -51,9 +51,6 @@ class MapNode(Node):
         handled as unexpected errors.
     """  # noqa: E501
 
-    # Altitude in meters used for DEM request to get local origin elevation
-    _DEM_REQUEST_ALTITUDE = 100
-
     _WMS_CONNECTION_ATTEMPT_DELAY_SEC = 10
     """
     Delay in seconds until a new WMS connection is attempted in case of
@@ -364,8 +361,8 @@ class MapNode(Node):
         self.orthoimage_3d
 
     @property
-    # @ROS.max_delay_ms(2000) - camera info has no header
-    @ROS.subscribe("camera/camera_info", QoSPresetProfiles.SENSOR_DATA.value)
+    # @ROS.max_delay_ms(2000) - camera info has no header (?)
+    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
 

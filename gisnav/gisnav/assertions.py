@@ -36,56 +36,16 @@ P = ParamSpec("P")
 
 
 def narrow_types(
-    instance: Optional[Node] = None,
-    return_value: Optional[Any] = None,
-) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
-    """
-    Function decorator to narrow provided argument types to match the decorated
-    method's type hints *in a ``mypy`` compatible way*. Can also be used to
-    *enforce* types at runtime. Can be used on an instance method, or a static
-    method if the ``node_instance`` argument is provided (None by default).
+    arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
+):
+    instance: Optional[Node] = None if not isinstance(arg, Node) else arg
+    method: Optional[Callable] = arg if not isinstance(arg, Node) else None
 
-    If any of the arguments do not match their corresponding type hints, this
-    decorator logs the mismatches and then returns None without executing the
-    original method. Otherwise, it proceeds to call the original method with
-    the given arguments and keyword argumwhich is a more exotic use case).ents.
-
-    .. warning::
-        * If the decorated method can also return None after execution you will
-          not be able to tell from the return value whether the method executed
-          or the type narrowing failed. In this case, you specify a different
-          return value using the optional input argument.
-
-    .. note::
-        This decorator is mainly used to streamline computed properties by
-        automating the check for required instance properties with e.g. None
-        values. It eliminates repetitive code and logs warning messages when a
-        property cannot be computed, resulting in cleaner property
-        implementations with less boilerplate code.
-
-    :param instance: Node instance that provides the logger if this decorator
-        is used to wrap e.g. a static or class method.
-    :param return_value: Optional custom return value to replace default
-        None if the types narrowing fails
-    :return: The return value of the original method or parameter
-        ``return_value`` if any argument does not match the type hints.
-    """
-
-    # TODO: change return type to something else than Optional if not default
-    def inner_decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
+    def inner_decorator(method):
         @wraps(method)
-        def wrapper(*args, **kwargs) -> Optional[T]:
-            """
-            This wrapper function validates the provided arguments against the
-            type hints of the wrapped method.
-
-            :param args: Positional arguments passed to the original method.
-            :param kwargs: Keyword arguments passed to the original method.
-            :return: The return value of the original method or None if any
-                argument does not match the type hints.
-            """
+        def wrapper(*args, **kwargs):
             node_instance: Node = args[0] if instance is None else instance
-            assert_type(node_instance, Node)
+            assert_type(instance, Node)
 
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)
@@ -144,8 +104,13 @@ def narrow_types(
 
             return method(*args, **kwargs)
 
-        return cast(Callable[..., Optional[T]], wrapper)  # TODO: cast needed for mypy?
+        return cast(Callable[..., Optional[T]], wrapper)
 
+    if method is not None:
+        # Wrapping instance method
+        return inner_decorator(method)
+
+    # Wrapping static or class method
     return inner_decorator
 
 

@@ -366,7 +366,7 @@ class MapNode(Node):
         the diagonal of the declared camera frame dimensions.
         """
 
-        @narrow_types
+        @narrow_types(self)
         def _orthoimage_size(camera_info: CameraInfo):
             diagonal = int(
                 np.ceil(np.sqrt(camera_info.width**2 + camera_info.height**2))

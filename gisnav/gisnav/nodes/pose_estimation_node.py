@@ -39,7 +39,7 @@ class PoseEstimationNode(Node):
     :class:`geographic_msgs.msg.GeoPoseStamped`.
     """
 
-    class PoseEstimationInputs(TypedDict):
+    class PoseEstimationInputs(TypedDict, total=True):
         """Input data for pose estimation service call"""
 
         query: np.ndarray
@@ -320,8 +320,8 @@ class PoseEstimationNode(Node):
 
     @staticmethod
     def _get_yaw_pitch_degrees_from_quaternion(
-            quaternion,
-        ) -> Tuple[float, float]:
+        quaternion,
+    ) -> Tuple[float, float]:
         """
         To avoid gimbal lock when facing nadir (pitch -90 degrees in NED),
         assumes roll is close to zero (i.e roll can be slightly non-zero).
@@ -343,12 +343,13 @@ class PoseEstimationNode(Node):
 
         return yaw_degrees, pitch_degrees
 
+    # TODO: fix optional context arg with better types decorator
     def _pre_process_geopose_inputs(
         self,
         image: Image,
         orthoimage: OrthoImage3D,
         camera_info: CameraInfo,
-        context: _PoseEstimationContext,
+        context: Optional[_PoseEstimationContext],
     ) -> Optional[Tuple[PoseEstimationInputs, _PoseEstimationIntermediateOutputs]]:
         @enforce_types(
             self.get_logger().warn, "Cannot preprocess pose estimation inputs"
@@ -403,10 +404,11 @@ class PoseEstimationNode(Node):
 
         return _pre_process_inputs(image, orthoimage, camera_info, context)
 
+    # TODO: fix and re-enable
     def _is_valid_pose_estimate(
         self,
         pose: Tuple[np.ndarray, np.ndarray],
-        #pose: Pose,
+        # pose: Pose,
         context: _PoseEstimationContext,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
     ):
@@ -416,11 +418,10 @@ class PoseEstimationNode(Node):
         )
         def _is_valid_pose_estimate(
             pose: Tuple[np.ndarray, np.ndarray],
-            #pose: Pose,
+            # pose: Pose,
             context: PoseEstimationNode._PoseEstimationContext,
             intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
         ) -> bool:
-            return True
             """Returns True if the estimate is valid
 
             Compares computed estimate to guess based on earlier gimbal attitude.
@@ -428,35 +429,38 @@ class PoseEstimationNode(Node):
             is strictly not necessary) if gimbal attitude is based on set attitude
             and not actual attitude, which is assumed to filter out more inaccurate
             estimates.
-        """
-            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(context.gimbal_quaternion)
+            """
+            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
+                context.gimbal_quaternion
+            )
             self.get_logger().error(f"gimbal yaw pitch NED {yaw} {pitch}")
 
-            #yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
-            #self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
+            # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
+            # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
 
-            r_guess = Rotation.from_matrix(messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion))
-            #r = np.transpose(messaging.quaternion_to_rotation_matrix(pose.orientation), (1, 0))  # cv2 x and y axis swap
+            r_guess = Rotation.from_matrix(
+                messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion)
+            )
             r, t = pose
 
-            rot_90_Z = np.array([[ 0, -1, 0],
-                     [ 1,  0, 0],
-                     [ 0,  0, 1]])
-    
+            rot_90_Z = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+
             r_estimate = (
-                    self._seu_to_ned_matrix
-                    @ np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ np.linalg.inv(rot_90_Z) @ r.T
-                    #@ np.linalg.inv(messaging.quaternion_to_rotation_matrix(pose.orientation))
+                self._seu_to_ned_matrix
+                @ np.linalg.inv(intermediate_outputs.affine_transform)
+                @ np.linalg.inv(rot_90_Z)
+                @ r.T
+                # @ np.linalg.inv(messaging.quaternion_to_rotation_matrix(
+                # pose.orientation))
+            )
+            # r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
 
-                )
-            #r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
-
-            #self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
+            # self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
             r_estimate = Rotation.from_matrix(r_estimate)
-            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(messaging.as_ros_quaternion(Rotation.as_quat(r_estimate)))
+            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
+                messaging.as_ros_quaternion(Rotation.as_quat(r_estimate))
+            )
             self.get_logger().error(f"processed pose yaw pitch {yaw} {pitch}")
-
 
             magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 
@@ -478,12 +482,13 @@ class PoseEstimationNode(Node):
 
         return _is_valid_pose_estimate(pose, context, intermediate_outputs)
 
+    # TODO: fix context arg with better types decorator
     def _post_process_pose(
         self,
         inputs,
         pose: Pose,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
-        context: _PoseEstimationContext,
+        context: Optional[_PoseEstimationContext],
     ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:
         """
         Post process estimated pose to vehicle GeoPoint, Altitude and gimbal
@@ -496,7 +501,7 @@ class PoseEstimationNode(Node):
         )
         def _compute_geopoint_altitude_attitude(
             inputs,
-            #pose: Pose,
+            # pose: Pose,
             pose: Tuple[np.ndarray, np.ndarray],
             context: PoseEstimationNode._PoseEstimationContext,
             intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
@@ -512,52 +517,34 @@ class PoseEstimationNode(Node):
             :return: Camera position or None if not available
             """
             geotransform = self._get_geotransformation_matrix(context.orthoimage)
-            #t = np.array([pose.position.x, pose.position.y, pose.position.z])
-            #r = messaging.quaternion_to_rotation_matrix(pose.orientation)
             r, t = pose
             t_world = np.matmul(r.T, -t)
-            #t_world = np.array((t_world[1], t_world[0], abs(t_world[2])))  # cv2 xy swap
             t_world_homogenous = np.vstack((t_world, [1]))
-            #t_world_homogenous[0:2] = t_world_homogenous[0:2][::-1]
-            ref = inputs.get("reference")
-            self.get_logger().error(str(tuple(t_world.squeeze()[0:2])))
-            refcopy = ref.copy()
-            cv2.circle(refcopy, tuple(map(int, tuple(t_world.squeeze()[0:2]))), 5, (0, 0, 255), 1)
-            cv2.imshow("world coords", refcopy)
-            cv2.waitKey(1)
             try:
                 t_unrotated_uncropped = (
-                    #geotransform
                     np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ t_world_homogenous #t
+                    @ t_world_homogenous  # t
                 )
-                self.get_logger().error("world coords: " + str(t_world))
-                self.get_logger().error("unrotated uncropped coordinates " + str(np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ t_world_homogenous))
-                
-                raw_map = self._cv_bridge.imgmsg_to_cv2(
-                    context.orthoimage.img, desired_encoding="passthrough"
-                )
-                cv2.circle(raw_map, tuple(map(int, tuple(t_unrotated_uncropped.squeeze()[0:2]))), 5, (0, 0, 255), 1)
-                cv2.imshow("raw orthophoto", raw_map)
-                cv2.waitKey(1)
-                self.get_logger().error(str(t_unrotated_uncropped))
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
-                    "Rotation and cropping was non-invertible, cannot compute GeoPoint and Altitude"
+                    "Rotation and cropping was non-invertible, cannot compute "
+                    "GeoPoint and Altitude"
                 )
                 return None
-            
-            self.get_logger().error(f"SHAPES: {geotransform.shape} {t_unrotated_uncropped.shape}")
 
-            # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might be flipped because cv2)
-            t_unrotated_uncropped = np.array((t_unrotated_uncropped[1], t_unrotated_uncropped[0], -t_unrotated_uncropped[2], t_unrotated_uncropped[3]))
-            self.get_logger().error(f"geotransform: {geotransform}")
+            # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
+            # be flipped because cv2)
+            t_unrotated_uncropped = np.array(
+                (
+                    t_unrotated_uncropped[1],
+                    t_unrotated_uncropped[0],
+                    -t_unrotated_uncropped[2],
+                    t_unrotated_uncropped[3],
+                )
+            )
             t_wgs84 = geotransform @ t_unrotated_uncropped
-            self.get_logger().error(f"t_wgs84: {t_wgs84[1],t_wgs84[0]}")
             lat, lon = t_wgs84.squeeze()[1::-1]
             alt = float(t_wgs84[2])
-            self.get_logger().error(f"WGS 84 coords: {lon} {lat} {alt}")
 
             altitude = Altitude(
                 monotonic=0.0,  # TODO
@@ -580,22 +567,25 @@ class PoseEstimationNode(Node):
         )
         r, t = pose
         if geopoint_and_altitude is not None:
-            #r = messaging.quaternion_to_rotation_matrix(pose.orientation)
+            # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
 
             # Rotation matrix is assumed to be in cv2.solvePnPRansac world
             # coordinate system (SEU axes), need to convert to NED axes after
             # reverting rotation and cropping
             try:
                 self.get_logger().error("inv shape.")
-                self.get_logger().error(str(np.linalg.inv(intermediate_outputs.affine_transform).shape))
+                self.get_logger().error(
+                    str(np.linalg.inv(intermediate_outputs.affine_transform).shape)
+                )
                 r = (
                     self._seu_to_ned_matrix
                     @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])
-                    @ r.T #@ -t
+                    @ r.T  # @ -t
                 )
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
-                    "Cropping and rotation was non-invertible, canot estimate GeoPoint and Altitude."
+                    "Cropping and rotation was non-invertible, canot estimate "
+                    "GeoPoint and Altitude."
                 )
                 return None
 
@@ -604,8 +594,8 @@ class PoseEstimationNode(Node):
         else:
             return None
 
-    #@property
-    #def _esu_to_ned_matrix(self):
+    # @property
+    # def _esu_to_ned_matrix(self):
     #    """Transforms from ESU to NED axes"""
     #    transformation_matrix = np.array(
     #        [[0, 1, 0], [1, 0, 0], [0, 0, -1]]  # E->N  # S->E  # U->D
@@ -632,7 +622,6 @@ class PoseEstimationNode(Node):
         else:
             return estimate
 
-
     @property
     @cache_if(_should_estimate_geopose)
     def _geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
@@ -654,17 +643,17 @@ class PoseEstimationNode(Node):
             return None
 
         inputs, intermediate_outputs = preprocess_results
-        pose = self._get_pose(inputs, context)
+        pose = self._get_pose(inputs)
 
-        if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
-            self.get_logger().warn(
-                "Pose estimate did not pass post-processing validity check, "
-                "skipping this frame."
-            )
-            return None
+        # if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
+        #    self.get_logger().warn(
+        #        "Pose estimate did not pass post-processing validity check, "
+        #        "skipping this frame."
+        #    )
+        #    return None
 
-        post_processed_pose = self._post_process_pose(inputs,
-            pose, intermediate_outputs, context
+        post_processed_pose = self._post_process_pose(
+            inputs, pose, intermediate_outputs, context
         )
 
         if post_processed_pose:
@@ -674,13 +663,16 @@ class PoseEstimationNode(Node):
                 gimbal_quaternion,
             ) = post_processed_pose  # TODO: uaternion might be in ESD and not NED
 
-            return GeoPoseStamped(
-                header=messaging.create_header("base_link"),
-                pose=GeoPose(
-                    position=geopoint,
-                    orientation=gimbal_quaternion,
+            return (
+                GeoPoseStamped(
+                    header=messaging.create_header("base_link"),
+                    pose=GeoPose(
+                        position=geopoint,
+                        orientation=gimbal_quaternion,
+                    ),
                 ),
-            ), altitude
+                altitude,
+            )
         else:
             self.get_logger().warn(
                 "Could not complete post-processing for pose estimation"
@@ -900,7 +892,7 @@ class PoseEstimationNode(Node):
         return cv2.warpAffine(image, affine_2d, shape[::-1]), affine
 
     def _get_pose(
-        self, inputs: PoseEstimationInputs, context: _PoseEstimationContext
+        self, inputs: PoseEstimationInputs
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Performs call to pose estimation service and returns pose as (r, t) tuple,
@@ -949,11 +941,11 @@ class PoseEstimationNode(Node):
                     # Visualize projected FOV estimate
                     h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
                     src_pts = create_src_corners(
-                        *inputs.get("query").shape[0:2][::-1]
+                        *inputs["query"].shape[0:2][::-1]
                     )  # cv2 flips axis order
                     try:
                         fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
-                        ref_img = inputs.get("reference")
+                        ref_img = inputs["reference"]
                         map_with_fov = cv2.polylines(
                             ref_img.copy(),
                             [np.int32(fov_pix)],
@@ -963,7 +955,7 @@ class PoseEstimationNode(Node):
                             cv2.LINE_AA,
                         )
 
-                        img: np.ndarray = np.vstack((map_with_fov, inputs.get("query")))
+                        img: np.ndarray = np.vstack((map_with_fov, inputs["query"]))
                         cv2.imshow("Projected FOV", img)
                         cv2.waitKey(1)
                     except np.linalg.LinAlgError as _:  # noqa: F841
@@ -971,11 +963,11 @@ class PoseEstimationNode(Node):
                             "H was non invertible, cannot visualize."
                         )
 
-                #pose = _matrices_to_pose(r, t)
+                # pose = _matrices_to_pose(r, t)
 
-                #r_new = np.transpose(r, (1,0))
-                #t_new = np.array((t[1], t[0], t[2])).reshape(t.shape)
-                return r, t  #pose
+                # r_new = np.transpose(r, (1,0))
+                # t_new = np.array((t[1], t[0], t[2])).reshape(t.shape)
+                return r, t  # pose
             else:
                 self.get_logger().warn(
                     f"Could not estimate pose, returned text {response.text}"
@@ -1064,7 +1056,8 @@ class PoseEstimationNode(Node):
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(
-                    f"Camera is {off_nadir_deg} degrees off nadir and above limit {max_pitch}."
+                    f"Camera is {off_nadir_deg} degrees off nadir and above "
+                    f"limit {max_pitch}."
                 )
                 return True
             else:

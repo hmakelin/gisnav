@@ -433,7 +433,6 @@ class PoseEstimationNode(Node):
             yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
                 context.gimbal_quaternion
             )
-            self.get_logger().error(f"gimbal yaw pitch NED {yaw} {pitch}")
 
             # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
             # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
@@ -460,7 +459,6 @@ class PoseEstimationNode(Node):
             yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
                 messaging.as_ros_quaternion(Rotation.as_quat(r_estimate))
             )
-            self.get_logger().error(f"processed pose yaw pitch {yaw} {pitch}")
 
             magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 
@@ -573,10 +571,6 @@ class PoseEstimationNode(Node):
             # coordinate system (SEU axes), need to convert to NED axes after
             # reverting rotation and cropping
             try:
-                self.get_logger().error("inv shape.")
-                self.get_logger().error(
-                    str(np.linalg.inv(intermediate_outputs.affine_transform).shape)
-                )
                 r = (
                     self._seu_to_ned_matrix
                     @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])

@@ -344,7 +344,7 @@ class PoseEstimationNode(Node):
         return yaw_degrees, pitch_degrees
 
     @narrow_types
-    def _pre_process_geopose_inputs(
+    def _preprocess_geopose_inputs(
         self,
         image: Image,
         orthoimage: OrthoImage3D,
@@ -510,8 +510,6 @@ class PoseEstimationNode(Node):
             longitude=lon,
         )
 
-        return geopoint, altitude
-
         if geopoint is not None and altitude is not None:
             r, t = pose
             # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
@@ -533,7 +531,7 @@ class PoseEstimationNode(Node):
                 return None
 
             quaternion = messaging.rotation_matrix_to_quaternion(r)
-            return geopoint_and_altitude + (quaternion,)
+            return geopoint, altitude, quaternion
         else:
             return None
 
@@ -576,16 +574,16 @@ class PoseEstimationNode(Node):
         """
 
         context = self._pose_estimation_context
-        preprocess_results = self._pre_process_geopose_inputs(
+        results = self._preprocess_geopose_inputs(
             self.image, self.orthoimage_3d, self.camera_info, context
         )
-        if not preprocess_results:
+        if not results:
             self.get_logger().warn(
                 "Could not complete pre-processing for pose estimation"
             )
             return None
 
-        inputs, intermediate_outputs = preprocess_results
+        inputs, intermediate_outputs = results
         pose = self._get_pose(inputs)
 
         # if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):

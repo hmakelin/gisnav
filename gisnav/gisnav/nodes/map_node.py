@@ -424,7 +424,7 @@ class MapNode(Node):
     def terrain_altitude(self) -> Optional[Altitude]:
         """Altitude of vehicle ground track, or None if not available"""
 
-        @narrow_types
+        @narrow_types(self)
         def _terrain_altitude(
             terrain_altitude_amsl: float,
             terrain_altitude_at_home_amsl: float,

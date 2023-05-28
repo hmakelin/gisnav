@@ -9,7 +9,7 @@ from mavros_msgs.msg import Altitude
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import Image
 
-from gisnav.assertions import enforce_types
+from gisnav.assertions import narrow_types
 
 from ..data import (
     Attitude,
@@ -207,7 +207,7 @@ class BBoxNode(CameraSubscriberNode):
             a FOV guess, or None if not available
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot generate mock image pair")
+        @narrow_types(self)
         def _mock_image_pair(image_data: ImageData, map_data: MapData):
             contextual_map_data = ContextualMapData(
                 rotation=0, crop=image_data.image.dim, map_data=map_data, mock_data=True
@@ -225,7 +225,7 @@ class BBoxNode(CameraSubscriberNode):
             :meth:`._mock_map_data` and :meth:`._mock_image_pair`
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot generate mock image data")
+        @narrow_types(self)
         def _mock_image_data(img_dim: Dim, camera_data: CameraData, usec: int):
             image_data = ImageData(
                 image=Img(np.zeros(img_dim)),
@@ -253,7 +253,7 @@ class BBoxNode(CameraSubscriberNode):
             or None if not available
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot generate mock map data")
+        @narrow_types(self)
         def _mock_map_data(
             camera_data: CameraData,
             map_size_with_padding: Tuple[int, int],
@@ -291,7 +291,7 @@ class BBoxNode(CameraSubscriberNode):
         :return: Center of the projected FOV, or None if not available
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot project FOV center")
+        @narrow_types(self)
         def _fov_center(
             mock_image_pair: ImagePair,
             gimbal_quaternion: Quaternion,
@@ -358,7 +358,7 @@ class BBoxNode(CameraSubscriberNode):
         to ensure the field of view is best contained in the new map raster.
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot publish bounding box")
+        @narrow_types(self)
         def _publish_bbox(
             vehicle_geopose: GeoPoseStamped,
             vehicle_altitude: Altitude,

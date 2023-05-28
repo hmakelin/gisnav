@@ -71,6 +71,7 @@ def narrow_types(
         ``return_value`` if any argument does not match the type hints.
     """
 
+    # TODO: change return type to something else than Optional if not default
     def inner_decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
         @wraps(method)
         def wrapper(*args, **kwargs) -> Optional[T]:
@@ -83,10 +84,8 @@ def narrow_types(
             :return: The return value of the original method or None if any
                 argument does not match the type hints.
             """
-            if not instance:
-                # Assume we are wrapping an instance method
-                instance = args[0]
-                assert_type(instance, Node)
+            node_instance: Node = args[0] if instance is None else instance
+            assert_type(node_instance, Node)
 
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)
@@ -140,7 +139,7 @@ def narrow_types(
                     f"Unexpected input argument types for {method.__name__}: "
                     f"{', '.join(mismatch_msgs)}"
                 )
-                instance.get_logger().warn(log_msg)
+                node_instance.get_logger().warn(log_msg)
                 return return_value
 
             return method(*args, **kwargs)

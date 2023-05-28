@@ -319,6 +319,8 @@ class AutopilotNode(RVizPublisherNode):
                 )
                 gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
                 gimbal_device_attitude_status.q = nadir_facing_quaternion
+            else:
+                gimbal_device_attitude_status = self.gimbal_device_attitude_status
 
             assert gimbal_device_attitude_status is not None
 

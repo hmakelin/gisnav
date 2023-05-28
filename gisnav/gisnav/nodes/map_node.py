@@ -297,7 +297,6 @@ class MapNode(Node):
             return True
 
     @property
-    @narrow_types
     @cache_if(_should_update_dem_height_at_local_origin)
     def dem_height_at_local_origin(self) -> Optional[float]:
         """
@@ -325,6 +324,10 @@ class MapNode(Node):
         format_ = self.get_parameter("format").get_parameter_value().string_value
 
         bounding_box = self._bounding_box_with_padding_for_geopoint(self.home_geopoint)
+        if bounding_box is None:
+            self.get_logger().error("Could not bbox with padding (home geopoint None?)")
+            return None
+
         bbox = messaging.bounding_box_to_bbox(bounding_box)
 
         self.get_logger().info("Requesting new orthoimage")
@@ -333,6 +336,7 @@ class MapNode(Node):
         )
         if height is None:
             self.get_logger().error("Could not get DEM height from GIS server")
+            return None
 
         return height
 

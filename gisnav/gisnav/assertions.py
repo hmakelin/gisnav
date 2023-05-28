@@ -78,7 +78,7 @@ def narrow_types(
         @wraps(method)
         def wrapper(*args, **kwargs):
             node_instance: Node = args[0] if instance is None else instance
-            assert_type(instance, Node)
+            assert_type(node_instance, Node)
 
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)

@@ -563,8 +563,8 @@ class PoseEstimationNode(Node):
         geopoint_and_altitude = _compute_geopoint_altitude_attitude(
             inputs, pose, context, intermediate_outputs
         )
-        r, t = pose
         if geopoint_and_altitude is not None:
+            r, t = pose
             # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
 
             # Rotation matrix is assumed to be in cv2.solvePnPRansac world

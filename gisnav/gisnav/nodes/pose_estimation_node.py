@@ -455,7 +455,7 @@ class PoseEstimationNode(Node):
     def _post_process_pose(
         self,
         inputs,
-        pose: Pose,
+        pose: Tuple[np.ndarray, np.ndarray],
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
         context: _PoseEstimationContext,
     ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:

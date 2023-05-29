@@ -35,6 +35,7 @@ P = ParamSpec("P")
 # **kwargs have the same keys?
 
 
+# TODO: make this work with typed dicts?
 def narrow_types(
     arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
 ):

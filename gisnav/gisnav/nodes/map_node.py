@@ -461,7 +461,7 @@ class MapNode(Node):
         message
         """
 
-        @narrow_types
+        @narrow_types(self)
         def _terrain_geopoint_stamped(
             geopose_stamped: GeoPoseStamped, terrain_altitude_ellipsoid: float
         ):
@@ -670,7 +670,7 @@ class MapNode(Node):
                 )
                 terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
                     geopose_stamped.pose.position,
-                    True,  # TODO: ground track orthoimage, not local origin orthoimage?
+                    # True,  # TODO: ground track, not local origin orthoimage?
                 )
 
             return terrain_altitude_amsl

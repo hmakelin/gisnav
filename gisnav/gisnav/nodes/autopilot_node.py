@@ -238,6 +238,18 @@ class AutopilotNode(RVizPublisherNode):
 
         return _geopose_stamped(self.nav_sat_fix, self.pose_stamped)
 
+    @staticmethod
+    def _quaternion_multiply(q1, q2):
+        w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
+        w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
+
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+        return Quaternion(w=w, x=x, y=y, z=z)
+
     @property
     @ROS.publish(
         messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
@@ -252,34 +264,6 @@ class AutopilotNode(RVizPublisherNode):
             is not available.
         """
 
-        def _euler_from_quaternion(q):
-            # Convert quaternion to euler angles
-            t0 = 2.0 * (q.w * q.x + q.y * q.z)
-            t1 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
-            roll = math.atan2(t0, t1)
-
-            t2 = 2.0 * (q.w * q.y - q.z * q.x)
-            t2 = 1.0 if t2 > 1.0 else t2
-            t2 = -1.0 if t2 < -1.0 else t2
-            pitch = math.asin(t2)
-
-            t3 = 2.0 * (q.w * q.z + q.x * q.y)
-            t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-            yaw = math.atan2(t3, t4)
-
-            return roll, pitch, yaw
-
-        def _quaternion_multiply(q1, q2):
-            w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
-            w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
-
-            w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-            x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-            y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-            z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-
-            return Quaternion(w=w, x=x, y=y, z=z)
-
         def _apply_vehicle_yaw(vehicle_q, gimbal_q):
             # Extract yaw from vehicle quaternion
             t3 = 2.0 * (vehicle_q.w * vehicle_q.z + vehicle_q.x * vehicle_q.y)
@@ -292,7 +276,7 @@ class AutopilotNode(RVizPublisherNode):
             )
 
             # Apply the vehicle yaw rotation to the gimbal quaternion
-            gimbal_yaw_q = _quaternion_multiply(yaw_q, gimbal_q)
+            gimbal_yaw_q = self._quaternion_multiply(yaw_q, gimbal_q)
 
             return gimbal_yaw_q
 
@@ -300,34 +284,39 @@ class AutopilotNode(RVizPublisherNode):
         @narrow_types(self)
         def _gimbal_quaternion(
             geopose_stamped: GeoPoseStamped,
-            # gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
         ):
+            """Gimbal orientation quaternion in North-East-Down (NED) frame.
+
+            Origin is defined as gimbal (camera) pointing directly down nadir
+            with top of image facing north. This definition should avoid gimbal
+            lock for realistic use cases where the camera is used mainly to look
+            down at the terrain under the vehicle instead of e.g. at the horizon.
+            """
             if self.gimbal_device_attitude_status is None:
-                # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
-                roll = 0
-                pitch = -85  # do not make it -90 to avoid gimbal lock
-                yaw = 0
-                nadir_facing_rotation = Rotation.from_euler(
-                    "xyz", [roll, pitch, yaw], degrees=True
+                # Identity quaternion: assume nadir-facing camera if no
+                # information received from autopilot bridge
+                gimbal_device_attitude_status = GimbalDeviceAttitudeStatus(
+                    q=Quaternion(
+                        x=0.0,
+                        y=0.0,
+                        z=0.0,
+                        w=1.0,
+                    )
                 )
-                nadir_facing_quaternion = nadir_facing_rotation.as_quat()
-                nadir_facing_quaternion = Quaternion(
-                    x=nadir_facing_quaternion[0],
-                    y=nadir_facing_quaternion[1],
-                    z=nadir_facing_quaternion[2],
-                    w=nadir_facing_quaternion[3],
-                )
-                gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
-                gimbal_device_attitude_status.q = nadir_facing_quaternion
             else:
-                gimbal_device_attitude_status = self.gimbal_device_attitude_status
+                # PX4 over MAVROS gives GimbalDeviceAttitudeStatus in vehicle
+                # body FRD frame with origin pointing forward along vehicle nose.
+                # To re-center origin to nadir need to adjust pitch by -90 degrees.
+                q_pitch_minus_90_deg = [np.cos(-np.pi / 4), 0, np.sin(-np.pi / 4), 0]
+                gimbal_device_attitude_status = self._quaternion_multiply(
+                    self.gimbal_device_attitude_status, q_pitch_minus_90_deg
+                )
 
             assert gimbal_device_attitude_status is not None
 
             compound_q = _apply_vehicle_yaw(
                 geopose_stamped.pose.orientation, gimbal_device_attitude_status.q
             )
-            roll, pitch, yaw = _euler_from_quaternion(compound_q)
 
             return compound_q
 

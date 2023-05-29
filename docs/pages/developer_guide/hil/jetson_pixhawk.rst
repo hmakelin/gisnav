@@ -63,6 +63,7 @@ Prerequisites
             end
             subgraph "Jetson Nano"
                 Nano_USB[USB Port]
+                Nano_micro_USB[Micro USB Port]
                 Nano_HDMI[HDMI Port]
                 Nano_ETH[Ethernet]
             end
@@ -80,8 +81,8 @@ Prerequisites
             FMU_TELEM1_RX -->|To UART TX| Converter_TX
             FMU_TELEM1_GND -->|To UART GND| Converter_GND
             FMU_USB -->|To Laptop USB| Laptop_USB
-            Converter_USB -->|To Nano RX| Nano_USB
-            Nano_USB -->|Micro-USB Power| Socket
+            Converter_USB -->|To Nano USB| Nano_USB
+            Nano_micro_USB -->|Micro USB Power| Socket
             Nano_HDMI -->|HDMI| Display
             Nano_USB -->|USB| Mouse
             Nano_USB -->|USB| Keyboard

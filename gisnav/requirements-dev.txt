@@ -7,6 +7,7 @@ myst_parser
 pygments
 sphinx-design
 sphinxcontrib-video
+sphinxcontrib-mermaid
 
 # Unit & ROS 2 integration tests
 pytest

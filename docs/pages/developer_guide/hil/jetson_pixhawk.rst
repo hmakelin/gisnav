@@ -41,17 +41,65 @@ Prerequisites
     convenience and to avoid having to handle LiPo batteries. In a more realistic setup you would supply power to both
     boards from the onboard battery.
 
-.. figure:: ../../../_static/img/gisnav_hil_fmuk66-e_setup.jpg
+.. tab-set::
 
-    NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM1. Other wires as per
-    `manufacturer's instructions`_, except for missing telemetry radio. FMU draws power from laptop via micro-USB, and
-    Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection from
-    FMU to Jetson Nano via TELEM1 serial port using USB to UART converter. See `FMUK66-E revision C pin layout`_ for
-    how to wire the TELEM1 JST-GH connector (only GND, RX and TX used here). Note that the TX from one board connects
-    to the RX of the other board, and vice versa.
+    .. tab-item:: Diagram
+        :selected:
 
-    .. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
-    .. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-1
+        .. mermaid::
+
+          graph TB
+            subgraph "FMUK66-E (FMU)"
+                subgraph "TELEM1"
+                    FMU_TELEM1_RX[RX]
+                    FMU_TELEM1_TX[TX]
+                    FMU_TELEM1_GND[GND]
+                end
+                FMU_USB[micro-USB Port]
+            end
+            subgraph "Laptop"
+                Laptop_USB[USB Port]
+                Laptop_ETH[Ethernet Port]
+            end
+            subgraph "Jetson Nano"
+                Nano_USB[USB Port]
+                Nano_HDMI[HDMI Port]
+                Nano_ETH[Ethernet]
+            end
+            subgraph "USB to UART Converter"
+                Converter_RX[RX]
+                Converter_TX[TX]
+                Converter_GND[GND]
+                Converter_USB[USB]
+            end
+            Socket[Wall Socket]
+            Display[External Display]
+            Mouse[USB Mouse]
+            Keyboard[USB Keyboard]
+            FMU_TELEM1_TX -->|To UART RX| Converter_RX
+            FMU_TELEM1_RX -->|To UART TX| Converter_TX
+            FMU_TELEM1_GND -->|To UART GND| Converter_GND
+            FMU_USB -->|To Laptop USB| Laptop_USB
+            Converter_USB -->|To Nano RX| Nano_USB
+            Nano_USB -->|Micro-USB Power| Socket
+            Nano_HDMI -->|HDMI| Display
+            Nano_USB -->|USB| Mouse
+            Nano_USB -->|USB| Keyboard
+            Nano_ETH -->|To Laptop ETH| Laptop_ETH
+
+    .. tab-item:: Picture
+
+        .. figure:: ../../../_static/img/gisnav_hil_fmuk66-e_setup.jpg
+
+NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM1. Other wires as per
+`manufacturer's instructions`_, except for missing telemetry radio. FMU draws power from laptop via micro-USB, and
+Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection from
+FMU to Jetson Nano via TELEM1 serial port using USB to UART converter. See `FMUK66-E revision C pin layout`_ for
+how to wire the TELEM1 JST-GH connector (only GND, RX and TX used here). Note that the TX from one board connects
+to the RX of the other board, and vice versa.
+
+.. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
+.. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-1
 
 Upload PX4 firmware
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

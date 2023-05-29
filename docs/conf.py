@@ -28,6 +28,7 @@ extensions = [
     "autodocsumm",
     "myst_parser",
     "sphinxcontrib.video",
+    "sphinxcontrib.mermaid",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

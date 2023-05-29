@@ -35,56 +35,52 @@ P = ParamSpec("P")
 # **kwargs have the same keys?
 
 
-def enforce_types(
-    logger_callable: Optional[Callable[[str], Any]] = None,
-    custom_msg: Optional[str] = None,
-    return_value_on_fail: Optional[Any] = None,
-) -> Callable[[Callable[..., T]], Callable[..., Optional[T]]]:
+# TODO: make this work with typed dicts?
+def narrow_types(
+    arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
+):
     """
     Function decorator to narrow provided argument types to match the decorated
-    function's type hints *in a ``mypy`` compatible way*.
+    method's type hints *in a ``mypy`` compatible way*. Can also be used to
+    *enforce* types at runtime. Can be used on an instance method, or a static
+    method if the ``node_instance`` argument is provided (None by default).
 
     If any of the arguments do not match their corresponding type hints, this
-    decorator optionally logs the mismatches and then returns None without
-    executing the original method. Otherwise, it proceeds to call the original
-    method with the given arguments and keyword arguments.
+    decorator logs the mismatches and then returns None without executing the
+    original method. Otherwise, it proceeds to call the original method with
+    the given arguments and keyword argumwhich is a more exotic use case).ents.
 
     .. warning::
         * If the decorated method can also return None after execution you will
           not be able to tell from the return value whether the method executed
-          or the type narrowing failed. # TODO: the decorator should log a
-          warning or perhaps even raise an error if the decorated function
-          includes a None return type.
+          or the type narrowing failed. In this case, you specify a different
+          return value using the optional input argument.
 
     .. note::
-        This decorator streamlines computed properties by automating the check
-        for required instance properties with e.g. None values. It eliminates
-        repetitive code and logs warning messages when a property cannot be
-        computed, resulting in cleaner property implementations with less
-        boilerplate code.
+        This decorator is mainly used to streamline computed properties by
+        automating the check for required instance properties with e.g. None
+        values. It eliminates repetitive code and logs warning messages when a
+        property cannot be computed, resulting in cleaner property
+        implementations with less boilerplate code.
 
-    :param logger: Optional logging callable that accepts a string message as
-        input argument
-    :param custom_msg: Optional custom message to prefix to the logging
-    :param return_value_on_fail: Optional custom return value to replace default
+    :param arg: Node instance that provides the logger if this decorator
+        is used to wrap e.g. a static or class method, of the wrapped method
+        if this wraps an instance method
+    :param return_value: Optional custom return value to replace default
         None if the types narrowing fails
-    :return: The return value of the original method or None if any argument
-        does not match the type hints. Be aware that the original method could
-        also return None after execution.
+    :return: The return value of the original method or parameter
+        ``return_value`` if any argument does not match the type hints.
     """
 
-    def inner_decorator(method: Callable[..., T]) -> Callable[..., Optional[T]]:
-        @wraps(method)
-        def wrapper(*args, **kwargs) -> Optional[T]:
-            """
-            This wrapper function validates the provided arguments against the
-            type hints of the wrapped method.
+    instance: Optional[Node] = None if not isinstance(arg, Node) else arg
+    method: Optional[Callable] = arg if not isinstance(arg, Node) else None
 
-            :param args: Positional arguments passed to the original method.
-            :param kwargs: Keyword arguments passed to the original method.
-            :return: The return value of the original method or None if any
-                argument does not match the type hints.
-            """
+    def inner_decorator(method):
+        @wraps(method)
+        def wrapper(*args, **kwargs):
+            node_instance: Node = args[0] if instance is None else instance
+            assert_type(node_instance, Node)
+
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)
             bound_arguments = signature.bind(*args, **kwargs)
@@ -129,21 +125,26 @@ def enforce_types(
                         mismatches.append((name, expected_type, type(value)))
 
             if mismatches:
-                if logger_callable:
-                    mismatch_msgs = [
-                        f"{name} (expected {expected}, got {actual})"
-                        for name, expected, actual in mismatches
-                    ]
-                    log_msg = f"Unexpected types: {', '.join(mismatch_msgs)}"
-                    if custom_msg:
-                        log_msg = f"{custom_msg}: {log_msg}"
-                    logger_callable(log_msg)
-                return return_value_on_fail
+                mismatch_msgs = [
+                    f"{name} (expected {expected}, got {actual})"
+                    for name, expected, actual in mismatches
+                ]
+                log_msg = (
+                    f"Unexpected input argument types for {method.__name__}: "
+                    f"{', '.join(mismatch_msgs)}"
+                )
+                node_instance.get_logger().warn(log_msg)
+                return return_value
 
             return method(*args, **kwargs)
 
-        return cast(Callable[..., Optional[T]], wrapper)  # TODO: cast needed for mypy?
+        return cast(Callable[..., Optional[T]], wrapper)
 
+    if method is not None:
+        # Wrapping instance method
+        return inner_decorator(method)
+
+    # Wrapping static or class method
     return inner_decorator
 
 

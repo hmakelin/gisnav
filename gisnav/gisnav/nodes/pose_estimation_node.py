@@ -26,7 +26,7 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import ROS, assert_type, cache_if, enforce_types
+from ..assertions import ROS, assert_type, cache_if, narrow_types
 from ..data import Attitude, create_src_corners
 from . import messaging
 
@@ -242,7 +242,7 @@ class PoseEstimationNode(Node):
         :param msg: The latest :class:`sensor_msgs.msg.Image` message
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot validate received image")
+        @narrow_types(self)
         def _image_callback(img: np.ndarray, camera_info: CameraInfo):
             img_shape = img.shape[0:2]
             declared_shape = (camera_info.height, camera_info.width)
@@ -281,7 +281,7 @@ class PoseEstimationNode(Node):
         :return: True if pose estimation be attempted
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot estimate pose")
+        @narrow_types(self)
         def _should_estimate(altitude: Altitude):
             # Check condition (2) - whether camera roll/pitch is too large
             max_pitch = (
@@ -343,68 +343,51 @@ class PoseEstimationNode(Node):
 
         return yaw_degrees, pitch_degrees
 
-    # TODO: fix optional context arg with better types decorator
-    def _pre_process_geopose_inputs(
+    @narrow_types
+    def _preprocess_geopose_inputs(
         self,
         image: Image,
         orthoimage: OrthoImage3D,
         camera_info: CameraInfo,
-        context: Optional[_PoseEstimationContext],
+        context: _PoseEstimationContext,
     ) -> Optional[Tuple[PoseEstimationInputs, _PoseEstimationIntermediateOutputs]]:
-        @enforce_types(
-            self.get_logger().warn, "Cannot preprocess pose estimation inputs"
+        """Rotate and crop and orthoimage stack to align with query image"""
+
+        query_array = self._cv_bridge.imgmsg_to_cv2(
+            image, desired_encoding="passthrough"
         )
-        def _pre_process_inputs(
-            image: Image,
-            orthoimage: OrthoImage3D,
-            camera_info: CameraInfo,
-            context: PoseEstimationNode._PoseEstimationContext,
-        ) -> Optional[
-            Tuple[
-                PoseEstimationNode.PoseEstimationInputs,
-                PoseEstimationNode._PoseEstimationIntermediateOutputs,
-            ]
-        ]:
-            """Rotate and crop and orthoimage stack to align with query image"""
+        orthophoto = self._cv_bridge.imgmsg_to_cv2(
+            orthoimage.img, desired_encoding="passthrough"
+        )
+        dem = self._cv_bridge.imgmsg_to_cv2(
+            orthoimage.dem, desired_encoding="passthrough"
+        )
 
-            query_array = self._cv_bridge.imgmsg_to_cv2(
-                image, desired_encoding="passthrough"
-            )
-            orthophoto = self._cv_bridge.imgmsg_to_cv2(
-                orthoimage.img, desired_encoding="passthrough"
-            )
-            dem = self._cv_bridge.imgmsg_to_cv2(
-                orthoimage.dem, desired_encoding="passthrough"
-            )
+        # Rotate and crop orthoimage stack
+        camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
+            context.gimbal_quaternion
+        )
+        crop_shape: Tuple[int, int] = query_array.shape[0:2]
+        orthoimage_stack = np.dstack((orthophoto, dem))
+        orthoimage_stack, affine = self._rotate_and_crop_image(
+            orthoimage_stack, camera_yaw_degrees, crop_shape
+        )
+        reference_array = orthoimage_stack[:, :, 0:3]
+        elevation_array = orthoimage_stack[:, :, 3]
 
-            # Rotate and crop orthoimage stack
-            camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
-                context.gimbal_quaternion
-            )
-            crop_shape: Tuple[int, int] = query_array.shape[0:2]
-            orthoimage_stack = np.dstack((orthophoto, dem))
-            orthoimage_stack, affine = self._rotate_and_crop_image(
-                orthoimage_stack, camera_yaw_degrees, crop_shape
-            )
-            reference_array = orthoimage_stack[:, :, 0:3]
-            elevation_array = orthoimage_stack[:, :, 3]
-
-            pre_processed_inputs: PoseEstimationNode.PoseEstimationInputs = {
-                "query": query_array,
-                "reference": reference_array,
-                "elevation": elevation_array,
-                "k": camera_info.k.reshape((3, 3)),
-            }
-            intermediate_outputs = (
-                PoseEstimationNode._PoseEstimationIntermediateOutputs(
-                    affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
-                )
-            )
-            return pre_processed_inputs, intermediate_outputs
-
-        return _pre_process_inputs(image, orthoimage, camera_info, context)
+        pre_processed_inputs: PoseEstimationNode.PoseEstimationInputs = {
+            "query": query_array,
+            "reference": reference_array,
+            "elevation": elevation_array,
+            "k": camera_info.k.reshape((3, 3)),
+        }
+        intermediate_outputs = PoseEstimationNode._PoseEstimationIntermediateOutputs(
+            affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
+        )
+        return pre_processed_inputs, intermediate_outputs
 
     # TODO: fix and re-enable
+    @narrow_types
     def _is_valid_pose_estimate(
         self,
         pose: Tuple[np.ndarray, np.ndarray],
@@ -412,158 +395,122 @@ class PoseEstimationNode(Node):
         context: _PoseEstimationContext,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
     ):
-        @enforce_types(
-            self.get_logger().warn,
-            "Cannot get determine whether pose estimate is valid",
+        """Returns True if the estimate is valid
+
+        Compares computed estimate to guess based on earlier gimbal attitude.
+        This will reject estimates made when the gimbal was not stable (which
+        is strictly not necessary) if gimbal attitude is based on set attitude
+        and not actual attitude, which is assumed to filter out more inaccurate
+        estimates.
+        """
+        yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
+            context.gimbal_quaternion
         )
-        def _is_valid_pose_estimate(
-            pose: Tuple[np.ndarray, np.ndarray],
-            # pose: Pose,
-            context: PoseEstimationNode._PoseEstimationContext,
-            intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
-        ) -> bool:
-            """Returns True if the estimate is valid
 
-            Compares computed estimate to guess based on earlier gimbal attitude.
-            This will reject estimates made when the gimbal was not stable (which
-            is strictly not necessary) if gimbal attitude is based on set attitude
-            and not actual attitude, which is assumed to filter out more inaccurate
-            estimates.
-            """
-            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-                context.gimbal_quaternion
+        # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
+        # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
+
+        r_guess = Rotation.from_matrix(
+            messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion)
+        )
+        r, t = pose
+
+        rot_90_Z = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+
+        r_estimate = (
+            self._seu_to_ned_matrix
+            @ np.linalg.inv(intermediate_outputs.affine_transform)
+            @ np.linalg.inv(rot_90_Z)
+            @ r.T
+            # @ np.linalg.inv(messaging.quaternion_to_rotation_matrix(
+            # pose.orientation))
+        )
+        # r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
+
+        # self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
+        r_estimate = Rotation.from_matrix(r_estimate)
+        yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
+            messaging.as_ros_quaternion(Rotation.as_quat(r_estimate))
+        )
+
+        magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
+
+        threshold = (
+            self.get_parameter("attitude_deviation_threshold")
+            .get_parameter_value()
+            .integer_value
+        )
+        threshold = np.radians(threshold)
+
+        if magnitude > threshold:
+            self.get_logger().warn(
+                f"Estimated rotation difference to expected was too high "
+                f"(magnitude {np.degrees(magnitude)})."
             )
+            return False
 
-            # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
-            # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
+        return True
 
-            r_guess = Rotation.from_matrix(
-                messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion)
-            )
-            r, t = pose
-
-            rot_90_Z = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-
-            r_estimate = (
-                self._seu_to_ned_matrix
-                @ np.linalg.inv(intermediate_outputs.affine_transform)
-                @ np.linalg.inv(rot_90_Z)
-                @ r.T
-                # @ np.linalg.inv(messaging.quaternion_to_rotation_matrix(
-                # pose.orientation))
-            )
-            # r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
-
-            # self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
-            r_estimate = Rotation.from_matrix(r_estimate)
-            yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-                messaging.as_ros_quaternion(Rotation.as_quat(r_estimate))
-            )
-
-            magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
-
-            threshold = (
-                self.get_parameter("attitude_deviation_threshold")
-                .get_parameter_value()
-                .integer_value
-            )
-            threshold = np.radians(threshold)
-
-            if magnitude > threshold:
-                self.get_logger().warn(
-                    f"Estimated rotation difference to expected was too high "
-                    f"(magnitude {np.degrees(magnitude)})."
-                )
-                return False
-
-            return True
-
-        return _is_valid_pose_estimate(pose, context, intermediate_outputs)
-
-    # TODO: fix context arg with better types decorator
+    @narrow_types
     def _post_process_pose(
         self,
         inputs,
-        pose: Pose,
+        pose: Tuple[np.ndarray, np.ndarray],
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
-        context: Optional[_PoseEstimationContext],
+        context: _PoseEstimationContext,
     ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:
         """
         Post process estimated pose to vehicle GeoPoint, Altitude and gimbal
         Quaternion estimates
+
+        Estimates camera GeoPoint (WGS84 coordinates + altitude in meters
+        above mean sea level (AMSL) and ground level (AGL).
         """
+        geotransform = self._get_geotransformation_matrix(context.orthoimage)
+        r, t = pose
+        t_world = np.matmul(r.T, -t)
+        t_world_homogenous = np.vstack((t_world, [1]))
+        try:
+            t_unrotated_uncropped = (
+                np.linalg.inv(intermediate_outputs.affine_transform)
+                @ t_world_homogenous  # t
+            )
+        except np.linalg.LinAlgError as _:  # noqa: F841
+            self.get_logger().warn(
+                "Rotation and cropping was non-invertible, cannot compute "
+                "GeoPoint and Altitude"
+            )
+            return None
 
-        @enforce_types(
-            self.get_logger().warn,
-            "Cannot get GeoPoint from estimated Pose and given context",
+        # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
+        # be flipped because cv2)
+        t_unrotated_uncropped = np.array(
+            (
+                t_unrotated_uncropped[1],
+                t_unrotated_uncropped[0],
+                -t_unrotated_uncropped[2],
+                t_unrotated_uncropped[3],
+            )
         )
-        def _compute_geopoint_altitude_attitude(
-            inputs,
-            # pose: Pose,
-            pose: Tuple[np.ndarray, np.ndarray],
-            context: PoseEstimationNode._PoseEstimationContext,
-            intermediate_outputs: PoseEstimationNode._PoseEstimationIntermediateOutputs,
-        ) -> Optional[Tuple[GeoPoint, Altitude]]:
-            """
-            Estimates camera GeoPoint (WGS84 coordinates + altitude in meters
-            above mean sea level (AMSL) and ground level (AGL).
+        t_wgs84 = geotransform @ t_unrotated_uncropped
+        lat, lon = t_wgs84.squeeze()[1::-1]
+        alt = float(t_wgs84[2])
 
-            :param ground_track_height_amsl: Ground elevation above AMSL in meters
-            :param ground_track_height_ellipsoid: Ground elevation above
-                WGS 84 ellipsoid in meters
-            :param crs: CRS to use for the Position
-            :return: Camera position or None if not available
-            """
-            geotransform = self._get_geotransformation_matrix(context.orthoimage)
-            r, t = pose
-            t_world = np.matmul(r.T, -t)
-            t_world_homogenous = np.vstack((t_world, [1]))
-            try:
-                t_unrotated_uncropped = (
-                    np.linalg.inv(intermediate_outputs.affine_transform)
-                    @ t_world_homogenous  # t
-                )
-            except np.linalg.LinAlgError as _:  # noqa: F841
-                self.get_logger().warn(
-                    "Rotation and cropping was non-invertible, cannot compute "
-                    "GeoPoint and Altitude"
-                )
-                return None
-
-            # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
-            # be flipped because cv2)
-            t_unrotated_uncropped = np.array(
-                (
-                    t_unrotated_uncropped[1],
-                    t_unrotated_uncropped[0],
-                    -t_unrotated_uncropped[2],
-                    t_unrotated_uncropped[3],
-                )
-            )
-            t_wgs84 = geotransform @ t_unrotated_uncropped
-            lat, lon = t_wgs84.squeeze()[1::-1]
-            alt = float(t_wgs84[2])
-
-            altitude = Altitude(
-                monotonic=0.0,  # TODO
-                amsl=alt + context.terrain_altitude.amsl,
-                local=0.0,  # TODO
-                relative=0.0,  # TODO
-                terrain=alt,
-                bottom_clearance=alt,
-            )
-            geopoint = GeoPoint(
-                altitude=alt + context.terrain_geopoint.position.altitude,
-                latitude=lat,
-                longitude=lon,
-            )
-
-            return geopoint, altitude
-
-        geopoint_and_altitude = _compute_geopoint_altitude_attitude(
-            inputs, pose, context, intermediate_outputs
+        altitude = Altitude(
+            monotonic=0.0,  # TODO
+            amsl=alt + context.terrain_altitude.amsl,
+            local=0.0,  # TODO
+            relative=0.0,  # TODO
+            terrain=alt,
+            bottom_clearance=alt,
         )
-        if geopoint_and_altitude is not None:
+        geopoint = GeoPoint(
+            altitude=alt + context.terrain_geopoint.position.altitude,
+            latitude=lat,
+            longitude=lon,
+        )
+
+        if geopoint is not None and altitude is not None:
             r, t = pose
             # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
 
@@ -584,7 +531,7 @@ class PoseEstimationNode(Node):
                 return None
 
             quaternion = messaging.rotation_matrix_to_quaternion(r)
-            return geopoint_and_altitude + (quaternion,)
+            return geopoint, altitude, quaternion
         else:
             return None
 
@@ -627,16 +574,16 @@ class PoseEstimationNode(Node):
         """
 
         context = self._pose_estimation_context
-        preprocess_results = self._pre_process_geopose_inputs(
+        results = self._preprocess_geopose_inputs(
             self.image, self.orthoimage_3d, self.camera_info, context
         )
-        if not preprocess_results:
+        if not results:
             self.get_logger().warn(
                 "Could not complete pre-processing for pose estimation"
             )
             return None
 
-        inputs, intermediate_outputs = preprocess_results
+        inputs, intermediate_outputs = results
         pose = self._get_pose(inputs)
 
         # if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
@@ -716,7 +663,7 @@ class PoseEstimationNode(Node):
 
     @property
     def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:
-        @enforce_types(self.get_logger().warn, "Cannot get pose estimation context")
+        @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
             gimbal_quaternion: Quaternion,

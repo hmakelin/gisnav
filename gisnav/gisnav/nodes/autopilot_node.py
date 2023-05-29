@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import Float32
 
-from gisnav.assertions import ROS, enforce_types
+from gisnav.assertions import ROS, narrow_types
 
 from . import messaging
 from .base.rviz_publisher_node import RVizPublisherNode
@@ -83,7 +83,7 @@ class AutopilotNode(RVizPublisherNode):
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         self.gimbal_quaternion
 
-        @enforce_types(self.get_logger().warn, "Cannot publish to RViz")
+        @narrow_types(self)
         def _publish_rviz(geopose_stamped: GeoPoseStamped, altitude: Altitude):
             self.publish_rviz(geopose_stamped, altitude.terrain)
 
@@ -168,7 +168,7 @@ class AutopilotNode(RVizPublisherNode):
     def altitude(self) -> Optional[Altitude]:
         """Altitude of vehicle, or None if unknown or too old"""
 
-        @enforce_types(self.get_logger().warn, "Cannot determine vehicle altitude")
+        @narrow_types(self)
         def _altitude(
             nav_sat_fix: NavSatFix,
             egm96_height: Float32,
@@ -203,7 +203,7 @@ class AutopilotNode(RVizPublisherNode):
         """Vehicle pose as :class:`geographic_msgs.msg.GeoPoseStamped` message
         or None if not available"""
 
-        @enforce_types(self.get_logger().warn, "Cannot determine vehicle GeoPose")
+        @narrow_types(self)
         def _geopose_stamped(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
             # Position
             latitude, longitude = (
@@ -297,12 +297,12 @@ class AutopilotNode(RVizPublisherNode):
             return gimbal_yaw_q
 
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
-        @enforce_types(self.get_logger().warn, "Cannot determine gimbal Quaternion")
+        @narrow_types(self)
         def _gimbal_quaternion(
             geopose_stamped: GeoPoseStamped,
-            gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
+            # gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
         ):
-            if gimbal_device_attitude_status is None:
+            if self.gimbal_device_attitude_status is None:
                 # Assume nadir-facing (roll and yaw are 0, pitch is -90 degrees)
                 roll = 0
                 pitch = -85  # do not make it -90 to avoid gimbal lock
@@ -319,6 +319,8 @@ class AutopilotNode(RVizPublisherNode):
                 )
                 gimbal_device_attitude_status = GimbalDeviceAttitudeStatus()
                 gimbal_device_attitude_status.q = nadir_facing_quaternion
+            else:
+                gimbal_device_attitude_status = self.gimbal_device_attitude_status
 
             assert gimbal_device_attitude_status is not None
 
@@ -330,7 +332,7 @@ class AutopilotNode(RVizPublisherNode):
             return compound_q
 
         return _gimbal_quaternion(
-            self.geopose_stamped, self.gimbal_device_attitude_status
+            self.geopose_stamped  # , self.gimbal_device_attitude_status
         )
 
     @property
@@ -339,7 +341,7 @@ class AutopilotNode(RVizPublisherNode):
         """Home position as :class:`geographic_msgs.msg.GeoPointStamped` message
         or None if not available"""
 
-        @enforce_types(self.get_logger().warn, "Cannot determine home GeoPoint")
+        @narrow_types(self)
         def _home_geopoint(home_position: HomePosition):
             return GeoPointStamped(
                 header=messaging.create_header("base_link"),
@@ -357,9 +359,7 @@ class AutopilotNode(RVizPublisherNode):
         """Returns z coordinate from :class:`sensor_msgs.msg.PoseStamped` message
         or None if not available"""
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot determine vehicle local altitude"
-        )
+        @narrow_types(self)
         def _altitude_local(pose_stamped: PoseStamped):
             return pose_stamped.pose.position.z
 

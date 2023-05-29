@@ -21,7 +21,7 @@ from std_msgs.msg import Float32
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import ROS, assert_len, assert_type, cache_if, enforce_types
+from ..assertions import ROS, assert_len, assert_type, cache_if, narrow_types
 from . import messaging
 
 
@@ -263,41 +263,33 @@ class MapNode(Node):
     def connected(self, value: bool) -> None:
         self._connected = value
 
+    @narrow_types
     def _bounding_box_with_padding_for_geopoint(
         self, geopoint: Union[GeoPoint, GeoPointStamped]
     ):
         """Adds 100 meters of padding to GeoPoint on both sides"""
-
-        @enforce_types(
-            self.get_logger().warn, "Cannot determine bounding box with padding"
-        )
-        def _bounding_box_with_padding_for_geopoint(
-            geopoint: GeoPoint,
-        ) -> BoundingBox:
-            # Approximate conversions
-            padding = 100.0
-            meters_in_degree = 111045.0  # at 0 latitude
-            lat_degree_meter = meters_in_degree
-            lon_degree_meter = meters_in_degree * np.cos(np.radians(geopoint.latitude))
-
-            delta_lat = padding / lat_degree_meter
-            delta_lon = padding / lon_degree_meter
-
-            bounding_box = BoundingBox()
-
-            bounding_box.min_pt = GeoPoint()
-            bounding_box.min_pt.latitude = geopoint.latitude - delta_lat
-            bounding_box.min_pt.longitude = geopoint.longitude - delta_lon
-
-            bounding_box.max_pt = GeoPoint()
-            bounding_box.max_pt.latitude = geopoint.latitude + delta_lat
-            bounding_box.max_pt.longitude = geopoint.longitude + delta_lon
-
-            return bounding_box
-
         if isinstance(geopoint, GeoPointStamped):
             geopoint = geopoint.position
-        return _bounding_box_with_padding_for_geopoint(geopoint)
+
+        padding = 100.0
+        meters_in_degree = 111045.0  # at 0 latitude
+        lat_degree_meter = meters_in_degree
+        lon_degree_meter = meters_in_degree * np.cos(np.radians(geopoint.latitude))
+
+        delta_lat = padding / lat_degree_meter
+        delta_lon = padding / lon_degree_meter
+
+        bounding_box = BoundingBox()
+
+        bounding_box.min_pt = GeoPoint()
+        bounding_box.min_pt.latitude = geopoint.latitude - delta_lat
+        bounding_box.min_pt.longitude = geopoint.longitude - delta_lon
+
+        bounding_box.max_pt = GeoPoint()
+        bounding_box.max_pt.latitude = geopoint.latitude + delta_lat
+        bounding_box.max_pt.longitude = geopoint.longitude + delta_lon
+
+        return bounding_box
 
     def _should_update_dem_height_at_local_origin(self):
         # TODO: Update if local frame changes
@@ -322,37 +314,31 @@ class MapNode(Node):
         .. note::
             Assumes home GeoPoint is also the local frame origin.
         """
+        dem_layers, dem_styles = (
+            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
+            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
+        )
+        assert_len(dem_styles, len(dem_layers))
 
-        @enforce_types(self.get_logger().warn, "Cannot request feature")
-        def _request_dem_height_for_local_origin(
-            home_geopoint: GeoPointStamped,
-        ) -> Optional[float]:
-            dem_layers, dem_styles = (
-                self.get_parameter("dem_layers")
-                .get_parameter_value()
-                .string_array_value,
-                self.get_parameter("dem_styles")
-                .get_parameter_value()
-                .string_array_value,
-            )
-            assert_len(dem_styles, len(dem_layers))
+        srs = self.get_parameter("srs").get_parameter_value().string_value
+        format_ = self.get_parameter("format").get_parameter_value().string_value
 
-            srs = self.get_parameter("srs").get_parameter_value().string_value
-            format_ = self.get_parameter("format").get_parameter_value().string_value
+        bounding_box = self._bounding_box_with_padding_for_geopoint(self.home_geopoint)
+        if bounding_box is None:
+            self.get_logger().error("Could not bbox with padding (home geopoint None?)")
+            return None
 
-            bounding_box = self._bounding_box_with_padding_for_geopoint(home_geopoint)
-            bbox = messaging.bounding_box_to_bbox(bounding_box)
+        bbox = messaging.bounding_box_to_bbox(bounding_box)
 
-            self.get_logger().info("Requesting new orthoimage")
-            height = self._get_feature_info(
-                dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
-            )
-            if height is None:
-                self.get_logger().error("Could not get DEM height from GIS server")
+        self.get_logger().info("Requesting new orthoimage")
+        height = self._get_feature_info(
+            dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
+        )
+        if height is None:
+            self.get_logger().error("Could not get DEM height from GIS server")
+            return None
 
-            return height
-
-        return _request_dem_height_for_local_origin(self.home_geopoint)
+        return height
 
     def bounding_box_cb(self, msg: BoundingBox) -> None:
         """Callback for :class:`geographic_msgs.msg.BoundingBox` messages"""
@@ -384,7 +370,7 @@ class MapNode(Node):
         the diagonal of the declared camera frame dimensions.
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot determine orthoimage size")
+        @narrow_types(self)
         def _orthoimage_size(camera_info: CameraInfo):
             diagonal = int(
                 np.ceil(np.sqrt(camera_info.width**2 + camera_info.height**2))
@@ -440,16 +426,14 @@ class MapNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def terrain_altitude(self) -> Optional[Altitude]:
-        """Altitude of terrain directly under drone, or None if not available"""
+        """Altitude of vehicle ground track, or None if not available"""
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot generate terrain altitude message"
-        )
+        @narrow_types(self)
         def _terrain_altitude(
             terrain_altitude_amsl: float,
             terrain_altitude_at_home_amsl: float,
         ):
-            terrain_altitude = Altitude(
+            return Altitude(
                 header=messaging.create_header("base_link"),
                 amsl=terrain_altitude_amsl,
                 local=terrain_altitude_at_home_amsl,
@@ -457,7 +441,6 @@ class MapNode(Node):
                 terrain=0.0,
                 bottom_clearance=0.0,
             )
-            return terrain_altitude
 
         return _terrain_altitude(
             self.terrain_altitude_amsl,
@@ -478,14 +461,11 @@ class MapNode(Node):
         message
         """
 
-        @enforce_types(
-            self.get_logger().warn,
-            "Cannot generate terrain altitude GeoPointStamped message",
-        )
+        @narrow_types(self)
         def _terrain_geopoint_stamped(
             geopose_stamped: GeoPoseStamped, terrain_altitude_ellipsoid: float
         ):
-            geopoint_stamped = GeoPointStamped(
+            return GeoPointStamped(
                 header=messaging.create_header("base_link"),
                 position=GeoPoint(
                     latitude=geopose_stamped.pose.position.latitude,
@@ -493,7 +473,6 @@ class MapNode(Node):
                     altitude=terrain_altitude_ellipsoid,
                 ),
             )
-            return geopoint_stamped
 
         return _terrain_geopoint_stamped(self.geopose, self.terrain_altitude_ellipsoid)
 
@@ -505,18 +484,18 @@ class MapNode(Node):
     def egm96_height(self) -> Optional[Float32]:
         """EGM96 geoid height at current location, or None if not available"""
 
-        @enforce_types(self.get_logger().warn, "Cannot generate EGM96 geoid height")
-        def _egm96_height(geopose_stamped: GeoPoseStamped):
-            _egm96_height = self._egm96.height(
+        @narrow_types(self)
+        def _egm96_height(geopose_stamped: GeoPoseStamped) -> float:
+            return self._egm96.height(
                 geopose_stamped.pose.position.latitude,
                 geopose_stamped.pose.position.longitude,
             )
-            return Float32(data=_egm96_height)
 
-        return _egm96_height(self.geopose)
+        return Float32(data=_egm96_height(self.geopose))
 
+    @narrow_types
     def _request_orthoimage_for_bounding_box(
-        self, bounding_box: BoundingBox
+        self, bounding_box: BoundingBox, size: Tuple[int, int]
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Sends GetMap request to GIS WMS for image and DEM layers and returns
@@ -528,76 +507,67 @@ class MapNode(Node):
         layers. Assumes height layer is available at same CRS as imagery layer.
 
         :param bounding_box: BoundingBox to request the orthoimage for
+        :param size: Orthoimage resolution (height, width)
+        :return: Orthophoto and dem tuple for bounding box
         """
+        layers, styles = (
+            self.get_parameter("layers").get_parameter_value().string_array_value,
+            self.get_parameter("styles").get_parameter_value().string_array_value,
+        )
+        assert_len(styles, len(layers))
+        assert all(isinstance(x, str) for x in layers)
+        assert all(isinstance(x, str) for x in styles)
 
-        @enforce_types(self.get_logger().warn, "Cannot request orthoimage")
-        def _request_orthoimage_for_bounding_box(
-            bounding_box: BoundingBox, size: Tuple[int, int]
-        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-            layers, styles = (
-                self.get_parameter("layers").get_parameter_value().string_array_value,
-                self.get_parameter("styles").get_parameter_value().string_array_value,
+        dem_layers, dem_styles = (
+            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
+            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
+        )
+        assert_len(dem_styles, len(dem_layers))
+        assert all(isinstance(x, str) for x in dem_layers)
+        assert all(isinstance(x, str) for x in dem_styles)
+
+        srs = self.get_parameter("srs").get_parameter_value().string_value
+        format_ = self.get_parameter("format").get_parameter_value().string_value
+        transparency = (
+            self.get_parameter("transparency").get_parameter_value().bool_value
+        )
+
+        bbox = messaging.bounding_box_to_bbox(bounding_box)
+
+        self.get_logger().info("Requesting new orthoimage")
+        img: np.ndarray = self._get_map(
+            layers, styles, srs, bbox, size, format_, transparency
+        )
+        if img is None:
+            self.get_logger().error("Could not get orthoimage from GIS server")
+            return None
+
+        dem: Optional[np.ndarray] = None
+        if len(dem_layers) > 0 and dem_layers[0]:
+            self.get_logger().info("Requesting new DEM")
+            dem = self._get_map(
+                dem_layers,
+                dem_styles,
+                srs,
+                bbox,
+                size,
+                format_,
+                transparency,
+                grayscale=True,
             )
-            assert_len(styles, len(layers))
-            assert all(isinstance(x, str) for x in layers)
-            assert all(isinstance(x, str) for x in styles)
-
-            dem_layers, dem_styles = (
-                self.get_parameter("dem_layers")
-                .get_parameter_value()
-                .string_array_value,
-                self.get_parameter("dem_styles")
-                .get_parameter_value()
-                .string_array_value,
+            if dem is not None and dem.ndim == 2:
+                dem = np.expand_dims(dem, axis=2)
+        else:
+            # Assume flat (:=zero) terrain if no DEM layer provided
+            self.get_logger().debug(
+                "No DEM layer provided, assuming flat (=zero) elevation model."
             )
-            assert_len(dem_styles, len(dem_layers))
-            assert all(isinstance(x, str) for x in dem_layers)
-            assert all(isinstance(x, str) for x in dem_styles)
+            dem = np.zeros_like(img)
 
-            srs = self.get_parameter("srs").get_parameter_value().string_value
-            format_ = self.get_parameter("format").get_parameter_value().string_value
-            transparency = (
-                self.get_parameter("transparency").get_parameter_value().bool_value
-            )
-
-            bbox = messaging.bounding_box_to_bbox(bounding_box)
-
-            self.get_logger().info("Requesting new orthoimage")
-            img: np.ndarray = self._get_map(
-                layers, styles, srs, bbox, size, format_, transparency
-            )
-            if img is None:
-                self.get_logger().error("Could not get orthoimage from GIS server")
-                return None
-
-            dem: Optional[np.ndarray] = None
-            if len(dem_layers) > 0 and dem_layers[0]:
-                self.get_logger().info("Requesting new DEM")
-                dem = self._get_map(
-                    dem_layers,
-                    dem_styles,
-                    srs,
-                    bbox,
-                    size,
-                    format_,
-                    transparency,
-                    grayscale=True,
-                )
-                if dem is not None and dem.ndim == 2:
-                    dem = np.expand_dims(dem, axis=2)
-            else:
-                # Assume flat (:=zero) terrain if no DEM layer provided
-                self.get_logger().debug(
-                    "No DEM layer provided, assuming flat (=zero) elevation model."
-                )
-                dem = np.zeros_like(img)
-
-            # TODO: handle dem is None from _get_map call
-            assert img is not None and dem is not None
-            assert img.ndim == dem.ndim == 3
-            return img, dem
-
-        return _request_orthoimage_for_bounding_box(bounding_box, self._orthoimage_size)
+        # TODO: handle dem is None from _get_map call
+        assert img is not None and dem is not None
+        assert img.ndim == dem.ndim == 3
+        return img, dem
 
     def _should_request_orthoimage(self) -> bool:
         """Returns True if a new orthoimage (including DEM) should be requested
@@ -614,9 +584,7 @@ class MapNode(Node):
         :return: True if new orthoimage should be requested from onboard GIS
         """
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot determine if orthoimage overlap is too low"
-        )
+        @narrow_types(self)
         def _orthoimage_overlap_is_too_low(
             new_bounding_box: BoundingBox, old_orthoimage: OrthoImage3D
         ) -> bool:
@@ -663,7 +631,9 @@ class MapNode(Node):
                 geopoint = self.geopose.pose.position
             bounding_box = self._bounding_box_with_padding_for_geopoint(geopoint)
 
-        map = self._request_orthoimage_for_bounding_box(bounding_box)
+        map = self._request_orthoimage_for_bounding_box(
+            bounding_box, self._orthoimage_size
+        )
         if map is not None:
             img, dem = map
             # TODO: use np.frombuffer, not CvBridge
@@ -683,7 +653,7 @@ class MapNode(Node):
         meters, or None if not available
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot generate terrain altitude AMSL")
+        @narrow_types(self)
         def _terrain_altitude_amsl(geopose_stamped: GeoPoseStamped):
             terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
                 geopose_stamped.pose.position
@@ -700,7 +670,7 @@ class MapNode(Node):
                 )
                 terrain_altitude_amsl = self._terrain_altitude_amsl_at_geopoint(
                     geopose_stamped.pose.position,
-                    True,  # TODO: ground track orthoimage, not local origin orthoimage?
+                    # True,  # TODO: ground track, not local origin orthoimage?
                 )
 
             return terrain_altitude_amsl
@@ -714,9 +684,7 @@ class MapNode(Node):
         or None if not available
         """
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot generate terrain ellipsoidal altitude"
-        )
+        @narrow_types(self)
         def _terrain_altitude_ellipsoid(
             terrain_altitude_amsl: float, geopose_stamped: GeoPoseStamped
         ):
@@ -735,7 +703,7 @@ class MapNode(Node):
         if not available
         """
 
-        @enforce_types(self.get_logger().warn, "Cannot generate home altitude AMSL")
+        @narrow_types(self)
         def _home_altitude_amsl(home_geopoint: GeoPointStamped):
             home_altitude_amsl = home_geopoint.position.altitude - self._egm96.height(
                 home_geopoint.position.latitude,
@@ -754,10 +722,7 @@ class MapNode(Node):
         # TODO: check if this definition is correct
         """
 
-        @enforce_types(
-            self.get_logger().warn,
-            "Cannot generate terrain altitude AMSL at home position",
-        )
+        @narrow_types(self)
         def _terrain_altitude_at_home_amsl(
             home_altitude_amsl: float, terrain_altitude_amsl: float
         ):
@@ -821,7 +786,7 @@ class MapNode(Node):
     def _get_feature_info(
         self, layers, styles, srs, bbox, size, format_, xy
     ) -> Optional[float]:
-        @enforce_types(self.get_logger().warn, "Cannot extract DEM height from GML")
+        @narrow_types(self)
         def _extract_dem_height_from_gml(gml_bytes: bytes) -> Optional[float]:
             """Extracts DEM height value from GML returned from WMS endpoint"""
             # Split the binary string into lines using '\n\n' as a separator
@@ -874,9 +839,9 @@ class MapNode(Node):
         finally:
             self.get_logger().debug("GetFeatureInfo request complete.")
 
-        dem_height = _extract_dem_height_from_gml(feature_info.read())
-        return dem_height
+        return _extract_dem_height_from_gml(feature_info.read())
 
+    @narrow_types
     def _dem_height_at_geopoint(self, geopoint: Optional[GeoPoint]) -> Optional[float]:
         """
         Raw DEM height in meters from cached DEM if available, or None if not
@@ -892,10 +857,7 @@ class MapNode(Node):
         :return: Raw altitude in DEM coordinate frame and units
         """
 
-        @enforce_types(
-            self.get_logger().warn,
-            "Cannot determine if geopoint is inside bounding box",
-        )
+        @narrow_types(self)
         def _is_geopoint_inside_bounding_box(
             geopoint: GeoPoint, bounding_box: BoundingBox
         ) -> bool:
@@ -909,9 +871,7 @@ class MapNode(Node):
             else:
                 return False
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot determine terrain altitude at position"
-        )
+        @narrow_types(self)
         def _dem_height_at_geopoint(
             orthoimage: OrthoImage3D, geopoint: GeoPoint
         ) -> Optional[float]:
@@ -941,21 +901,18 @@ class MapNode(Node):
 
         return _dem_height_at_geopoint(self.orthoimage_3d, geopoint)
 
+    @narrow_types
     def _terrain_altitude_amsl_at_geopoint(
-        self, geopoint: Optional[GeoPoint], local_origin: bool = False
+        self, geopoint: Optional[GeoPoint]
     ) -> Optional[float]:
         """Terrain altitude in meters AMSL according to DEM if available, or
         None if not available
 
         :param geopoint: GeoPoint to query
-        :param local_origin: True to use :py:attr:`._home_dem` (retrieved
-            specifically for local frame origin).
         :return: Terrain altitude AMSL in meters at position
         """
 
-        @enforce_types(
-            self.get_logger().warn, "Cannot compute terrain altitude AMSL at position"
-        )
+        @narrow_types(self)
         def _terrain_altitude_amsl(
             dem_meters: float,
             dem_meters_origin: float,

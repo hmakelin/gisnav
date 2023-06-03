@@ -1,13 +1,13 @@
 """Module containing classes that wrap :class:`geopandas.GeoSeries` for convenience"""
 from __future__ import annotations
 
-import math
 import warnings
 from abc import ABC
 from typing import TYPE_CHECKING, Tuple, TypeVar
 
 import numpy as np
 from geopandas import GeoSeries
+from sensor_msgs.msg import CameraInfo
 from shapely.geometry import Point, Polygon, box
 
 from gisnav.assertions import assert_len, assert_type
@@ -278,7 +278,7 @@ class GeoTrapezoid(_GeoPolygon):
 
 
 def get_dynamic_map_radius(
-    camera_data: CameraData, max_map_radius: int, altitude: float
+    camera_info: CameraInfo, max_map_radius: int, altitude: float
 ) -> float:
     """Returns map radius that adjusts for camera altitude to be used for new
     map requests
@@ -288,7 +288,7 @@ def get_dynamic_map_radius(
     :param altitude: Altitude of camera in meters
     :return: Suitable map radius in meters
     """
-    hfov = 2 * math.atan(camera_data.dim.width / (2 * camera_data.fx))
+    hfov = 2 * np.arctan(camera_info.width / (2 * camera_info.k[0]))
     map_radius = 1.5 * hfov * altitude  # Arbitrary padding of 50%
     return min(map_radius, max_map_radius)
 

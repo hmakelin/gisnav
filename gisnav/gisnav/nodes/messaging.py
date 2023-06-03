@@ -202,3 +202,49 @@ def rotation_matrix_to_quaternion(matrix):
     q.w = quat[3]
 
     return q
+
+
+def corners_to_bounding_box(corners):
+    """
+    Generates a geographic_msgs/BoundingBox message from the FOV corners.
+
+    :param corners: A dictionary containing the coordinates (latitude, longitude)
+        of the four corners of the FOV.
+    :return: A geographic_msgs/BoundingBox message representing the bounding
+        box of the FOV.
+    """
+    # Extract the latitudes and longitudes from the corners
+    latitudes = [corner.lat for corner in corners.values()]
+    longitudes = [corner.lon for corner in corners.values()]
+
+    # Create the bounding box
+    bounding_box = BoundingBox()
+    bounding_box.min_latitude = min(latitudes)
+    bounding_box.min_longitude = min(longitudes)
+    bounding_box.max_latitude = max(latitudes)
+    bounding_box.max_longitude = max(longitudes)
+
+    return bounding_box
+
+
+def off_nadir_angle(quaternion: np.ndarray):
+    """
+    Off-nadir angle (magnitude) of quaternion assuming nadir origin
+
+    :param quaternion: Quaternion in (x, y, z, w) format
+    :raise: ValueError if quaternion is invalid
+    """
+    # Normalize the quaternion
+    norm = np.linalg.norm(quaternion)
+    if norm > 0:
+        quaternion = quaternion / norm
+    else:
+        raise ValueError("Invalid quaternion: norm is zero")
+
+    # Calculate rotation angle in radians
+    angle = 2 * np.arccos(quaternion[3])
+
+    # Convert to degrees
+    angle_degrees = np.degrees(angle)
+
+    return angle_degrees

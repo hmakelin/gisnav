@@ -18,7 +18,6 @@ import pstats
 
 import rclpy
 
-from .autopilot_node import AutopilotNode
 from .bbox_node import BBoxNode
 from .map_node import MapNode
 from .mock_gps_node import MockGPSNode
@@ -60,11 +59,6 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()
-
-
-def run_autopilot_node():
-    """Spins up a :class:`.AutopilotNode`"""
-    _run(AutopilotNode, "AutopilotNode")
 
 
 def run_mock_gps_node():

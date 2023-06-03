@@ -49,10 +49,8 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "autopilot_node = gisnav.nodes:run_autopilot_node",
             "mock_gps_node = gisnav.nodes:run_mock_gps_node",
             "map_node = gisnav.nodes:run_map_node",
-            "bbox_node = gisnav.nodes:run_bbox_node",
             "pose_estimation_node = gisnav.nodes:run_pose_estimation_node",
         ],
     },

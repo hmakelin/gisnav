@@ -29,16 +29,6 @@ def generate_launch_description():
             parameters=[os.path.join(package_share_dir, "launch/params/map_node.yaml")],
         )
     )
-    # ld.add_action(
-    #    Node(
-    #        package="gisnav",
-    #        name="bbox_node",
-    #        executable="bbox_node",
-    #        parameters=[
-    #            os.path.join(package_share_dir, "launch/params/bbox_node.yaml")
-    #        ],
-    #    )
-    # )
     ld.add_action(
         Node(
             package="gisnav",
@@ -51,14 +41,4 @@ def generate_launch_description():
             ],
         )
     )
-    # ld.add_action(
-    #    Node(
-    #        package="gisnav",
-    #        name="autopilot_node",
-    #        executable="autopilot_node",
-    #        parameters=[
-    #            os.path.join(package_share_dir, "launch/params/autopilot_node.yaml")
-    #        ],
-    #    )
-    # )
     return ld

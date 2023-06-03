@@ -2,7 +2,7 @@
 import time
 import xml.etree.ElementTree as ET
 from collections import deque
-from typing import IO, Optional, Tuple, Union
+from typing import IO, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -33,7 +33,6 @@ from shapely.geometry import box
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from ..assertions import ROS, assert_len, assert_type, cache_if, narrow_types
-from ..data import create_src_corners
 from ..geo import get_dynamic_map_radius
 from . import messaging
 
@@ -299,16 +298,13 @@ class MapNode(Node):
         self._connected = value
 
     @narrow_types
-    def _bounding_box_with_padding_for_geopoint(
-        self, geopoint: Union[GeoPoint, GeoPointStamped], padding: float = 100.0
+    def _bounding_box_with_padding_for_latlon(
+        self, latitude: float, longitude: float, padding: float = 100.0
     ):
-        """Adds 100 meters of padding to GeoPoint on both sides"""
-        if isinstance(geopoint, GeoPointStamped):
-            geopoint = geopoint.position
-
+        """Adds 100 meters of padding to coordinates on both sides"""
         meters_in_degree = 111045.0  # at 0 latitude
         lat_degree_meter = meters_in_degree
-        lon_degree_meter = meters_in_degree * np.cos(np.radians(geopoint.latitude))
+        lon_degree_meter = meters_in_degree * np.cos(np.radians(latitude))
 
         delta_lat = padding / lat_degree_meter
         delta_lon = padding / lon_degree_meter
@@ -316,23 +312,52 @@ class MapNode(Node):
         bounding_box = BoundingBox()
 
         bounding_box.min_pt = GeoPoint()
-        bounding_box.min_pt.latitude = geopoint.latitude - delta_lat
-        bounding_box.min_pt.longitude = geopoint.longitude - delta_lon
+        bounding_box.min_pt.latitude = latitude - delta_lat
+        bounding_box.min_pt.longitude = longitude - delta_lon
 
         bounding_box.max_pt = GeoPoint()
-        bounding_box.max_pt.latitude = geopoint.latitude + delta_lat
-        bounding_box.max_pt.longitude = geopoint.longitude + delta_lon
+        bounding_box.max_pt.latitude = latitude + delta_lat
+        bounding_box.max_pt.longitude = longitude + delta_lon
 
         return bounding_box
 
     def _should_update_dem_height_at_local_origin(self):
         # TODO: Update if local frame changes
-        if self._dem_height_at_local_origin is None:
+        if self._dem_height_meters_at_local_origin is None:
             return True
+
+    def _dem_height_meters_at_latlon_wms(
+        self, lat: float, lon: float
+    ) -> Optional[float]:
+        """Digital elevation model (DEM) height in meters at given coordinates
+
+        Uses WMS GetFeatureInfo to get the value frome the onboard GIS server.
+        """
+        dem_layers, dem_styles = (
+            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
+            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
+        )
+        assert_len(dem_styles, len(dem_layers))
+
+        srs = self.get_parameter("srs").get_parameter_value().string_value
+        format_ = self.get_parameter("format").get_parameter_value().string_value
+
+        bounding_box = self._bounding_box_with_padding_for_latlon(lat, lon)
+        bbox = messaging.bounding_box_to_bbox(bounding_box)
+
+        self.get_logger().info("Requesting DEM height (GetFeatureInfo)")
+        height = self._get_feature_info(
+            dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
+        )
+        if height is None:
+            self.get_logger().error("Could not get DEM height from GIS server")
+            return None
+
+        return height
 
     @property
     @cache_if(_should_update_dem_height_at_local_origin)
-    def dem_height_at_local_origin(self) -> Optional[float]:
+    def dem_height_meters_at_local_origin(self) -> Optional[float]:
         """
         Digital elevation model (DEM) height in meters at local frame origin
 
@@ -348,41 +373,14 @@ class MapNode(Node):
         .. note::
             Assumes HomePosition is also the local frame origin.
         """
-        dem_layers, dem_styles = (
-            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
-            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
-        )
-        assert_len(dem_styles, len(dem_layers))
-
-        srs = self.get_parameter("srs").get_parameter_value().string_value
-        format_ = self.get_parameter("format").get_parameter_value().string_value
-
         home_position = self.home_position
         if home_position is not None:
-            bounding_box = self._bounding_box_with_padding_for_geopoint(
-                home_position.geo
+            return self._dem_height_meters_at_latlon_wms(
+                home_position.geo.latitude, home_position.geo.longitude
             )
         else:
             self.get_logger().error("Home geopoint none, cannot get bbox wit padding)")
             return None
-
-        if bounding_box is None:
-            self.get_logger().error(
-                "Could not estimate bbox with padding (home geopoint None?)"
-            )
-            return None
-
-        bbox = messaging.bounding_box_to_bbox(bounding_box)
-
-        self.get_logger().info("Requesting new orthoimage")
-        height = self._get_feature_info(
-            dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
-        )
-        if height is None:
-            self.get_logger().error("Could not get DEM height from GIS server")
-            return None
-
-        return height
 
     def nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for :class:`mavros_msgs.msg.NavSatFix` message
@@ -548,7 +546,7 @@ class MapNode(Node):
                     self._pose_stamped_queue.append(pose_stamped)
                 else:
                     # Observation is too recent, return
-                    return
+                    return None
             else:
                 # Queue is empty
                 self._pose_stamped_queue.append(pose_stamped)
@@ -862,15 +860,11 @@ class MapNode(Node):
             map_radius = get_dynamic_map_radius(
                 camera_info, max_map_radius, altitude.terrain
             )
-            # TODO: altitude does not matter here but try to fix API:
-            geopoint = GeoPoint(
-                latitude=latlon.lat, longitude=latlon.lon, altitude=altitude.terrain
-            )
+            return self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon, map_radius)
 
-            return self._bounding_box_with_padding_for_geopoint(geopoint, map_radius)
-
+        latlon = self._principal_point_on_ground_plane
         bounding_box = _bounding_box(
-            self._principal_point_on_ground_plane, self.camera_info, self.altitude
+            latlon, self.camera_info, self.altitude
         )
 
         if bounding_box is None:
@@ -883,7 +877,7 @@ class MapNode(Node):
             else:
                 geopoint = geopose.pose.position
 
-            bounding_box = self._bounding_box_with_padding_for_geopoint(geopoint)
+            bounding_box = self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon)
 
         return bounding_box
 
@@ -902,6 +896,8 @@ class MapNode(Node):
         map = self._request_orthoimage_for_bounding_box(
             bounding_box, self._orthoimage_size
         )
+        self.get_logger().error(str(bounding_box))
+        #self.get_logger().error(str(map))
         if map is not None:
             img, dem = map
             # TODO: use np.frombuffer, not CvBridge
@@ -1111,10 +1107,12 @@ class MapNode(Node):
                 latitude: float, longitude: float, bounding_box: BoundingBox
             ) -> bool:
                 return (
-                    latitude <= bounding_box.max_pt.latitude
-                    and latitude >= bounding_box.min_pt.latitude
-                    and longitude >= bounding_box.min_pt.longitude
-                    and longitude <= bounding_box.max_pt.longitude
+                    bounding_box.min_pt.latitude
+                    <= latitude
+                    <= bounding_box.max_pt.latitude
+                    and bounding_box.min_pt.longitude
+                    <= longitude
+                    <= bounding_box.max_pt.longitude
                 )
 
             dem = self._cv_bridge.imgmsg_to_cv2(
@@ -1141,11 +1139,17 @@ class MapNode(Node):
             else:
                 return None
 
-        # TODO: use of orthoimage here a bit confusing, we do not want to
-        # recompute because of possible circular dependencies. This is intended
-        # for getting the DEM height for outgoing Altitude messages.
-        # Use cached orthoimage if available, do not try to recompute
-        return _dem_height_meters_at_latlon(latitude, longitude, self._orthoimage_3d)
+        # Use cached orthoimage if available, do not try to recompute to avoid
+        # circular dependencies
+        dem_height_meters_at_latlon = _dem_height_meters_at_latlon(
+            latitude, longitude, self._orthoimage_3d
+        )
+        if dem_height_meters_at_latlon is None:
+            dem_height_meters_at_latlon = self._dem_height_meters_at_latlon_wms(
+                latitude, longitude
+            )
+
+        return dem_height_meters_at_latlon
 
     def _ground_track_altitude_amsl_at_latlon(
         self,
@@ -1187,7 +1191,7 @@ class MapNode(Node):
         )
         return _ground_track_altitude_amsl_at_latlon(
             dem_height_meters_at_latlon,
-            self.dem_height_at_local_origin,
+            self.dem_height_meters_at_local_origin,
             self.home_position,
         )
 

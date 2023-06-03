@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC
-from typing import TYPE_CHECKING, Tuple, TypeVar
+from typing import Tuple, TypeVar
 
 import numpy as np
 from geopandas import GeoSeries
@@ -11,10 +11,6 @@ from sensor_msgs.msg import CameraInfo
 from shapely.geometry import Point, Polygon, box
 
 from gisnav.assertions import assert_len, assert_type
-
-if TYPE_CHECKING:
-    # CameraData used as type hint only - avoid ImportError due to circular import
-    from .data import CameraData
 
 warnings.filterwarnings(
     action="ignore", category=UserWarning, message="Geometry is in a geographic CRS."

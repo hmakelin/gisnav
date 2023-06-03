@@ -214,7 +214,7 @@ class PoseEstimationNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    #@ROS.max_delay_ms(_DELAY_NORMAL_MS)  # TODO: re-enable
     @ROS.subscribe(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
     )

@@ -227,7 +227,7 @@ def corners_to_bounding_box(corners):
     return bounding_box
 
 
-def off_nadir_angle(quaternion: np.ndarray):
+def off_nadir_angle_v2(quaternion: np.ndarray):
     """
     Off-nadir angle (magnitude) of quaternion assuming nadir origin
 
@@ -248,3 +248,26 @@ def off_nadir_angle(quaternion: np.ndarray):
     angle_degrees = np.degrees(angle)
 
     return angle_degrees
+
+def off_nadir_angle(q):
+    # Rotated vector
+    rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
+    rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
+    rotated_z = q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z
+
+    # Down direction
+    down_x, down_y, down_z = 0.0, 0.0, -1.0
+
+    # Dot product of rotated vector and down direction
+    dot_product = rotated_x * down_x + rotated_y * down_y + rotated_z * down_z
+
+    # Clamp dot_product to avoid floating-point precision issues
+    dot_product = max(min(dot_product, 1.0), -1.0)
+
+    # Compute the angle between the rotated vector and down direction
+    angle_rad = np.arccos(dot_product)
+
+    # Convert the angle to degrees
+    angle_deg = np.degrees(angle_rad)
+
+    return angle_deg

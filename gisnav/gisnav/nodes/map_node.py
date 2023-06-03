@@ -863,6 +863,8 @@ class MapNode(Node):
             return self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon, map_radius)
 
         latlon = self._principal_point_on_ground_plane
+        if latlon is not None:
+            self.get_logger().error(f"principal point {latlon.lat} {latlon.lon}")
         bounding_box = _bounding_box(
             latlon, self.camera_info, self.altitude
         )
@@ -877,7 +879,9 @@ class MapNode(Node):
             else:
                 geopoint = geopose.pose.position
 
-            bounding_box = self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon)
+            if geopoint is not None:
+                self.get_logger().error(f"principal point substitute {geopoint.latitude} {geopoint.longitude}")
+            bounding_box = self._bounding_box_with_padding_for_latlon(geopoint.latitude, geopoint.longitude)
 
         return bounding_box
 
@@ -896,8 +900,6 @@ class MapNode(Node):
         map = self._request_orthoimage_for_bounding_box(
             bounding_box, self._orthoimage_size
         )
-        self.get_logger().error(str(bounding_box))
-        #self.get_logger().error(str(map))
         if map is not None:
             img, dem = map
             # TODO: use np.frombuffer, not CvBridge
@@ -1195,6 +1197,12 @@ class MapNode(Node):
             self.home_position,
         )
 
+    @staticmethod
+    def _quaternion_to_yaw_degrees(q):
+        yaw = np.arctan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+        return np.degrees(yaw)
+
     @property
     def _principal_point_on_ground_plane(self) -> LatLon:
         @narrow_types(self)
@@ -1203,18 +1211,18 @@ class MapNode(Node):
         ) -> LatLon:
             # Your off-nadir angle and camera yaw
             off_nadir_angle_deg = messaging.off_nadir_angle(
-                quaternion=messaging.as_np_quaternion(gimbal_quaternion)
+                gimbal_quaternion
             )
 
-            # Convert the quaternion into Euler angles (roll, pitch, yaw)
-            r = Rotation.from_quat(messaging.as_np_quaternion(gimbal_quaternion))
-            _, __, camera_yaw = r.as_euler("xyz", degrees=True)
+            camera_yaw = self._quaternion_to_yaw_degrees(gimbal_quaternion)
 
             # Convert the off-nadir angle to a distance on the ground
             # (This step assumes a simple spherical Earth model, not taking into account ellipsoid shape or terrain altitude)
             ground_distance = altitude.terrain / np.sin(
                 np.radians(off_nadir_angle_deg)
             )  # in meters
+
+            self.get_logger().error(f"ground distance for projection {ground_distance}")
 
             # Use pygeodesy to calculate new position
             current_pos = LatLon(
@@ -1290,10 +1298,8 @@ class MapNode(Node):
         """
 
         def _apply_vehicle_yaw(vehicle_q, gimbal_q):
-            # Extract yaw from vehicle quaternion
-            t3 = 2.0 * (vehicle_q.w * vehicle_q.z + vehicle_q.x * vehicle_q.y)
-            t4 = 1.0 - 2.0 * (vehicle_q.y * vehicle_q.y + vehicle_q.z * vehicle_q.z)
-            yaw_rad = np.arctan2(t3, t4)
+            yaw_deg = self._quaternion_to_yaw_degrees(vehicle_q)
+            yaw_rad = np.radians(yaw_deg)
 
             # Create a new quaternion with only yaw rotation
             yaw_q = Quaternion(

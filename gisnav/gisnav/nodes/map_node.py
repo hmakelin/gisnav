@@ -1218,7 +1218,7 @@ class MapNode(Node):
 
             # Use pygeodesy to calculate new position
             current_pos = LatLon(
-                geopose.pose.position.latitude, geopose.pose.position.latitude
+                geopose.pose.position.latitude, geopose.pose.position.longitude
             )
 
             # Get the latitude and longitude of the principal point projected on the ground

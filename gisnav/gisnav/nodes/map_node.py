@@ -863,8 +863,6 @@ class MapNode(Node):
             return self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon, map_radius)
 
         latlon = self._principal_point_on_ground_plane
-        if latlon is not None:
-            self.get_logger().error(f"principal point {latlon.lat} {latlon.lon}")
         bounding_box = _bounding_box(
             latlon, self.camera_info, self.altitude
         )
@@ -1218,11 +1216,9 @@ class MapNode(Node):
 
             # Convert the off-nadir angle to a distance on the ground
             # (This step assumes a simple spherical Earth model, not taking into account ellipsoid shape or terrain altitude)
-            ground_distance = altitude.terrain / np.sin(
+            ground_distance = altitude.terrain / np.cos(
                 np.radians(off_nadir_angle_deg)
             )  # in meters
-
-            self.get_logger().error(f"ground distance for projection {ground_distance}")
 
             # Use pygeodesy to calculate new position
             current_pos = LatLon(

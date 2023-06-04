@@ -214,7 +214,7 @@ class PoseEstimationNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    #@ROS.max_delay_ms(_DELAY_NORMAL_MS)  # TODO: re-enable
     @ROS.subscribe(
         messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
     )
@@ -993,7 +993,7 @@ class PoseEstimationNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.gimbal_quaternion is not None:
-            off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion) - 90
+            off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

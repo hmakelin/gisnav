@@ -6,6 +6,79 @@ for both external and internal communication. If you have a ROS 2 node, you can 
 For simple integrations you might only be interested in the :ref:`Aircraft GeoPose estimate topics`. For an overview of
 all available topics, see :ref:`Remapping ROS 2 topics`.
 
+.. mermaid::
+    :caption: Target data flow graph (WIP)
+
+    graph LR
+        subgraph Camera
+            image_raw[camera/image_raw]
+            camera_info[camera/camera_info]
+        end
+
+        subgraph MAVROS
+            pose[mavros/local_position/pose]
+            global[mavros/global_position/global]
+            home[mavros/home_position/home]
+            attitude[mavros/gimbal_control/device/attitude_status]
+        end
+
+        subgraph GISNode
+            geopose[gisnav/vehicle/geopose]
+            altitude[gisnav/vehicle/altitude]
+            geopoint_track[gisnav/ground_track/geopoint]
+            altitude_track[gisnav/ground_track/altitude]
+            orthoimage[gisnav/orthoimage]
+        end
+
+        subgraph CVNode
+            geopose_estimate[gisnav/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/vehicle/altitude/estimate]
+        end
+
+        subgraph MockGPSNode
+            sensor_gps[fmu/in/sensor_gps]
+        end
+
+        pose -->|geometry_msgs/Pose| GISNode
+        global -->|sensor_msgs/NavSatFix| GISNode
+        home -->|mavros_msgs/HomePosition| GISNode
+        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| CVNode
+        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| GISNode
+        geopose -->|geographic_msgs/GeoPose| CVNode
+        altitude -->|mavros_msgs/Altitude| CVNode
+        camera_info -->|sensor_msgs/CameraInfo| GISNode
+        camera_info -->|sensor_msgs/CameraInfo| CVNode
+        orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
+        altitude_track -->|mavros_msgs/Altitude| CVNode
+        geopoint_track -->|geographic_msgs/GeoPoint| CVNode
+        image_raw -->|sensor_msgs/Image| CVNode
+        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
+        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
+
+
+Motivation for the data flow graph design:
+
+1. **Unidirectional Flow:**
+
+  The system is designed to avoid bidirectional loops that could potentially
+  cause significant delays. This streamlined, one-way flow facilitates real-time
+  operation and enhances performance.
+
+2. **Modular Structure:**
+
+  Rather than having a monolithic single node, which can be challenging to
+  maintain, the architecture is broken down into multiple specialized nodes.
+  This modular approach allows for focused expertise within each node, such as
+  the dedicated OpenCV node for image processing and the GIS library node for
+  geographic information processing.
+
+3. **Application Integration:**
+
+  The architecture includes specific nodes for application integration, such as
+  the MockGPSNode. This design facilitates integration with various applications
+  and aids in the maintainability and extensibility of the system.
+
+
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To integrate GISNav with your own ROS system, you will likely have to do some topic name remapping. See the examples

@@ -18,10 +18,10 @@ import pstats
 
 import rclpy
 
-from .bbox_node import BBoxNode
 from .map_node import MapNode
 from .mock_gps_node import MockGPSNode
 from .pose_estimation_node import PoseEstimationNode
+from .rviz_node import RVizNode
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -66,9 +66,9 @@ def run_mock_gps_node():
     _run(MockGPSNode, "mock_gps_node")
 
 
-def run_bbox_node():
-    """Spins up a :class:`.BBoxNode`"""
-    _run(BBoxNode, "bbox_node")
+def run_rviz_node():
+    """Spins up a :class:`.RVizNode`"""
+    _run(RVizNode, "rviz_node")
 
 
 def run_map_node():

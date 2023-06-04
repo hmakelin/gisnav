@@ -6,8 +6,11 @@ for both external and internal communication. If you have a ROS 2 node, you can 
 For simple integrations you might only be interested in the :ref:`Aircraft GeoPose estimate topics`. For an overview of
 all available topics, see :ref:`Remapping ROS 2 topics`.
 
+
+Core data flow graph
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. mermaid::
-    :caption: Target data flow graph (WIP)
+    :caption: WIP: Target core data flow graph
 
     graph LR
         subgraph Camera
@@ -35,10 +38,6 @@ all available topics, see :ref:`Remapping ROS 2 topics`.
             altitude_estimate[gisnav/vehicle/altitude/estimate]
         end
 
-        subgraph MockGPSNode
-            sensor_gps[fmu/in/sensor_gps]
-        end
-
         pose -->|geometry_msgs/Pose| GISNode
         global -->|sensor_msgs/NavSatFix| GISNode
         home -->|mavros_msgs/HomePosition| GISNode
@@ -52,8 +51,6 @@ all available topics, see :ref:`Remapping ROS 2 topics`.
         altitude_track -->|mavros_msgs/Altitude| CVNode
         geopoint_track -->|geographic_msgs/GeoPoint| CVNode
         image_raw -->|sensor_msgs/Image| CVNode
-        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
-        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
 
 
 Motivation for the data flow graph design:
@@ -78,6 +75,55 @@ Motivation for the data flow graph design:
   the MockGPSNode. This design facilitates integration with various applications
   and aids in the maintainability and extensibility of the system.
 
+
+Application specific data flow graphs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+These are extensions of the core data flow graph. New nodes are added to integrate
+with new tools with the core data flow architecture staying the same.
+
+.. mermaid::
+    :caption: WIP: Mock GPS node data flow graph (PX4)
+
+    graph LR
+        subgraph CVNode
+            geopose_estimate[gisnav/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/vehicle/altitude/estimate]
+        end
+
+        subgraph MockGPSNode
+            sensor_gps[fmu/in/sensor_gps]
+        end
+
+        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
+        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
+        sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
+
+.. mermaid::
+    :caption: WIP: RViz data flow graph
+
+    graph LR
+        subgraph GISNode
+            geopose[gisnav/vehicle/geopose]
+            geopoint_track[gisnav/ground_track/geopoint]
+        end
+
+        subgraph CVNode
+            geopose_estimate[gisnav/vehicle/geopose/estimate]
+        end
+
+        subgraph RVizNode
+            path[gisnav/vehicle/path]
+            path_estimate[gisnav/vehicle/estimate/path]
+            ground_track_path[gisnav/ground_track/path]
+        end
+
+        geopose -->|geographic_msgs/GeoPose| RVizNode
+        geopose_estimate -->|geographic_msgs/GeoPose| RVizNode
+        geopoint_track -->|geographic_msgs/GeoPoint| RVizNode
+        path -->|nav_msgs/Path| rviz2
+        path_estimate -->|nav_msgs/Path| rviz2
+        ground_track_path -->|nav_msgs/Path| rviz2
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

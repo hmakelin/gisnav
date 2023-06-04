@@ -45,3 +45,8 @@ it to match your use case.
     integrate/ros_messaging
     integrate/mock_gps
     integrate/pose_estimators
+
+.. toctree::
+    :caption: Terminology
+
+    terminology

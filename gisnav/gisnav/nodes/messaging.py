@@ -75,7 +75,7 @@ ROS_TOPIC_HOME_POSITION = "/mavros/home_position/home"
 """Name of ROS topic for :class:`mavros_msgs.msg.HomePosition` messages"""
 
 ROS_TOPIC_PATH = "gisnav/vehicle/path"
-ROS_TOPIC_PATH_ESTIMATE = "gisnav/vehicle/estimate/path"
+ROS_TOPIC_PATH_ESTIMATE = "gisnav/vehicle/estimated/path"
 ROS_TOPIC_GROUND_TRACK_PATH = "gisnav/ground_track/path"
 # endregion ROS topic names
 

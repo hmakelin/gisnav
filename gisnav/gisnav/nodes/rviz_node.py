@@ -1,14 +1,44 @@
-"""Rviz Publisher Node
+"""
+This module contains a :term:`ROS 2` node for publishing messages to
+:term:`RViz`. The node simplifies data visualization from across different
+parts of the :term:`core` system, aiding development and debugging.
 
-This module contains a ROS2 node for publishing various messages into rviz2.
-It is intended for interfacing with various ROS topics including camera,
-MAVROS, GISNode, CVNode, and MockGPSNode. This node facilitates development by
-consolidating data from across the system and makes it visualizable.
+The below graph depicts how :class:`.RVizNode` publishes the :term:`vehicle` and
+:term:`ground track` :term:`path` that can be susbcribed to and visualized by
+:term:`RViz`, making it easier to see where GISNav thinks the vehicle is compared
+to where the vehicle :term:`navigation filter` thinks it is:
+
+.. mermaid::
+    :caption: RVizNode computational graph
+
+    graph LR
+        subgraph GISNode
+            vehicle_geopose[gisnav/gis_node/vehicle/geopose]
+            ground_track_geopose[gisnav/gis_node/ground_track/geopose]
+        end
+
+        subgraph CVNode
+            vehicle_estimated_geopose[gisnav/cv_node/vehicle/estimated/geopose]
+        end
+
+        subgraph RVizNode
+            vehicle_path[gisnav/rviz_node/vehicle/path]
+            vehicle_estimated_path[gisnav/rviz_node/vehicle/estimated/path]
+            ground_track_path[gisnav/rviz_node/ground_track/path]
+        end
+
+        vehicle_geopose -->|geographic_msgs/GeoPose| RVizNode
+        vehicle_estimated_geopose -->|geographic_msgs/GeoPose| RVizNode
+        ground_track_geopose -->|geographic_msgs/GeoPose| RVizNode
+        vehicle_path -->|nav_msgs/Path| rviz2
+        vehicle_estimated_path -->|nav_msgs/Path| rviz2
+        ground_track_path -->|nav_msgs/Path| rviz2
 """
 from collections import deque
-from typing import Optional
+from typing import Final, Optional
 
-from geographic_msgs.msg import GeoPointStamped, GeoPoseStamped
+import numpy as np
+from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import HomePosition
 from nav_msgs.msg import Path
@@ -21,10 +51,27 @@ from . import messaging
 
 
 class RVizNode(Node):
-    """RViz publisher node"""
+    """:term:`ROS 2` node that subscribes to GISNav :term:`core` output
+    messages and publishes them into :term:`RViz`.
+    """
 
-    _MAX_POSE_STAMPED_MESSAGES = 100
+    _MAX_POSE_STAMPED_MESSAGES: Final = 100
     """Max limit for held :class:`geometry_msgs.msg.PoseStamped` messages"""
+
+    ROS_TOPIC_RELATIVE_VEHICLE_PATH: Final = "~/vehicle/path"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`.vehicle_path`
+    """
+
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_PATH: Final = "~/vehicle/estimated/path"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`.vehicle_estimated_path`
+    """
+
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_PATH: Final = "~/ground_track/path"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`.ground_track_path`
+    """
 
     def __init__(self, name: str):
         """Initializes the node
@@ -33,119 +80,23 @@ class RVizNode(Node):
         """
         super().__init__(name)
 
-        # Initialize ROS subscriptions
+        # Initialize ROS subscriptions by calling the decorated properties once
         self.home_position
-        self.geopose
-        self.geopose_estimate
-        self.ground_track_geopoint
+        self.vehicle_geopose
+        self.vehicle_estimated_geopose
+        self.ground_track_geopose
 
-        self._path_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
-        self._path_estimate_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
+        # Store poses for outgoing path messages in dedicated queues
+        self._vehicle_path_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
+        self._vehicle_estimated_path_queue: deque = deque(
+            maxlen=self._MAX_POSE_STAMPED_MESSAGES
+        )
         self._ground_track_path_queue: deque = deque(
             maxlen=self._MAX_POSE_STAMPED_MESSAGES
         )
 
+        # Transforms latitude and longitude into pseudo-meters
         self._transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
-
-    def _home_position_callback(self, msg: HomePosition):
-        """Callback for :class:`mavros_msgs.msg.HomePosition` messages for
-        subscribed to by :attr:`.home_position`
-
-        Stores the conversion from global to local frame whenever home position
-        changes (expected to only happen once at the beginning).
-        """
-        # Convert latitude, longitude, and altitude to Cartesian coordinates
-        x, y = self._transformer.transform(
-            msg.geo.latitude,
-            msg.geo.longitude,
-        )
-
-    @property
-    @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
-    @ROS.subscribe(
-        messaging.ROS_TOPIC_HOME_POSITION,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_home_position_callback,
-    )
-    def home_position(self) -> Optional[HomePosition]:
-        """Vehicle :class:`mavros_msgs.msg.HomePosition` (defined as local
-        frame origin), or None if unknown or too old
-        """
-
-    @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=lambda pose: _append_geopose_to_path(msg, self._path_queue),
-    )
-    def geopose(self) -> Optional[GeoPoseStamped]:
-        """Vehicle :class:`.geographic_msgs.msg.GeoPoseStamped`, or None if
-        not available or too old
-        """
-
-    @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=lambda msg: _append_geopose_to_path(msg, self._path_estimate_queue),
-    )
-    def geopose_estimate(self) -> Optional[GeoPoseStamped]:
-        """Vehicle est:class:`.geographic_msgs.msg.GeoPoseStamped` estimate,
-        or None if not available or too old
-        """
-
-    @property
-    @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
-    @ROS.subscribe(
-        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=lambda msg: _append_geopose_to_path(
-            msg, self._ground_track_path_queue
-        ),
-    )
-    def ground_track_geopoint(self) -> Optional[GeoPointStamped]:
-        """Vehicle ground track GeoPointStamped, or None if unknown or too old"""
-
-    @property
-    @ROS.publish(
-        messaging.ROS_TOPIC_PATH,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def path(self) -> Optional[Path]:
-        """Vehicle navigation filter :class:`nav_msgs.msg.Path`, or None if
-        not available
-        """
-        raise NotImplementedError
-
-    @property
-    @ROS.publish(
-        messaging.ROS_TOPIC_PATH_ESTIMATE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def path_estimate(self) -> Optional[Path]:
-        """Vehicle :class:`nav_msgs.msg.Path` estimate, or None if not available"""
-        raise NotImplementedError
-
-    @property
-    @ROS.publish(
-        messaging.ROS_TOPIC_GROUND_TRACK_PATH,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def ground_track_path(self) -> Optional[Path]:
-        """Vehicle ground track :class:`nav_msgs.msg.Path`, or None if not
-        available
-        """
-        raise NotImplementedError
-
-    def _publish_path(self):
-        """Publishes :class:`nav_msgs.msg.Path` for debugging and visualization"""
-        path = Path()
-        path.header.stamp = self.get_clock().now().to_msg()
-        path.header.frame_id = "map"
-        path.poses = list(self._pose_stamped_queue)
-        self.__path_publisher.publish(path)
 
     # TODO: use local or home altitude, not whatever is in the message, as ground
     # track will be visualized separately! Altitude at local frame origin
@@ -153,7 +104,7 @@ class RVizNode(Node):
     @narrow_types
     def _geopose_to_local_pose(
         self, geopose: GeoPoseStamped, home_position: HomePosition
-    ) -> None:
+    ) -> Optional[PoseStamped]:
         """
         Converts :class:`geographic_msgs.msg.GeoPoseStamped` into
         :class:`geometry_msgs.msg.PoseStamped` in a local ENU frame where the
@@ -164,36 +115,54 @@ class RVizNode(Node):
         :param home_position: Vehicle :class:`.HomePosition` message representing
             local frame origin
         """
-        # Convert latitude, longitude, and altitude to Cartesian coordinates
-        x, y = self._transformer.transform(
-            geopose_stamped.pose.position.latitude,
-            geopose_stamped.pose.position.longitude,
+        # Use home position as scaling factor for converting EPSG:3857
+        # pseudo-meters into actual meters (simple spherical Earth model
+        # appropriate for visualization use)
+        scale_factor = 1 / np.cos(home_position.geo.latitude)
+
+        # Convert home position latitude, longitude to local frame Cartesian coordinates
+        # TODO: cache these, no need to recompute unless home position has changed
+        x_home, y_home = (
+            scale_factor * coordinate
+            for coordinate in self._transformer.transform(
+                home_position.geo.latitude,
+                home_position.geo.longitude,
+            )
         )
 
+        # Convert vehicle (or ground track) latitude, longitude, and altitude
+        # (or elevation) to local frame Cartesian coordinates
+        x, y = (
+            scale_factor * coordinate
+            for coordinate in self._transformer.transform(
+                geopose.pose.position.latitude,
+                geopose.pose.position.longitude,
+            )
+        )
         # TODO: use altitude.local or relative (whichever is positive?) even
         # if slightly out of sync
-        z = geopose.altitude
+        z = geopose.pose.position.altitude
 
         # Create a PoseStamped message
         pose_stamped = PoseStamped()
-        pose_stamped.header = geopose_stamped.header
+        pose_stamped.header = geopose.header
         pose_stamped.header.frame_id = "map"
 
-        # TODO: x should be easting but re-centered to 0 for ksql_airport.world
-        pose_stamped.pose.position.x = x + 13609376
+        # Re-center easting and northing to home position
+        pose_stamped.pose.position.x = x - x_home
+        pose_stamped.pose.position.y = y - y_home
 
-        # TODO: y should be northing but re-centered to 0 for ksql_airport.world
-        pose_stamped.pose.position.y = y - 4512349
+        # TODO: Re-center z
+        # GeoPose is ellipsoid while home position is AMSL altitude/elevation
         pose_stamped.pose.position.z = z
-        pose_stamped.pose.orientation = geopose_stamped.pose.orientation
+        pose_stamped.pose.orientation = geopose.pose.orientation
 
-        assert len(self._pose_stamped_queue) > 0
-        self._publish_path()
-        self.__pose_stamped_publisher.publish(pose_stamped)
+        return pose_stamped
 
     @staticmethod
-    def _append_pose_to_path(pose: PoseStamped, queue: deque) -> None:
-        """Appends the pose message to the Path queue
+    def _append_pose_to_queue(pose: PoseStamped, queue: deque) -> None:
+        """Appends the :class:`.PoseStamped` message to the :class:`.Path`
+        queue
 
         :param pose: :class:`.PoseStamped` message to append
         :param queue: :class:`nav_msgs.msg.Path` queue to append to
@@ -204,21 +173,153 @@ class RVizNode(Node):
         # GPS at 10 Hz vs GISNav mock GPS at 1 Hz). Also for visualization
         # a very frequent sample rate is not needed.
         if len(queue) > 0:
-            if pose_stamped.header.stamp.sec - self.queue[-1].header.stamp.sec > 1.0:
-                self.queue.append(pose_stamped)
+            if pose.header.stamp.sec - queue[-1].header.stamp.sec > 1.0:
+                queue.append(pose)
             else:
                 # Observation is too recent, return
                 return None
         else:
             # Queue is empty
-            queue.append(pose_stamped)
+            queue.append(pose)
 
-    @staticmethod
-    def _append_geopose_to_path(geopose: GeoPoseStamped, queue: deque) -> None:
+    def _append_geopose_to_queue(self, geopose: GeoPoseStamped, queue: deque) -> None:
         """Appends the geopose message to the Path queue
 
         :param pose: :class:`.GeoPoseStamped` message to append
         :param queue: :class:`nav_msgs.msg.Path` queue to append to
         """
-        pose = self._geopose_to_local_pose(geopose)
-        self._append_pose_to_path(pose, queue)
+        pose = self._geopose_to_local_pose(geopose, self.home_position)
+        if pose is not None:
+            self._append_pose_to_queue(pose, queue)
+        else:
+            self.get_logger().warn(
+                "Could not append geopose to queue because "
+                "could not convert it into a local pose"
+            )
+
+    def _append_vehicle_geopose_to_queue(self, geopose: GeoPoseStamped) -> None:
+        """Appends the geopose message to the vehicle pose Path queue
+
+        :param pose: :class:`.GeoPoseStamped` message to append
+        """
+        self._append_geopose_to_queue(geopose, self._vehicle_path_queue)
+        self.vehicle_path
+
+    def _append_vehicle_estimated_geopose_to_queue(
+        self, geopose: GeoPoseStamped
+    ) -> None:
+        """Appends the geopose message to the vehicle pose estimate Path queue
+
+        :param pose: :class:`.GeoPoseStamped` message to append
+        """
+        self._append_geopose_to_queue(geopose, self._vehicle_estimated_path_queue)
+        self.vehicle_estimated_path
+
+    def _append_ground_track_geopose_to_queue(self, geopose: GeoPoseStamped) -> None:
+        """Appends the geopose message to the ground track Path queue
+
+        :param pose: :class:`.GeoPoseStamped` message to append
+        """
+        self._append_geopose_to_queue(geopose, self._ground_track_path_queue)
+        self.vehicle_ground_track_path
+
+    def _get_path(self, queue: deque) -> Path:
+        """Returns :class:`nav_msgs.msg.Path` based on provided queue
+
+        :param queue: Queue to turn into a :class:`nav_msgs.msg.Path` message
+        :return: :class:`nav_msgs.msg.Path` message
+        """
+        path = Path()
+        path.header.stamp = self.get_clock().now().to_msg()
+        path.header.frame_id = "map"
+        path.poses = list(queue)
+        return path
+
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_HOME_POSITION,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def home_position(self) -> Optional[HomePosition]:
+        """Subscribed :term:`vehicle` :term:`home` position, or None if not
+        available or too old
+        """
+
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_append_vehicle_geopose_to_queue,
+    )
+    def vehicle_geopose(self) -> Optional[GeoPoseStamped]:
+        """Subscribed :term:`vehicle` :term:`geopose`, or None if not available
+        or too old
+        """
+
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_append_vehicle_estimated_geopose_to_queue,
+    )
+    def vehicle_estimated_geopose(self) -> Optional[GeoPoseStamped]:
+        """Subscribed :term:`vehicle` :term:`geopose` estimate, or None if not
+        available or too old
+        """
+
+    # TODO: this expects a geopoint but topic name says geopoint?
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
+    @ROS.subscribe(
+        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_append_ground_track_geopose_to_queue,
+    )
+    def ground_track_geopose(self) -> Optional[GeoPoseStamped]:
+        """Subscribed :term:`vehicle` :term:`ground track` :term:`geopose`, or None
+        if not available or too old
+
+        .. note::
+            The :term:`orientation` part of the geopose is not defined for the
+            ground track and should be ignored.
+        """
+
+    @property
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_VEHICLE_PATH,
+        QoSPresetProfiles.SYSTEM_DEFAULT.value,
+    )
+    def vehicle_path(self) -> Optional[Path]:
+        """Published :term:`vehicle` :term:`global position` :term:`path`, or None
+        if not available
+        """
+        return self._get_path(self._vehicle_path_queue)
+
+    @property
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_PATH,
+        QoSPresetProfiles.SYSTEM_DEFAULT.value,
+    )
+    def vehicle_estimated_path(self) -> Optional[Path]:
+        """Published :term:`vehicle` :term:`global position` estimate :term:`path`,
+        or None if not available
+        """
+        return self._get_path(self._vehicle_estimated_path_queue)
+
+    @property
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_GROUND_TRACK_PATH,
+        QoSPresetProfiles.SYSTEM_DEFAULT.value,
+    )
+    def ground_track_path(self) -> Optional[Path]:
+        """Published :term:`vehicle` :term:`ground track` :term:`path`, or None if
+        not available
+
+        .. note::
+            The :term:`orientation` part of the :term:`geopose` contained in the
+            path is not defined for the ground track and should be ignored.
+        """
+        return self._get_path(self._ground_track_path_queue)

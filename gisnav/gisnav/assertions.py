@@ -533,7 +533,7 @@ class ROS:
                     node_name=args[0],
                     *args[1:],
                     **kwargs,
-                    # allow_undeclared_parameters=True,
+                    allow_undeclared_parameters=True,
                     automatically_declare_parameters_from_overrides=True,
                 )
                 for param_tuple in params:
@@ -616,13 +616,12 @@ class ROS:
                 try:
                     # Attempt to describe the parameter
                     # self.describe_parameter(param_name)
-                    # TODO: this won't work if allow_undeclared_parameters=True,
-                    #  will return None instead of going into parameter not declared
-                    #  exception
-
                     param_value = self.get_parameter(param_name).value
-                    # TODO: generic types, need to do like in narrow types
-                    # if not isinstance(param_value, get_args(param_type)):
+                    if param_value is None:
+                        # Need to do this manually since allow_undeclared_parameters
+                        # might be enabled
+                        raise ParameterNotDeclaredException(param_name)
+
                     origin_type = get_origin(param_type)
                     type_args = get_args(param_type)
                     # self.get_logger().error(f"{param_name} {param_value} {param_type} {origin_type} {type_args}")

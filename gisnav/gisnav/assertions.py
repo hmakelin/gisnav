@@ -38,6 +38,38 @@ P = ParamSpec("P")
 # **kwargs have the same keys?
 
 
+def _is_generic_instance(value, origin_type, type_args):
+    if origin_type == list:
+        return isinstance(value, list) and all(
+            isinstance(element, type_args[0]) for element in value
+        )
+    elif origin_type == dict:
+        key_type, value_type = type_args
+        return isinstance(value, dict) and all(
+            isinstance(k, key_type) and isinstance(v, value_type)
+            for k, v in value.items()
+        )
+    elif origin_type == tuple:
+        return (
+            isinstance(value, tuple)
+            and len(value) == len(type_args)
+            and all(
+                isinstance(element, type_arg)
+                for element, type_arg in zip(value, type_args)
+            )
+        )
+    elif origin_type == Union:
+        # Recurse all generic type args
+        return any(
+            _is_generic_instance(value, get_origin(type_arg), get_args(type_arg))
+            if get_origin(type_arg) is not None
+            else isinstance(value, type_arg)
+            for type_arg in type_args
+        )
+    else:
+        return any(isinstance(value, type_arg) for type_arg in type_args)
+
+
 # TODO: make this work with typed dicts?
 def narrow_types(
     arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
@@ -88,29 +120,6 @@ def narrow_types(
             signature = inspect.signature(method)
             bound_arguments = signature.bind(*args, **kwargs)
             bound_arguments.apply_defaults()
-
-            def _is_generic_instance(value, origin_type, type_args):
-                if origin_type == list:
-                    return isinstance(value, list) and all(
-                        isinstance(element, type_args[0]) for element in value
-                    )
-                elif origin_type == dict:
-                    key_type, value_type = type_args
-                    return isinstance(value, dict) and all(
-                        isinstance(k, key_type) and isinstance(v, value_type)
-                        for k, v in value.items()
-                    )
-                elif origin_type == tuple:
-                    return (
-                        isinstance(value, tuple)
-                        and len(value) == len(type_args)
-                        and all(
-                            isinstance(element, type_arg)
-                            for element, type_arg in zip(value, type_args)
-                        )
-                    )
-                else:
-                    return any(isinstance(value, type_arg) for type_arg in type_args)
 
             mismatches = []
             for name, value in bound_arguments.arguments.items():
@@ -610,12 +619,23 @@ class ROS:
                     # TODO: this won't work if allow_undeclared_parameters=True,
                     #  will return None instead of going into parameter not declared
                     #  exception
+
                     param_value = self.get_parameter(param_name).value
                     # TODO: generic types, need to do like in narrow types
                     # if not isinstance(param_value, get_args(param_type)):
-                    if not type(param_value) in get_args(param_type):
+                    origin_type = get_origin(param_type)
+                    type_args = get_args(param_type)
+                    # self.get_logger().error(f"{param_name} {param_value} {param_type} {origin_type} {type_args}")
+                    if (
+                        origin_type is not None
+                        and not _is_generic_instance(
+                            param_value, origin_type, type_args
+                        )
+                        or origin_type is None
+                        and not isinstance(param_value, param_type)
+                    ):
                         self.get_logger().warn(
-                            f"Return value of get_parameter() {param_value } does "
+                            f"Return value of get_parameter() {param_value} does "
                             f"not match declared type return type {param_type}."
                         )
                     return None

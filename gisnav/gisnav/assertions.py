@@ -637,7 +637,9 @@ class ROS:
                             f"Return value of get_parameter() {param_value} does "
                             f"not match declared type return type {param_type}."
                         )
-                    return None
+                        return None
+                    else:
+                        return param_value
                 except ParameterNotDeclaredException:
                     # Parameter not declared yet, so we declare it now
                     self.get_logger().info(

@@ -19,7 +19,10 @@ from typing import (
 
 import numpy as np
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.exceptions import ParameterAlreadyDeclaredException
+from rclpy.exceptions import (
+    ParameterAlreadyDeclaredException,
+    ParameterNotDeclaredException,
+)
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
@@ -257,6 +260,12 @@ def cache_if(predicate):
         return wrapper
 
     return decorator
+
+
+ROS_PARAM_TYPE = Union[
+    str, int, float, bool, List[str], List[int], List[float], List[bool]
+]
+D = TypeVar("D", bound=ROS_PARAM_TYPE)
 
 
 class ROS:
@@ -542,6 +551,93 @@ class ROS:
                 initializer(node_instance, *args, **kwargs)
 
             return wrapped_function
+
+        return decorator
+
+    # List of types supported by ROS2
+    SUPPORTED_ROS_TYPES = (
+        str,
+        int,
+        float,
+        bool,
+        List[str],
+        List[int],
+        List[float],
+        List[bool],
+    )
+
+    @staticmethod
+    def parameter(
+        default_value: ROS_PARAM_TYPE,
+        descriptor: Optional[ParameterDescriptor] = None,
+    ) -> Callable[
+        [Callable[..., Optional[ROS_PARAM_TYPE]]],
+        Callable[..., Optional[ROS_PARAM_TYPE]],
+    ]:
+        """
+        Decorator for declaring a property as a ROS parameter in a ROS node.
+        It uses the name of the property for the parameter name and the return
+        type hint for the parameter type.
+
+        :param default_value: Default value for parameter
+        :param descriptor: Optional parameter descriptor
+        :return: Decorator function
+        :raises ValueError: If the decorator is not used in a ROS node, or if
+            the property return type is not a supported ROS type, or if the
+            default value does not match the declared return type
+        """
+
+        def decorator(
+            func: Callable[..., Optional[ROS_PARAM_TYPE]]
+        ) -> Callable[..., Optional[ROS_PARAM_TYPE]]:
+            param_name = func.__name__
+            param_type = inspect.signature(func).return_annotation
+
+            if param_type not in ROS.SUPPORTED_ROS_TYPES:
+                raise ValueError(
+                    f"Invalid ROS parameter type. Must be one of "
+                    f"{ROS.SUPPORTED_ROS_TYPES}"
+                )
+
+            if not isinstance(default_value, get_args(param_type)):
+                raise ValueError(
+                    f"Provided default value does not match declared "
+                    f"type return type {param_type}"
+                )
+
+            @wraps(func)
+            def wrapper(self: Node) -> Optional[ROS_PARAM_TYPE]:
+                """
+                Wrapper function that declares a ROS parameter and sets a callback
+                for parameter changes
+
+                :param self: Instance of the class (ROS node)
+                :return: Result of the decorated function
+                :raises ValueError: If the decorator is not used in a ROS node
+                """
+                if not isinstance(self, Node):
+                    raise ValueError("ROS parameter can only be declared in a ROS node")
+
+                try:
+                    # Attempt to describe the parameter
+                    # self.describe_parameter(param_name)
+                    param_value = self.get_parameter(param_name).value
+                    if not isinstance(param_value, get_args(param_type)):
+                        self.logger().warn(
+                            f"Return value of get_parameter() {param_value } does "
+                            f"not match declared type return type {param_type}."
+                        )
+                    return None
+                except ParameterNotDeclaredException:
+                    # Parameter not declared yet, so we declare it now
+                    self.declare_parameter(param_name, default_value, descriptor)
+                    self.get_logger().info(
+                        f'Using default value "{default_value}" for ROS '
+                        f'parameter "{param_name}".'
+                    )
+                    return default_value
+
+            return wrapper
 
         return decorator
 

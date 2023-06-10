@@ -524,7 +524,7 @@ class ROS:
                     node_name=args[0],
                     *args[1:],
                     **kwargs,
-                    allow_undeclared_parameters=True,
+                    # allow_undeclared_parameters=True,
                     automatically_declare_parameters_from_overrides=True,
                 )
                 for param_tuple in params:
@@ -582,9 +582,7 @@ class ROS:
         :param default_value: Default value for parameter
         :param descriptor: Optional parameter descriptor
         :return: Decorator function
-        :raises ValueError: If the decorator is not used in a ROS node, or if
-            the property return type is not a supported ROS type, or if the
-            default value does not match the declared return type
+        :raises ValueError: If the decorator is not used in a ROS node
         """
 
         def decorator(
@@ -592,18 +590,6 @@ class ROS:
         ) -> Callable[..., Optional[ROS_PARAM_TYPE]]:
             param_name = func.__name__
             param_type = inspect.signature(func).return_annotation
-
-            if param_type not in ROS.SUPPORTED_ROS_TYPES:
-                raise ValueError(
-                    f"Invalid ROS parameter type. Must be one of "
-                    f"{ROS.SUPPORTED_ROS_TYPES}"
-                )
-
-            if not isinstance(default_value, get_args(param_type)):
-                raise ValueError(
-                    f"Provided default value does not match declared "
-                    f"type return type {param_type}"
-                )
 
             @wraps(func)
             def wrapper(self: Node) -> Optional[ROS_PARAM_TYPE]:
@@ -621,20 +607,28 @@ class ROS:
                 try:
                     # Attempt to describe the parameter
                     # self.describe_parameter(param_name)
+                    # TODO: this won't work if allow_undeclared_parameters=True,
+                    #  will return None instead of going into parameter not declared
+                    #  exception
                     param_value = self.get_parameter(param_name).value
-                    if not isinstance(param_value, get_args(param_type)):
-                        self.logger().warn(
+                    # TODO: generic types, need to do like in narrow types
+                    # if not isinstance(param_value, get_args(param_type)):
+                    if not type(param_value) in get_args(param_type):
+                        self.get_logger().warn(
                             f"Return value of get_parameter() {param_value } does "
                             f"not match declared type return type {param_type}."
                         )
                     return None
                 except ParameterNotDeclaredException:
                     # Parameter not declared yet, so we declare it now
-                    self.declare_parameter(param_name, default_value, descriptor)
                     self.get_logger().info(
                         f'Using default value "{default_value}" for ROS '
                         f'parameter "{param_name}".'
                     )
+                    if descriptor is None:
+                        self.declare_parameter(param_name, default_value)
+                    else:
+                        self.declare_parameter(param_name, default_value, descriptor)
                     return default_value
 
             return wrapper

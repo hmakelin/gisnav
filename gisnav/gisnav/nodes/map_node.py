@@ -436,7 +436,12 @@ class MapNode(Node):
         home_position = self.home_position
         if home_position is not None:
             return self._dem_height_meters_at_latlon_wms(
-                home_position.geo.latitude, home_position.geo.longitude
+                home_position.geo.latitude,
+                home_position.geo.longitude,
+                self.wms_srs,
+                self.wms_format,
+                self.wms_dem_layers,
+                self.wms_dem_styles,
             )
         else:
             self.get_logger().error("Home geopoint none, cannot get bbox wit padding)")
@@ -953,7 +958,15 @@ class MapNode(Node):
         # of this BoundingBox instead, with limited width and height (in meters)
         bounding_box = self.bounding_box
         map = self._request_orthoimage_for_bounding_box(
-            bounding_box, self._orthoimage_size
+            bounding_box,
+            self._orthoimage_size,
+            self.wms_srs,
+            self.wms_format,
+            self.wms_transparency,
+            self.wms_layers,
+            self.wms_dem_layers,
+            self.wms_styles,
+            self.wms_dem_styles,
         )
         if map is not None:
             img, dem = map
@@ -1203,7 +1216,12 @@ class MapNode(Node):
         )
         if dem_height_meters_at_latlon is None:
             dem_height_meters_at_latlon = self._dem_height_meters_at_latlon_wms(
-                latitude, longitude
+                latitude,
+                longitude,
+                self.wms_srs,
+                self.wms_format,
+                self.wms_dem_layers,
+                self.wms_dem_styles,
             )
 
         return dem_height_meters_at_latlon

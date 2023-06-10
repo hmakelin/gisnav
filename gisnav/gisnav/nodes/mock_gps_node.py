@@ -1,4 +1,24 @@
-"""Publishes mock GPS (GNSS) messages"""
+"""Publishes mock GPS (GNSS) messages
+
+.. mermaid::
+    :caption: WIP: Mock GPS node data flow graph
+
+    graph LR
+        subgraph CVNode
+            geopose_estimate[gisnav/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/vehicle/altitude/estimate]
+        end
+
+        subgraph MockGPSNode
+            sensor_gps[fmu/in/sensor_gps]
+            gps_input
+        end
+
+        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
+        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
+        sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
+        gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
+"""
 import json
 import socket
 from datetime import datetime

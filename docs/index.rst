@@ -53,3 +53,4 @@ The HTML documentation will then appear in the ``~/colcon_ws/src/gisnav/docs/_bu
    pages/developer_guide/index
    pages/api_documentation/index
    pages/contribute
+   pages/glossary

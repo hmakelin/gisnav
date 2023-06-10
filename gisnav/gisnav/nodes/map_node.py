@@ -860,12 +860,12 @@ class MapNode(Node):
             map_radius = get_dynamic_map_radius(
                 camera_info, max_map_radius, altitude.terrain
             )
-            return self._bounding_box_with_padding_for_latlon(latlon.lat, latlon.lon, map_radius)
+            return self._bounding_box_with_padding_for_latlon(
+                latlon.lat, latlon.lon, map_radius
+            )
 
         latlon = self._principal_point_on_ground_plane
-        bounding_box = _bounding_box(
-            latlon, self.camera_info, self.altitude
-        )
+        bounding_box = _bounding_box(latlon, self.camera_info, self.altitude)
 
         if bounding_box is None:
             geopose = self.geopose
@@ -878,8 +878,12 @@ class MapNode(Node):
                 geopoint = geopose.pose.position
 
             if geopoint is not None:
-                self.get_logger().error(f"principal point substitute {geopoint.latitude} {geopoint.longitude}")
-            bounding_box = self._bounding_box_with_padding_for_latlon(geopoint.latitude, geopoint.longitude)
+                self.get_logger().error(
+                    f"principal point substitute {geopoint.latitude} {geopoint.longitude}"
+                )
+            bounding_box = self._bounding_box_with_padding_for_latlon(
+                geopoint.latitude, geopoint.longitude
+            )
 
         return bounding_box
 
@@ -1197,7 +1201,9 @@ class MapNode(Node):
 
     @staticmethod
     def _quaternion_to_yaw_degrees(q):
-        yaw = np.arctan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        yaw = np.arctan2(
+            2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
 
         return np.degrees(yaw)
 
@@ -1208,9 +1214,7 @@ class MapNode(Node):
             geopose: GeoPoseStamped, altitude: Altitude, gimbal_quaternion: Quaternion
         ) -> LatLon:
             # Your off-nadir angle and camera yaw
-            off_nadir_angle_deg = messaging.off_nadir_angle(
-                gimbal_quaternion
-            )
+            off_nadir_angle_deg = messaging.off_nadir_angle(gimbal_quaternion)
 
             camera_yaw = self._quaternion_to_yaw_degrees(gimbal_quaternion)
 

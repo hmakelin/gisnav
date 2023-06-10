@@ -6,8 +6,11 @@ for both external and internal communication. If you have a ROS 2 node, you can 
 For simple integrations you might only be interested in the :ref:`Aircraft GeoPose estimate topics`. For an overview of
 all available topics, see :ref:`Remapping ROS 2 topics`.
 
+
+Core data flow graph
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. mermaid::
-    :caption: Target data flow graph (WIP)
+    :caption: WIP: Target core data flow graph
 
     graph LR
         subgraph Camera
@@ -35,10 +38,6 @@ all available topics, see :ref:`Remapping ROS 2 topics`.
             altitude_estimate[gisnav/vehicle/altitude/estimate]
         end
 
-        subgraph MockGPSNode
-            sensor_gps[fmu/in/sensor_gps]
-        end
-
         pose -->|geometry_msgs/Pose| GISNode
         global -->|sensor_msgs/NavSatFix| GISNode
         home -->|mavros_msgs/HomePosition| GISNode
@@ -52,8 +51,6 @@ all available topics, see :ref:`Remapping ROS 2 topics`.
         altitude_track -->|mavros_msgs/Altitude| CVNode
         geopoint_track -->|geographic_msgs/GeoPoint| CVNode
         image_raw -->|sensor_msgs/Image| CVNode
-        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
-        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
 
 
 Motivation for the data flow graph design:

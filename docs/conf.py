@@ -24,6 +24,7 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
     "sphinx.ext.autosectionlabel",
+    "sphinx.ext.todo",
     "sphinx_design",
     "autodocsumm",
     "myst_parser",
@@ -38,6 +39,8 @@ templates_path = ["_templates"]
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+todo_include_todos = True
 
 # -- Options for HTML output -------------------------------------------------
 

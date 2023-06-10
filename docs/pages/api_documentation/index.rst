@@ -11,7 +11,30 @@ search bar or the below module index to find what you are looking for.
     to mitigate the impact of breaking changes.
 
 .. toctree::
-    :caption: Python module index
+    :caption: Core
 
-    common_automodule
-    nodes/automodule
+    nodes/map_node
+    nodes/pose_estimation_node
+
+.. toctree::
+    :caption: Extensions
+
+    nodes/mock_gps_node
+    nodes/rviz_node
+
+.. toctree::
+    :caption: Utilities
+
+    gisnav/rclpy_decorators
+    nodes/messaging
+
+.. toctree::
+    :caption: Entry points
+
+    nodes/nodes
+    nodes/base_node
+
+.. toctree::
+    :caption: Launch tests
+
+    test/launch

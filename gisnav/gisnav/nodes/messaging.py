@@ -70,7 +70,32 @@ ROS_TOPIC_CAMERA_INFO = "camera/camera_info"
 
 ROS_TOPIC_IMAGE = "camera/image_raw"
 """Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
+
+ROS_TOPIC_HOME_POSITION = "/mavros/home_position/home"
+"""Name of ROS topic for :class:`mavros_msgs.msg.HomePosition` messages"""
+
+ROS_TOPIC_PATH = "gisnav/vehicle/path"
+ROS_TOPIC_PATH_ESTIMATE = "gisnav/vehicle/estimated/path"
+ROS_TOPIC_GROUND_TRACK_PATH = "gisnav/ground_track/path"
 # endregion ROS topic names
+
+
+DELAY_SLOW_MS = 10000
+"""Max delay for messages where updates are not needed nor expected often,
+e.g. home position
+"""
+
+
+DELAY_DEFAULT_MS = 2000
+"""Max delay for things like global position"""
+
+
+DELAY_FAST_MS = 500
+"""Max delay for messages with fast dynamics that go "stale" quickly, e.g.
+local position and attitude. The delay can be a bit higher than is
+intuitive because the vehicle EKF should be able to fuse things with
+fast dynamics with higher lags as long as the timestamps are accurate.
+"""
 
 
 def create_header(frame_id: str = "") -> Header:
@@ -248,6 +273,7 @@ def off_nadir_angle_v2(quaternion: np.ndarray):
     angle_degrees = np.degrees(angle)
 
     return angle_degrees
+
 
 def off_nadir_angle(q):
     # Rotated vector

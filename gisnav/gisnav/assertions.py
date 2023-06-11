@@ -624,7 +624,6 @@ class ROS:
 
                     origin_type = get_origin(param_type)
                     type_args = get_args(param_type)
-                    # self.get_logger().error(f"{param_name} {param_value} {param_type} {origin_type} {type_args}")
                     if (
                         origin_type is not None
                         and not _is_generic_instance(
@@ -633,9 +632,10 @@ class ROS:
                         or origin_type is None
                         and not isinstance(param_value, param_type)
                     ):
-                        self.get_logger().warn(
-                            f"Return value of get_parameter() {param_value} does "
-                            f"not match declared type return type {param_type}."
+                        self.get_logger().error(
+                            f"Return value of {param_name} get_parameter() "
+                            f"{param_value} does not match declared type return "
+                            f"type {param_type}."
                         )
                         return None
                     else:

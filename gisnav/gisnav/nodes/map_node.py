@@ -263,7 +263,7 @@ class MapNode(Node):
 
     @property
     @ROS.parameter(ROS_D_IMAGE_TRANSPARENCY)
-    def wms_transparency(self) -> Optional[str]:
+    def wms_transparency(self) -> Optional[bool]:
         """WMS request transparency for all :term:`GetMap` requests"""
 
     @property
@@ -405,7 +405,6 @@ class MapNode(Node):
         bounding_box = self._bounding_box_with_padding_for_latlon(lat, lon)
         bbox = messaging.bounding_box_to_bbox(bounding_box)
 
-        self.get_logger().info("Requesting DEM height (GetFeatureInfo)")
         height = self._get_feature_info(
             dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
         )

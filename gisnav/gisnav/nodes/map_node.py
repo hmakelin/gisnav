@@ -98,15 +98,40 @@ from . import messaging
 class MapNode(Node):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic
 
-    Downloads and stores orthophoto and optional DEM (together called orthoimage)
-    from WMS for location of projected camera field of view.
+    This node generates both :term:`vehicle` :term:`altitude` and
+    :term:`ground track` :term:`elevation` :term:`messages`, resulting in a
+    complex interplay of class properties. The diagram below shows the dependency
+    between the properties of GISNode:
 
-    Subscribes to :class:`.CameraInfo` and :class:`.FOV` messages to determine
-    bounding box for next orthoimage to be cached. Requests new map whenever
-    ground-projected FOV overlap with bounding box of current cached orthoimage
-    gets too small. Publishes a :class:`.OrthoImage3D`with a high-resolution
-    orthophoto and an optional digital elevation model (DEM) that can be used
-    for pose estimation.
+    .. mermaid::
+        :caption: GISNode main execution paths
+
+        graph TD
+            A[MapNode] --> B(_dem_height_meters_at_latlon)
+            B --> C[_dem_height_meters_at_latlon_wms]
+            C --> I[_get_feature_info]
+            A --> D[dem_height_meters_at_local_origin]
+            D --> C
+            D --> R[_should_update_dem_height_at_local_origin]
+            A --> E[ground_track_altitude]
+            E --> F[_ground_track_altitude_at_home_amsl]
+            F --> N[_home_altitude_amsl]
+            E --> G[_ground_track_altitude_amsl]
+            G --> J[_ground_track_altitude_amsl_at_latlon]
+            A --> H[_request_orthoimage_for_bounding_box]
+            H --> K[_get_map]
+            A --> L[orthoimage_3d]
+            L --> H
+            L --> O[bounding_box]
+            O --> Q[_principal_point_on_ground_plane]
+            A --> M[_ground_track_altitude_ellipsoid]
+            M --> G
+            A --> P[_should_request_orthoimage]
+            P --> O
+
+    Diamonds represent conditionals, often reverting to cached values. Boxed
+    items can be ROS messages, parameters, or private computed properties used
+    as intermediates.
 
     .. warning::
         ``OWSLib`` *as of version 0.25.0* uses the Python ``requests`` library

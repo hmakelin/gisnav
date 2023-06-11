@@ -1,7 +1,6 @@
 """Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
 import time
 import xml.etree.ElementTree as ET
-from collections import deque
 from typing import IO, Final, List, Optional, Tuple
 
 import cv2
@@ -199,8 +198,6 @@ class MapNode(Node):
         self.nav_sat_fix
         self.home_position
         self.gimbal_device_attitude_status
-
-        self._pose_stamped_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
 
         # TODO: use throttling in publish decorator, remove timer
         publish_rate = self.publish_rate
@@ -553,67 +550,6 @@ class MapNode(Node):
     )
     def pose(self) -> Optional[PoseStamped]:
         """Vehicle local position, or None if not available or too old"""
-
-    @property
-    @ROS.publish(
-        "~/pose",
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def pose_stamped(self) -> Optional[PoseStamped]:
-        @narrow_types(self)
-        def _pose_stamped(
-            geopose_stamped: GeoPoseStamped, altitude: Altitude
-        ) -> Optional[PoseStamped]:
-            """
-            Publish :class:`geometry_msgs.msg.PoseStamped` and
-            :class:`nav_msgs.msg.Path` messages
-
-            :param geopose_stamped: Vehicle geopose
-            :param alt_agl: Vehicle altitude above ground level (RViz config is
-                assumed to define a planar ground surface at z=0)
-            """
-            alt_agl = altitude.terrain
-            # Convert latitude, longitude, and altitude to Cartesian coordinates
-            x, y = self._transformer.transform(
-                geopose_stamped.pose.position.latitude,
-                geopose_stamped.pose.position.longitude,
-            )
-            z = alt_agl
-
-            # Create a PoseStamped message
-            pose_stamped = PoseStamped()
-            pose_stamped.header = geopose_stamped.header
-            pose_stamped.header.frame_id = "map"
-
-            # TODO: x should be easting but re-centered to 0 for ksql_airport.world
-            pose_stamped.pose.position.x = x + 13609376
-
-            # TODO: y should be northing but re-centered to 0 for ksql_airport.world
-            pose_stamped.pose.position.y = y - 4512349
-            pose_stamped.pose.position.z = z
-            pose_stamped.pose.orientation = geopose_stamped.pose.orientation
-
-            # Update visualization if some time has passed, but not too soon. This
-            # is mainly to prevent the Paths being much shorter in time for nodes
-            # that would otherwise publish at much higher frequency (e.g. actual
-            # GPS at 10 Hz vs GISNav mock GPS at 1 Hz)
-            if len(self._pose_stamped_queue) > 0:
-                if (
-                    pose_stamped.header.stamp.sec
-                    - self._pose_stamped_queue[-1].header.stamp.sec
-                    > 1.0
-                ):
-                    self._pose_stamped_queue.append(pose_stamped)
-                else:
-                    # Observation is too recent, return
-                    return None
-            else:
-                # Queue is empty
-                self._pose_stamped_queue.append(pose_stamped)
-
-            return pose_stamped
-
-        return _pose_stamped(self.geopose, self.altitude)
 
     @property
     # @ROS.max_delay_ms(2000) - camera info has no header (?)

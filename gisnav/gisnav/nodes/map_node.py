@@ -17,7 +17,6 @@ from geographic_msgs.msg import (
 )
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from nav_msgs.msg import Path
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from pygeodesy.ellipsoidalVincenty import LatLon
@@ -36,8 +35,6 @@ from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 from ..assertions import ROS, assert_len, assert_type, cache_if, narrow_types
 from ..geo import get_dynamic_map_radius
 from . import messaging
-
-# from std_msgs.msg import Float32
 
 
 class MapNode(Node):
@@ -546,7 +543,6 @@ class MapNode(Node):
         # Publish to rviz
         # assert len(self._pose_stamped_queue) > 0
         self.pose_stamped
-        self.path
 
     @property
     # @ROS.max_delay_ms(_DELAY_FAST_MS)  # TODO:
@@ -651,19 +647,6 @@ class MapNode(Node):
             return diagonal, diagonal
 
         return _orthoimage_size(self.camera_info)
-
-    @property
-    @ROS.publish(
-        ROS_TOPIC_PATH,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def path(self) -> Optional[Path]:
-        """Altitude of vehicle ground track, or None if not available"""
-        path = Path()
-        path.header.stamp = self.get_clock().now().to_msg()
-        path.header.frame_id = "map"
-        path.poses = list(self._pose_stamped_queue)
-        return path
 
     @property
     @ROS.publish(

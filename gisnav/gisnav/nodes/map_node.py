@@ -104,30 +104,69 @@ class MapNode(Node):
     between the properties of GISNode:
 
     .. mermaid::
-        :caption: GISNode main execution paths
+        :caption: GISNode process flow diagram
 
-        graph TD
-            A[MapNode] --> B(_dem_height_meters_at_latlon)
-            B --> C[_dem_height_meters_at_latlon_wms]
-            C --> I[_get_feature_info]
-            A --> D[dem_height_meters_at_local_origin]
-            D --> C
-            D --> R[_should_update_dem_height_at_local_origin]
-            A --> E[ground_track_altitude]
+        graph TB
+            subgraph subscribe
+                I[nav_sat_fix]
+                HP[home_position]
+                T[vehicle_pose]
+                GDAS[gimbal_device_attitude_status]
+                CI[camera_info]
+            end subscribe
+
+            subgraph publish
+                E[ground_track_altitude]
+                Z[vehicle_altitude]
+                V[vehicle_geopose]
+                L[orthoimage_3d]
+                Y[ground_track_geopoint]
+            end publish
+
+            subgraph OWSLib
+                K[_get_map]
+                GFI[_get_feature_info]
+            end OWSLib
+
+            A[MapNode] --> Y
+            A --> Z
+            J[_ground_track_altitude_amsl_at_latlon] --> C[_dem_height_meters_at_latlon_wms]
+            HP --> D[dem_height_meters_at_local_origin]
+            D --> R{_should_update_dem_height_at_local_origin}
+            R --> C
+            A --> E
             E --> F[_ground_track_altitude_at_home_amsl]
             F --> N[_home_altitude_amsl]
             E --> G[_ground_track_altitude_amsl]
-            G --> J[_ground_track_altitude_amsl_at_latlon]
-            A --> H[_request_orthoimage_for_bounding_box]
-            H --> K[_get_map]
-            A --> L[orthoimage_3d]
+            G --> J
+            J --> HP
+            J --> D
+            H[_request_orthoimage_for_bounding_box] --> K
+            A --> P{_should_request_orthoimage}
+            P --> L
             L --> H
-            L --> O[bounding_box]
+            L --> O[_bounding_box]
+            L --> OS[_orthoimage_size]
+            O --> HP
             O --> Q[_principal_point_on_ground_plane]
-            A --> M[_ground_track_altitude_ellipsoid]
+            O --> CI
+            OS --> CI
+            Q --> Z
+            Q --> X[gimbal_quaternion]
+            Q --> V
+            A --> V
+            V --> I
+            V --> T
             M --> G
-            A --> P[_should_request_orthoimage]
-            P --> O
+            J --> I
+            O --> V
+            Y --> V
+            Y --> M[_ground_track_altitude_ellipsoid]
+            X --> GDAS
+            C --> GFI
+            N --> HP
+            M --> EGM[_egm96]
+
 
     Diamonds represent conditionals, often reverting to cached values. Boxed
     items can be ROS messages, parameters, or private computed properties used
@@ -885,7 +924,7 @@ class MapNode(Node):
         return (
             bool(
                 _orthoimage_overlap_is_too_low(
-                    self.bounding_box,
+                    self._bounding_box,
                     self._orthoimage_3d,
                     self.min_map_overlap_update_threshold,
                 )
@@ -905,7 +944,7 @@ class MapNode(Node):
         return _altitude_local(self.pose)
 
     @property
-    def bounding_box(self) -> Optional[BoundingBox]:
+    def _bounding_box(self) -> Optional[BoundingBox]:
         """Geographical bounding box of area to retrieve a map for, or None if not
         available
         """
@@ -958,7 +997,7 @@ class MapNode(Node):
         # TODO: if FOV projection is large, this BoundingBox can be too large
         # and the WMS server will choke? Should get a BoundingBox for center
         # of this BoundingBox instead, with limited width and height (in meters)
-        bounding_box = self.bounding_box
+        bounding_box = self._bounding_box
         map = self._request_orthoimage_for_bounding_box(
             bounding_box,
             self._orthoimage_size,
@@ -1239,7 +1278,7 @@ class MapNode(Node):
         not available.
 
         :param latitude: Vehicle global position latitude
-        :param latitude: Vehicle global position longitude
+        :param latitude: Vehicle global position longitudeack_
         :return: Vehicle ground track altitude AMSL in meters at vehicle global
             position
         """

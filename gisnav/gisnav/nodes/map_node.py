@@ -106,7 +106,7 @@ class MapNode(Node):
     .. mermaid::
         :caption: GISNode process flow diagram
 
-        graph TB
+        graph LR
             subgraph subscribe
                 I[nav_sat_fix]
                 HP[home_position]
@@ -129,43 +129,43 @@ class MapNode(Node):
             end OWSLib
 
             A[MapNode] --> Y
+            A --> E
+            A --> V
+            A --> P{_should_request_orthoimage}
             A --> Z
             J[_ground_track_altitude_amsl_at_latlon] --> C[_dem_height_meters_at_latlon_wms]
-            HP --> D[dem_height_meters_at_local_origin]
             D --> R{_should_update_dem_height_at_local_origin}
+            D[dem_height_meters_at_local_origin] --> HP
             R --> C
-            A --> E
+            E --> G[_ground_track_altitude_amsl]
             E --> F[_ground_track_altitude_at_home_amsl]
             F --> N[_home_altitude_amsl]
-            E --> G[_ground_track_altitude_amsl]
             G --> J
-            J --> HP
             J --> D
+            J --> HP
             H[_request_orthoimage_for_bounding_box] --> K
-            A --> P{_should_request_orthoimage}
             P --> L
             L --> H
-            L --> O[_bounding_box]
             L --> OS[_orthoimage_size]
+            L --> O[_bounding_box]
             O --> HP
             O --> Q[_principal_point_on_ground_plane]
             O --> CI
+            O --> V
             OS --> CI
             Q --> Z
             Q --> X[gimbal_quaternion]
             Q --> V
-            A --> V
             V --> I
             V --> T
-            M --> G
             J --> I
-            O --> V
-            Y --> V
             Y --> M[_ground_track_altitude_ellipsoid]
+            Y --> V
             X --> GDAS
             C --> GFI
             N --> HP
             M --> EGM[_egm96]
+            M --> G
 
 
     Diamonds represent conditionals, often reverting to cached values. Boxed

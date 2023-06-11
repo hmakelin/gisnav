@@ -1278,7 +1278,7 @@ class MapNode(Node):
         not available.
 
         :param latitude: Vehicle global position latitude
-        :param latitude: Vehicle global position longitudeack_
+        :param latitude: Vehicle global position longitude
         :return: Vehicle ground track altitude AMSL in meters at vehicle global
             position
         """

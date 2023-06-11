@@ -1,4 +1,63 @@
-"""Contains :class:`.Node` that provides :class:`OrthoImage3D`s"""
+"""This module contains :class:`.GISNode`, a :term:`ROS` node for retrieving and
+publishing geographic information and images.
+
+:class:`.GISNode` manages geographic information for the system, including
+downloading and storing the :term:`orthophoto` and optionally :term:`DEM`
+:term:`raster`. These rasters are retrieved from an :term:`onboard` :term:`WMS`
+based on the projected location of the :term:`camera` field of view.
+
+The node subscribes to :term:`.CameraInfo` and Field of View (FOV) messages to
+determine the :term:`bounding box` for the next :term:`orthoimage` to cache. It
+will request a new raster when the overlap between the ground-projected FOV
+and the bounding box of the current cached orthoimage becomes too small.
+
+:class:`.GISNode` publishes :class:`.OrthoImage3D` messages, which contain
+high-resolution orthophotos and an optional DEM. These messages can be used
+for estimating the :term:`geopose` and :term:`altitude` of the vehicle as well
+as determining the :term:`ground track` :term:`elevation`.
+
+.. mermaid::
+    :caption: :class:`.GISNode` computational graph
+
+    graph LR
+
+        subgraph Camera
+            camera_info[camera/camera_info]
+        end
+
+        subgraph MAVROS
+            pose[mavros/local_position/pose]
+            global[mavros/global_position/global]
+            home[mavros/home_position/home]
+            attitude[mavros/gimbal_control/device/attitude_status]
+        end
+
+        subgraph GISNode
+            geopose[gisnav/vehicle/geopose]
+            altitude[gisnav/vehicle/altitude]
+            geopoint_track[gisnav/ground_track/geopoint]
+            altitude_track[gisnav/ground_track/altitude]
+            orthoimage[gisnav/orthoimage]
+        end
+
+        subgraph CVNode
+            geopose_estimate[gisnav/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/vehicle/altitude/estimate]
+        end
+
+        pose -->|geometry_msgs/Pose| GISNode
+        global -->|sensor_msgs/NavSatFix| GISNode
+        home -->|mavros_msgs/HomePosition| GISNode
+        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| GISNode
+        camera_info -->|sensor_msgs/CameraInfo| GISNode
+
+        geopose -->|geographic_msgs/GeoPose| CVNode
+        altitude -->|mavros_msgs/Altitude| CVNode
+        orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
+        altitude_track -->|mavros_msgs/Altitude| CVNode
+        geopoint_track -->|geographic_msgs/GeoPoint| CVNode
+
+"""
 import time
 import xml.etree.ElementTree as ET
 from typing import IO, Final, List, Optional, Tuple

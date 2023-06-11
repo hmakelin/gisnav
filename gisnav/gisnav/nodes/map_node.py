@@ -2,7 +2,7 @@
 import time
 import xml.etree.ElementTree as ET
 from collections import deque
-from typing import IO, Optional, Tuple
+from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -23,6 +23,7 @@ from owslib.wms import WebMapService
 from pygeodesy.ellipsoidalVincenty import LatLon
 from pygeodesy.geoids import GeoidPGM
 from pyproj import Transformer
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
@@ -149,8 +150,9 @@ class MapNode(Node):
     """
 
     ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
-    """Overlap ration between FOV and current map, under which a new map will
-    be requested."""
+    """Required overlap ratio between suggested new :term:`bounding box` and current
+    :term:`orthoimage` bounding box, under which a new map will be requested.
+    """
 
     ROS_D_MAX_MAP_RADIUS = 1000
     """Max radius for circle inside the maps (half map side length)"""
@@ -181,23 +183,10 @@ class MapNode(Node):
     #: Max limit for held :class:`geometry_msgs.msg.PoseStamped` messages
     _MAX_POSE_STAMPED_MESSAGES = 100
 
-    @ROS.setup_node(
-        [
-            ("url", ROS_D_URL, True),
-            ("version", ROS_D_VERSION, True),
-            ("timeout", ROS_D_TIMEOUT, True),
-            ("publish_rate", ROS_D_PUBLISH_RATE, True),
-            ("layers", ROS_D_LAYERS, False),
-            ("styles", ROS_D_STYLES, False),
-            ("dem_layers", ROS_D_DEM_LAYERS, False),
-            ("dem_styles", ROS_D_DEM_STYLES, False),
-            ("srs", ROS_D_SRS, False),
-            ("transparency", ROS_D_IMAGE_TRANSPARENCY, False),
-            ("format", ROS_D_IMAGE_FORMAT, False),
-            ("map_overlap_update_threshold", ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD, False),
-            ("max_map_radius", ROS_D_MAX_MAP_RADIUS, False),
-        ]
-    )
+    _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
+    """A read only ROS parameter descriptor"""
+
+    @ROS.setup_node([])
     def __init__(self, name: str):
         """Class initializer
 
@@ -217,9 +206,8 @@ class MapNode(Node):
         self._pose_stamped_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
 
         # TODO: use throttling in publish decorator, remove timer
-        publish_rate = (
-            self.get_parameter("publish_rate").get_parameter_value().integer_value
-        )
+        publish_rate = self.publish_rate
+        assert publish_rate is not None
         self._publish_timer = self._create_publish_timer(publish_rate)
 
         # TODO: make configurable / use shared folder home path instead
@@ -231,8 +219,82 @@ class MapNode(Node):
 
         # TODO: WMS connection handle disconnects, declare property
         self._connected = False
-        self._connect_wms()
+        self._connect_wms(self.wms_url, self.wms_version, self.wms_timeout)
 
+    @property
+    @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def wms_url(self) -> Optional[str]:
+        """WMS client endpoint URL"""
+
+    @property
+    @ROS.parameter(ROS_D_VERSION, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def wms_version(self) -> Optional[str]:
+        """Used WMS protocol version"""
+
+    @property
+    @ROS.parameter(ROS_D_TIMEOUT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def wms_timeout(self) -> Optional[int]:
+        """WMS request timeout in seconds"""
+
+    @property
+    @ROS.parameter(ROS_D_LAYERS)
+    def wms_layers(self) -> Optional[List[str]]:
+        """WMS request layers for :term:`orthophoto` :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_DEM_LAYERS)
+    def wms_dem_layers(self) -> Optional[List[str]]:
+        """WMS request layers for :term:`DEM` :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_STYLES)
+    def wms_styles(self) -> Optional[List[str]]:
+        """WMS request styles for :term:`orthophoto` :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_DEM_STYLES)
+    def wms_dem_styles(self) -> Optional[List[str]]:
+        """WMS request styles for :term:`DEM` :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_SRS)
+    def wms_srs(self) -> Optional[str]:
+        """WMS request :term:`SRS` for all :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_IMAGE_TRANSPARENCY)
+    def wms_transparency(self) -> Optional[bool]:
+        """WMS request transparency for all :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_IMAGE_FORMAT)
+    def wms_format(self) -> Optional[str]:
+        """WMS request format for all :term:`GetMap` requests"""
+
+    @property
+    @ROS.parameter(ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD)
+    def min_map_overlap_update_threshold(self) -> Optional[float]:
+        """Required :term:`bounding box` overlap ratio for new :term:`GetMap`
+        requests
+
+        If the overlap between the candidate new bounding box and the current
+        :term:`orthoimage` bounding box is below this value, a new map will be
+        requested.
+        """
+
+    @property
+    @ROS.parameter(ROS_D_MAX_MAP_RADIUS)
+    def max_map_radius(self) -> Optional[int]:
+        """Max radius in meters for circle inside the requested :term:`bounding box`
+        (half map side length)
+        """
+
+    @property
+    @ROS.parameter(ROS_D_PUBLISH_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def publish_rate(self) -> Optional[int]:
+        """Publish rate in Hz for the :attr:`.orthoimage_3d` :term:`message`"""
+
+    @narrow_types
     def _create_publish_timer(self, publish_rate: int) -> Timer:
         """
         Returns a timer to publish :attr:`.orthoimage_3d` to ROS
@@ -267,11 +329,9 @@ class MapNode(Node):
         """
         self.orthoimage_3d
 
-    def _connect_wms(self) -> None:
+    @narrow_types
+    def _connect_wms(self, url: str, version: str, timeout: int) -> None:
         """Connects to WMS server"""
-        url = self.get_parameter("url").get_parameter_value().string_value
-        version = self.get_parameter("version").get_parameter_value().string_value
-        timeout = self.get_parameter("timeout").get_parameter_value().integer_value
         while not self.connected:
             try:
                 self.get_logger().info("Connecting to WMS endpoint...")
@@ -326,26 +386,25 @@ class MapNode(Node):
         if self._dem_height_meters_at_local_origin is None:
             return True
 
+    @narrow_types
     def _dem_height_meters_at_latlon_wms(
-        self, lat: float, lon: float
+        self,
+        lat: float,
+        lon: float,
+        srs: str,
+        format_: str,
+        dem_layers: List[str],
+        dem_styles: List[str],
     ) -> Optional[float]:
         """Digital elevation model (DEM) height in meters at given coordinates
 
         Uses WMS GetFeatureInfo to get the value frome the onboard GIS server.
         """
-        dem_layers, dem_styles = (
-            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
-            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
-        )
         assert_len(dem_styles, len(dem_layers))
-
-        srs = self.get_parameter("srs").get_parameter_value().string_value
-        format_ = self.get_parameter("format").get_parameter_value().string_value
 
         bounding_box = self._bounding_box_with_padding_for_latlon(lat, lon)
         bbox = messaging.bounding_box_to_bbox(bounding_box)
 
-        self.get_logger().info("Requesting DEM height (GetFeatureInfo)")
         height = self._get_feature_info(
             dem_layers, dem_styles, srs, bbox, (3, 3), format_, xy=(1, 1)
         )
@@ -376,7 +435,12 @@ class MapNode(Node):
         home_position = self.home_position
         if home_position is not None:
             return self._dem_height_meters_at_latlon_wms(
-                home_position.geo.latitude, home_position.geo.longitude
+                home_position.geo.latitude,
+                home_position.geo.longitude,
+                self.wms_srs,
+                self.wms_format,
+                self.wms_dem_layers,
+                self.wms_dem_styles,
             )
         else:
             self.get_logger().error("Home geopoint none, cannot get bbox wit padding)")
@@ -716,7 +780,16 @@ class MapNode(Node):
 
     @narrow_types
     def _request_orthoimage_for_bounding_box(
-        self, bounding_box: BoundingBox, size: Tuple[int, int]
+        self,
+        bounding_box: BoundingBox,
+        size: Tuple[int, int],
+        srs: str,
+        format_: str,
+        transparency: bool,
+        layers: List[str],
+        dem_layers: List[str],
+        styles: List[str],
+        dem_styles: List[str],
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Sends GetMap request to GIS WMS for image and DEM layers and returns
@@ -731,27 +804,8 @@ class MapNode(Node):
         :param size: Orthoimage resolution (height, width)
         :return: Orthophoto and dem tuple for bounding box
         """
-        layers, styles = (
-            self.get_parameter("layers").get_parameter_value().string_array_value,
-            self.get_parameter("styles").get_parameter_value().string_array_value,
-        )
         assert_len(styles, len(layers))
-        assert all(isinstance(x, str) for x in layers)
-        assert all(isinstance(x, str) for x in styles)
-
-        dem_layers, dem_styles = (
-            self.get_parameter("dem_layers").get_parameter_value().string_array_value,
-            self.get_parameter("dem_styles").get_parameter_value().string_array_value,
-        )
         assert_len(dem_styles, len(dem_layers))
-        assert all(isinstance(x, str) for x in dem_layers)
-        assert all(isinstance(x, str) for x in dem_styles)
-
-        srs = self.get_parameter("srs").get_parameter_value().string_value
-        format_ = self.get_parameter("format").get_parameter_value().string_value
-        transparency = (
-            self.get_parameter("transparency").get_parameter_value().bool_value
-        )
 
         bbox = messaging.bounding_box_to_bbox(bounding_box)
 
@@ -807,20 +861,17 @@ class MapNode(Node):
 
         @narrow_types(self)
         def _orthoimage_overlap_is_too_low(
-            new_bounding_box: BoundingBox, old_orthoimage: OrthoImage3D
+            new_bounding_box: BoundingBox,
+            old_orthoimage: OrthoImage3D,
+            min_map_overlap_update_threshold: float,
         ) -> bool:
             bbox = messaging.bounding_box_to_bbox(new_bounding_box)
             bbox_previous = messaging.bounding_box_to_bbox(old_orthoimage.bbox)
-            threshold = (
-                self.get_parameter("map_overlap_update_threshold")
-                .get_parameter_value()
-                .double_value
-            )
             bbox1, bbox2 = box(*bbox), box(*bbox_previous)
             ratio1 = bbox1.intersection(bbox2).area / bbox1.area
             ratio2 = bbox2.intersection(bbox1).area / bbox2.area
             ratio = min(ratio1, ratio2)
-            if ratio > threshold:
+            if ratio > min_map_overlap_update_threshold:
                 return False
 
             return True
@@ -829,7 +880,13 @@ class MapNode(Node):
         # used as @cache_if predicate for self.orthoimage_3d
         # Cast None to False (assume bounding box not yet available)
         return (
-            bool(_orthoimage_overlap_is_too_low(self.bounding_box, self._orthoimage_3d))
+            bool(
+                _orthoimage_overlap_is_too_low(
+                    self.bounding_box,
+                    self._orthoimage_3d,
+                    self.min_map_overlap_update_threshold,
+                )
+            )
             or not self._orthoimage_3d
         )
 
@@ -851,12 +908,14 @@ class MapNode(Node):
         """
 
         @narrow_types(self)
-        def _bounding_box(latlon: LatLon, camera_info: CameraInfo, altitude: Altitude):
+        def _bounding_box(
+            latlon: LatLon,
+            camera_info: CameraInfo,
+            altitude: Altitude,
+            max_map_radius: int,
+        ):
             # TODO: log messages for what's going on, or split into multiple methods
             # bounding_box = self.bounding_box
-            max_map_radius = (
-                self.get_parameter("max_map_radius").get_parameter_value().integer_value
-            )
             map_radius = get_dynamic_map_radius(
                 camera_info, max_map_radius, altitude.terrain
             )
@@ -865,7 +924,9 @@ class MapNode(Node):
             )
 
         latlon = self._principal_point_on_ground_plane
-        bounding_box = _bounding_box(latlon, self.camera_info, self.altitude)
+        bounding_box = _bounding_box(
+            latlon, self.camera_info, self.altitude, self.max_map_radius
+        )
 
         if bounding_box is None:
             geopose = self.geopose
@@ -877,10 +938,6 @@ class MapNode(Node):
             else:
                 geopoint = geopose.pose.position
 
-            if geopoint is not None:
-                self.get_logger().error(
-                    f"principal point substitute {geopoint.latitude} {geopoint.longitude}"
-                )
             bounding_box = self._bounding_box_with_padding_for_latlon(
                 geopoint.latitude, geopoint.longitude
             )
@@ -900,7 +957,15 @@ class MapNode(Node):
         # of this BoundingBox instead, with limited width and height (in meters)
         bounding_box = self.bounding_box
         map = self._request_orthoimage_for_bounding_box(
-            bounding_box, self._orthoimage_size
+            bounding_box,
+            self._orthoimage_size,
+            self.wms_srs,
+            self.wms_format,
+            self.wms_transparency,
+            self.wms_layers,
+            self.wms_dem_layers,
+            self.wms_styles,
+            self.wms_dem_styles,
         )
         if map is not None:
             img, dem = map
@@ -1150,7 +1215,12 @@ class MapNode(Node):
         )
         if dem_height_meters_at_latlon is None:
             dem_height_meters_at_latlon = self._dem_height_meters_at_latlon_wms(
-                latitude, longitude
+                latitude,
+                longitude,
+                self.wms_srs,
+                self.wms_format,
+                self.wms_dem_layers,
+                self.wms_dem_styles,
             )
 
         return dem_height_meters_at_latlon
@@ -1218,8 +1288,9 @@ class MapNode(Node):
 
             camera_yaw = self._quaternion_to_yaw_degrees(gimbal_quaternion)
 
-            # Convert the off-nadir angle to a distance on the ground
-            # (This step assumes a simple spherical Earth model, not taking into account ellipsoid shape or terrain altitude)
+            # Convert the off-nadir angle to a distance on the ground.
+            # This step assumes a simple spherical Earth model, not taking
+            # into account ellipsoid shape or terrain altitude.
             ground_distance = altitude.terrain / np.cos(
                 np.radians(off_nadir_angle_deg)
             )  # in meters
@@ -1229,7 +1300,8 @@ class MapNode(Node):
                 geopose.pose.position.latitude, geopose.pose.position.longitude
             )
 
-            # Get the latitude and longitude of the principal point projected on the ground
+            # Get the latitude and longitude of the principal point projected
+            # on the ground
             principal_point_ground = current_pos.destination(
                 ground_distance, camera_yaw
             )

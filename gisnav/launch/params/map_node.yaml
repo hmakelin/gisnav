@@ -1,9 +1,8 @@
 map_node:
   ros__parameters:
-    url: 'http://127.0.0.1:80/wms'
-    layers: ['imagery']
-    dem_layers: ['osm-buildings']
-    # srs: 'EPSG:4326'  # default value, disabled for testing purposes
-    image_format: 'image/jpeg'
-    map_update_overlay_threshold: 0.85
+    wms_url: 'http://127.0.0.1:80/wms'
+    wms_layers: ['imagery']
+    wms_dem_layers: ['osm-buildings']
+    wms_format: 'image/jpeg'
+    min_map_overlap_update_threshold: 0.85
     max_map_radius: 1000

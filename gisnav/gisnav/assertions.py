@@ -19,7 +19,10 @@ from typing import (
 
 import numpy as np
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.exceptions import ParameterAlreadyDeclaredException
+from rclpy.exceptions import (
+    ParameterAlreadyDeclaredException,
+    ParameterNotDeclaredException,
+)
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
@@ -33,6 +36,38 @@ P = ParamSpec("P")
 # enforce_types because the decorated function is not expected to have the same
 # ParamSpec. However, should check that the *args are the same length and
 # **kwargs have the same keys?
+
+
+def _is_generic_instance(value, origin_type, type_args):
+    if origin_type == list:
+        return isinstance(value, list) and all(
+            isinstance(element, type_args[0]) for element in value
+        )
+    elif origin_type == dict:
+        key_type, value_type = type_args
+        return isinstance(value, dict) and all(
+            isinstance(k, key_type) and isinstance(v, value_type)
+            for k, v in value.items()
+        )
+    elif origin_type == tuple:
+        return (
+            isinstance(value, tuple)
+            and len(value) == len(type_args)
+            and all(
+                isinstance(element, type_arg)
+                for element, type_arg in zip(value, type_args)
+            )
+        )
+    elif origin_type == Union:
+        # Recurse all generic type args
+        return any(
+            _is_generic_instance(value, get_origin(type_arg), get_args(type_arg))
+            if get_origin(type_arg) is not None
+            else isinstance(value, type_arg)
+            for type_arg in type_args
+        )
+    else:
+        return any(isinstance(value, type_arg) for type_arg in type_args)
 
 
 # TODO: make this work with typed dicts?
@@ -85,29 +120,6 @@ def narrow_types(
             signature = inspect.signature(method)
             bound_arguments = signature.bind(*args, **kwargs)
             bound_arguments.apply_defaults()
-
-            def _is_generic_instance(value, origin_type, type_args):
-                if origin_type == list:
-                    return isinstance(value, list) and all(
-                        isinstance(element, type_args[0]) for element in value
-                    )
-                elif origin_type == dict:
-                    key_type, value_type = type_args
-                    return isinstance(value, dict) and all(
-                        isinstance(k, key_type) and isinstance(v, value_type)
-                        for k, v in value.items()
-                    )
-                elif origin_type == tuple:
-                    return (
-                        isinstance(value, tuple)
-                        and len(value) == len(type_args)
-                        and all(
-                            isinstance(element, type_arg)
-                            for element, type_arg in zip(value, type_args)
-                        )
-                    )
-                else:
-                    return any(isinstance(value, type_arg) for type_arg in type_args)
 
             mismatches = []
             for name, value in bound_arguments.arguments.items():
@@ -257,6 +269,12 @@ def cache_if(predicate):
         return wrapper
 
     return decorator
+
+
+ROS_PARAM_TYPE = Union[
+    str, int, float, bool, List[str], List[int], List[float], List[bool]
+]
+D = TypeVar("D", bound=ROS_PARAM_TYPE)
 
 
 class ROS:
@@ -542,6 +560,99 @@ class ROS:
                 initializer(node_instance, *args, **kwargs)
 
             return wrapped_function
+
+        return decorator
+
+    # List of types supported by ROS2
+    SUPPORTED_ROS_TYPES = (
+        str,
+        int,
+        float,
+        bool,
+        List[str],
+        List[int],
+        List[float],
+        List[bool],
+    )
+
+    @staticmethod
+    def parameter(
+        default_value: ROS_PARAM_TYPE,
+        descriptor: Optional[ParameterDescriptor] = None,
+    ) -> Callable[
+        [Callable[..., Optional[ROS_PARAM_TYPE]]],
+        Callable[..., Optional[ROS_PARAM_TYPE]],
+    ]:
+        """
+        Decorator for declaring a property as a ROS parameter in a ROS node.
+        It uses the name of the property for the parameter name and the return
+        type hint for the parameter type.
+
+        :param default_value: Default value for parameter
+        :param descriptor: Optional parameter descriptor
+        :return: Decorator function
+        :raises ValueError: If the decorator is not used in a ROS node
+        """
+
+        def decorator(
+            func: Callable[..., Optional[ROS_PARAM_TYPE]]
+        ) -> Callable[..., Optional[ROS_PARAM_TYPE]]:
+            param_name = func.__name__
+            param_type = inspect.signature(func).return_annotation
+
+            @wraps(func)
+            def wrapper(self: Node) -> Optional[ROS_PARAM_TYPE]:
+                """
+                Wrapper function that declares a ROS parameter and sets a callback
+                for parameter changes
+
+                :param self: Instance of the class (ROS node)
+                :return: Result of the decorated function
+                :raises ValueError: If the decorator is not used in a ROS node
+                """
+                if not isinstance(self, Node):
+                    raise ValueError("ROS parameter can only be declared in a ROS node")
+
+                try:
+                    # Attempt to describe the parameter
+                    # self.describe_parameter(param_name)
+                    param_value = self.get_parameter(param_name).value
+                    if param_value is None:
+                        # Need to do this manually since allow_undeclared_parameters
+                        # might be enabled
+                        raise ParameterNotDeclaredException(param_name)
+
+                    origin_type = get_origin(param_type)
+                    type_args = get_args(param_type)
+                    if (
+                        origin_type is not None
+                        and not _is_generic_instance(
+                            param_value, origin_type, type_args
+                        )
+                        or origin_type is None
+                        and not isinstance(param_value, param_type)
+                    ):
+                        self.get_logger().error(
+                            f"Return value of {param_name} get_parameter() "
+                            f"{param_value} does not match declared type return "
+                            f"type {param_type}."
+                        )
+                        return None
+                    else:
+                        return param_value
+                except ParameterNotDeclaredException:
+                    # Parameter not declared yet, so we declare it now
+                    self.get_logger().info(
+                        f'Using default value "{default_value}" for ROS '
+                        f'parameter "{param_name}".'
+                    )
+                    if descriptor is None:
+                        self.declare_parameter(param_name, default_value)
+                    else:
+                        self.declare_parameter(param_name, default_value, descriptor)
+                    return default_value
+
+            return wrapper
 
         return decorator
 

@@ -18,7 +18,7 @@ import pstats
 
 import rclpy
 
-from .map_node import MapNode
+from .map_node import GISNode
 from .mock_gps_node import MockGPSNode
 from .pose_estimation_node import PoseEstimationNode
 from .rviz_node import RVizNode
@@ -71,9 +71,9 @@ def run_rviz_node():
     _run(RVizNode, "rviz_node")
 
 
-def run_map_node():
-    """Spins up a :class:`.MapNode`"""
-    _run(MapNode, "map_node")
+def run_gis_node():
+    """Spins up a :class:`.GISNode`"""
+    _run(GISNode, "gis_node")
 
 
 def run_pose_estimation_node():

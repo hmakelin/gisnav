@@ -183,7 +183,7 @@ class PoseEstimationNode(Node):
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        messaging.ROS_TOPIC_GROUND_TRACK_GEOPOSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def terrain_geopoint(self) -> Optional[GeoPointStamped]:

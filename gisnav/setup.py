@@ -50,7 +50,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mock_gps_node = gisnav.nodes:run_mock_gps_node",
-            "map_node = gisnav.nodes:run_map_node",
+            "gis_node = gisnav.nodes:run_gis_node",
             "pose_estimation_node = gisnav.nodes:run_pose_estimation_node",
             "rviz_node = gisnav.nodes:run_rviz_node",
         ],

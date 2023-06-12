@@ -274,7 +274,7 @@ class RVizNode(Node):
     @property
     @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        messaging.ROS_TOPIC_GROUND_TRACK_GEOPOSE,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_ground_track_geopose_to_queue,
     )

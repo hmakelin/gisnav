@@ -1,6 +1,6 @@
 """Launches GISNav's autopilot agnostic nodes
 
-The :class:`.PoseEstimationNode`,  :class:`.BBoxNode`, and :class:`.MapNode`
+The :class:`.PoseEstimationNode`,  :class:`.BBoxNode`, and :class:`.GISNode`
 nodes are autopilot agnostic and are launched from a shared description
 defined in this file.
 """
@@ -24,9 +24,9 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="map_node",
-            executable="map_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/map_node.yaml")],
+            name="gis_node",
+            executable="gis_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/gis_node.yaml")],
         )
     )
     ld.add_action(

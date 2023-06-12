@@ -95,7 +95,7 @@ from ..geo import get_dynamic_map_radius
 from . import messaging
 
 
-class MapNode(Node):
+class GISNode(Node):
     """Publishes :class:`.OrthoImage3D` of approximate location to a topic
 
     This node generates both :term:`vehicle` :term:`altitude` and
@@ -119,7 +119,7 @@ class MapNode(Node):
                 E[ground_track_altitude]
                 Z[vehicle_altitude]
                 V[vehicle_geopose]
-                L[orthoimage_3d]
+                L[orthoimage]
                 Y[ground_track_geopoint]
             end publish
 
@@ -128,7 +128,7 @@ class MapNode(Node):
                 GFI[_get_feature_info]
             end OWSLib
 
-            A[MapNode] --> Y
+            A[GISNode] --> Y
             A --> E
             A --> V
             A --> P{_should_request_orthoimage}
@@ -180,7 +180,7 @@ class MapNode(Node):
         <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_
         that are specific to the ``requests`` library.
 
-        These errors and exceptions are not handled by the :class:`.MapNode`
+        These errors and exceptions are not handled by the :class:`.GISNode`
         to avoid a direct dependency to ``requests``. They are therefore
         handled as unexpected errors.
     """  # noqa: E501
@@ -279,7 +279,7 @@ class MapNode(Node):
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
     """Default delay in seconds for throttling WMS GetMap requests
 
-    .. note::
+    .. todo::
         TODO: ROS_D_MAP_UPDATE_UPDATE_DELAY not currently used but could be
         useful (old param from basenode)
 
@@ -296,11 +296,26 @@ class MapNode(Node):
         conditions set in :meth:`._should_request_new_map`.
     """
 
-    #: Publishing topic for :class:`nav_msgs.msg.Path` messages for rviz
-    ROS_TOPIC_PATH = "~/path"
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE = "~/vehicle/geopose"
+    """Relative :term:`topic` into which this node publishes :attr:`vehicle_geopose`."""
 
-    #: Max limit for held :class:`geometry_msgs.msg.PoseStamped` messages
-    _MAX_POSE_STAMPED_MESSAGES = 100
+    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE = "~/vehicle/altitude"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`vehicle_altitude`.
+    """
+
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE = "~/ground_track/geopose"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`ground_track_geopose`.
+    """
+
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_ALTITUDE = "~/ground_track/altitude"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`ground_track_altitude`.
+    """
+
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE = "~/orthoimage"
+    """Relative :term:`topic` into which this node publishes:attr:`orthoimage`."""
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
@@ -316,7 +331,7 @@ class MapNode(Node):
         # Calling these decorated properties the first time will setup
         # subscriptions to the appropriate ROS topics
         # self.bounding_box
-        self.pose
+        self.vehicle_pose
         self.camera_info
         self.nav_sat_fix
         self.home_position
@@ -409,12 +424,12 @@ class MapNode(Node):
     @property
     @ROS.parameter(ROS_D_PUBLISH_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def publish_rate(self) -> Optional[int]:
-        """Publish rate in Hz for the :attr:`.orthoimage_3d` :term:`message`"""
+        """Publish rate in Hz for the :attr:`.orthoimage` :term:`message`"""
 
     @narrow_types
     def _create_publish_timer(self, publish_rate: int) -> Timer:
         """
-        Returns a timer to publish :attr:`.orthoimage_3d` to ROS
+        Returns a timer to publish :attr:`.orthoimage` to ROS
 
         :param publish_rate: Publishing rate for the timer (in Hz)
         :return: The :class:`.Timer` instance
@@ -439,12 +454,12 @@ class MapNode(Node):
 
     def publish(self):
         """
-        Publish :attr:`.orthoimage_3d` (:attr:`.terrain_altitude` and
+        Publish :attr:`.orthoimage` (:attr:`.terrain_altitude` and
         :attr:`.terrain_geopoint_stamped` are also published but that
         publish is triggered by callbacks since the messages are smaller and
         can be published more often)
         """
-        self.orthoimage_3d
+        self.orthoimage
 
     @narrow_types
     def _connect_wms(self, url: str, version: str, timeout: int) -> None:
@@ -498,13 +513,13 @@ class MapNode(Node):
 
         return bounding_box
 
-    def _should_update_dem_height_at_local_origin(self):
+    def _should_update_dem_elevation_meters_at_home(self):
         # TODO: Update if local frame changes
         if self._dem_height_meters_at_local_origin is None:
             return True
 
     @narrow_types
-    def _dem_height_meters_at_latlon_wms(
+    def _dem_elevation_meters_at_latlon_wms(
         self,
         lat: float,
         lon: float,
@@ -513,9 +528,11 @@ class MapNode(Node):
         dem_layers: List[str],
         dem_styles: List[str],
     ) -> Optional[float]:
-        """Digital elevation model (DEM) height in meters at given coordinates
+        """:term:`DEM` :term:`elevation` in meters at :term:`WGS 84` coordinates,
+        or None if not available
 
-        Uses WMS GetFeatureInfo to get the value frome the onboard GIS server.
+        Uses WMS :term:`GetFeatureInfo` to get the value from the onboard
+        :term:`GIS`.
         """
         assert_len(dem_styles, len(dem_layers))
 
@@ -532,26 +549,25 @@ class MapNode(Node):
         return height
 
     @property
-    @cache_if(_should_update_dem_height_at_local_origin)
-    def dem_height_meters_at_local_origin(self) -> Optional[float]:
-        """
-        Digital elevation model (DEM) height in meters at local frame origin
+    @cache_if(_should_update_dem_elevation_meters_at_home)
+    def _dem_elevation_meters_at_home(self) -> Optional[float]:
+        """:term:`DEM` :term:`elevation` in meters at :term:`home`, or None if
+        not available
 
-        DEM values are expected to be requested for (1) the vehicle's current
-        position, and (2) the local frame origin. DEM value for the local frame
-        origin is needed to determine the AMSL height of the DEM, which may
-        be expressed in some other vertical datum. Since the local frame origin
-        generally is not inside :attr:`.orthoimage_3d`, a separate request
-        retrieving DEM height for local frame origin using a WMS GetFeatureInfo
-        request is implemnted here (this has a bit of latency but is OK for the
-        given use case of retrieving it typically only once and then caching it).
+        DEM elevation vlaues are expected to be requested for (1) the
+        :term:`vehicle` :term:`global position`, and (2) home global position.
+        DEM elevation for the home global position is needed to determine the
+        :term:`AMSL` elevation of the DEM, which may be expressed in some other
+        vertical datum. Since the home global position generally is not inside
+        :attr:`.orthoimage`, a separate :term:`GetFeatureInfo` request retrieving
+        DEM elevation for home global position is implemented here.
 
         .. note::
-            Assumes HomePosition is also the local frame origin.
+            Assumes :term:`home` is also the local frame :term:`origin`.
         """
         home_position = self.home_position
         if home_position is not None:
-            return self._dem_height_meters_at_latlon_wms(
+            return self._dem_elevation_meters_at_latlon_wms(
                 home_position.geo.latitude,
                 home_position.geo.longitude,
                 self.wms_srs,
@@ -560,22 +576,25 @@ class MapNode(Node):
                 self.wms_dem_styles,
             )
         else:
-            self.get_logger().error("Home geopoint none, cannot get bbox wit padding)")
+            self.get_logger().error(
+                "Home position is None, cannot get bounding box with padding."
+            )
             return None
 
-    def nav_sat_fix_cb(self, msg: NavSatFix) -> None:
-        """Callback for :class:`mavros_msgs.msg.NavSatFix` message
+    def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
+        """Callback for the :term:`global position` message from the
+        :term:`navigation filter`
 
-        Publishes vehicle :class:`.geographic_msgs.msg.GeoPoseStamped` and
-        :class:`mavros_msgs.msg.Altitude` because the contents of those messages
-        are affected by this update.
+        Publishes :term:`vehicle` and :term:`ground track` :term:`geopose` and
+        :term:`altitude` or :term:`elevation` because they are affected by the
+        updated global position.
 
         :param msg: :class:`mavros_msgs.msg.NavSatFix` message from MAVROS
         """
         self.ground_track_altitude
-        self.ground_track_geopoint_stamped
-        self.altitude
-        self.geopose
+        self.ground_track_geopose
+        self.vehicle_altitude
+        self.vehicle_geopose
 
         # TODO: temporarily assuming static camera so publishing gimbal quat here
         # self.gimbal_quaternion
@@ -585,21 +604,20 @@ class MapNode(Node):
     @ROS.subscribe(
         "/mavros/global_position/global",
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=nav_sat_fix_cb,
+        callback=_nav_sat_fix_cb,
     )
     def nav_sat_fix(self) -> Optional[NavSatFix]:
         """Vehicle GPS fix, or None if unknown or too old"""
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
+        ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def geopose(self) -> Optional[GeoPoseStamped]:
-        """Vehicle pose as :class:`geographic_msgs.msg.GeoPoseStamped` message
-        or None if not available"""
+    def vehicle_geopose(self) -> Optional[GeoPoseStamped]:
+        """Published :term:`vehicle` :term:`geopose`, or None if not available"""
 
         @narrow_types(self)
-        def _geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
+        def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
             # Position
             latitude, longitude = (
                 nav_sat_fix.latitude,
@@ -631,7 +649,7 @@ class MapNode(Node):
                 ),
             )
 
-        return _geopose(self.nav_sat_fix, self.pose)
+        return _vehicle_geopose(self.nav_sat_fix, self.vehicle_pose)
 
     def pose_stamped_cb(self, msg: PoseStamped) -> None:
         """Callback for :class:`geometry_msgs.msg.Pose` message
@@ -671,14 +689,14 @@ class MapNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=pose_stamped_cb,
     )
-    def pose(self) -> Optional[PoseStamped]:
+    def vehicle_pose(self) -> Optional[PoseStamped]:
         """Vehicle local position, or None if not available or too old"""
 
     @property
     # @ROS.max_delay_ms(2000) - camera info has no header (?)
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
+        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
     @property
     def _orthoimage_size(self) -> Optional[Tuple[int, int]]:
@@ -709,11 +727,19 @@ class MapNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_TERRAIN_ALTITUDE,
+        ROS_TOPIC_RELATIVE_GROUND_TRACK_ALTITUDE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def ground_track_altitude(self) -> Optional[Altitude]:
-        """Altitude of vehicle ground track, or None if not available"""
+        """
+        Published :term:`ground track` :term:`elevation`, or None if not available
+
+        .. note::
+            The term "elevation" is more appropriate for the ground track than
+            "altitude". However, :class:`.mavros_msgs.msg.Altitude` is used to
+            model ground track elevation the same way it is used to model
+            :term:`vehicle` :term:`altitude`.
+        """
 
         @narrow_types(self)
         def _ground_track_altitude(
@@ -738,44 +764,49 @@ class MapNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_TERRAIN_GEOPOINT,
+        ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def ground_track_geopoint_stamped(self) -> Optional[GeoPointStamped]:
+    def ground_track_geopose(self) -> Optional[GeoPoseStamped]:
         """
-        Vehicle ground track as :class:`geographic_msgs.msg.GeoPointStamped`
-        message, or None if not available
+        Published :term:`ground track` :term:`geopose`, or None if not available
 
-        Complementary to the Altitude message, includes lat and lon in atomic
-        message
+        Complementary to the :attr:`ground_track_altitude`, including horizontal
+        and vertical :term:`global position` in one (atomic) :term:`message`.
+
+        .. note::
+            The :term:`orientation` part of the :term:`geopose` contained in the
+            path is not defined for the ground track and should be ignored.
         """
 
         @narrow_types(self)
-        def _ground_track_geopoint_stamped(
+        def _ground_track_geopose(
             geopose: GeoPoseStamped, ground_track_altitude_ellipsoid: float
         ):
-            return GeoPointStamped(
+            return GeoPoseStamped(
                 header=messaging.create_header("base_link"),
-                position=GeoPoint(
-                    latitude=geopose.pose.position.latitude,
-                    longitude=geopose.pose.position.longitude,
-                    altitude=ground_track_altitude_ellipsoid,
+                pose=GeoPose(
+                    position=GeoPoint(
+                        latitude=geopose.pose.position.latitude,
+                        longitude=geopose.pose.position.longitude,
+                        altitude=ground_track_altitude_ellipsoid,
+                    ),
                 ),
             )
 
-        return _ground_track_geopoint_stamped(
-            self.geopose, self._ground_track_altitude_ellipsoid
+        return _ground_track_geopose(
+            self.vehicle_geopose, self._ground_track_elevation_ellipsoid
         )
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+        ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def altitude(self) -> Optional[Altitude]:
-        """Vehicle altitude, or None if unknown or too old"""
+    def vehicle_altitude(self) -> Optional[Altitude]:
+        """Published :term:`vehicle` :term:`altitude`, or None if not available"""
 
         @narrow_types(self)
-        def _altitude(
+        def _vehicle_altitude(
             geopose: GeoPoseStamped,
             egm96_height: float,  # Float32,
             ground_track_altitude: Altitude,
@@ -795,30 +826,36 @@ class MapNode(Node):
             )
             return altitude
 
-        return _altitude(
-            self.geopose,
-            self.egm96_height,
+        return _vehicle_altitude(
+            self.vehicle_geopose,
+            self._ground_track_geoid_separation_egm96,
             self.ground_track_altitude,
             self._altitude_local,
         )
 
     @property
-    # @ROS.publish(
-    #    messaging.ROS_TOPIC_EGM96_HEIGHT,
-    #    QoSPresetProfiles.SENSOR_DATA.value,
-    # )
-    def egm96_height(self) -> float:  # Optional[Float32]:
-        """EGM96 geoid height at current location, or None if not available"""
+    def _ground_track_geoid_separation_egm96(self) -> float:
+        """EGM96 geoid separation in meters at current location, or None if not
+        available
+
+        Add this value to :term:`AMSL` :term:`altitude` to get :term:`ellipsoid`
+        altitude. Subtract this value from ellipsoid altitude to get AMSL altitude.
+
+        .. seealso::
+            See the "Avoiding Pitfalls Related to Ellipsoid Height and Height
+            Above Mean Sea Level" section in the `MAVROS Plugins wiki`_
+
+        .. _MAVROS wiki: http://wiki.ros.org/mavros/Plugins
+        """
 
         @narrow_types(self)
-        def _egm96_height(geopose: GeoPoseStamped) -> float:
+        def _ground_track_altitude_egm96(navsatfix: NavSatFix) -> float:
             return self._egm96.height(
-                geopose.pose.position.latitude,
-                geopose.pose.position.longitude,
+                navsatfix.latitude,
+                navsatfix.longitude,
             )
 
-        # return Float32(data=_egm96_height(self.geopose))
-        return _egm96_height(self.geopose)
+        return _ground_track_altitude_egm96(self.nav_sat_fix)
 
     @narrow_types
     def _request_orthoimage_for_bounding_box(
@@ -835,7 +872,7 @@ class MapNode(Node):
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Sends GetMap request to GIS WMS for image and DEM layers and returns
-        :attr:`.orthoimage_3d` attribute.
+        :attr:`.orthoimage` attribute.
 
         Assumes zero raster as DEM if no DEM layer is available.
 
@@ -918,18 +955,18 @@ class MapNode(Node):
 
             return True
 
-        # Access self._orthoimage_3d directly to prevent recursion since this is
-        # used as @cache_if predicate for self.orthoimage_3d
+        # Access self._orthoimage directly to prevent recursion since this is
+        # used as @cache_if predicate for self.orthoimage
         # Cast None to False (assume bounding box not yet available)
         return (
             bool(
                 _orthoimage_overlap_is_too_low(
                     self._bounding_box,
-                    self._orthoimage_3d,
+                    self._orthoimage,
                     self.min_map_overlap_update_threshold,
                 )
             )
-            or not self._orthoimage_3d
+            or not self._orthoimage
         )
 
     @property
@@ -941,7 +978,7 @@ class MapNode(Node):
         def _altitude_local(pose_stamped: PoseStamped):
             return pose_stamped.pose.position.z
 
-        return _altitude_local(self.pose)
+        return _altitude_local(self.vehicle_pose)
 
     @property
     def _bounding_box(self) -> Optional[BoundingBox]:
@@ -967,11 +1004,11 @@ class MapNode(Node):
 
         latlon = self._principal_point_on_ground_plane
         bounding_box = _bounding_box(
-            latlon, self.camera_info, self.altitude, self.max_map_radius
+            latlon, self.camera_info, self.vehicle_altitude, self.max_map_radius
         )
 
         if bounding_box is None:
-            geopose = self.geopose
+            geopose = self.vehicle_geopose
             if geopose is None:
                 if self.home_position is not None:
                     geopoint = self.home_position.geo
@@ -988,11 +1025,11 @@ class MapNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_ORTHOIMAGE,
+        ROS_TOPIC_RELATIVE_ORTHOIMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     @cache_if(_should_request_orthoimage)
-    def orthoimage_3d(self) -> Optional[OrthoImage3D]:
+    def orthoimage(self) -> Optional[OrthoImage3D]:
         """Outgoing orthoimage and elevation raster pair"""
         # TODO: if FOV projection is large, this BoundingBox can be too large
         # and the WMS server will choke? Should get a BoundingBox for center
@@ -1040,23 +1077,21 @@ class MapNode(Node):
         return _ground_track_altitude_amsl(self.nav_sat_fix)
 
     @property
-    def _ground_track_altitude_ellipsoid(self) -> Optional[float]:
-        """
-        Vehicle ground track altitude above WGS84 ellipsoid in meters,
+    def _ground_track_elevation_ellipsoid(self) -> Optional[float]:
+        """:term:`Ground track` :term:`elevation` above WGS 84 ellipsoid in meters,
         or None if not available
         """
 
         @narrow_types(self)
-        def _ground_track_altitude_ellipsoid(
-            ground_track_altitude_amsl: float, navsatfix: NavSatFix
+        def _ground_track_elevation_ellipsoid(
+            ground_track_altitude_amsl: float, ground_track_altitude_egm96: float
         ):
-            return ground_track_altitude_amsl + self._egm96.height(
-                navsatfix.latitude,
-                navsatfix.longitude,
+            return (
+                ground_track_altitude_amsl + self._ground_track_geoid_separation_egm96
             )
 
-        return _ground_track_altitude_ellipsoid(
-            self._ground_track_altitude_amsl, self.nav_sat_fix
+        return _ground_track_elevation_ellipsoid(
+            self._ground_track_altitude_amsl, self._ground_track_geoid_separation_egm96
         )
 
     @property
@@ -1253,10 +1288,10 @@ class MapNode(Node):
         # Use cached orthoimage if available, do not try to recompute to avoid
         # circular dependencies
         dem_height_meters_at_latlon = _dem_height_meters_at_latlon(
-            latitude, longitude, self._orthoimage_3d
+            latitude, longitude, self._orthoimage
         )
         if dem_height_meters_at_latlon is None:
-            dem_height_meters_at_latlon = self._dem_height_meters_at_latlon_wms(
+            dem_height_meters_at_latlon = self._dem_elevation_meters_at_latlon_wms(
                 latitude,
                 longitude,
                 self.wms_srs,
@@ -1307,7 +1342,7 @@ class MapNode(Node):
         )
         return _ground_track_altitude_amsl_at_latlon(
             dem_height_meters_at_latlon,
-            self.dem_height_meters_at_local_origin,
+            self._dem_elevation_meters_at_home,
             self.home_position,
         )
 
@@ -1351,7 +1386,7 @@ class MapNode(Node):
             return principal_point_ground
 
         return _principal_point_on_ground_plane(
-            self.geopose, self.altitude, self.gimbal_quaternion
+            self.vehicle_geopose, self.vehicle_altitude, self.gimbal_quaternion
         )
 
     @property
@@ -1463,4 +1498,4 @@ class MapNode(Node):
 
             return compound_q
 
-        return _gimbal_quaternion(self.geopose)
+        return _gimbal_quaternion(self.vehicle_geopose)

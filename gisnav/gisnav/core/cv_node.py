@@ -33,6 +33,7 @@ from .._data import Attitude, create_src_corners
 from ..static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -82,7 +83,7 @@ class CVNode(Node):
             evaluated in post-processing even though it could already be
             computed earlier - all required information is contained in the
             orthoimage itself.
-        :ivar gimbal_quaternion: Qimbal quaternion in NED frame. The pose estimation
+        :ivar camera_quaternion: Qimbal quaternion in NED frame. The pose estimation
             is done against a rotated orthoimage and this is needed to get the
             pose in the original coordinate frame.
         :ivar terrain_altitude: Terrain or vehicle ground track Altitude.
@@ -95,7 +96,7 @@ class CVNode(Node):
         """
 
         orthoimage: OrthoImage3D
-        gimbal_quaternion: Quaternion
+        camera_quaternion: Quaternion
         terrain_altitude: Altitude
         terrain_geopoint: GeoPointStamped
 
@@ -164,7 +165,7 @@ class CVNode(Node):
         self.terrain_altitude
         self.terrain_geopoint
         self.altitude
-        self.gimbal_quaternion
+        self.camera_quaternion
         self.geopose
         self.camera_info
         self.image
@@ -245,11 +246,13 @@ class CVNode(Node):
     @property
     # @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def gimbal_quaternion(self) -> Optional[Quaternion]:
-        """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message
-        or None if not available
+    def camera_quaternion(self) -> Optional[Quaternion]:
+        """:term:`Camera` :term:`orientation` as :class:`geometry_msgs.msg.Quaternion`
+        message, or None if not available
         """
 
     @property
@@ -392,7 +395,7 @@ class CVNode(Node):
 
         # Rotate and crop orthoimage stack
         camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
-            context.gimbal_quaternion
+            context.camera_quaternion
         )
         crop_shape: Tuple[int, int] = query_array.shape[0:2]
         orthoimage_stack = np.dstack((orthophoto, dem))
@@ -431,14 +434,14 @@ class CVNode(Node):
         estimates.
         """
         yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-            context.gimbal_quaternion
+            context.camera_quaternion
         )
 
         # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
         # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
 
         r_guess = Rotation.from_matrix(
-            messaging.quaternion_to_rotation_matrix(context.gimbal_quaternion)
+            messaging.quaternion_to_rotation_matrix(context.camera_quaternion)
         )
         r, t = pose
 
@@ -628,7 +631,7 @@ class CVNode(Node):
             (
                 geopoint,
                 altitude,
-                gimbal_quaternion,
+                camera_quaternion,
             ) = post_processed_pose  # TODO: uaternion might be in ESD and not NED
 
             return (
@@ -636,7 +639,7 @@ class CVNode(Node):
                     header=messaging.create_header("base_link"),
                     pose=GeoPose(
                         position=geopoint,
-                        orientation=gimbal_quaternion,
+                        orientation=camera_quaternion,
                     ),
                 ),
                 altitude,
@@ -693,20 +696,20 @@ class CVNode(Node):
         @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
-            gimbal_quaternion: Quaternion,
+            camera_quaternion: Quaternion,
             terrain_altitude: Altitude,
             terrain_geopoint: GeoPointStamped,
         ):
             return self._PoseEstimationContext(
                 orthoimage=orthoimage,
-                gimbal_quaternion=gimbal_quaternion,
+                camera_quaternion=camera_quaternion,
                 terrain_altitude=terrain_altitude,
                 terrain_geopoint=terrain_geopoint,
             )
 
         return _pose_estimation_context(
             self.orthoimage_3d,
-            self.gimbal_quaternion,
+            self.camera_quaternion,
             self.terrain_altitude,
             self.terrain_geopoint,
         )
@@ -1015,8 +1018,8 @@ class CVNode(Node):
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        if self.gimbal_quaternion is not None:
-            off_nadir_deg = self.off_nadir_angle(self.gimbal_quaternion)
+        if self.camera_quaternion is not None:
+            off_nadir_deg = self.off_nadir_angle(self.camera_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

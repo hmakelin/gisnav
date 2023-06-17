@@ -88,6 +88,7 @@ from .. import messaging
 from .._assertions import ROS, assert_len, assert_type, cache_if, narrow_types
 from .._geo import get_dynamic_map_radius
 from ..static_configuration import (
+    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -142,7 +143,7 @@ class GISNode(Node):
                 K[_get_map]
             end
 
-            Q --> X[gimbal_quaternion]
+            Q --> X[camera_quaternion]
             X --> V
             Q --> Z
             Q --> V
@@ -654,7 +655,7 @@ class GISNode(Node):
         self.vehicle_geopose
 
         # TODO: temporarily assuming static camera so publishing gimbal quat here
-        # self.gimbal_quaternion
+        # self.camera_quaternion
 
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
@@ -1379,12 +1380,12 @@ class GISNode(Node):
         def _principal_point_on_ground_plane(
             geopose: GeoPoseStamped,
             vehicle_altitude: Altitude,
-            gimbal_quaternion: Quaternion,
+            camera_quaternion: Quaternion,
         ) -> LatLon:
             # Your off-nadir angle and camera yaw
-            off_nadir_angle_deg = messaging.off_nadir_angle(gimbal_quaternion)
+            off_nadir_angle_deg = messaging.off_nadir_angle(camera_quaternion)
 
-            camera_yaw = self._quaternion_to_yaw_degrees(gimbal_quaternion)
+            camera_yaw = self._quaternion_to_yaw_degrees(camera_quaternion)
 
             # Convert the off-nadir angle to a distance on the ground.
             # This step assumes a simple spherical Earth model, not taking
@@ -1407,7 +1408,7 @@ class GISNode(Node):
             return principal_point_ground
 
         return _principal_point_on_ground_plane(
-            self.vehicle_geopose, self.vehicle_altitude, self.gimbal_quaternion
+            self.vehicle_geopose, self.vehicle_altitude, self.camera_quaternion
         )
 
     @property
@@ -1424,13 +1425,13 @@ class GISNode(Node):
     ) -> None:
         """Callback for :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
 
-        Publishes gimbal :class:`.geometry_msgs.msg.Quaternion` because its content
-        is affected by this update.
+        Publishes :term:`camera` :class:`.geometry_msgs.msg.Quaternion` because
+        its content is affected by this update.
 
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
         """
-        self.gimbal_quaternion
+        self.camera_quaternion
 
     @property
     # @ROS.max_delay_ms(_DELAY_FAST_MS)  # TODO re-enable
@@ -1458,9 +1459,9 @@ class GISNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
+        ROS_TOPIC_RELATIVE_CAMERA_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
     )
-    def gimbal_quaternion(self) -> Optional[Quaternion]:
+    def camera_quaternion(self) -> Optional[Quaternion]:
         """:term:`Camera` :term:`orientation` or None if not available
 
         .. note::
@@ -1470,7 +1471,7 @@ class GISNode(Node):
             estimating :term:`vehicle` :term:`orientation`.
         """
 
-        def _apply_vehicle_yaw(vehicle_q, gimbal_q):
+        def _apply_vehicle_yaw(vehicle_q, camera_q):
             yaw_deg = self._quaternion_to_yaw_degrees(vehicle_q)
             yaw_rad = np.radians(yaw_deg)
 
@@ -1479,19 +1480,19 @@ class GISNode(Node):
                 w=np.cos(yaw_rad / 2), x=0.0, y=0.0, z=np.sin(yaw_rad / 2)
             )
 
-            # Apply the vehicle yaw rotation to the gimbal quaternion
-            gimbal_yaw_q = self._quaternion_multiply(yaw_q, gimbal_q)
+            # Apply the vehicle yaw rotation to the camera (gimbal) quaternion
+            gimbal_yaw_q = self._quaternion_multiply(yaw_q, camera_q)
 
             return gimbal_yaw_q
 
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         @narrow_types(self)
-        def _gimbal_quaternion(
+        def _camera_quaternion(
             geopose: GeoPoseStamped,
         ):
             """:term:`Camera` :term:`orientation` quaternion in :term:`NED` frame
 
-            Origin is defined as gimbal (camera) pointing directly down :term:`nadir`
+            Origin is defined as camera (gimbal) pointing directly down :term:`nadir`
             with top of image facing north. This definition should avoid gimbal
             lock for realistic use cases where the camera is used mainly to look
             down at the ground under the :term:`vehicle` instead of e.g. at the horizon.
@@ -1522,4 +1523,4 @@ class GISNode(Node):
 
             return compound_q
 
-        return _gimbal_quaternion(self.vehicle_geopose)
+        return _camera_quaternion(self.vehicle_geopose)

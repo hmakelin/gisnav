@@ -43,3 +43,8 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "orthoimage"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
 :attr:`GISNode.orthoimage`.
 """
+
+ROS_TOPIC_RELATIVE_CAMERA_QUATERNION: Final = "~/camera/quaternion"
+"""Relative :term:`topic` into which :class:`.GISNode` publishes
+:attr:`GISNode.camera_quaternion`.
+"""

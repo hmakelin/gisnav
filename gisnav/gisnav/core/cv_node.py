@@ -86,19 +86,19 @@ class CVNode(Node):
         :ivar camera_quaternion: Qimbal quaternion in NED frame. The pose estimation
             is done against a rotated orthoimage and this is needed to get the
             pose in the original coordinate frame.
-        :ivar terrain_altitude: Terrain or vehicle ground track Altitude.
-            The pose estimation estimates above-ground (AGL) altitude, and
-            context of terrain altitude is  required to generate other types
-            of altitude such as ASML.
-        :ivar terrain_geopoint: Terrain or vehicle ground track GeoPoint.
-            Required to generate GeoPoint altitude (WGS 84 ellipsoid) since
+        :ivar ground_track_elevation: :term:`Ground track` :term:`elevation`.
+            The pose estimation estimates :term:`vehicle` :term:`AGL`
+            :term:`altitude`, and context of ground track elevation is required
+            to generate other types of vehicle altitude such as :term:`ASML`.
+        :ivar ground_track_geopose: :term:`Ground track` :term:`geopose`.
+            Required to generate GeoPoint/GeoPose :term:`ellipsoid` altitude since
             it is not included in the Altitude message.
         """
 
         orthoimage: OrthoImage3D
         camera_quaternion: Quaternion
-        terrain_altitude: Altitude
-        terrain_geopoint: GeoPointStamped
+        ground_track_elevation: Altitude
+        ground_track_geopose: GeoPointStamped
 
     _DELAY_SLOW_MS = 10000
     """
@@ -162,8 +162,8 @@ class CVNode(Node):
         # Calling these decorated properties the first time will setup
         # subscriptions to the appropriate ROS topics
         self.orthoimage_3d
-        self.terrain_altitude
-        self.terrain_geopoint
+        self.ground_track_elevation
+        self.ground_track_geopose
         self.altitude
         self.camera_quaternion
         self.geopose
@@ -214,8 +214,10 @@ class CVNode(Node):
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def terrain_altitude(self) -> Optional[Altitude]:
-        """Altitude of terrain directly under vehicle, or None if unknown or too old"""
+    def ground_track_elevation(self) -> Optional[Altitude]:
+        """:term:`Ground track` :term:`elevation`, or None if not available or
+        too old
+        """
 
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
@@ -224,13 +226,11 @@ class CVNode(Node):
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def terrain_geopoint(self) -> Optional[GeoPointStamped]:
-        """
-        Vehicle ground track as :class:`geographic_msgs.msg.GeoPointStamped`
-        message, or None if not available
+    def ground_track_geopose(self) -> Optional[GeoPoseStamped]:
+        """:term:`Ground track` :term:`geopose`, or None if not available or too old
 
-        Complementary to the terrain Altitude message, includes lat and lon in
-        atomic message
+        Complementary to the :attr:`ground_track_elevation`, includes lat and lon
+        in atomic message
         """
 
     @property
@@ -523,14 +523,14 @@ class CVNode(Node):
 
         altitude = Altitude(
             monotonic=0.0,  # TODO
-            amsl=alt + context.terrain_altitude.amsl,
+            amsl=alt + context.ground_track_elevation.amsl,
             local=0.0,  # TODO
             relative=0.0,  # TODO
             terrain=alt,
             bottom_clearance=alt,
         )
         geopoint = GeoPoint(
-            altitude=alt + context.terrain_geopoint.position.altitude,
+            altitude=alt + context.ground_track_geopose.pose.position.altitude,
             latitude=lat,
             longitude=lon,
         )
@@ -632,7 +632,7 @@ class CVNode(Node):
                 geopoint,
                 altitude,
                 camera_quaternion,
-            ) = post_processed_pose  # TODO: uaternion might be in ESD and not NED
+            ) = post_processed_pose  # TODO: quaternion might be in ESD and not NED
 
             return (
                 GeoPoseStamped(
@@ -697,21 +697,21 @@ class CVNode(Node):
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
             camera_quaternion: Quaternion,
-            terrain_altitude: Altitude,
-            terrain_geopoint: GeoPointStamped,
+            ground_track_elevation: Altitude,
+            ground_track_geopose: GeoPoseStamped,
         ):
             return self._PoseEstimationContext(
                 orthoimage=orthoimage,
                 camera_quaternion=camera_quaternion,
-                terrain_altitude=terrain_altitude,
-                terrain_geopoint=terrain_geopoint,
+                ground_track_elevation=ground_track_elevation,
+                ground_track_geopose=ground_track_geopose,
             )
 
         return _pose_estimation_context(
             self.orthoimage_3d,
             self.camera_quaternion,
-            self.terrain_altitude,
-            self.terrain_geopoint,
+            self.ground_track_elevation,
+            self.ground_track_geopose,
         )
 
     @staticmethod

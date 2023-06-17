@@ -510,7 +510,7 @@ class GISNode(Node):
 
     def publish(self):
         """
-        Publish :attr:`.orthoimage` (:attr:`.terrain_altitude` and
+        Publish :attr:`.orthoimage` (:attr:`.ground_track_elevation` and
         :attr:`.terrain_geopoint_stamped` are also published but that
         publish is triggered by callbacks since the messages are smaller and
         can be published more often)

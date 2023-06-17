@@ -8,9 +8,9 @@ from geometry_msgs.msg import Quaternion
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
-from ..assertions import assert_shape, assert_type
-from ..data import BBox
-from ..geo import GeoPt
+from ._assertions import assert_shape, assert_type
+from ._data import BBox
+from ._geo import GeoPt
 
 # region ROS topic names
 ROS_TOPIC_BOUNDING_BOX = "gisnav/bounding_box"

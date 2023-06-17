@@ -28,15 +28,14 @@ from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
 from mavros_msgs.msg import Altitude
 from px4_msgs.msg import SensorGps
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
-from gisnav.data import Attitude
-from gisnav.nodes.base.rviz_publisher_node import RVizPublisherNode
-
-from . import messaging
+from .. import messaging
+from .._data import Attitude
 
 
-class MockGPSNode(RVizPublisherNode):
+class MockGPSNode(Node):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_USE_SENSOR_GPS = True
@@ -56,13 +55,14 @@ class MockGPSNode(RVizPublisherNode):
     ]
     """List containing ROS parameter name, default value and read_only flag tuples"""
 
-    def __init__(self, name: str):
-        """
-        Class initializer
+    def __init__(self, *args, **kwargs):
+        """Class initializer
 
-        :param name: Node name
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
+
         self._sensor_gps = (
             self.get_parameter("sensor_gps").get_parameter_value().bool_value
         )
@@ -223,6 +223,3 @@ class MockGPSNode(RVizPublisherNode):
             self._socket.sendto(
                 f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
             )
-
-        # Publish pose stamped and terrain altitude and path for rviz2, debugging etc.
-        self.publish_rviz(self._geopose_estimate, self._altitude_estimate.terrain)

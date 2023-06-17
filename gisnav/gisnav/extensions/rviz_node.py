@@ -46,8 +46,14 @@ from pyproj import Transformer
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
-from ..assertions import ROS, narrow_types
-from . import messaging
+from .. import messaging
+from .._assertions import ROS, narrow_types
+from ..static_configuration import (
+    GIS_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
+)
 
 
 class RVizNode(Node):
@@ -73,12 +79,13 @@ class RVizNode(Node):
     :attr:`.ground_track_path`
     """
 
-    def __init__(self, name: str):
-        """Initializes the node
+    def __init__(self, *args, **kwargs):
+        """Class initializer
 
-        :param name: Node name
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
-        super().__init__(name)
+        super().__init__(*args, **kwargs)
 
         # Initialize ROS subscriptions by calling the decorated properties once
         self.home_position
@@ -221,7 +228,7 @@ class RVizNode(Node):
         :param pose: :class:`.GeoPoseStamped` message to append
         """
         self._append_geopose_to_queue(geopose, self._ground_track_path_queue)
-        self.vehicle_ground_track_path
+        self.ground_track_path
 
     def _get_path(self, queue: deque) -> Path:
         """Returns :class:`nav_msgs.msg.Path` based on provided queue
@@ -249,7 +256,8 @@ class RVizNode(Node):
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE,
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_vehicle_geopose_to_queue,
     )
@@ -270,11 +278,11 @@ class RVizNode(Node):
         available or too old
         """
 
-    # TODO: this expects a geopoint but topic name says geopoint?
     @property
     @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_GROUND_TRACK_GEOPOSE,
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_ground_track_geopose_to_queue,
     )

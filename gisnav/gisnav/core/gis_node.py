@@ -66,13 +66,7 @@ import cv2
 import numpy as np
 import requests
 from cv_bridge import CvBridge
-from geographic_msgs.msg import (
-    BoundingBox,
-    GeoPoint,
-    GeoPointStamped,
-    GeoPose,
-    GeoPoseStamped,
-)
+from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from owslib.util import ServiceException
@@ -90,9 +84,16 @@ from shapely.geometry import box
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import ROS, assert_len, assert_type, cache_if, narrow_types
-from ..geo import get_dynamic_map_radius
-from . import messaging
+from .. import messaging
+from .._assertions import ROS, assert_len, assert_type, cache_if, narrow_types
+from .._geo import get_dynamic_map_radius
+from ..static_configuration import (
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
+)
 
 
 class GISNode(Node):
@@ -100,77 +101,151 @@ class GISNode(Node):
 
     This node generates both :term:`vehicle` :term:`altitude` and
     :term:`ground track` :term:`elevation` :term:`messages`, resulting in a
-    complex interplay of class properties. The diagram below shows the dependency
-    between the properties of GISNode:
+    complex interplay of class properties. The workflows to publish specific
+    messages are triggered by subscription callbacks.
+
+    GISNode implements three data flows representing its main outputs, which are
+    defined as its :term:`ROS` publishers. The data flows use shared inputs and
+    intermediates and are therefore all included in the same node. The data
+    flows are 1. the orthoimage data flow, 2. vehicle data flow, 3. and the
+    ground track data flow. Diagrams are provided for each below.
+
+    .. note::
+        Diamonds represent conditionals, often reverting to cached values. Boxed
+        items can be ROS messages or private computed properties used as
+        intermediates.
+
+    **1. Orthoimage data flow**: The diagram below shows the dependency between
+    the properties of GISNode when generating the :attr:`orthoimage` message:
 
     .. mermaid::
-        :caption: GISNode process flow diagram
+        :caption: Orthoimage data flow diagram
 
-        graph LR
+        graph TB
+            subgraph callbacks
+                CB[_nav_sat_fix_cb]
+            end
+
             subgraph subscribe
-                I[nav_sat_fix]
-                HP[home_position]
-                T[vehicle_pose]
-                GDAS[gimbal_device_attitude_status]
                 CI[camera_info]
-            end subscribe
+                HP[home_position]
+                GDAS[gimbal_device_attitude_status]
+            end
 
             subgraph publish
-                E[ground_track_altitude]
                 Z[vehicle_altitude]
                 V[vehicle_geopose]
                 L[orthoimage]
-                Y[ground_track_geopoint]
-            end publish
+            end
 
             subgraph OWSLib
                 K[_get_map]
+            end
+
+            Q --> X[gimbal_quaternion]
+            X --> V
+            Q --> Z
+            Q --> V
+            P{_should_request_orthoimage} --> L
+            CB --> P
+            L --> H[_request_orthoimage_for_bounding_box]
+            L --> OS[_orthoimage_size]
+            H --> K
+            L ----> O[_bounding_box]
+            O --> HP
+            O --> Q[_principal_point_on_ground_plane]
+            O --> V
+            OS ----> CI
+            O --> CI
+            X --> GDAS
+
+    .. note::
+        :attr:`.vehicle_geopose` is a dependency to the :attr:`._bounding_box`
+        both directly and via :attr:`._principal_point_on_ground_plane`. If the
+        principal point projection on ground is not available, vehicle
+        :term:`geopose` is used for an approximate position guess directly.
+
+    **2. Vehicle data flow**: The diagram below shows the dependency between
+    the properties of GISNode when generating the :attr:`vehicle_geopose` and
+    :attr:`vehicle_altitude` messages:
+
+    .. mermaid::
+        :caption: Vehicle data flow diagram
+
+        graph TB
+
+            subgraph _callbacks
+                NSFCB[_nav_sat_fix_cb]
+            end _callbacks
+
+            subgraph subscribe
+                I[nav_sat_fix]
+                T[vehicle_pose]
+            end subscribe
+
+            subgraph publish
+                E[ground_track_elevation]
+                V[vehicle_geopose]
+                Z[vehicle_altitude]
+            end publish
+
+            NSFCB --> Z
+            NSFCB --> V
+            V --> I
+            V --> T
+            Z --> EGM[_ground_track_geoid_separation_egm96]
+            Z --> E
+            Z --> V
+            Z --> AL[_altitude_local]
+            AL --> T
+            EGM[_ground_track_geoid_separation_egm96] --> EGM2[_egm96]
+            EGM --> I
+
+    **3. Ground track data flow**: The diagram below shows he dependency between
+    the properties of GISNode when generating the :attr:`ground_track_geopose` and
+    :attr:`ground_track_elevation` messages:
+
+    .. mermaid::
+        :caption: Ground track data flow diagram
+
+        graph TB
+
+            subgraph callbacks
+                NSFCB[_nav_sat_fix_cb]
+            end callbacks
+
+            subgraph subscribe
+                I[nav_sat_fix]
+                HP[home_position]
+            end subscribe
+
+            subgraph publish
+                E[ground_track_elevation]
+                Y[ground_track_geopose]
+            end publish
+
+            subgraph OWSLib
                 GFI[_get_feature_info]
             end OWSLib
 
-            A[GISNode] --> Y
-            A --> E
-            A --> V
-            A --> P{_should_request_orthoimage}
-            A --> Z
-            J[_ground_track_altitude_amsl_at_latlon] --> C[_dem_height_meters_at_latlon_wms]
-            D --> R{_should_update_dem_height_at_local_origin}
-            D[dem_height_meters_at_local_origin] --> HP
-            R --> C
-            E --> G[_ground_track_altitude_amsl]
-            E --> F[_ground_track_altitude_at_home_amsl]
-            F --> N[_home_altitude_amsl]
-            G --> J
-            J --> D
-            J --> HP
-            H[_request_orthoimage_for_bounding_box] --> K
-            P --> L
-            L --> H
-            L --> OS[_orthoimage_size]
-            L --> O[_bounding_box]
-            O --> HP
-            O --> Q[_principal_point_on_ground_plane]
-            O --> CI
-            O --> V
-            OS --> CI
-            Q --> Z
-            Q --> X[gimbal_quaternion]
-            Q --> V
-            V --> I
-            V --> T
-            J --> I
-            Y --> M[_ground_track_altitude_ellipsoid]
-            Y --> V
-            X --> GDAS
+            NSFCB[_nav_sat_fix_cb] --> E
+            E --> F[_ground_track_elevation_at_home_amsl]
+            E --> G[_ground_track_elevation_amsl]
+            F --> N[_home_elevation_amsl]
+            G --> J[_ground_track_elevation_amsl_at_latlon]
+            J --> D[_dem_elevation_meters_at_home]
+            D --> R{_should_update_dem_elevation_at_home}
+            R --> C[_dem_elevation_meters_at_latlon_wms]
             C --> GFI
-            N --> HP
-            M --> EGM[_egm96]
-            M --> G
-
-
-    Diamonds represent conditionals, often reverting to cached values. Boxed
-    items can be ROS messages, parameters, or private computed properties used
-    as intermediates.
+            D --> HP
+            J --> I[nav_sat_fix]
+            Y --> M[_ground_track_elevation_ellipsoid]
+            NSFCB --> Y
+            EGM2 --> I
+            EGM2[_ground_track_geoid_separation_egm96] --> EGM[_egm96]
+            M --> G[_ground_track_elevation_amsl]
+            M --> EGM2
+            N --> HP[home_position]
 
     .. warning::
         ``OWSLib`` *as of version 0.25.0* uses the Python ``requests`` library
@@ -235,8 +310,9 @@ class GISNode(Node):
     .. note::
         This is an optional elevation layer that makes the pose estimation more
         accurate especially when flying at low altitude. It should be a grayscale
-        raster with pixel values corresponding meters relative to origin. Origin
-        can be whatever system is used (e.g. USGS DEM uses NAVD 88).
+        raster with pixel values corresponding meters relative to vertical datum.
+        Vertical datum can be whatever system is used (e.g. USGS DEM uses NAVD 88),
+        although it is assumed to be flat across the flight mission area.
     """
 
     ROS_D_STYLES = [""]
@@ -296,37 +372,16 @@ class GISNode(Node):
         conditions set in :meth:`._should_request_new_map`.
     """
 
-    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE = "~/vehicle/geopose"
-    """Relative :term:`topic` into which this node publishes :attr:`vehicle_geopose`."""
-
-    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE = "~/vehicle/altitude"
-    """Relative :term:`topic` into which this node publishes
-    :attr:`vehicle_altitude`.
-    """
-
-    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE = "~/ground_track/geopose"
-    """Relative :term:`topic` into which this node publishes
-    :attr:`ground_track_geopose`.
-    """
-
-    ROS_TOPIC_RELATIVE_GROUND_TRACK_ALTITUDE = "~/ground_track/altitude"
-    """Relative :term:`topic` into which this node publishes
-    :attr:`ground_track_altitude`.
-    """
-
-    ROS_TOPIC_RELATIVE_ORTHOIMAGE = "~/orthoimage"
-    """Relative :term:`topic` into which this node publishes:attr:`orthoimage`."""
-
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
 
-    @ROS.setup_node([])
-    def __init__(self, name: str):
+    def __init__(self, *args, **kwargs):
         """Class initializer
 
-        :param name: Node name
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
-        # super().__init__(name)  # Handled by setup_node decorator
+        super().__init__(*args, **kwargs)
 
         # Calling these decorated properties the first time will setup
         # subscriptions to the appropriate ROS topics
@@ -515,8 +570,10 @@ class GISNode(Node):
 
     def _should_update_dem_elevation_meters_at_home(self):
         # TODO: Update if local frame changes
-        if self._dem_height_meters_at_local_origin is None:
-            return True
+        return (
+            not hasattr(self, "__dem_elevation_meters_at_home")
+            or getattr(self, "__dem_elevation_meters_at_home") is None
+        )
 
     @narrow_types
     def _dem_elevation_meters_at_latlon_wms(
@@ -591,7 +648,7 @@ class GISNode(Node):
 
         :param msg: :class:`mavros_msgs.msg.NavSatFix` message from MAVROS
         """
-        self.ground_track_altitude
+        self.ground_track_elevation
         self.ground_track_geopose
         self.vehicle_altitude
         self.vehicle_geopose
@@ -651,43 +708,11 @@ class GISNode(Node):
 
         return _vehicle_geopose(self.nav_sat_fix, self.vehicle_pose)
 
-    def pose_stamped_cb(self, msg: PoseStamped) -> None:
-        """Callback for :class:`geometry_msgs.msg.Pose` message
-
-        Publishes :class:`nav_msgs.msg.Path` of :class:`.Pose` messages for
-        visualization in RViz.
-
-        :param msg: :class:`.PoseStamped` message from MAVROS
-        """
-        # Update visualization if some time has passed, but not too soon. This
-        # is mainly to prevent the Paths being much shorter in time for nodes
-        # that would otherwise publish at much higher frequency (e.g. actual
-        # GPS at 10 Hz vs GISNav mock GPS at 1 Hz)
-
-        # if len(self._pose_stamped_queue) > 0:
-        #    if (
-        #        msg.header.stamp.sec
-        #        - self._pose_stamped_queue[-1].header.stamp.sec
-        #        > 1.0
-        #    ):
-        #        self._pose_stamped_queue.append(msg)
-        #    else:
-        #        # Observation is too recent, return
-        #        return
-        # else:
-        #    # Queue is empty
-        #    self._pose_stamped_queue.append(msg)
-
-        # Publish to rviz
-        # assert len(self._pose_stamped_queue) > 0
-        self.pose_stamped
-
     @property
     # @ROS.max_delay_ms(_DELAY_FAST_MS)  # TODO:
     @ROS.subscribe(
         "/mavros/local_position/pose",
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=pose_stamped_cb,
     )
     def vehicle_pose(self) -> Optional[PoseStamped]:
         """Vehicle local position, or None if not available or too old"""
@@ -727,10 +752,10 @@ class GISNode(Node):
 
     @property
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_GROUND_TRACK_ALTITUDE,
+        ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def ground_track_altitude(self) -> Optional[Altitude]:
+    def ground_track_elevation(self) -> Optional[Altitude]:
         """
         Published :term:`ground track` :term:`elevation`, or None if not available
 
@@ -742,24 +767,24 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
-        def _ground_track_altitude(
-            ground_track_altitude_amsl: float,
-            ground_track_altitude_at_home_amsl: float,
+        def _ground_track_elevation(
+            ground_track_elevation_amsl: float,
+            ground_track_elevation_at_home_amsl: float,
         ):
             # Define local == -relative, and terrain == bottom_clearance
             return Altitude(
                 header=messaging.create_header("base_link"),
-                amsl=ground_track_altitude_amsl,
-                local=ground_track_altitude_amsl - ground_track_altitude_at_home_amsl,
+                amsl=ground_track_elevation_amsl,
+                local=ground_track_elevation_amsl - ground_track_elevation_at_home_amsl,
                 relative=-(
-                    ground_track_altitude_amsl - ground_track_altitude_at_home_amsl
+                    ground_track_elevation_amsl - ground_track_elevation_at_home_amsl
                 ),
                 terrain=0.0,
                 bottom_clearance=0.0,
             )
 
-        return _ground_track_altitude(
-            self._ground_track_altitude_amsl, self._ground_track_altitude_at_home_amsl
+        return _ground_track_elevation(
+            self._ground_track_elevation_amsl, self._ground_track_elevation_at_home_amsl
         )
 
     @property
@@ -768,10 +793,9 @@ class GISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def ground_track_geopose(self) -> Optional[GeoPoseStamped]:
-        """
-        Published :term:`ground track` :term:`geopose`, or None if not available
+        """Published :term:`ground track` :term:`geopose`, or None if not available
 
-        Complementary to the :attr:`ground_track_altitude`, including horizontal
+        Complementary to the :attr:`ground_track_elevation`, including horizontal
         and vertical :term:`global position` in one (atomic) :term:`message`.
 
         .. note::
@@ -781,7 +805,7 @@ class GISNode(Node):
 
         @narrow_types(self)
         def _ground_track_geopose(
-            geopose: GeoPoseStamped, ground_track_altitude_ellipsoid: float
+            geopose: GeoPoseStamped, ground_track_elevation_ellipsoid: float
         ):
             return GeoPoseStamped(
                 header=messaging.create_header("base_link"),
@@ -789,7 +813,7 @@ class GISNode(Node):
                     position=GeoPoint(
                         latitude=geopose.pose.position.latitude,
                         longitude=geopose.pose.position.longitude,
-                        altitude=ground_track_altitude_ellipsoid,
+                        altitude=ground_track_elevation_ellipsoid,
                     ),
                 ),
             )
@@ -809,7 +833,7 @@ class GISNode(Node):
         def _vehicle_altitude(
             geopose: GeoPoseStamped,
             egm96_height: float,  # Float32,
-            ground_track_altitude: Altitude,
+            ground_track_elevation: Altitude,
             altitude_local: Optional[float],
         ):
             altitude_amsl = geopose.pose.position.altitude - egm96_height
@@ -821,15 +845,15 @@ class GISNode(Node):
                 amsl=altitude_amsl,
                 local=local,  # TODO: home altitude ok?
                 relative=-local,  # TODO: check sign
-                terrain=altitude_amsl - ground_track_altitude.amsl,
-                bottom_clearance=altitude_amsl - ground_track_altitude.amsl,
+                terrain=altitude_amsl - ground_track_elevation.amsl,
+                bottom_clearance=altitude_amsl - ground_track_elevation.amsl,
             )
             return altitude
 
         return _vehicle_altitude(
             self.vehicle_geopose,
             self._ground_track_geoid_separation_egm96,
-            self.ground_track_altitude,
+            self.ground_track_elevation,
             self._altitude_local,
         )
 
@@ -849,13 +873,13 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
-        def _ground_track_altitude_egm96(navsatfix: NavSatFix) -> float:
+        def _ground_track_geoid_separation_egm96(navsatfix: NavSatFix) -> float:
             return self._egm96.height(
                 navsatfix.latitude,
                 navsatfix.longitude,
             )
 
-        return _ground_track_altitude_egm96(self.nav_sat_fix)
+        return _ground_track_geoid_separation_egm96(self.nav_sat_fix)
 
     @narrow_types
     def _request_orthoimage_for_bounding_box(
@@ -1059,22 +1083,21 @@ class GISNode(Node):
             return None
 
     @property
-    def _ground_track_altitude_amsl(self) -> Optional[float]:
-        """
-        Altitude of vehicle ground track above mean sea level (AMSL) in
-        meters, or None if not available
+    def _ground_track_elevation_amsl(self) -> Optional[float]:
+        """:term:`Ground track` :term:`elevation` in meters :term:`AMSL`, or
+        None if not available
         """
 
         @narrow_types(self)
-        def _ground_track_altitude_amsl(navsatfix: NavSatFix):
-            return self._ground_track_altitude_amsl_at_latlon(
+        def _ground_track_elevation_amsl(navsatfix: NavSatFix):
+            return self._ground_track_elevation_amsl_at_latlon(
                 navsatfix.latitude, navsatfix.longitude
             )
 
         # Use self.latlon instead of self.geopose (geopose needs vehicle ellipsoide
         # altitude, which possibly creates a circular dependency), should not need
-        # vehicle altitude to get ground track altitude at vehicle global position
-        return _ground_track_altitude_amsl(self.nav_sat_fix)
+        # vehicle altitude to get ground track elevation at vehicle global position
+        return _ground_track_elevation_amsl(self.nav_sat_fix)
 
     @property
     def _ground_track_elevation_ellipsoid(self) -> Optional[float]:
@@ -1084,49 +1107,44 @@ class GISNode(Node):
 
         @narrow_types(self)
         def _ground_track_elevation_ellipsoid(
-            ground_track_altitude_amsl: float, ground_track_altitude_egm96: float
+            ground_track_elevation_amsl: float,
+            ground_track_geoid_separation_egm96: float,
         ):
-            return (
-                ground_track_altitude_amsl + self._ground_track_geoid_separation_egm96
-            )
+            return ground_track_elevation_amsl + ground_track_geoid_separation_egm96
 
         return _ground_track_elevation_ellipsoid(
-            self._ground_track_altitude_amsl, self._ground_track_geoid_separation_egm96
+            self._ground_track_elevation_amsl, self._ground_track_geoid_separation_egm96
         )
 
     @property
-    def _home_altitude_amsl(self) -> Optional[float]:
-        """
-        Home position altitude above mean sea level (AMLS) in meters, or None
-        if not available
+    def _home_elevation_amsl(self) -> Optional[float]:
+        """:term:`Home` :term:`elevation` in meters :term:`AMSL`, or None if not
+        available
         """
 
         @narrow_types(self)
-        def _home_altitude_amsl(home_position: HomePosition):
+        def _home_elevation_amsl(home_position: HomePosition):
             home_geopoint = home_position.geo
             return home_geopoint.altitude - self._egm96.height(
                 home_geopoint.latitude,
                 home_geopoint.longitude,
             )
 
-        return _home_altitude_amsl(self.home_position)
+        return _home_elevation_amsl(self.home_position)
 
     @property
-    def _ground_track_altitude_at_home_amsl(self) -> Optional[float]:
-        """
-        Vehicle ground track altitude above mean sea level (AMSL) at home
-        position, or None if not available
-
-        # TODO: check if this definition is correct
+    def _ground_track_elevation_at_home_amsl(self) -> Optional[float]:
+        """:term:`Ground track` :term:`elevation` in meters:term:`AMSL` at :term:`home`,
+        or None if not available
         """
         # Home defined as local origin, and local origin defined as part of
-        # ground track, so this should be just home altitude AMSL
-        return self._home_altitude_amsl
+        # ground track, so this should be just home elevation AMSL
+        return self._home_elevation_amsl
 
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
     ) -> Optional[np.ndarray]:
-        """Sends WMS GetMap request and returns numpy array"""
+        """Sends WMS :term:`GetMap` request and returns response :term:`raster`"""
         self.get_logger().info(
             f"Sending GetMap request for bbox: {bbox}, layers: {layers}."
         )
@@ -1171,9 +1189,11 @@ class GISNode(Node):
     def _get_feature_info(
         self, layers, styles, srs, bbox, size, format_, xy
     ) -> Optional[float]:
+        """Sends WMS :term:`GetFeatureInfo` request and returns response value"""
+
         @narrow_types(self)
         def _extract_dem_height_from_gml(gml_bytes: bytes) -> Optional[float]:
-            """Extracts DEM height value from GML returned from WMS endpoint"""
+            """Extracts :term:`DEM` :term:`elevation` from returned :term:`GML`"""
             # Split the binary string into lines using '\n\n' as a separator
             binary_lines = gml_bytes.split(b"\n\n")
 
@@ -1226,13 +1246,13 @@ class GISNode(Node):
 
         return _extract_dem_height_from_gml(feature_info.read())
 
-    def _dem_height_meters_at_latlon(
+    def _dem_elevation_meters_at_latlon(
         self, latitude: float, longitude: float
     ) -> Optional[float]:
         """
-        Raw digital elevation model (DEM) height in meters at geographic coordinates
-        (WGS 84 latitude and longitude) from cached DEM if available, or None
-        if not available
+        Raw :term:`DEM` :term:`elevation` in meters at :term:`WGS 84` coordinates
+        from (1) cached DEM if available, or (2) via :term:`GetFeatureInfo`
+        request if no earlier cached DEM, or (3) None if not available
 
         .. note::
             The vertical datum for the USGS DEM is NAVD 88. Other DEMs may
@@ -1242,11 +1262,11 @@ class GISNode(Node):
 
         :param latitude: Query latitude coordinate
         :param longitude: Query longitude coordinate
-        :return: Raw altitude in DEM coordinate frame and units
+        :return: Raw elevation in DEM coordinate frame and units (assumed meters)
         """
 
         @narrow_types(self)
-        def _dem_height_meters_at_latlon(
+        def _dem_elevation_meters_at_latlon(
             latitude: float, longitude: float, orthoimage: OrthoImage3D
         ) -> Optional[float]:
             def _is_latlon_inside_bounding_box(
@@ -1279,15 +1299,15 @@ class GISNode(Node):
                 x_pixel = int(u * (orthoimage.dem.width - 1))
                 y_pixel = int(v * (orthoimage.dem.height - 1))
 
-                # DEM height at the pixel coordinates
-                dem_altitude = dem[y_pixel, x_pixel]
-                return float(dem_altitude)
+                # DEM elevation in meters at the pixel coordinates
+                dem_elevation = dem[y_pixel, x_pixel]
+                return float(dem_elevation)
             else:
                 return None
 
         # Use cached orthoimage if available, do not try to recompute to avoid
         # circular dependencies
-        dem_height_meters_at_latlon = _dem_height_meters_at_latlon(
+        dem_height_meters_at_latlon = _dem_elevation_meters_at_latlon(
             latitude, longitude, self._orthoimage
         )
         if dem_height_meters_at_latlon is None:
@@ -1302,45 +1322,38 @@ class GISNode(Node):
 
         return dem_height_meters_at_latlon
 
-    def _ground_track_altitude_amsl_at_latlon(
+    def _ground_track_elevation_amsl_at_latlon(
         self,
         latitude: float,
         longitude: float,
     ) -> Optional[float]:
-        """
-        Vehicle ground track altitude in meters above mean sea level (AMSL)
-        according to digital elevation model (DEM) if available, or None if
-        not available.
+        """:term:`Ground track` :term:`elevation` in meters :term:`AMSL` according to
+        :term:`DEM` if available, or None if not available
 
         :param latitude: Vehicle global position latitude
         :param latitude: Vehicle global position longitude
-        :return: Vehicle ground track altitude AMSL in meters at vehicle global
-            position
+        :return: Vehicle ground track elevation AMSL in meters
         """
 
         @narrow_types(self)
-        def _ground_track_altitude_amsl_at_latlon(
-            dem_height_meters_at_latlon: float,
-            dem_height_meters_at_local_origin: float,
+        def _ground_track_elevation_amsl_at_latlon(
+            dem_elevation_meters_at_latlon: float,
+            dem_elevation_meters_at_home: float,
             home_position: HomePosition,
         ):
-            local_origin_position = home_position.geo
-            local_origin_altitude_amsl = (
-                local_origin_position.altitude
-                - self._egm96.height(
-                    local_origin_position.latitude, local_origin_position.longitude
-                )
+            home_elevation_amsl = home_position.geo.altitude - self._egm96.height(
+                home_position.geo.latitude, home_position.geo.longitude
             )
             dem_elevation_relative_meters = (
-                dem_height_meters_at_latlon - dem_height_meters_at_local_origin
+                dem_elevation_meters_at_latlon - dem_elevation_meters_at_home
             )
-            elevation_amsl = dem_elevation_relative_meters + local_origin_altitude_amsl
+            elevation_amsl = dem_elevation_relative_meters + home_elevation_amsl
             return float(elevation_amsl)
 
-        dem_height_meters_at_latlon = self._dem_height_meters_at_latlon(
+        dem_height_meters_at_latlon = self._dem_elevation_meters_at_latlon(
             latitude, longitude
         )
-        return _ground_track_altitude_amsl_at_latlon(
+        return _ground_track_elevation_amsl_at_latlon(
             dem_height_meters_at_latlon,
             self._dem_elevation_meters_at_home,
             self.home_position,
@@ -1356,9 +1369,17 @@ class GISNode(Node):
 
     @property
     def _principal_point_on_ground_plane(self) -> LatLon:
+        """Projects :term:`camera` principal point on ground plane
+
+        .. note::
+            Assumes ground is a flat plane, does not take :term:`DEM` into account
+        """
+
         @narrow_types(self)
         def _principal_point_on_ground_plane(
-            geopose: GeoPoseStamped, altitude: Altitude, gimbal_quaternion: Quaternion
+            geopose: GeoPoseStamped,
+            vehicle_altitude: Altitude,
+            gimbal_quaternion: Quaternion,
         ) -> LatLon:
             # Your off-nadir angle and camera yaw
             off_nadir_angle_deg = messaging.off_nadir_angle(gimbal_quaternion)
@@ -1367,8 +1388,8 @@ class GISNode(Node):
 
             # Convert the off-nadir angle to a distance on the ground.
             # This step assumes a simple spherical Earth model, not taking
-            # into account ellipsoid shape or terrain altitude.
-            ground_distance = altitude.terrain / np.cos(
+            # into account ellipsoid shape or ground track elevation.
+            ground_distance = vehicle_altitude.terrain / np.cos(
                 np.radians(off_nadir_angle_deg)
             )  # in meters
 
@@ -1396,13 +1417,15 @@ class GISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def home_position(self) -> Optional[HomePosition]:
-        """Home position, or None if unknown or too old"""
+        """:term:`Home` :term:`global position`, or None if unknown or too old"""
 
-    def gimbal_device_attitude_status_cb(self, msg: GimbalDeviceAttitudeStatus) -> None:
+    def _gimbal_device_attitude_status_cb(
+        self, msg: GimbalDeviceAttitudeStatus
+    ) -> None:
         """Callback for :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
 
-        Publishes gimbal :class:`.geometry_msgs.msg.Quaternion` because the
-        content of that message is affected by this update.
+        Publishes gimbal :class:`.geometry_msgs.msg.Quaternion` because its content
+        is affected by this update.
 
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
@@ -1414,13 +1437,15 @@ class GISNode(Node):
     @ROS.subscribe(
         "/mavros/gimbal_control/device/attitude_status",
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=gimbal_device_attitude_status_cb,
+        callback=_gimbal_device_attitude_status_cb,
     )
     def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
-        """Gimbal attitude, or None if unknown or too old"""
+        """:term:`Camera` :term:`FRD` :term:`orientation`, or None if not available
+        or too old
+        """
 
     @staticmethod
-    def _quaternion_multiply(q1, q2):
+    def _quaternion_multiply(q1: Quaternion, q2: Quaternion) -> Quaternion:
         w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
         w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
 
@@ -1436,14 +1461,13 @@ class GISNode(Node):
         messaging.ROS_TOPIC_GIMBAL_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
     )
     def gimbal_quaternion(self) -> Optional[Quaternion]:
-        """Gimbal orientation as :class:`geometry_msgs.msg.Quaternion` message
-        or None if not available
+        """:term:`Camera` :term:`orientation` or None if not available
 
         .. note::
-            Current implementation assumes camera is facing directly down from
-            vehicle body if GimbalDeviceAttitudeStatus (MAVLink gimbal protocol v2)
-            is not available. SHould therefore not be used for estimating
-            vehicle pose from gimbal pose.
+            Current implementation assumes camera is :term:`nadir` facing
+            if GimbalDeviceAttitudeStatus :term:`message` (:term:`MAVLink` gimbal
+            protocol v2) is not available. Should therefore not be used for
+            estimating :term:`vehicle` :term:`orientation`.
         """
 
         def _apply_vehicle_yaw(vehicle_q, gimbal_q):
@@ -1465,12 +1489,12 @@ class GISNode(Node):
         def _gimbal_quaternion(
             geopose: GeoPoseStamped,
         ):
-            """Gimbal orientation quaternion in North-East-Down (NED) frame.
+            """:term:`Camera` :term:`orientation` quaternion in :term:`NED` frame
 
-            Origin is defined as gimbal (camera) pointing directly down nadir
+            Origin is defined as gimbal (camera) pointing directly down :term:`nadir`
             with top of image facing north. This definition should avoid gimbal
             lock for realistic use cases where the camera is used mainly to look
-            down at the terrain under the vehicle instead of e.g. at the horizon.
+            down at the ground under the :term:`vehicle` instead of e.g. at the horizon.
             """
             if self.gimbal_device_attitude_status is None:
                 # Identity quaternion: assume nadir-facing camera if no

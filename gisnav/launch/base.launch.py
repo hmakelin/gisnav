@@ -32,13 +32,9 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="pose_estimation_node",
-            executable="pose_estimation_node",
-            parameters=[
-                os.path.join(
-                    package_share_dir, "launch/params/pose_estimation_node.yaml"
-                )
-            ],
+            name="cv_node",
+            executable="cv_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/cv_node.yaml")],
         )
     )
     return ld

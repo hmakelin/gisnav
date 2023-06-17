@@ -10,7 +10,7 @@ from geopandas import GeoSeries
 from sensor_msgs.msg import CameraInfo
 from shapely.geometry import Point, Polygon, box
 
-from gisnav.assertions import assert_len, assert_type
+from ._assertions import assert_len, assert_type
 
 warnings.filterwarnings(
     action="ignore", category=UserWarning, message="Geometry is in a geographic CRS."

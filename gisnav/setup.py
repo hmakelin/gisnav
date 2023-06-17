@@ -3,15 +3,15 @@ from glob import glob
 
 from setuptools import setup
 
-from gisnav.data import PackageData
+from gisnav._data import PackageData
 
 pdata = PackageData.parse_package_data(os.path.abspath("package.xml"))
 
 # Setup packages depending on what submodules have been downloaded
 packages_ = [
     pdata.package_name,
-    pdata.package_name + ".nodes",
-    pdata.package_name + ".nodes.base",
+    pdata.package_name + ".core",
+    pdata.package_name + ".extensions",
     "test",
     "test.launch",
     "test.sitl",
@@ -49,10 +49,10 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "mock_gps_node = gisnav.nodes:run_mock_gps_node",
-            "gis_node = gisnav.nodes:run_gis_node",
-            "pose_estimation_node = gisnav.nodes:run_pose_estimation_node",
-            "rviz_node = gisnav.nodes:run_rviz_node",
+            "mock_gps_node = gisnav:run_mock_gps_node",
+            "gis_node = gisnav:run_gis_node",
+            "cv_node = gisnav:run_cv_node",
+            "rviz_node = gisnav:run_rviz_node",
         ],
     },
 )

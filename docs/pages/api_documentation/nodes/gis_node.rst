@@ -1,6 +1,6 @@
 GISNode
 ____________________________________________________
-.. automodule:: gisnav.nodes.map_node
+.. automodule:: gisnav.nodes.gis_node
    :autosummary:
    :members:
    :undoc-members:

@@ -3,7 +3,7 @@ import json
 import math
 import pickle
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, TypedDict, Union, get_args
+from typing import Final, List, Optional, Tuple, TypedDict, Union, get_args
 
 import cv2
 import numpy as np
@@ -19,6 +19,7 @@ from geographic_msgs.msg import (
 )
 from geometry_msgs.msg import Pose, Quaternion
 from mavros_msgs.msg import Altitude
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from scipy.spatial.transform import Rotation
@@ -26,12 +27,21 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from ..assertions import ROS, assert_type, cache_if, narrow_types
-from ..data import Attitude, create_src_corners
-from . import messaging
+from .. import messaging
+from .._assertions import ROS, assert_type, cache_if, narrow_types
+from .._data import Attitude, create_src_corners
+from ..static_configuration import (
+    GIS_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
+)
 
 
-class PoseEstimationNode(Node):
+class CVNode(Node):
     """Estimates and publishes pose between two images
 
     Compares images from :class:`sensor_msgs.msg.Image` message to maps from
@@ -132,24 +142,17 @@ class PoseEstimationNode(Node):
     """Magnitude of allowed attitude deviation of estimate from expectation in
     degrees"""
 
-    @ROS.setup_node(
-        [
-            ("pose_estimator_endpoint", ROS_D_POSE_ESTIMATOR_ENDPOINT, True),
-            ("max_pitch", ROS_D_MISC_MAX_PITCH, False),
-            ("min_match_altitude", ROS_D_MISC_MIN_MATCH_ALTITUDE, False),
-            (
-                "attitude_deviation_threshold",
-                ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD,
-                False,
-            ),
-        ]
-    )
-    def __init__(self, name: str) -> None:
-        """Node initializer
+    _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
+    """A read only ROS parameter descriptor"""
 
-        :param name: Node name
+    def __init__(self, *args, **kwargs) -> None:
+        """Class initializer
+
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
-        # super().__init__(name)  # Handled by @setup_node decorator
+        super().__init__(*args, **kwargs)
+
         self._package_share_dir = get_package_share_directory("gisnav")
 
         # Converts image_raw to cv2 compatible image
@@ -163,19 +166,52 @@ class PoseEstimationNode(Node):
         self.altitude
         self.gimbal_quaternion
         self.geopose
-        self.home_geopoint
         self.camera_info
         self.image
 
     @property
-    @ROS.subscribe(messaging.ROS_TOPIC_ORTHOIMAGE, QoSPresetProfiles.SENSOR_DATA.value)
+    @ROS.parameter(
+        ROS_D_POSE_ESTIMATOR_ENDPOINT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY
+    )
+    def pose_estimator_endpoint(self) -> Optional[str]:
+        """Pose estimation service endpoint URL"""
+
+    @property
+    @ROS.parameter(ROS_D_MISC_MAX_PITCH)
+    def max_pitch(self) -> Optional[int]:
+        """Max :term:`camera` pitch in degrees from :term:`nadir` beyond which
+        :term:`pose` estimation will not be attempted
+        """
+
+    @property
+    @ROS.parameter(ROS_D_MISC_MIN_MATCH_ALTITUDE)
+    def min_match_altitude(self) -> Optional[int]:
+        """Minimum :term:`vehicle` :term:`altitude` in meters :term:`AGL` below which
+        :term:`pose` estimation will not be attempted
+        """
+
+    @property
+    @ROS.parameter(ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD)
+    def attitude_deviation_threshold(self) -> Optional[float]:
+        """Maximum allowed attitude deviation in degrees of :term:`pose` estimate
+        from expectation for the estimate to be considered valid
+        """
+
+    @property
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
     def orthoimage_3d(self) -> Optional[OrthoImage3D]:
         """Input orthoimage and elevation raster pair for pose estimation"""
 
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_TERRAIN_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
     )
     def terrain_altitude(self) -> Optional[Altitude]:
         """Altitude of terrain directly under vehicle, or None if unknown or too old"""
@@ -183,7 +219,8 @@ class PoseEstimationNode(Node):
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_GROUND_TRACK_GEOPOSE,
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def terrain_geopoint(self) -> Optional[GeoPointStamped]:
@@ -198,7 +235,9 @@ class PoseEstimationNode(Node):
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_ALTITUDE, QoSPresetProfiles.SENSOR_DATA.value
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
     )
     def altitude(self) -> Optional[Altitude]:
         """Altitude of vehicle, or None if unknown or too old"""
@@ -216,18 +255,12 @@ class PoseEstimationNode(Node):
     @property
     # @ROS.max_delay_ms(_DELAY_NORMAL_MS)  # TODO: re-enable
     @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
     )
     def geopose(self) -> Optional[GeoPoseStamped]:
         """Vehicle GeoPoseStamped, or None if not available or too old"""
-
-    @property
-    @ROS.max_delay_ms(_DELAY_SLOW_MS)
-    @ROS.subscribe(
-        messaging.ROS_TOPIC_HOME_GEOPOINT, QoSPresetProfiles.SENSOR_DATA.value
-    )
-    def home_geopoint(self) -> Optional[GeoPointStamped]:
-        """Home position GeoPointStamped, or None if not available or too old"""
 
     @property
     # @ROS.max_delay_ms(_DELAY_SLOW_MS) - gst plugin config does not enable timestamp?
@@ -282,11 +315,8 @@ class PoseEstimationNode(Node):
         """
 
         @narrow_types(self)
-        def _should_estimate(altitude: Altitude):
+        def _should_estimate(altitude: Altitude, max_pitch: int, min_alt: int):
             # Check condition (2) - whether camera roll/pitch is too large
-            max_pitch = (
-                self.get_parameter("max_pitch").get_parameter_value().integer_value
-            )
             if self._camera_roll_or_pitch_too_high(max_pitch):
                 self.get_logger().warn(
                     f"Camera roll or pitch not available or above limit {max_pitch}. "
@@ -295,11 +325,6 @@ class PoseEstimationNode(Node):
                 return False
 
             # Check condition (3) - whether vehicle altitude is too low
-            min_alt = (
-                self.get_parameter("min_match_altitude")
-                .get_parameter_value()
-                .integer_value
-            )
             assert min_alt > 0
             if altitude.terrain is np.nan:
                 self.get_logger().warn(
@@ -316,7 +341,9 @@ class PoseEstimationNode(Node):
 
             return True
 
-        return bool(_should_estimate(self.altitude))
+        return bool(
+            _should_estimate(self.altitude, self.max_pitch, self.min_match_altitude)
+        )
 
     @staticmethod
     def _get_yaw_pitch_degrees_from_quaternion(
@@ -375,13 +402,13 @@ class PoseEstimationNode(Node):
         reference_array = orthoimage_stack[:, :, 0:3]
         elevation_array = orthoimage_stack[:, :, 3]
 
-        pre_processed_inputs: PoseEstimationNode.PoseEstimationInputs = {
+        pre_processed_inputs: CVNode.PoseEstimationInputs = {
             "query": query_array,
             "reference": reference_array,
             "elevation": elevation_array,
             "k": camera_info.k.reshape((3, 3)),
         }
-        intermediate_outputs = PoseEstimationNode._PoseEstimationIntermediateOutputs(
+        intermediate_outputs = CVNode._PoseEstimationIntermediateOutputs(
             affine_transform=affine, camera_yaw_degrees=camera_yaw_degrees
         )
         return pre_processed_inputs, intermediate_outputs
@@ -391,9 +418,9 @@ class PoseEstimationNode(Node):
     def _is_valid_pose_estimate(
         self,
         pose: Tuple[np.ndarray, np.ndarray],
-        # pose: Pose,
         context: _PoseEstimationContext,
         intermediate_outputs: _PoseEstimationIntermediateOutputs,
+        threshold: int,
     ):
         """Returns True if the estimate is valid
 
@@ -435,11 +462,6 @@ class PoseEstimationNode(Node):
 
         magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
 
-        threshold = (
-            self.get_parameter("attitude_deviation_threshold")
-            .get_parameter_value()
-            .integer_value
-        )
         threshold = np.radians(threshold)
 
         if magnitude > threshold:
@@ -584,9 +606,14 @@ class PoseEstimationNode(Node):
             return None
 
         inputs, intermediate_outputs = results
-        pose = self._get_pose(inputs)
+        pose = self._get_pose(inputs, self.pose_estimator_endpoint)
 
-        # if not self._is_valid_pose_estimate(pose, context, intermediate_outputs):
+        # if not self._is_valid_pose_estimate(
+        #        pose,
+        #        context,
+        #        intermediate_outputs,
+        #        self.attitude_deviation_threshold
+        # ):
         #    self.get_logger().warn(
         #        "Pose estimate did not pass post-processing validity check, "
         #        "skipping this frame."
@@ -832,8 +859,9 @@ class PoseEstimationNode(Node):
         affine_2d = affine_2d[:2, :]
         return cv2.warpAffine(image, affine_2d, shape[::-1]), affine
 
+    @narrow_types
     def _get_pose(
-        self, inputs: PoseEstimationInputs
+        self, inputs: PoseEstimationInputs, pose_estimator_endpoint: str
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """
         Performs call to pose estimation service and returns pose as (r, t) tuple,
@@ -861,11 +889,6 @@ class PoseEstimationNode(Node):
 
             return pose
 
-        pose_estimator_endpoint = (
-            self.get_parameter("pose_estimator_endpoint")
-            .get_parameter_value()
-            .string_value
-        )
         response = requests.post(
             pose_estimator_endpoint,
             data={k: pickle.dumps(v) for k, v in inputs.items()},

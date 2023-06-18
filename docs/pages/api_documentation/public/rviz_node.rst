@@ -1,6 +1,6 @@
 RVizNode
 ____________________________________________________
-.. automodule:: gisnav.nodes.rviz_node
+.. automodule:: gisnav.extensions.rviz_node
    :autosummary:
    :members:
    :undoc-members:

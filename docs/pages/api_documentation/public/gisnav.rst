@@ -1,6 +1,6 @@
 Entry points
 ____________________________________________________
-.. automodule:: gisnav.nodes
+.. automodule:: gisnav
    :autosummary:
    :members:
    :undoc-members:

@@ -22,13 +22,14 @@
 import json
 import socket
 from datetime import datetime
-from typing import Optional
+from typing import Final, Optional
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
 from mavros_msgs.msg import Altitude
 from px4_msgs.msg import SensorGps
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
@@ -42,19 +43,31 @@ from ..static_configuration import (
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
 )
 
+_ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
+"""A read only ROS parameter descriptor"""
+
 
 class MockGPSNode(Node):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
-    ROS_D_USE_SENSOR_GPS = True
-    """Set to False to use GPSINPUT message for ArduPilot MAVROS,
-    SensorGps otherwise (PX4)"""
+    ROS_D_USE_SENSOR_GPS: Final = True
+    """Set to False to use :class:`mavros_msgs.msg.GPSINPUT` message for
+    :term:`ArduPilot`, :class:`px4_msgs.msg.SensorGps` for :term:`PX4` otherwise
+    """
 
-    ROS_D_UDP_HOST = "127.0.0.1"
-    """MAVProxy GPSInput plugin default host"""
+    ROS_D_UDP_HOST: Final = "127.0.0.1"
+    """MAVProxy GPSInput plugin default host
 
-    ROS_D_UDP_PORT = 25100
-    """MAVProxy GPSInput plugin default port"""
+    .. note::
+        Only used if :attr:`use_sensor_gps` is ``False``
+    """
+
+    ROS_D_UDP_PORT: Final = 25100
+    """MAVProxy GPSInput plugin default port
+
+    .. note::
+        Only used if :attr:`use_sensor_gps` is ``False``
+    """
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -76,7 +89,7 @@ class MockGPSNode(Node):
             self._mock_gps_pub = None
 
     @property
-    @ROS.parameter(ROS_D_USE_SENSOR_GPS)
+    @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def use_sensor_gps(self) -> Optional[bool]:
         """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
         should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
@@ -84,12 +97,12 @@ class MockGPSNode(Node):
         """
 
     @property
-    @ROS.parameter(ROS_D_UDP_HOST)
+    @ROS.parameter(ROS_D_UDP_HOST, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def udp_host(self) -> Optional[str]:
         """:term:`ROS` parameter MAVProxy GPSInput plugin host name or IP address"""
 
     @property
-    @ROS.parameter(ROS_D_UDP_PORT)
+    @ROS.parameter(ROS_D_UDP_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def udp_port(self) -> Optional[int]:
         """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
@@ -116,7 +129,7 @@ class MockGPSNode(Node):
         callback=_vehicle_estimated_geopose_cb,
     )
     def vehicle_estimated_geopose(self) -> Optional[GeoPoseStamped]:
-        """Subscribed :term:`Vehicle` estimated :term:`geopose`, or None if not
+        """Subscribed :term:`vehicle` estimated :term:`geopose`, or None if not
         available
         """
 
@@ -128,7 +141,7 @@ class MockGPSNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def vehicle_estimated_altitude(self) -> Optional[Altitude]:
-        """Subscribed :term:`Vehicle` estimated :term:`altitude`,or None if not
+        """Subscribed :term:`vehicle` estimated :term:`altitude`, or None if not
         available
         """
 

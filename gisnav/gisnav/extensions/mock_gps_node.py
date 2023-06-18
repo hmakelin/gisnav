@@ -58,7 +58,7 @@ class MockGPSNode(Node):
         """
         super().__init__(*args, **kwargs)
 
-        if self._sensor_gps:
+        if self.sensor_gps:
             self._mock_gps_pub = self.create_publisher(
                 SensorGps,
                 messaging.ROS_TOPIC_SENSOR_GPS,
@@ -87,20 +87,20 @@ class MockGPSNode(Node):
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS)
     def sensor_gps(self) -> Optional[bool]:
-        """Flag indicating outgoing mock :term:`GPS` message should be published
-        as :class:`px4_msgs.msg.SensorGps` for :term:`PX4` instead of as
-        :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
+        """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
+        should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
+        instead of as :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
         """
 
     @property
     @ROS.parameter(ROS_D_UDP_HOST)
     def udp_host(self) -> Optional[str]:
-        """MAVProxy GPSInput plugin host name or IP address"""
+        """:term:`ROS` parameter MAVProxy GPSInput plugin host name or IP address"""
 
     @property
     @ROS.parameter(ROS_D_UDP_PORT)
     def udp_port(self) -> Optional[int]:
-        """MAVProxy GPSInput plugin port"""
+        """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
     def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
         """
@@ -162,7 +162,7 @@ class MockGPSNode(Node):
         eph = 10.0
         epv = 1.0
 
-        if self._sensor_gps:
+        if self.sensor_gps:
             yaw_rad = np.radians(yaw)
 
             msg = SensorGps()

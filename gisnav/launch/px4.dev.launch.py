@@ -1,4 +1,4 @@
-"""Launches GISNav with PX4 SITL simulation configuration"""
+"""Launches GISNav with PX4 SITL simulation development configuration"""
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -8,7 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import ThisLaunchFileDir
 from launch_ros.actions import Node
 
-from gisnav.data import PackageData
+from gisnav._data import PackageData
 
 
 def generate_launch_description():

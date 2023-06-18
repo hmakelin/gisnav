@@ -1,8 +1,8 @@
-"""Launches GISNav's autopilot agnostic nodes
+"""Launches GISNav :term:`core` nodes
 
-The :class:`.PoseEstimationNode`,  :class:`.BBoxNode`, and :class:`.GISNode`
-nodes are autopilot agnostic and are launched from a shared description
-defined in this file.
+The :class:`.CVNode` and :class:`.GISNode` nodes are launched from this file.
+
+The dev version of this launch file alse launches :class:`.RVizNode`.
 """
 import os
 
@@ -10,7 +10,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
-from gisnav.data import PackageData
+from gisnav._data import PackageData
 
 
 def generate_launch_description():

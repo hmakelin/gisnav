@@ -1,7 +1,7 @@
 import os
 import sys
 
-from gisnav.data import PackageData
+from gisnav._data import PackageData
 
 sys.path.insert(0, os.path.abspath("../gisnav"))
 

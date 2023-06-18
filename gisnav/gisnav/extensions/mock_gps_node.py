@@ -51,8 +51,8 @@ class MockGPSNode(Node):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_USE_SENSOR_GPS: Final = True
-    """Set to False to use :class:`mavros_msgs.msg.GPSINPUT` message for
-    :term:`ArduPilot`, :class:`px4_msgs.msg.SensorGps` for :term:`PX4` otherwise
+    """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for
+    :term:`ArduPilot`, :class:`px4_msgs.msg.SensorGps` for :term:`PX4` otherwise.
     """
 
     ROS_D_UDP_HOST: Final = "127.0.0.1"

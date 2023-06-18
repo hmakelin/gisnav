@@ -39,22 +39,22 @@ ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION: Final = "~/ground_track/elevation"
 :attr:`.GISNode.ground_track_elevation`.
 """
 
-ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "orthoimage"
+ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
-:attr:`GISNode.orthoimage`.
+:attr:`.GISNode.orthoimage`.
 """
 
 ROS_TOPIC_RELATIVE_CAMERA_QUATERNION: Final = "~/camera/quaternion"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
-:attr:`GISNode.camera_quaternion`.
+:attr:`.GISNode.camera_quaternion`.
 """
 
 ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE: Final = "~/vehicle/estimated/geopose"
 """Relative :term:`topic` into which :class:`.CVNode` publishes
-:attr:`CVNode.vehicle_estimated_geopose`.
+:attr:`.CVNode.vehicle_estimated_geopose`.
 """
 
 ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE: Final = "~/vehicle/estimated/altitude"
 """Relative :term:`topic` into which :class:`.CVNode` publishes
-:attr:`CVNode.vehicle_estimated_altitude`.
+:attr:`.CVNode.vehicle_estimated_altitude`.
 """

@@ -1,8 +1,9 @@
 **************************************************
 API Documentation
 **************************************************
-Here you can find the automatically generated **public API** documentation for the `GISNav ROS 2 package`_. Use the
-search bar or the below module index to find what you are looking for.
+Here you can find the automatically generated API documentation for the
+`GISNav ROS 2 package`_. Use the search bar or the below module index to find
+what you are looking for.
 
 .. _GISNav ROS 2 package: https://github.com/hmakelin/gisnav
 
@@ -13,28 +14,22 @@ search bar or the below module index to find what you are looking for.
 .. toctree::
     :caption: Core
 
-    nodes/gis_node
-    nodes/pose_estimation_node
+    public/gis_node
+    public/pose_estimation_node
 
 .. toctree::
     :caption: Extensions
 
-    nodes/mock_gps_node
-    nodes/rviz_node
+    public/mock_gps_node
+    public/rviz_node
 
 .. toctree::
-    :caption: Utilities
+    :caption: Configuration
 
-    gisnav/rclpy_decorators
-    nodes/messaging
-
-.. toctree::
-    :caption: Entry points
-
-    nodes/nodes
-    nodes/base_node
+    public/static_configuration
+    public/gisnav
 
 .. toctree::
-    :caption: Launch tests
+    :caption: Private API
 
-    test/launch
+    private/rclpy_decorators

@@ -1,8 +1,9 @@
-CVNode
+Decorators
 ____________________________________________________
-.. automodule:: gisnav.nodes.pose_estimation_node
+.. automodule:: gisnav._assertions
    :autosummary:
    :members:
    :undoc-members:
    :special-members: __init__
    :show-inheritance:
+   :exclude-members: P

@@ -1,6 +1,6 @@
-MockGPSNode
+Static configuration
 ____________________________________________________
-.. automodule:: gisnav.nodes.mock_gps_node
+.. automodule:: gisnav.static_configuration
    :autosummary:
    :members:
    :undoc-members:

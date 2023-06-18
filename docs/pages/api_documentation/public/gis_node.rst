@@ -1,6 +1,6 @@
-Messaging
+GISNode
 ____________________________________________________
-.. automodule:: gisnav.nodes.messaging
+.. automodule:: gisnav.core.gis_node
    :autosummary:
    :members:
    :undoc-members:

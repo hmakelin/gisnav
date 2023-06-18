@@ -1,9 +1,8 @@
-Decorators
+CVNode
 ____________________________________________________
-.. automodule:: gisnav.assertions
+.. automodule:: gisnav.core.cv_node
    :autosummary:
    :members:
    :undoc-members:
    :special-members: __init__
    :show-inheritance:
-   :exclude-members: P

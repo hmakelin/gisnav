@@ -1,6 +1,6 @@
-BaseNode
+MockGPSNode
 ____________________________________________________
-.. automodule:: gisnav.nodes.base.base_node
+.. automodule:: gisnav.extensions.mock_gps_node
    :autosummary:
    :members:
    :undoc-members:

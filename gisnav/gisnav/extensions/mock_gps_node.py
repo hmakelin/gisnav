@@ -1,12 +1,12 @@
-"""Publishes mock GPS (GNSS) messages
+"""GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages
 
 .. mermaid::
-    :caption: WIP: Mock GPS node data flow graph
+    :caption: Mock GPS node data flow graph
 
     graph LR
         subgraph CVNode
-            geopose_estimate[gisnav/vehicle/geopose/estimate]
-            altitude_estimate[gisnav/vehicle/altitude/estimate]
+            geopose_estimate[gisnav/vehicle/estimated/geopose]
+            altitude_estimate[gisnav/vehicle/estimated/altitude]
         end
 
         subgraph MockGPSNode
@@ -14,7 +14,7 @@
             gps_input
         end
 
-        geopose_estimate -->|geographic_msgs/GeoPose| MockGPSNode
+        geopose_estimate -->|geographic_msgs/GeoPoseStamped| MockGPSNode
         altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
         sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
         gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
@@ -64,7 +64,7 @@ class MockGPSNode(Node):
         """
         super().__init__(*args, **kwargs)
 
-        if self.sensor_gps:
+        if self.use_sensor_gps:
             self._mock_gps_pub = self.create_publisher(
                 SensorGps,
                 messaging.ROS_TOPIC_SENSOR_GPS,
@@ -77,7 +77,7 @@ class MockGPSNode(Node):
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS)
-    def sensor_gps(self) -> Optional[bool]:
+    def use_sensor_gps(self) -> Optional[bool]:
         """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
         should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
         instead of as :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
@@ -169,7 +169,7 @@ class MockGPSNode(Node):
         eph = 10.0
         epv = 1.0
 
-        if self.sensor_gps:
+        if self.use_sensor_gps:
             yaw_rad = np.radians(yaw)
 
             msg = SensorGps()

@@ -129,7 +129,14 @@ def narrow_types(
                     type_args = get_args(expected_type)
 
                     if origin_type is None:
-                        check = isinstance(value, expected_type)
+                        try:
+                            check = isinstance(value, expected_type)
+                        except TypeError as te:
+                            # TODO: handle TypedDict better
+                            if isinstance(value, dict) and "TypedDict" in str(te):
+                                check = True
+                            else:
+                                raise te
                     else:
                         check = _is_generic_instance(value, origin_type, type_args)
 

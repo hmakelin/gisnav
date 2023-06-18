@@ -13,7 +13,7 @@ search bar or the below module index to find what you are looking for.
 .. toctree::
     :caption: Core
 
-    nodes/map_node
+    nodes/gis_node
     nodes/pose_estimation_node
 
 .. toctree::

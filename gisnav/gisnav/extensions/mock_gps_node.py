@@ -22,21 +22,22 @@
 import json
 import socket
 from datetime import datetime
+from typing import Optional
 
 import numpy as np
 from geographic_msgs.msg import GeoPoseStamped
 from gps_time import GPSTime
 from mavros_msgs.msg import Altitude
 from px4_msgs.msg import SensorGps
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
-from gisnav.data import Attitude
-from gisnav.nodes.base.rviz_publisher_node import RVizPublisherNode
+from .. import messaging
+from .._assertions import ROS
+from .._data import Attitude
 
-from . import messaging
 
-
-class MockGPSNode(RVizPublisherNode):
+class MockGPSNode(Node):
     """A node that publishes a mock GPS message over the microRTPS bridge"""
 
     ROS_D_USE_SENSOR_GPS = True
@@ -49,31 +50,15 @@ class MockGPSNode(RVizPublisherNode):
     ROS_D_UDP_PORT = 25100
     """MAVProxy GPSInput plugin default port"""
 
-    ROS_PARAM_DEFAULTS = [
-        ("udp_host", ROS_D_UDP_HOST, True),
-        ("udp_port", ROS_D_UDP_PORT, True),
-        ("sensor_gps", ROS_D_USE_SENSOR_GPS, True),
-    ]
-    """List containing ROS parameter name, default value and read_only flag tuples"""
+    def __init__(self, *args, **kwargs):
+        """Class initializer
 
-    def __init__(self, name: str):
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
-        Class initializer
+        super().__init__(*args, **kwargs)
 
-        :param name: Node name
-        """
-        super().__init__(name)
-        self._sensor_gps = (
-            self.get_parameter("sensor_gps").get_parameter_value().bool_value
-        )
-        self._udp_host = (
-            self.get_parameter("udp_host").get_parameter_value().string_value
-        )
-        self._udp_port = (
-            self.get_parameter("udp_port").get_parameter_value().integer_value
-        )
-
-        if self._sensor_gps:
+        if self.sensor_gps:
             self._mock_gps_pub = self.create_publisher(
                 SensorGps,
                 messaging.ROS_TOPIC_SENSOR_GPS,
@@ -98,6 +83,24 @@ class MockGPSNode(RVizPublisherNode):
         )
         self._geopose_estimate = None
         self._altitude_estimate = None
+
+    @property
+    @ROS.parameter(ROS_D_USE_SENSOR_GPS)
+    def sensor_gps(self) -> Optional[bool]:
+        """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
+        should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
+        instead of as :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
+        """
+
+    @property
+    @ROS.parameter(ROS_D_UDP_HOST)
+    def udp_host(self) -> Optional[str]:
+        """:term:`ROS` parameter MAVProxy GPSInput plugin host name or IP address"""
+
+    @property
+    @ROS.parameter(ROS_D_UDP_PORT)
+    def udp_port(self) -> Optional[int]:
+        """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
     def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
         """
@@ -159,7 +162,7 @@ class MockGPSNode(RVizPublisherNode):
         eph = 10.0
         epv = 1.0
 
-        if self._sensor_gps:
+        if self.sensor_gps:
             yaw_rad = np.radians(yaw)
 
             msg = SensorGps()
@@ -220,9 +223,7 @@ class MockGPSNode(RVizPublisherNode):
             msg["satellites_visible"] = satellites_visible
             msg["yaw"] = yaw * 100
 
+            # TODO: handle None host or port
             self._socket.sendto(
-                f"{json.dumps(msg)}".encode("utf-8"), (self._udp_ip, self._udp_port)
+                f"{json.dumps(msg)}".encode("utf-8"), (self.udp_host, self.udp_port)
             )
-
-        # Publish pose stamped and terrain altitude and path for rviz2, debugging etc.
-        self.publish_rviz(self._geopose_estimate, self._altitude_estimate.terrain)

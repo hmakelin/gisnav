@@ -1,8 +1,8 @@
-"""Launches GISNav's autopilot agnostic nodes
+"""Launches GISNav :term:`core` nodes
 
-The :class:`.PoseEstimationNode`,  :class:`.BBoxNode`, and :class:`.MapNode`
-nodes are autopilot agnostic and are launched from a shared description
-defined in this file.
+The :class:`.CVNode` and :class:`.GISNode` nodes are launched from this file.
+
+The dev version of this launch file alse launches :class:`.RVizNode`.
 """
 import os
 
@@ -10,7 +10,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
-from gisnav.data import PackageData
+from gisnav._data import PackageData
 
 
 def generate_launch_description():
@@ -24,21 +24,17 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="map_node",
-            executable="map_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/map_node.yaml")],
+            name="gis_node",
+            executable="gis_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/gis_node.yaml")],
         )
     )
     ld.add_action(
         Node(
             package="gisnav",
-            name="pose_estimation_node",
-            executable="pose_estimation_node",
-            parameters=[
-                os.path.join(
-                    package_share_dir, "launch/params/pose_estimation_node.yaml"
-                )
-            ],
+            name="cv_node",
+            executable="cv_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/cv_node.yaml")],
         )
     )
     ld.add_action(

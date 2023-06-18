@@ -31,8 +31,8 @@ from geographic_msgs.msg import GeoPoint
 from scipy.spatial.transform import Rotation
 from shapely.geometry import box
 
-from gisnav.assertions import assert_len, assert_ndim, assert_shape, assert_type
-from gisnav.geo import GeoPt, GeoTrapezoid, GeoValueError
+from ._assertions import assert_len, assert_ndim, assert_shape, assert_type
+from ._geo import GeoPt, GeoTrapezoid, GeoValueError
 
 warnings.filterwarnings(
     action="ignore", category=UserWarning, message="Gimbal lock detected."

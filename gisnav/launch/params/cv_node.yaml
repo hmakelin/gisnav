@@ -1,4 +1,4 @@
-pose_estimation_node:
+cv_node:
   ros__parameters:
     max_pitch: 30
     min_match_altitude: 50

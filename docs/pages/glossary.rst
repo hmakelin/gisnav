@@ -24,10 +24,11 @@ correct alternative should be easily inferred from the context they are used in.
         .. todo::
             Describe AGL, AMSL, ellipsoid and other flavors of altitude used by GISNav.
 
-    Application
-        Extended functionality beyond GISNav :term:`core` functionality. For example,
+    Extension
+    Extended functionality
+        Functionality beyond GISNav :term:`core` functionality. For example,
         :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
-        or complement.
+        or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
 
     Autopilot
         Autopilot flight control software such as :term:`PX4` or :term:`ArduPilot`.
@@ -56,11 +57,12 @@ correct alternative should be easily inferred from the context they are used in.
         A :term:`Docker` container.
 
     Core
+    Core functionality
         Deployment or implementation of GISNav which is enough to implement
-        core functionality needed by an extending :term:`application`. GISNav
-        is intended to be extended by adding more application or integration
-        specific :term:`nodes` instead of adding new features to :term:`core`
-        nodes. Consists of :class:`.GISNode` and :class:`.CVNode`.
+        core functionality needed by an :term:`extension`. GISNav is intended
+        to be extended by adding more application or integration specific
+        :term:`nodes` instead of adding new features to :term:`core` nodes.
+        Consists of :class:`.GISNode` and :class:`.CVNode`.
 
     Coverage
         * Code coverage
@@ -472,6 +474,9 @@ ____________________________________________________
 
     GIS
         Geographic Information System
+
+    GML
+        Geography Markup Language
 
     GNSS
     GPS

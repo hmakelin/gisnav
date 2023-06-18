@@ -1,6 +1,6 @@
 """Launches GISNav's autopilot agnostic nodes
 
-The :class:`.PoseEstimationNode`,  :class:`.BBoxNode`, and :class:`.MapNode`
+The :class:`.CVNode`,  :class:`.BBoxNode`, and :class:`.MapNode`
 nodes are autopilot agnostic and are launched from a shared description
 defined in this file.
 """

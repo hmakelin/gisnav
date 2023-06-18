@@ -38,6 +38,8 @@ from ..static_configuration import (
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
     ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
 )
 
@@ -288,8 +290,8 @@ class CVNode(Node):
                     f"shape ({declared_shape})."
                 )
 
-            self.geopose_stamped_estimate
-            self.altitude_estimate
+            self.vehicle_estimated_geopose
+            self.vehicle_estimated_altitude
 
         img = self._cv_bridge.imgmsg_to_cv2(
             msg, desired_encoding="passthrough"
@@ -308,7 +310,7 @@ class CVNode(Node):
         """Raw image data from vehicle camera for pose estimation"""
 
     def _should_estimate_geopose(self) -> bool:
-        """Determines whether :attr:`.geopose_stamped_estimate` should be called
+        """Determines whether :attr:`.vehicle_estimated_geopose` should be called
 
         Match should be attempted if (1) a reference map has been retrieved,
         (2) camera roll or pitch is not too high (e.g. facing horizon instead
@@ -578,10 +580,11 @@ class CVNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
+        ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
+    def vehicle_estimated_geopose(self) -> Optional[GeoPoseStamped]:
+        """:term:`Vehicle` :term:`geopose` estimate, or None if not available"""
         estimate = self._geopose_stamped_estimate
         if estimate is not None:
             return estimate[0]
@@ -680,11 +683,11 @@ class CVNode(Node):
 
     @property
     @ROS.publish(
-        messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
+        ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def altitude_estimate(self) -> Optional[Altitude]:
-        """Altitude estimate of vehicle, or None if unknown or too old"""
+    def vehicle_estimated_altitude(self) -> Optional[Altitude]:
+        """:term:`Vehicle` :term:`altitude`, or None if not available"""
         estimate = self._geopose_stamped_estimate
         if estimate is not None:
             return estimate[1]

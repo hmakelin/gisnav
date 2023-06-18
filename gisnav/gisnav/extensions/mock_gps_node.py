@@ -35,6 +35,12 @@ from rclpy.qos import QoSPresetProfiles
 from .. import messaging
 from .._assertions import ROS
 from .._data import Attitude
+from ..static_configuration import (
+    CV_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
+)
 
 
 class MockGPSNode(Node):
@@ -69,21 +75,6 @@ class MockGPSNode(Node):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._mock_gps_pub = None
 
-        self._vehicle_geopose_estimate_sub = self.create_subscription(
-            GeoPoseStamped,
-            messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
-            self._vehicle_geopose_estimate_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._vehicle_altitude_estimate_sub = self.create_subscription(
-            Altitude,
-            messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE,
-            self._vehicle_altitude_estimate_callback,
-            QoSPresetProfiles.SENSOR_DATA.value,
-        )
-        self._geopose_estimate = None
-        self._altitude_estimate = None
-
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS)
     def sensor_gps(self) -> Optional[bool]:
@@ -102,14 +93,13 @@ class MockGPSNode(Node):
     def udp_port(self) -> Optional[int]:
         """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
-    def _vehicle_geopose_estimate_callback(self, msg: GeoPoseStamped) -> None:
+    def _vehicle_estimated_geopose_cb(self, msg: GeoPoseStamped) -> None:
         """
         Handles latest geopose estimate
 
         :param msg: Latest :class:`geographic_msgs.msg.GeoPose` message
         """
-        self._geopose_estimate = msg
-        if self._altitude_estimate is not None:
+        if self.vehicle_estimated_altitude is not None:
             self._publish()
         else:
             self.get_logger().warn(
@@ -117,13 +107,30 @@ class MockGPSNode(Node):
                 "GPS message."
             )
 
-    def _vehicle_altitude_estimate_callback(self, msg: Altitude) -> None:
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_vehicle_estimated_geopose_cb,
+    )
+    def vehicle_estimated_geopose(self) -> Optional[GeoPoseStamped]:
+        """Subscribed :term:`Vehicle` estimated :term:`geopose`, or None if not
+        available
         """
-        Handles latest altitude message
 
-        :param msg: Latest :class:`mavros_msgs.msg.Altitude` message
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def vehicle_estimated_altitude(self) -> Optional[Altitude]:
+        """Subscribed :term:`Vehicle` estimated :term:`altitude`,or None if not
+        available
         """
-        self._altitude_estimate = msg
 
     @property
     def _device_id(self) -> int:

@@ -49,9 +49,11 @@ from rclpy.qos import QoSPresetProfiles
 from .. import messaging
 from .._assertions import ROS, narrow_types
 from ..static_configuration import (
+    CV_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
     ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
 )
 
@@ -269,7 +271,8 @@ class RVizNode(Node):
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
-        messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE,
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_vehicle_estimated_geopose_to_queue,
     )

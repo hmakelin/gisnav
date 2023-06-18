@@ -82,6 +82,10 @@ class MockGPSNode(Node):
         """
         super().__init__(*args, **kwargs)
 
+        # Call the decorated properties to setup subscriptions
+        self.vehicle_estimated_geopose
+        self.vehicle_estimated_altitude
+
         if self.use_sensor_gps:
             self._mock_gps_pub = self.create_publisher(
                 SensorGps,
@@ -251,27 +255,27 @@ class MockGPSNode(Node):
 
             gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
 
-            msg = {
-                "usec": timestamp,
-                "gps_id": 0,
-                "ignore_flags": 0,
-                "time_week": gps_time.week_number,
-                "time_week_ms": int(gps_time.time_of_week * 1e3),
-                "fix_type": 3,
-                "lat": int(vehicle_estimated_geopose.pose.position.latitude * 1e7),
-                "lon": int(vehicle_estimated_geopose.pose.position.longitude * 1e7),
-                "alt": vehicle_estimated_altitude.amsl,
-                "horiz_accuracy": eph,
-                "vert_accuracy": epv,
-                "speed_accuracy": 5.0,
-                "hdop": 0.0,
-                "vdop": 0.0,
-                "vn": 0.0,
-                "ve": 0.0,
-                "vd": 0.0,
-                "satellites_visible": satellites_visible,
-                "yaw": yaw * 100,
-            }
+            msg = dict(
+                usec=timestamp,
+                gps_id=0,
+                ignore_flags=0,
+                time_week=gps_time.week_number,
+                time_week_ms=int(gps_time.time_of_week * 1e3),
+                fix_type=3,
+                lat=int(vehicle_estimated_geopose.pose.position.latitude * 1e7),
+                lon=int(vehicle_estimated_geopose.pose.position.longitude * 1e7),
+                alt=vehicle_estimated_altitude.amsl,
+                horiz_accuracy=eph,
+                vert_accuracy=epv,
+                speed_accuracy=5.0,
+                hdop=0.0,
+                vdop=0.0,
+                vn=0.0,
+                ve=0.0,
+                vd=0.0,
+                satellites_visible=satellites_visible,
+                yaw=yaw * 100,
+            )
 
             # TODO: handle None host or port
             self._socket.sendto(

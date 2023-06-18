@@ -163,7 +163,7 @@ class CVNode(Node):
 
         # Calling these decorated properties the first time will setup
         # subscriptions to the appropriate ROS topics
-        self.orthoimage_3d
+        self.orthoimage
         self.ground_track_elevation
         self.ground_track_geopose
         self.altitude
@@ -206,8 +206,8 @@ class CVNode(Node):
         f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def orthoimage_3d(self) -> Optional[OrthoImage3D]:
-        """Input orthoimage and elevation raster pair for pose estimation"""
+    def orthoimage(self) -> Optional[OrthoImage3D]:
+        """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
     @property
     @ROS.max_delay_ms(_DELAY_NORMAL_MS)
@@ -271,7 +271,7 @@ class CVNode(Node):
     # @ROS.max_delay_ms(_DELAY_SLOW_MS) - gst plugin config does not enable timestamp?
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage_3d` resolution"""
+        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
     def _image_callback(self, msg: Image) -> None:
         """
@@ -603,7 +603,7 @@ class CVNode(Node):
 
         context = self._pose_estimation_context
         results = self._preprocess_geopose_inputs(
-            self.image, self.orthoimage_3d, self.camera_info, context
+            self.image, self.orthoimage, self.camera_info, context
         )
         if not results:
             self.get_logger().warn(
@@ -711,7 +711,7 @@ class CVNode(Node):
             )
 
         return _pose_estimation_context(
-            self.orthoimage_3d,
+            self.orthoimage,
             self.camera_quaternion,
             self.ground_track_elevation,
             self.ground_track_geopose,

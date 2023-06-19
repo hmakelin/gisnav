@@ -639,6 +639,7 @@ class CVNode(Node):
             ) = post_processed_pose  # TODO: quaternion might be in ESD and not NED
 
             return (
+                # TODO: use timestamp from input context instead of creating new one
                 GeoPoseStamped(
                     header=messaging.create_header("base_link"),
                     pose=GeoPose(

@@ -478,8 +478,8 @@ class ROS:
                     if time_diff > max_time_diff_ms:
                         self.get_logger().warn(
                             f"Time difference for message {type(message)} "
-                            f"({time_diff} ms) exceeded allowed limit "
-                            f"({max_time_diff_ms} ms)."
+                            f"({time_diff} ms) in {func.__name__} exceeded allowed "
+                            f"limit ({max_time_diff_ms} ms)."
                         )
                         return None
                 else:

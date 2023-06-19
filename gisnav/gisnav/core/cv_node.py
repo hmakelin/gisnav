@@ -524,6 +524,7 @@ class CVNode(Node):
         alt = float(t_wgs84[2])
 
         altitude = Altitude(
+            header=context.ground_track_elevation.header,
             monotonic=0.0,  # TODO
             amsl=alt + context.ground_track_elevation.amsl,
             local=0.0,  # TODO

@@ -86,7 +86,6 @@ from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from .. import messaging
 from .._assertions import ROS, assert_len, assert_type, cache_if, narrow_types
-from .._geo import get_dynamic_map_radius
 from ..static_configuration import (
     ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
@@ -1019,7 +1018,16 @@ class GISNode(Node):
             max_map_radius: int,
         ):
             # TODO: log messages for what's going on, or split into multiple methods
-            # bounding_box = self.bounding_box
+            def get_dynamic_map_radius(
+                camera_info: CameraInfo, max_map_radius: int, elevation: float
+            ) -> float:
+                """Returns map radius that adjusts for camera altitude to be used
+                for new map requests"""
+                hfov = 2 * np.arctan(camera_info.width / (2 * camera_info.k[0]))
+                map_radius = 1.5 * hfov * elevation  # Arbitrary padding of 50%
+                return min(map_radius, max_map_radius)
+
+            assert all((camera_info, max_map_radius, altitude.terrain))
             map_radius = get_dynamic_map_radius(
                 camera_info, max_map_radius, altitude.terrain
             )

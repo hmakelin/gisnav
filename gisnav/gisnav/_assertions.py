@@ -702,27 +702,3 @@ def assert_shape(value: np.ndarray, shape: tuple) -> None:
     :param shape: Required shape
     """
     assert value.shape == shape, f"Unexpected shape: {value.shape} ({shape} expected)."
-
-
-def assert_pose(pose: Tuple[np.ndarray, np.ndarray]) -> None:
-    """Asserts that provided tuple is a valid pose (r, t)
-
-    :param pose: Tuple consisting of a rotation (3, 3) and translation (3, 1)
-        numpy arrays with valid values
-    """
-    r, t = pose
-    assert_rotation_matrix(r)
-    assert_shape(t, (3, 1))
-
-
-def assert_rotation_matrix(r: np.ndarray) -> None:
-    """Asserts that matrix is a valid rotation matrix
-
-    Provided matrix of shape (3, 3) with valid values
-
-    TODO: also check matrix orthogonality within some tolerance?
-
-    :param r: Rotation matrix candidate
-    """
-    assert not np.isnan(r).any(), f"Rotation matrix {r} contained nans."
-    assert_shape(r, (3, 3))

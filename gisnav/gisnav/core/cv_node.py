@@ -1,4 +1,43 @@
-"""Module that contains the pose estimation node"""
+"""Module that contains the pose estimation node
+
+.. mermaid::
+    :caption: :class:`.GVNode` computational graph
+
+    graph LR
+        subgraph Camera
+            image_raw[camera/image_raw]
+            camera_info[camera/camera_info]
+        end
+
+        subgraph MAVROS
+            attitude[mavros/gimbal_control/device/attitude_status]
+        end
+
+        subgraph GISNode
+            geopose[gisnav/gis_node/vehicle/geopose]
+            altitude[gisnav/gis_node/vehicle/altitude]
+            geopose_track[gisnav/gis_node/ground_track/geopose]
+            altitude_track[gisnav/gis_node/ground_track/altitude]
+            orthoimage[gisnav/gis_node/orthoimage]
+        end
+
+        subgraph CVNode
+            geopose_estimate[gisnav/cv_node/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/cv_node/vehicle/altitude/estimate]
+        end
+
+        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| CVNode
+        geopose -->|geographic_msgs/GeoPoseStamped| CVNode
+        altitude -->|mavros_msgs/Altitude| CVNode
+        camera_info -->|sensor_msgs/CameraInfo| CVNode
+        orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
+        altitude_track -->|mavros_msgs/Altitude| CVNode
+        geopose_track -->|geographic_msgs/GeoPoseStamped| CVNode
+        image_raw -->|sensor_msgs/Image| CVNode
+        geopose_estimate -->|geographic_msgs/GeoPoseStamped| out:::hidden
+        altitude_estimate -->|mavros_msgs/Altitude| out:::hidden
+
+"""
 import json
 import math
 import pickle

@@ -141,23 +141,6 @@ class CVNode(Node):
         ground_track_elevation: Altitude
         ground_track_geopose: GeoPointStamped
 
-    _DELAY_SLOW_MS = 10000
-    """
-    Max delay for messages where updates are not needed nor expected often,
-    e.g. home position
-    """
-
-    _DELAY_NORMAL_MS = 2000
-    """Max delay for things like global position"""
-
-    _DELAY_FAST_MS = 500
-    """
-    Max delay for messages with fast dynamics that go "stale" quickly, e.g. local
-    position and attitude. The delay can be a bit higher than is intuitive because
-    the vehicle EKF should be able to fuse things with fast dynamics with higher
-    delay as long as the timestamps are accurate.
-    """
-
     # _IMAGE_ENCODING = "bgr8"
     # """
     # Encoding of input video (input to CvBridge) e.g. gscam2 only supports bgr8
@@ -249,7 +232,7 @@ class CVNode(Node):
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
@@ -261,7 +244,7 @@ class CVNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
@@ -275,7 +258,7 @@ class CVNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
@@ -285,7 +268,7 @@ class CVNode(Node):
         """Altitude of vehicle, or None if unknown or too old"""
 
     @property
-    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
@@ -297,7 +280,7 @@ class CVNode(Node):
         """
 
     @property
-    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)  # TODO: re-enable
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: re-enable
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
@@ -307,7 +290,7 @@ class CVNode(Node):
         """Vehicle GeoPoseStamped, or None if not available or too old"""
 
     @property
-    # @ROS.max_delay_ms(_DELAY_SLOW_MS) - gst plugin config does not enable timestamp?
+    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
@@ -339,7 +322,7 @@ class CVNode(Node):
         _image_callback(img, self.camera_info)
 
     @property
-    # @ROS.max_delay_ms(_DELAY_FAST_MS) - gst plugin config does not enable timestamp?
+    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,

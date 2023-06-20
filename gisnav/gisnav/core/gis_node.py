@@ -266,23 +266,6 @@ class GISNode(Node):
     connection error
     """
 
-    _DELAY_SLOW_MS = 10000
-    """
-    Max delay for messages where updates are not needed nor expected often,
-    e.g. home position
-    """
-
-    _DELAY_NORMAL_MS = 2000
-    """Max delay for things like global position"""
-
-    _DELAY_FAST_MS = 500
-    """
-    Max delay for messages with fast dynamics that go "stale" quickly, e.g.
-    local position and attitude. The delay can be a bit higher than is
-    intuitive because the vehicle EKF should be able to fuse things with
-    fast dynamics with higher lags as long as the timestamps are accurate.
-    """
-
     ROS_D_URL = "http://127.0.0.1:80/wms"
     """Default WMS URL"""
 
@@ -657,7 +640,7 @@ class GISNode(Node):
         # self.camera_quaternion
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         "/mavros/global_position/global",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -709,7 +692,7 @@ class GISNode(Node):
         return _vehicle_geopose(self.nav_sat_fix, self.vehicle_pose)
 
     @property
-    # @ROS.max_delay_ms(_DELAY_FAST_MS)  # TODO:
+    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO:
     @ROS.subscribe(
         "/mavros/local_position/pose",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -718,7 +701,7 @@ class GISNode(Node):
         """Vehicle local position, or None if not available or too old"""
 
     @property
-    # @ROS.max_delay_ms(2000) - camera info has no header (?)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
@@ -1420,7 +1403,7 @@ class GISNode(Node):
         )
 
     @property
-    @ROS.max_delay_ms(_DELAY_SLOW_MS)
+    @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
     @ROS.subscribe(
         "/mavros/home_position/home",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -1442,7 +1425,7 @@ class GISNode(Node):
         self.camera_quaternion
 
     @property
-    # @ROS.max_delay_ms(_DELAY_FAST_MS)  # TODO re-enable
+    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
     @ROS.subscribe(
         "/mavros/gimbal_control/device/attitude_status",
         QoSPresetProfiles.SENSOR_DATA.value,

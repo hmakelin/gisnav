@@ -11,40 +11,6 @@ from ._assertions import assert_shape, assert_type
 from ._data import BBox
 
 # region ROS topic names
-ROS_TOPIC_BOUNDING_BOX = "/gisnav/bounding_box"
-"""Name of ROS topics into which :class:`geographic_msgs.msg.BoundingBox`
-will be published"""
-
-ROS_TOPIC_VEHICLE_GEOPOSE = "/gisnav/vehicle_geopose"
-"""Name of ROS topic into which :class:`geographic_msgs.msg.GeoPoseStamped`
-will be published"""
-
-ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE = "/gisnav/vehicle_geopose/estimate"
-"""Name of ROS topic into which :class:`geographic_msgs.msg.GeoPoseStamped`
-estimate will be published"""
-
-ROS_TOPIC_VEHICLE_ALTITUDE = "/gisnav/vehicle_altitude"
-"""Name of ROS topics into which :class:`mavros_msgs.msg.Altitude` will be published"""
-
-ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE = "/gisnav/vehicle_altitude/estimate"
-"""Name of ROS topics into which :class:`mavGros_msgs.msg.Altitude` estimate
-will be published"""
-
-ROS_TOPIC_GIMBAL_QUATERNION = "/gisnav/gimbal_quaternion"
-"""Name of ROS topics into which :class:`geometry_msgs.msg.Quaternion` will
-be published"""
-
-ROS_TOPIC_HOME_GEOPOINT = "/gisnav/home_geopoint"
-"""Name of ROS topics into which :class:`geographic_msgs.msg.GeoPointStamped`
-will be published"""
-
-ROS_TOPIC_ORTHOIMAGE = "/gisnav/orthoimage_3d"
-"""ROS publish topic for :class:`.OrthoImage3D` message"""
-
-ROS_TOPIC_EGM96_HEIGHT = "/gisnav/egm96_height"
-"""ROS publish topic for EGM96 ellipsoid height :class:`std_msgs.msg.Float32`
-message"""
-
 ROS_TOPIC_GPS_INPUT = "/mavros/gps_input/gps_input"
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages
 over MAVROS"""

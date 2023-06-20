@@ -67,8 +67,9 @@ from sensor_msgs.msg import CameraInfo, Image
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from .. import messaging
-from .._assertions import ROS, assert_type, cache_if, narrow_types
+from .._assertions import assert_type
 from .._data import Attitude, create_src_corners
+from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,

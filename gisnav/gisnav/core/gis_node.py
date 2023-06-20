@@ -85,7 +85,8 @@ from shapely.geometry import box
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from .. import messaging
-from .._assertions import ROS, assert_len, assert_type, cache_if, narrow_types
+from .._assertions import assert_len, assert_type
+from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,

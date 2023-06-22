@@ -727,6 +727,11 @@ class CVNode(Node):
 
     @property
     def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:
+        """Gather all required inputs for pose estimation into one context
+        in order to avoid using the same message with multiple different
+        timestamps when computing the pose estimate
+        """
+
         @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
@@ -753,10 +758,8 @@ class CVNode(Node):
     def _boundingbox_to_geo_coords(
         bounding_box: BoundingBox,
     ) -> List[Tuple[float, float]]:
-        """
-        Extracts the geo coordinates from a ROS
-            geographic_msgs/BoundingBox and returns them as a list
-            of tuples.
+        """Extracts the geo coordinates from a ROS
+        geographic_msgs/BoundingBox and returns them as a list of tuples.
 
         Returns corners in order: top-left, bottom-left, bottom-right,
         top-right.
@@ -765,7 +768,6 @@ class CVNode(Node):
         be used for multiple matches.
 
         :param bbox: (geographic_msgs/BoundingBox): The bounding box.
-
         :return: The geo coordinates as a list of (longitude, latitude) tuples.
         """
         min_lon = bounding_box.min_pt.longitude
@@ -783,8 +785,8 @@ class CVNode(Node):
     @classmethod
     # @lru_cache(1)  # TODO: cache this use predicate decorator to update
     def _get_geotransformation_matrix(cls, orthoimage: OrthoImage3D):
-        """
-        Transform orthoimage frame pixel coordinates to WGS84 lon, lat coordinates
+        """Transforms orthoimage frame pixel coordinates to WGS84 lon,
+        lat coordinates
         """
         pixel_coords = create_src_corners(orthoimage.img.height, orthoimage.img.width)
         geo_coords = cls._boundingbox_to_geo_coords(orthoimage.bbox)
@@ -825,8 +827,7 @@ class CVNode(Node):
     def _get_affine_matrix(
         cls, image: np.ndarray, degrees: float, crop_height: int, crop_width: int
     ) -> np.ndarray:
-        """
-        Creates affine transformation that rotates around center and then
+        """Creates affine transformation that rotates around center and then
         center-crops an image.
 
         .. note::

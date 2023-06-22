@@ -42,21 +42,21 @@ class LoFTRHandler(BaseHandler):
         qry_tensor = torch.Tensor(qry_grayscale)[None][None].cuda() / 255.0
         ref_tensor = torch.Tensor(ref_grayscale)[None][None].cuda() / 255.0
         batch = {"image0": qry_tensor, "image1": ref_tensor}
-        return batch, k, elevation
+        return batch, qry, ref, k, elevation
 
-    def inference(self, batch):
+    def inference(self, preprocessed_data):
         """Do keypoint matching"""
-        batch, k, elevation = batch
+        batch, qry, ref, k, elevation = preprocessed_data
         with torch.no_grad():
             results = self.model(batch)
-        return results, k, elevation
+        return results, qry, ref, k, elevation
 
-    def postprocess(self, data):
+    def postprocess(self, inferred_data):
         """Filter based on confidence threshold"""
-        batch, k, elevation = data
-        mkp_qry = batch["keypoints0"].cpu().numpy()
-        mkp_ref = batch["keypoints1"].cpu().numpy()
-        conf = batch["confidence"].cpu().numpy()
+        results, qry, ref, k, elevation = inferred_data
+        mkp_qry = results["keypoints0"].cpu().numpy()
+        mkp_ref = results["keypoints1"].cpu().numpy()
+        conf = results["confidence"].cpu().numpy()
         valid = conf > self.CONFIDENCE_THRESHOLD
 
         mkp_qry = mkp_qry[valid, :]
@@ -93,4 +93,50 @@ class LoFTRHandler(BaseHandler):
         )
         r, _ = cv2.Rodrigues(r)
 
+        self.visualize(qry, ref, mkp_qry, mkp_ref, k, r, t)
+
         return [{"r": r.tolist(), "t": t.tolist()}]
+
+    @staticmethod
+    def _make_keypoint(pt, sz=1.0):
+        """Converts tuple to a cv2.KeyPoint."""
+        return cv2.KeyPoint(pt[0], pt[1], sz)
+
+    def visualize(self, qry, ref, mkp_qry, mkp_ref, k, r, t):
+        print(mkp_qry.shape)
+
+        # Visualize matches and projected FOV
+        h = k @ np.delete(np.hstack((r, t)), 2, 1)
+        height, width = qry.shape[0:2][::-1]  # cv2 flips axis order
+        src_pts = np.float32(
+            [[0, 0], [height - 1, 0], [height - 1, width - 1], [0, width - 1]]
+        ).reshape(-1, 1, 2)
+        try:
+            fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
+            map_with_fov = cv2.polylines(
+                ref,
+                [np.int32(fov_pix)],
+                True,
+                255,
+                3,
+                cv2.LINE_AA,
+            )
+        except np.linalg.LinAlgError:
+            # cannot project FOV
+            map_with_fov = ref
+
+        draw_params = dict(
+            matchColor=(0, 255, 0), singlePointColor=None, matchesMask=None, flags=2
+        )
+
+        # Need cv2.KeyPoints and cv2.DMatches to make cv2.drawMatches work
+        mkp_ref = np.apply_along_axis(self._make_keypoint, 1, mkp_ref)
+        mkp_qry = np.apply_along_axis(self._make_keypoint, 1, mkp_qry)
+        matches = list(map(lambda i: cv2.DMatch(i, i, 0), range(0, len(mkp_qry))))
+
+        img = cv2.drawMatches(
+            map_with_fov, mkp_ref, qry, mkp_qry, matches, None, **draw_params
+        )
+
+        cv2.imshow("Matches and field of view", img)
+        cv2.waitKey(1)

@@ -62,7 +62,7 @@ from geographic_msgs.msg import (
     GeoPose,
     GeoPoseStamped,
 )
-from geometry_msgs.msg import Pose, Quaternion
+from geometry_msgs.msg import Quaternion
 from mavros_msgs.msg import Altitude
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -905,28 +905,6 @@ class CVNode(Node):
         Performs call to pose estimation service and returns pose as (r, t) tuple,
         or None if not available
         """
-
-        def _matrices_to_pose(r, t):
-            # Convert the rotation matrix to a quaternion
-            rotation = Rotation.from_matrix(r)
-            quaternion = rotation.as_quat()
-
-            # Create a Pose object
-            pose = Pose()
-
-            # Set the position
-            pose.position.x = t[0][0]
-            pose.position.y = t[1][0]
-            pose.position.z = t[2][0]
-
-            # Set the orientation
-            pose.orientation.x = quaternion[0]
-            pose.orientation.y = quaternion[1]
-            pose.orientation.z = quaternion[2]
-            pose.orientation.w = quaternion[3]
-
-            return pose
-
         response = requests.post(
             pose_estimator_endpoint,
             data={k: pickle.dumps(v) for k, v in inputs.items()},
@@ -938,38 +916,7 @@ class CVNode(Node):
             data = json.loads(response.text)
             if "r" in data and "t" in data:
                 r, t = np.asarray(data.get("r")), np.asarray(data.get("t"))
-
-                if __debug__:
-                    # Visualize projected FOV estimate
-                    h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
-                    src_pts = create_src_corners(
-                        *inputs["query"].shape[0:2][::-1]
-                    )  # cv2 flips axis order
-                    try:
-                        fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
-                        ref_img = inputs["reference"]
-                        map_with_fov = cv2.polylines(
-                            ref_img.copy(),
-                            [np.int32(fov_pix)],
-                            True,
-                            255,
-                            3,
-                            cv2.LINE_AA,
-                        )
-
-                        img: np.ndarray = np.vstack((map_with_fov, inputs["query"]))
-                        cv2.imshow("Projected FOV", img)
-                        cv2.waitKey(1)
-                    except np.linalg.LinAlgError as _:  # noqa: F841
-                        self.get_logger().debug(
-                            "H was non invertible, cannot visualize."
-                        )
-
-                # pose = _matrices_to_pose(r, t)
-
-                # r_new = np.transpose(r, (1,0))
-                # t_new = np.array((t[1], t[0], t[2])).reshape(t.shape)
-                return r, t  # pose
+                return r, t
             else:
                 self.get_logger().warn(
                     f"Could not estimate pose, returned text {response.text}"

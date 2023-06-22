@@ -5,6 +5,10 @@ LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 
 COPY --chown=755 loftr_handler.py ts_config /home/model-server/
 
+USER root
+RUN apt -y install libsm6
+
+USER model-server
 RUN pip3 install kornia==0.6.10 importlib-metadata opencv-python torch-model-archiver
 
 RUN python3 -c "import torch; \

@@ -1,4 +1,10 @@
-"""Module that contains the pose estimation node
+"""This module contains :class:`.CVNode`, a :term:`ROS` node for estimating
+:term:`vehicle` :term:`geopose` and :term:`altitude`.
+
+Its primary inputs are:
+
+- :term:`Query` image
+- :term:`Reference` :term:`orthoimage` that is published by :class:`.GISNode`
 
 .. mermaid::
     :caption: :class:`.GVNode` computational graph
@@ -978,13 +984,13 @@ class CVNode(Node):
     # @lru_cache(1) TODO use own cache_if or cachetools from pypi
     def _bounding_box_perimeter_meters(cls, bounding_box: BoundingBox) -> float:
         """Returns the length of the bounding box perimeter in meters"""
-        width_meters = cls.haversine_distance(
+        width_meters = cls._haversine_distance(
             bounding_box.min_pt.latitude,
             bounding_box.min_pt.longitude,
             bounding_box.min_pt.latitude,
             bounding_box.max_pt.longitude,
         )
-        height_meters = cls.haversine_distance(
+        height_meters = cls._haversine_distance(
             bounding_box.min_pt.latitude,
             bounding_box.min_pt.longitude,
             bounding_box.max_pt.latitude,
@@ -993,7 +999,7 @@ class CVNode(Node):
         return 2 * width_meters + 2 * height_meters
 
     @staticmethod
-    def off_nadir_angle(q):
+    def _off_nadir_angle(q):
         # Rotated vector
         rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
         rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
@@ -1047,7 +1053,7 @@ class CVNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.camera_quaternion is not None:
-            off_nadir_deg = self.off_nadir_angle(self.camera_quaternion)
+            off_nadir_deg = self._off_nadir_angle(self.camera_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(
@@ -1067,7 +1073,7 @@ class CVNode(Node):
             return True
 
     @staticmethod
-    def haversine_distance(lat1, lon1, lat2, lon2) -> float:
+    def _haversine_distance(lat1, lon1, lat2, lon2) -> float:
         R = 6371000  # Radius of the Earth in meters
         lat1_rad, lon1_rad = np.radians(lat1), np.radians(lon1)
         lat2_rad, lon2_rad = np.radians(lat2), np.radians(lon2)

@@ -6,15 +6,10 @@ downloading and storing the :term:`orthophoto` and optionally :term:`DEM`
 :term:`raster`. These rasters are retrieved from an :term:`onboard` :term:`WMS`
 based on the projected location of the :term:`camera` field of view.
 
-The node subscribes to :term:`.CameraInfo` and Field of View (FOV) messages to
-determine the :term:`bounding box` for the next :term:`orthoimage` to cache. It
-will request a new raster when the overlap between the ground-projected FOV
-and the bounding box of the current cached orthoimage becomes too small.
-
 :class:`.GISNode` publishes :class:`.OrthoImage3D` messages, which contain
-high-resolution orthophotos and an optional DEM. These messages can be used
-for estimating the :term:`geopose` and :term:`altitude` of the vehicle as well
-as determining the :term:`ground track` :term:`elevation`.
+high-resolution orthophotos and an optional DEM. It also publishes vehicle
+:term:`geopose` and :term:`altitude`, and :term:`ground track` :term:`geopose` and
+:term:`elevation`.
 
 .. mermaid::
     :caption: :class:`.GISNode` computational graph

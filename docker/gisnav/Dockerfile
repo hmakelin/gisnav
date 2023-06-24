@@ -12,7 +12,7 @@ ENV FASTRTPS_DEFAULT_PROFILES_FILE \
 
 # Install GISNav dependencies
 RUN cd /opt/colcon_ws/src/gisnav/gisnav && \
-    rosdep update && \
+    rosdep update --include-eol-distros && \
     rosdep install --from-paths . -y -r --ignore-src && \
     apt-get -y install python3-pip && \
     pip install -r requirements.txt && \
@@ -32,7 +32,8 @@ RUN apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
 
 # Custom ROS messages (px4_msgs and mavros mavlink gimbal protocl v2 support)
 RUN cd /opt/colcon_ws/src/ && \
-    git clone https://github.com/px4/px4_msgs.git && \
+    git clone --branch release/1.14  \
+      https://github.com/px4/px4_msgs.git && \
     git clone --branch gimbal-protocol-v2-plugin \
       https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
     sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g'  \

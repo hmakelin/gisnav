@@ -51,5 +51,12 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# TODO: add better health check (are the core nodes publishing?)
+HEALTHCHECK --interval=10s --timeout=3s \
+  CMD /bin/bash -c "source /opt/ros/foxy/setup.bash && \
+  ros2 node list | grep -q cv_node && \
+  ros2 node list | grep -q gis_node" || exit 1
+
+
 WORKDIR /opt/colcon_ws/src/gisnav/gisnav
 ENTRYPOINT ["../docker/gisnav/entrypoint.sh"]

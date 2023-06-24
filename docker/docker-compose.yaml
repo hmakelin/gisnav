@@ -169,3 +169,11 @@ services:
               count: 1
               capabilities: [ gpu ]
     command: rviz2 -d gisnav_config.rviz
+
+  autoheal:
+    image: willfarrell/autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

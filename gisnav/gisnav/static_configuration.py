@@ -15,7 +15,7 @@ CV_NODE_NAME: Final = "cv_node"
 """Name of :class:`.CVNode` spun up by :func:`.run_cv_node`"""
 
 MOCK_GPS_NODE_NAME: Final = "mock_gps_node"
-"""Name of :class:`.GISNode` spun up by :func:`.run_mock_gps_node`"""
+"""Name of :class:`.MockGPSNode` spun up by :func:`.run_mock_gps_node`"""
 
 RVIZ_NODE_NAME: Final = "rviz_node"
 """Name of :class:`.RVizNode` spun up by :func:`.run_rviz_node`"""

@@ -32,4 +32,5 @@ what you are looking for.
 .. toctree::
     :caption: Private API
 
+    private/assertions
     private/rclpy_decorators

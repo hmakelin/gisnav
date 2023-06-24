@@ -134,6 +134,10 @@ services:
       dockerfile: Dockerfile
       args:
         - BASE_IMAGE=pytorch/torchserve:latest-gpu
+    env_file:
+      - env/x11.env
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
     network_mode: host
     deploy:
       resources:

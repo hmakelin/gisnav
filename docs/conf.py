@@ -75,6 +75,7 @@ html_theme_options = {
     ],
     "icon_links_label": "Quick Links",
     "show_toc_level": 3,
+    "primary_sidebar_end": ["indices.html"],
 }
 
 # Make version number accessible in .rst files

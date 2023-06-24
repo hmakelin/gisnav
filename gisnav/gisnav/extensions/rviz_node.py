@@ -47,7 +47,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
 from .. import messaging
-from .._assertions import ROS, narrow_types
+from .._decorators import ROS, narrow_types
 from ..static_configuration import (
     CV_NODE_NAME,
     GIS_NODE_NAME,

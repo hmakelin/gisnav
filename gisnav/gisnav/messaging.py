@@ -1,52 +1,16 @@
 """Helper functions for ROS messaging"""
 import time
-from typing import Union
 
 import numpy as np
-from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPointStamped
+from geographic_msgs.msg import BoundingBox, GeoPoint
 from geometry_msgs.msg import Quaternion
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
 from ._assertions import assert_shape, assert_type
 from ._data import BBox
-from ._geo import GeoPt
 
 # region ROS topic names
-ROS_TOPIC_BOUNDING_BOX = "/gisnav/bounding_box"
-"""Name of ROS topics into which :class:`geographic_msgs.msg.BoundingBox`
-will be published"""
-
-ROS_TOPIC_VEHICLE_GEOPOSE = "/gisnav/vehicle_geopose"
-"""Name of ROS topic into which :class:`geographic_msgs.msg.GeoPoseStamped`
-will be published"""
-
-ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE = "/gisnav/vehicle_geopose/estimate"
-"""Name of ROS topic into which :class:`geographic_msgs.msg.GeoPoseStamped`
-estimate will be published"""
-
-ROS_TOPIC_VEHICLE_ALTITUDE = "/gisnav/vehicle_altitude"
-"""Name of ROS topics into which :class:`mavros_msgs.msg.Altitude` will be published"""
-
-ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE = "/gisnav/vehicle_altitude/estimate"
-"""Name of ROS topics into which :class:`mavros_msgs.msg.Altitude` estimate
-will be published"""
-
-ROS_TOPIC_GIMBAL_QUATERNION = "/gisnav/gimbal_quaternion"
-"""Name of ROS topics into which :class:`geometry_msgs.msg.Quaternion` will
-be published"""
-
-ROS_TOPIC_HOME_GEOPOINT = "/gisnav/home_geopoint"
-"""Name of ROS topics into which :class:`geographic_msgs.msg.GeoPointStamped`
-will be published"""
-
-ROS_TOPIC_ORTHOIMAGE = "/gisnav/orthoimage_3d"
-"""ROS publish topic for :class:`.OrthoImage3D` message"""
-
-ROS_TOPIC_EGM96_HEIGHT = "/gisnav/egm96_height"
-"""ROS publish topic for EGM96 ellipsoid height :class:`std_msgs.msg.Float32`
-message"""
-
 ROS_TOPIC_GPS_INPUT = "/mavros/gps_input/gps_input"
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages
 over MAVROS"""
@@ -156,20 +120,6 @@ def wxyz_to_xyzw_q(q: np.ndarray) -> np.ndarray:
     q_out = np.append(q_out[1:], q_out[0])
     q_out = q_out.reshape(q.shape)  # Re-add potential padding
     return q_out
-
-
-def geopoint_to_geopt(msg: Union[GeoPoint, GeoPointStamped]) -> GeoPt:
-    """Convert :class:`geographic_msgs.msg.GeoPoint` or
-    :class:`geographic_msgs.msg.GeoPointStamped` to :class:`.GeoPt`
-
-    :param msg: ROS GeoPoint(Stamped) message
-    :return: GeoPt instance
-    """
-    if isinstance(msg, GeoPoint):
-        return GeoPt(x=msg.longitude, y=msg.latitude)
-    else:
-        assert isinstance(msg, GeoPointStamped)
-        return GeoPt(x=msg.position.longitude, y=msg.position.latitude)
 
 
 def bbox_to_bounding_box(bbox: BBox) -> BoundingBox:

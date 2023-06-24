@@ -1,4 +1,49 @@
-"""Module that contains the pose estimation node"""
+"""This module contains :class:`.CVNode`, a :term:`ROS` node for estimating
+:term:`vehicle` :term:`geopose` and :term:`altitude`.
+
+Its primary inputs are:
+
+- :term:`Query` image
+- :term:`Reference` :term:`orthoimage` that is published by :class:`.GISNode`
+
+.. mermaid::
+    :caption: :class:`.GVNode` computational graph
+
+    graph LR
+        subgraph Camera
+            image_raw[camera/image_raw]
+            camera_info[camera/camera_info]
+        end
+
+        subgraph MAVROS
+            attitude[mavros/gimbal_control/device/attitude_status]
+        end
+
+        subgraph GISNode
+            geopose[gisnav/gis_node/vehicle/geopose]
+            altitude[gisnav/gis_node/vehicle/altitude]
+            geopose_track[gisnav/gis_node/ground_track/geopose]
+            altitude_track[gisnav/gis_node/ground_track/altitude]
+            orthoimage[gisnav/gis_node/orthoimage]
+        end
+
+        subgraph CVNode
+            geopose_estimate[gisnav/cv_node/vehicle/geopose/estimate]
+            altitude_estimate[gisnav/cv_node/vehicle/altitude/estimate]
+        end
+
+        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| CVNode
+        geopose -->|geographic_msgs/GeoPoseStamped| CVNode
+        altitude -->|mavros_msgs/Altitude| CVNode
+        camera_info -->|sensor_msgs/CameraInfo| CVNode
+        orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
+        altitude_track -->|mavros_msgs/Altitude| CVNode
+        geopose_track -->|geographic_msgs/GeoPoseStamped| CVNode
+        image_raw -->|sensor_msgs/Image| CVNode
+        geopose_estimate -->|geographic_msgs/GeoPoseStamped| out:::hidden
+        altitude_estimate -->|mavros_msgs/Altitude| out:::hidden
+
+"""
 import json
 import math
 import pickle
@@ -17,7 +62,7 @@ from geographic_msgs.msg import (
     GeoPose,
     GeoPoseStamped,
 )
-from geometry_msgs.msg import Pose, Quaternion
+from geometry_msgs.msg import Quaternion
 from mavros_msgs.msg import Altitude
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -28,8 +73,9 @@ from sensor_msgs.msg import CameraInfo, Image
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 from .. import messaging
-from .._assertions import ROS, assert_type, cache_if, narrow_types
+from .._assertions import assert_type
 from .._data import Attitude, create_src_corners
+from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
@@ -101,23 +147,6 @@ class CVNode(Node):
         camera_quaternion: Quaternion
         ground_track_elevation: Altitude
         ground_track_geopose: GeoPointStamped
-
-    _DELAY_SLOW_MS = 10000
-    """
-    Max delay for messages where updates are not needed nor expected often,
-    e.g. home position
-    """
-
-    _DELAY_NORMAL_MS = 2000
-    """Max delay for things like global position"""
-
-    _DELAY_FAST_MS = 500
-    """
-    Max delay for messages with fast dynamics that go "stale" quickly, e.g. local
-    position and attitude. The delay can be a bit higher than is intuitive because
-    the vehicle EKF should be able to fuse things with fast dynamics with higher
-    delay as long as the timestamps are accurate.
-    """
 
     # _IMAGE_ENCODING = "bgr8"
     # """
@@ -210,7 +239,7 @@ class CVNode(Node):
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
@@ -222,7 +251,7 @@ class CVNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
@@ -236,7 +265,7 @@ class CVNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
@@ -246,7 +275,7 @@ class CVNode(Node):
         """Altitude of vehicle, or None if unknown or too old"""
 
     @property
-    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
@@ -258,7 +287,7 @@ class CVNode(Node):
         """
 
     @property
-    # @ROS.max_delay_ms(_DELAY_NORMAL_MS)  # TODO: re-enable
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: re-enable
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
@@ -268,7 +297,7 @@ class CVNode(Node):
         """Vehicle GeoPoseStamped, or None if not available or too old"""
 
     @property
-    # @ROS.max_delay_ms(_DELAY_SLOW_MS) - gst plugin config does not enable timestamp?
+    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
@@ -300,7 +329,7 @@ class CVNode(Node):
         _image_callback(img, self.camera_info)
 
     @property
-    # @ROS.max_delay_ms(_DELAY_FAST_MS) - gst plugin config does not enable timestamp?
+    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -524,6 +553,7 @@ class CVNode(Node):
         alt = float(t_wgs84[2])
 
         altitude = Altitude(
+            header=context.ground_track_elevation.header,
             monotonic=0.0,  # TODO
             amsl=alt + context.ground_track_elevation.amsl,
             local=0.0,  # TODO
@@ -638,6 +668,7 @@ class CVNode(Node):
             ) = post_processed_pose  # TODO: quaternion might be in ESD and not NED
 
             return (
+                # TODO: use timestamp from input context instead of creating new one
                 GeoPoseStamped(
                     header=messaging.create_header("base_link"),
                     pose=GeoPose(
@@ -696,6 +727,11 @@ class CVNode(Node):
 
     @property
     def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:
+        """Gather all required inputs for pose estimation into one context
+        in order to avoid using the same message with multiple different
+        timestamps when computing the pose estimate
+        """
+
         @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
@@ -722,10 +758,8 @@ class CVNode(Node):
     def _boundingbox_to_geo_coords(
         bounding_box: BoundingBox,
     ) -> List[Tuple[float, float]]:
-        """
-        Extracts the geo coordinates from a ROS
-            geographic_msgs/BoundingBox and returns them as a list
-            of tuples.
+        """Extracts the geo coordinates from a ROS
+        geographic_msgs/BoundingBox and returns them as a list of tuples.
 
         Returns corners in order: top-left, bottom-left, bottom-right,
         top-right.
@@ -734,7 +768,6 @@ class CVNode(Node):
         be used for multiple matches.
 
         :param bbox: (geographic_msgs/BoundingBox): The bounding box.
-
         :return: The geo coordinates as a list of (longitude, latitude) tuples.
         """
         min_lon = bounding_box.min_pt.longitude
@@ -752,8 +785,8 @@ class CVNode(Node):
     @classmethod
     # @lru_cache(1)  # TODO: cache this use predicate decorator to update
     def _get_geotransformation_matrix(cls, orthoimage: OrthoImage3D):
-        """
-        Transform orthoimage frame pixel coordinates to WGS84 lon, lat coordinates
+        """Transforms orthoimage frame pixel coordinates to WGS84 lon,
+        lat coordinates
         """
         pixel_coords = create_src_corners(orthoimage.img.height, orthoimage.img.width)
         geo_coords = cls._boundingbox_to_geo_coords(orthoimage.bbox)
@@ -794,8 +827,7 @@ class CVNode(Node):
     def _get_affine_matrix(
         cls, image: np.ndarray, degrees: float, crop_height: int, crop_width: int
     ) -> np.ndarray:
-        """
-        Creates affine transformation that rotates around center and then
+        """Creates affine transformation that rotates around center and then
         center-crops an image.
 
         .. note::
@@ -873,28 +905,6 @@ class CVNode(Node):
         Performs call to pose estimation service and returns pose as (r, t) tuple,
         or None if not available
         """
-
-        def _matrices_to_pose(r, t):
-            # Convert the rotation matrix to a quaternion
-            rotation = Rotation.from_matrix(r)
-            quaternion = rotation.as_quat()
-
-            # Create a Pose object
-            pose = Pose()
-
-            # Set the position
-            pose.position.x = t[0][0]
-            pose.position.y = t[1][0]
-            pose.position.z = t[2][0]
-
-            # Set the orientation
-            pose.orientation.x = quaternion[0]
-            pose.orientation.y = quaternion[1]
-            pose.orientation.z = quaternion[2]
-            pose.orientation.w = quaternion[3]
-
-            return pose
-
         response = requests.post(
             pose_estimator_endpoint,
             data={k: pickle.dumps(v) for k, v in inputs.items()},
@@ -906,38 +916,7 @@ class CVNode(Node):
             data = json.loads(response.text)
             if "r" in data and "t" in data:
                 r, t = np.asarray(data.get("r")), np.asarray(data.get("t"))
-
-                if __debug__:
-                    # Visualize projected FOV estimate
-                    h = inputs.get("k") @ np.delete(np.hstack((r, t)), 2, 1)
-                    src_pts = create_src_corners(
-                        *inputs["query"].shape[0:2][::-1]
-                    )  # cv2 flips axis order
-                    try:
-                        fov_pix = cv2.perspectiveTransform(src_pts, np.linalg.inv(h))
-                        ref_img = inputs["reference"]
-                        map_with_fov = cv2.polylines(
-                            ref_img.copy(),
-                            [np.int32(fov_pix)],
-                            True,
-                            255,
-                            3,
-                            cv2.LINE_AA,
-                        )
-
-                        img: np.ndarray = np.vstack((map_with_fov, inputs["query"]))
-                        cv2.imshow("Projected FOV", img)
-                        cv2.waitKey(1)
-                    except np.linalg.LinAlgError as _:  # noqa: F841
-                        self.get_logger().debug(
-                            "H was non invertible, cannot visualize."
-                        )
-
-                # pose = _matrices_to_pose(r, t)
-
-                # r_new = np.transpose(r, (1,0))
-                # t_new = np.array((t[1], t[0], t[2])).reshape(t.shape)
-                return r, t  # pose
+                return r, t
             else:
                 self.get_logger().warn(
                     f"Could not estimate pose, returned text {response.text}"
@@ -953,13 +932,13 @@ class CVNode(Node):
     # @lru_cache(1) TODO use own cache_if or cachetools from pypi
     def _bounding_box_perimeter_meters(cls, bounding_box: BoundingBox) -> float:
         """Returns the length of the bounding box perimeter in meters"""
-        width_meters = cls.haversine_distance(
+        width_meters = cls._haversine_distance(
             bounding_box.min_pt.latitude,
             bounding_box.min_pt.longitude,
             bounding_box.min_pt.latitude,
             bounding_box.max_pt.longitude,
         )
-        height_meters = cls.haversine_distance(
+        height_meters = cls._haversine_distance(
             bounding_box.min_pt.latitude,
             bounding_box.min_pt.longitude,
             bounding_box.max_pt.latitude,
@@ -968,7 +947,7 @@ class CVNode(Node):
         return 2 * width_meters + 2 * height_meters
 
     @staticmethod
-    def off_nadir_angle(q):
+    def _off_nadir_angle(q):
         # Rotated vector
         rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
         rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
@@ -1022,7 +1001,7 @@ class CVNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.camera_quaternion is not None:
-            off_nadir_deg = self.off_nadir_angle(self.camera_quaternion)
+            off_nadir_deg = self._off_nadir_angle(self.camera_quaternion)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(
@@ -1042,7 +1021,7 @@ class CVNode(Node):
             return True
 
     @staticmethod
-    def haversine_distance(lat1, lon1, lat2, lon2) -> float:
+    def _haversine_distance(lat1, lon1, lat2, lon2) -> float:
         R = 6371000  # Radius of the Earth in meters
         lat1_rad, lon1_rad = np.radians(lat1), np.radians(lon1)
         lat2_rad, lon2_rad = np.radians(lat2), np.radians(lon2)

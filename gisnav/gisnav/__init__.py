@@ -16,8 +16,10 @@ rovided via ROS 2 launch arguments.
 import cProfile
 import io
 import pstats
+from typing import Optional
 
 import rclpy
+from rclpy.node import Node
 
 from .core import CVNode, GISNode
 from .extensions.mock_gps_node import MockGPSNode
@@ -45,7 +47,7 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
     else:
         profile = None
 
-    node = None
+    node: Optional[Node] = None
     try:
         rclpy.init()
         node = constructor(*args, **kwargs)
@@ -57,11 +59,10 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             # Print out cProfile stats
             profile.disable()
             s = io.StringIO()
-            stats = pstats.Stats(profile, stream=s).sort_stats(
-                pstats.SortKey.CUMULATIVE
-            )
-            stats.print_stats(40)
-            print(s.getvalue())
+            stats = pstats.Stats(profile, stream=s).sort_stats(pstats.SortKey.TIME)
+            stats.print_stats(20)
+            if node is not None:
+                node.get_logger().info(s.getvalue())
     finally:
         if node is not None:
             node.destroy_node()

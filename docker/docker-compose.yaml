@@ -138,7 +138,6 @@ services:
       - env/x11.env
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/dri:/dev/dri
     network_mode: host
     deploy:
       resources:

@@ -58,11 +58,15 @@ html_css_files = [
     "css/style.css",
 ]
 
+html_js_files = [
+    "js/custom.js",
+]
+
 # Configure pydata theming options here
 html_theme_options = {
     "logo": {
-        "image_light": "_static/img/logo.png",
-        "image_dark": "_static/img/logo_inverted.png",
+        "image_light": "_static/svg/logo-no-background.svg",
+        "image_dark": "_static/svg/logo-no-background-white.svg",
     },
     "collapse_navigation": True,
     "icon_links": [
@@ -76,6 +80,13 @@ html_theme_options = {
     "icon_links_label": "Quick Links",
     "show_toc_level": 3,
     "primary_sidebar_end": ["indices.html"],
+    "favicons": [
+        {
+            "rel": "icon",
+            "sizes": "128x128",
+            "href": "png/gisnav-website-favicon-color.png",
+        },
+    ],
 }
 
 # Make version number accessible in .rst files

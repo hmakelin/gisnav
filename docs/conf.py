@@ -58,11 +58,15 @@ html_css_files = [
     "css/style.css",
 ]
 
+html_js_files = [
+    "js/custom.js",
+]
+
 # Configure pydata theming options here
 html_theme_options = {
     "logo": {
-        "image_light": "_static/img/logo.png",
-        "image_dark": "_static/img/logo_inverted.png",
+        "image_light": "assets/svg/logo-no-background.svg",
+        "image_dark": "_static/img/logo-white.svg",
     },
     "collapse_navigation": True,
     "icon_links": [

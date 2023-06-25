@@ -8,6 +8,7 @@ pygments
 sphinx-design
 sphinxcontrib-video
 sphinxcontrib-mermaid
+sphinx-copybutton
 
 # Unit & ROS 2 integration tests
 pytest

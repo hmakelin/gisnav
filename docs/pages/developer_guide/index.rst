@@ -9,6 +9,14 @@ it to match your use case.
     software-in-the-loop (SITL) simulation environment.
 
 .. toctree::
+    :caption: Run GISNav
+
+    launch/service_orchestration
+    launch/docker_compose
+    launch/ros2_launch_system
+    launch/modify_params
+
+.. toctree::
     :caption: Setup SITL
 
     sitl/prerequisites
@@ -22,14 +30,6 @@ it to match your use case.
     :caption: Setup HIL
 
     hil/jetson_pixhawk
-
-.. toctree::
-    :caption: Run GISNav
-
-    launch/service_orchestration
-    launch/docker_compose
-    launch/ros2_launch_system
-    launch/modify_params
 
 .. toctree::
     :caption: Run tests

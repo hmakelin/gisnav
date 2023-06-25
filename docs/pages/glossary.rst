@@ -81,6 +81,11 @@ correct alternative should be easily inferred from the context they are used in.
     Decorator
         A :term:`Python` decorator function.
 
+    Deploy
+    Deployment
+        A GISNav deployment consisting of various configurations of
+        :term:`Docker Compose` services depending on deployment type.
+
     Elevation
         Elevation of the ground surface or :term:`ground track` in any vertical
         datum or reference level.
@@ -482,6 +487,9 @@ ____________________________________________________
     GPS
         Global Navigation Satellite System / Global Positioning System
 
+    GUI
+        Graphical User Interface
+
     HIL
     HITL
         Hardware In The Loop simulation
@@ -563,7 +571,10 @@ relate to external interfaces.
     Jupyter notebook
         A web based :term:`IDE`: `jupyter.org <https://jupyter.org/>`_
 
-    MapServer:
+    Make
+        GNU Make, a build automation tool: `gnu.org/software/make/ <https://www.gnu.org/software/make/>`_
+
+    MapServer
         Open source GIS software: `mapserver.org <https://mapserver.org/>`_
 
     MAVLink
@@ -572,6 +583,9 @@ relate to external interfaces.
     MAVROS
         An open source :term:`MAVLink` to :term:`ROS` :term:`middleware`:
         `wiki.ros.org/mavros <http://wiki.ros.org/mavros>`_
+
+    MAVSDK
+        :term:`MAVLink` software development kit: `mavsdk.mavlink.io/main/en/index.html <https://mavsdk.mavlink.io/main/en/index.html>`_
 
     micro-ROS Agent
         A :term:`ROS` package that wraps the Micro XRCE-DDS Agent :term:`middleware`:

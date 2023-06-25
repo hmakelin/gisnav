@@ -80,6 +80,13 @@ html_theme_options = {
     "icon_links_label": "Quick Links",
     "show_toc_level": 3,
     "primary_sidebar_end": ["indices.html"],
+    "favicons": [
+        {
+            "rel": "icon",
+            "sizes": "128x128",
+            "href": "png/gisnav-website-favicon-color.png",
+        },
+    ],
 }
 
 # Make version number accessible in .rst files

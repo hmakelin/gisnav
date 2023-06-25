@@ -42,6 +42,10 @@ html[data-theme="light"] {
     --pst-color-primary: #ff4136;
     --pst-color-h1: var(--pst-color-text-base);
     --pst-color-h2: var(--pst-color-text-base);
+
+    .xref {
+        --pst-color-primary: none;
+    }
 }
 
 html[data-theme="dark"] {

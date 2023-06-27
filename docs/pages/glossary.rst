@@ -487,6 +487,9 @@ ____________________________________________________
     GPS
         Global Navigation Satellite System / Global Positioning System
 
+    GPU
+        Graphics Processing Unit
+
     GUI
         Graphical User Interface
 
@@ -508,6 +511,9 @@ ____________________________________________________
 
     OGC
         Open Geospatial Consortium: `ogc.org <https://www.ogc.org/>`_
+
+    OSM
+        :term:`OpenStreetMap`
 
     PnP
     PNP
@@ -542,6 +548,9 @@ relate to external interfaces.
 
     ArduPilot
         ArduPilot open source autopilot: `ardupilot.org <https://ardupilot.org/>`_
+
+    colcon
+        A build automation tool used by :term:`ROS 2`: `colcon.readthedocs.io/en/released/ <https://colcon.readthedocs.io/en/released/>`_
 
     DDS
     Data Distribution Service
@@ -593,6 +602,9 @@ relate to external interfaces.
 
     OpenCV
         Open source computer vision software library: `opencv.org <https://opencv.org/>`_
+
+    OpenStreetMap
+        Open source map of the world: `openstreetmap.org <https://www.openstreetmap.org/>`_
 
     Pixhawk
         Hardware standard for open source autopilots: `pixhawk.org <https://pixhawk.org/>`_

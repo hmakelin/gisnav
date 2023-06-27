@@ -1,119 +1,224 @@
-Docker Compose
-===================================
+Deploy with Docker Compose
+____________________________________________________
 
-The ``docker`` folder contains scripts for generating SITL simulation environments for development, testing, and
-demonstration purposes.
+GISNav uses :term:`Docker Compose` to define the services that constitute its
+different deployment configurations. The services are
+:ref:`orchestrated by a Makefile <Deploy using Makefile>` for convenience and
+for increased ease of adoption.
 
-The ``docker-compose.yaml`` file defines the following services:
+This page describes how these services are built and deployed individually to
+help you customize GISNav's deployments beyond what the Makefile offers.
+
+Prerequisites
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. include:: _prerequisites_docker.rst
+
+.. include:: _prerequisites_gisnav.rst
+
+List of services
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``docker/docker-compose.yaml`` file defines all services used to support
+GISNav deployments. Provided below is a list of the service names along with
+a brief description of their intended use.
+
+.. dropdown:: See YAML source code
+    :icon: code
+
+    .. literalinclude:: ../../../../docker/docker-compose.yaml
+        :caption: Docker Compose base services
+        :language: yaml
 
 +---------------------+-----------------------------------------------------------------------------------------------+
 | Service             | Description                                                                                   |
 +=====================+===============================================================================================+
-| ``ardupilot``       | ArduPilot Gazebo SITL simulation. Starts the `gazebo-iris` model with added static down       |
-|                     | (FRD frame) facing camera at the KSQL Airport.                                                |
+| ``ardupilot``       | :term:`ArduPilot` :term:`Gazebo` :term:`SITL` simulation. Starts the ``gazebo-iris`` model    |
+|                     | with added static down (:term:`FRD`) facing :term:`camera` at the KSQL Airport.               |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``px4``             | PX4 Gazebo SITL simulation. Starts `typhoon_h480` model at the KSQL Airport.                  |
+| ``px4``             | :term:`PX4` Gazebo SITL simulation. Starts the ``typhoon_h480`` model at the KSQL Airport.    |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mavros``          | MAVROS. Used as autopilot middleware (both PX4 and ArduPilot).                                |
+| ``mavros``          | :term:`MAVROS` middleware. Used as autopilot middleware with both PX4 and ArduPilot.          |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``micro-ros-agent`` | Micro-ROS agent. Used for PX4 SITL for outgoing SensorGps messages.                           |
+| ``micro-ros-agent`` | :term:`Micro-ROS agent` middleware. Used for PX4 SITL for outgoing :class:`SensorGps`         |
+|                     | :term:`messages`.                                                                             |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``qgc``             | QGroundControl ground control software for controlling simulated drones.                      |
+| ``qgc``             | :term:`QGroundControl` ground control software for controlling the :term:`vehicle`.           |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``torch-serve``     | Deep-learning service that handles image matching.                                            |
+| ``torch-serve``     | :term:`Torch` based deep learning service that handles image matching as part of :term:`pose` |
+|                     | estimation.                                                                                   |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mapserver``       | WMS server with self-hosted NAIP and OSM Buildings data, covering KSQL airport.               |
+| ``mapserver``       | :term:`GIS` server with self-hosted :term:`NAIP` and :term:`OSM` Buildings data covering      |
+|                     | KSQL airport.                                                                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mapproxy``        | WMS proxy for existing remote tile-based imagery endpoint. Alternative for `mapserver` when   |
-|                     | an imagery layer needs to cover multiple flight regions.                                      |
+| ``mapproxy``        | :term:`WMS` proxy for existing remote tile-based imagery endpoint. Alternative for            |
+|                     | ``mapserver`` when an imagery layer needs to cover multiple flight regions.                   |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``gisnav``          | GISNav ROS 2 package for demo purposes. Launches GISNav with the PX4 configuration by default.|
-|                     | Intended to be used with the `px4` service. Can be launched for `ardupilot`.                  |
+| ``autoheal``        | Monitors Docker container health and restarts containers marked as unhealthy. Used in the     |
+|                     | :term:`onboard` :term:`HIL` deployment configuration.                                         |
++---------------------+-----------------------------------------------------------------------------------------------+
+| ``gisnav``          | GISNav :term:`ROS 2` package for demonstration use only. Launches GISNav with the PX4         |
+|                     | configuration by default. Can also be launched for ArduPilot.                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+
 
-A number of Docker Compose overrides are also included in the folder. They are
-used by the ``Makefile`` described in :ref:`Service orchestration`.
+Deploy demonstration
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Prerequisites
--------------
-You must install `Docker`_ and the `Docker Compose plugin`_ to run the following
-example commands. If you have an NVIDIA GPU on your host machine, ensure you
-have `NVIDIA Container Toolkit installed`_.
+To deploy the mock :term:`GPS` demonstration introduced on the :ref:`Get Started`
+page locally, ensure you have the :ref:`prerequisites <Prerequisites>` installed and
+then follow the below steps to create, deploy, and shutdown the required services.
 
-.. _Docker: https://docs.docker.com/engine/install/
-.. _Docker Compose plugin: https://docs.docker.com/compose/install/linux/
-.. _NVIDIA Container Toolkit installed: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+Build and create
+***********
 
-PX4 SITL (Mock GPS Demo)
-------------------------
-
-Follow these instructions to launch the SITL simulation used in the
-`mock GPS demo`_.
-
-.. _mock GPS demo: https://github.com/hmakelin/gisnav/blob/master/README.md#mock-gps-example
-
-.. note::
-    Run the below commands without the ``gisnav`` service if you want to
-    develop or test a local copy of GISNav.
-
-
-Build
-^^^^^^^^^^^^^^^^^^^
-
-To build the ``mapserver``, ``px4``,  ``micro-ros-agent``,  ``mavros``,
-``torch-serve`` and ``gisnav`` services, run the following command:
+.. include:: _build_and_create_docker_intro.rst
 
 .. code-block:: bash
+    :caption: Build images and create containers
 
-    docker compose build mapserver px4 micro-ros-agent torch-serve qgc gisnav
+    cd ~/colcon_ws/src/gisnav/docker
+    docker compose create --build \
+        mapserver \
+        torch-serve \
+        micro-ros-agent \
+        mavros \
+        qgc \
+        rviz \
+        px4 \
+        gisnav
 
+Expose xhost
+***********
 
-Run
-^^^^^^^^^^^^^^^^^^^^
+.. include:: _expose_xhost.rst
 
-Run the PX4 SITL simulation with GISNav:
+Deploy
+***********
 
-.. code-block:: bash
+.. include:: _deploy_docker_intro.rst
 
-    docker compose up mapserver px4 micro-ros-agent mavros torch-serve qgc gisnav
+.. tab-set::
 
+    .. tab-item:: Foreground
+        :selected:
+
+        .. code-block:: bash
+            :caption: Deploy containers
+
+            cd ~/colcon_ws/src/gisnav/docker
+            docker compose up \
+                mapserver \
+                torch-serve \
+                micro-ros-agent \
+                mavros \
+                qgc \
+                rviz \
+                px4 \
+                gisnav
+
+    .. tab-item:: Detached
+
+        .. code-block:: bash
+            :caption: Run demo services
+
+            cd ~/colcon_ws/src/gisnav/docker
+            docker compose up -d \
+                mapserver \
+                torch-serve \
+                micro-ros-agent \
+                mavros \
+                qgc \
+                rviz \
+                px4 \
+                gisnav
 
 Shutdown
-^^^^^^^^^^^^^^^^^^^^
+***********
+
+.. include:: _docker_compose_shutdown.rst
+
+
+Deploy for local development
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Build and create
+***********
+
+.. include:: _build_and_create_docker_intro.rst
+
+When deploying for local development, the difference to
+:ref:`deploying the Get Started demonstration <Deploy demonstration>` is that
+we do not include the ``gisnav`` service which is assumed to be
+:ref:`launched separately from a local development version <Launch GISNav>`:
 
 .. code-block:: bash
+    :caption: Build images and create containers
 
-    docker compose down
+    cd ~/colcon_ws/src/gisnav/docker
+    docker compose create --build \
+        mapserver \
+        torch-serve \
+        micro-ros-agent \
+        mavros \
+        qgc \
+        rviz \
+        px4
 
+Expose xhost
+***********
 
-ArduPilot SITL
----------------
-Build and run the SITL simulation environment with ArduPilot instead of PX4.
+.. include:: _expose_xhost.rst
 
-Build
-^^^^^^^^^^^^^^^^^^^^
+Deploy
+***********
 
-.. code-block:: bash
+.. include:: _deploy_docker_intro.rst
 
-    docker compose \
-      -f docker-compose.yaml \
-      -f docker-compose.gisnav-ardupilot.yaml \
-      build mapserver ardupilot mavros qgc torch-serve gisnav
+.. tab-set::
 
+    .. tab-item:: Foreground
+        :selected:
 
-Run
-^^^^^^^^^^^^^^^^^^^^
+        .. code-block:: bash
+            :caption: Deploy containers
 
-.. code-block:: bash
+            cd ~/colcon_ws/src/gisnav/docker
+            docker compose up \
+                mapserver \
+                torch-serve \
+                micro-ros-agent \
+                mavros \
+                qgc \
+                rviz \
+                px4
 
-    docker compose \
-      -f docker-compose.yaml \
-      -f docker-compose.gisnav-ardupilot.yaml \
-      up mapserver ardupilot mavros qgc torch-serve gisnav
+    .. tab-item:: Detached
 
+        .. code-block:: bash
+            :caption: Run demo services
+
+            cd ~/colcon_ws/src/gisnav/docker
+            docker compose up -d \
+                mapserver \
+                torch-serve \
+                micro-ros-agent \
+                mavros \
+                qgc \
+                rviz \
+                px4
+
+Launch GISNav
+***********
+
+.. include:: _launch_gisnav_with_ros2_launch.rst
+
+Shutdown
+***********
+
+.. include:: _docker_compose_shutdown.rst
 
 Mapproxy
---------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Run the SITL simulation with a WMS proxy instead of locally hosted maps.
 
 .. note::
@@ -131,76 +236,3 @@ Run the SITL simulation with a WMS proxy instead of locally hosted maps.
       --build-arg MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s" \
       mapproxy px4 micro-ros-agent gisnav qgc torch-serve gisnav
     docker compose up mapproxy px4 micro-ros-agent qgc torch-serve gisnav
-
-
-Troubleshooting
----------------
-
-Expose ``xhost``
-^^^^^^^^^^^^^^^^^^^^
-
-If the Gazebo and QGroundControl windows do not appear on your screen soon after running your container, you may need to
-expose your ``xhost`` to your Docker container. Refer to the `ROS GUI Tutorial`_ for details.
-
-.. _ROS GUI Tutorial: http://wiki.ros.org/docker/Tutorials/GUI
-
-.. code-block:: bash
-
-    export containerId=$(docker ps -l -q)
-    xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
-
-
-Headless mode
-^^^^^^^^^^^^^^^^^^^^
-
-You may want to run Gazebo in headless mode when doing automated testing (e.g., with mavsdk).
-
-.. code-block:: bash
-micro
-    docker compose -f docker-compose.headless.yaml up px4
-
-
-Disable SharedMemory for Fast DDS
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you are not able to establish ROS communication between the ``mavros`` or
-``micro-ros-agent`` container and the host, or receive the above error when
-using ``--network host``, try disabling SharedMemory for Fast DDS
-**on your host**. You can do so by creating an XML configuration (e.g.,
-``disable_shared_memory.xml``) as described in `this comment`_
-or discussion `here`_ and restarting ROS 2 daemon with the new configuration:
-
-.. _this comment: https://github.com/eProsima/Fast-DDS/issues/1698#issuecomment-778039676
-.. _here: https://stackoverflow.com/questions/65900201/troubles-communicating-with-ros2-node-in-docker-container
-
-.. code-block:: bash
-
-    export FASTRTPS_DEFAULT_PROFILES_FILE=disable_fastrtps.xml
-    ros2 daemon stop
-    ros2 daemon start
-
-Disable AppArmor for ArduPilot SITL
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Possibly needed if using ``--network host``: If QGroundControl or Gazebo do
-not seem to be starting when running the containers, you may need to run them
-image with ``--security-opt apparmor:unconfined`` or ``--privileged`` options.
-
-Run shell inside container
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you need to do debugging on the images with GUI applications enabled (e.g.,
-Gazebo inside ``px4``), run bash inside the container using the following command:
-
-.. code-block:: bash
-
-    docker run -it \
-      --env="DISPLAY" \
-      --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-      --volume "/dev/shm:/dev/shm" \
-      --volume="/dev/dri:/dev/dri" \
-      --gpus all \
-      --tty \
-      --network host \
-      --entrypoint="/bin/bash" \
-      gisnav

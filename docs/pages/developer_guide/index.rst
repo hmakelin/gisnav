@@ -15,6 +15,7 @@ it to match your use case.
     launch/docker_compose
     launch/ros2_launch_system
     launch/modify_params
+    launch/troubleshooting
 
 .. toctree::
     :caption: Setup SITL

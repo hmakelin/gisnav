@@ -45,34 +45,51 @@ SHELL := /bin/bash
 # Supported autopilots, must match docker/docker-compose.yaml service name
 AUTOPILOTS := px4 ardupilot
 
-# Define a reusable template for creating Docker Compose targets
-# Parameters:
-#   1. The prefix for the target name.
-#   2. The dependency target.
-#   3. The optional Docker Compose override files to include (if any).
-#   4. The Docker Compose services to start or build - use $$* here for
-#		autopilot, the first '$' is to escape the second '$'.
 define compose_template
-# Create phony targets with the specified prefix for each autopilot
-.PHONY: $(addprefix $(1)-, $(AUTOPILOTS))
+# $(1) - The prefix to use for the build, create, and up targets
+# $(2) - The dependency target for the build and create rules
+# $(3) - Additional Docker Compose files to include in the build, create, and up operations
+# $(4) - The services to include in the build, create, and up operations
 
-# Generate rules for the prefixed targets, depending on the specified dependency target
-$(addprefix $(1)-, $(AUTOPILOTS)): $(if $(2),$(1)-%: $(2)-%,$(1)-%)
-	# Evaluate the additional Docker Compose files
-	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
-	# Run Docker Compose with the specified services
-	@docker compose $$(compose_files) up -d $(4)
+# Define a macro for generating build and create rules
+define generate_rules
+# $(1) - The operation type (either "build" or "create")
+# $(2) - The prefix to use for the target
+# $(3) - The dependency target (if any)
+# $(4) - Additional Docker Compose files to include
+# $(5) - The services to include in the build or create operations
 
-# Create phony build targets with the specified prefix for each autopilot
-.PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))
+.PHONY: $(addprefix $(1)-$(2)-, $(AUTOPILOTS))
 
-# Generate rules for the build prefixed targets, depending on the specified build dependency target
-$(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,build-$(1)-%)
-	# Evaluate the additional Docker Compose files
-	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
-	# Build the specified Docker Compose services
-	@docker compose $$(compose_files) build $(4)
+$(addprefix $(1)-$(2)-, $(AUTOPILOTS)): $(if $(3),$(1)-$(2)-%: $(1)-$(3)-%,$(1)-$(2)-%)
+	$$(eval compose_files := $(if $(4),-f docker-compose.yaml $(foreach file,$(4),-f $(file))))
+	@docker compose $$(compose_files) $(1) $(5)
+	@if [ "$(1)" = "create" -o "$(1)" = "up" ]; then \
+		for containerId in $$(docker ps -f name=gisnav -aq); do \
+			xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
+		done \
+	fi
 endef
+
+# Define a macro for generating up rules
+define up_rule
+# $(1) - The prefix to use for the target
+# $(2) - The dependency target (which is always the corresponding "create" target)
+# $(3) - Additional Docker Compose files to include
+# $(4) - The services to include in the up operation
+
+.PHONY: $(addprefix up-$(1)-, $(AUTOPILOTS))
+
+$(addprefix up-$(1)-, $(AUTOPILOTS)): create-$(1)-%
+	@docker compose up -d $(4)
+endef
+
+# Use the new macro to generate build, create and up rules
+$(eval $(call generate_rules, build, $(1), $(2), $(3), $(4)))
+$(eval $(call generate_rules, create, $(1), $(2), $(3), $(4)))
+$(eval $(call up_rule, $(1), $(2), $(3), $(4)))
+endef
+
 
 
 # Define a reusable template for creating Docker Compose middleware targets

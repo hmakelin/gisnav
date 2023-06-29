@@ -31,7 +31,7 @@ following scheme:
     :caption: Make target naming scheme
 
     cd ~/colcon_ws/src/gisnav
-    make -C docker <build>-<onboard/offboard>-<sitl/hil>-<middleware>-<dev/test>-<px4/ardupilot>
+    make -C docker <build/create>-<onboard/offboard>-<sitl/hil>-<middleware>-<dev/test>-<px4/ardupilot>
 
 In the naming scheme, the various qualifiers determine the type of deployment:
 
@@ -41,9 +41,9 @@ In the naming scheme, the various qualifiers determine the type of deployment:
 
     * - Qualifier
       - Description
-    * - ``build``
+    * - ``build/create``
       - *Optional:*  Indicates that the constituent Docker Compose services
-        should only be built but not run
+        should only be built and their containers optionally created but not run
     * - ``onboard/offboard``
       - Designates whether the target is intended for :term:`onboard` or :term:`offboard` use
     * - ``sitl/hil``
@@ -74,13 +74,9 @@ combinations of qualifiers, see the source code:
 Deploy for local development
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the following commands to deploy GISNav supporting services when developing
+Use the following command to deploy GISNav supporting services when developing
 locally (i.e. running all supporting services but not GISNav itself inside a
-Docker container).
-
-.. include:: _expose_xhost.rst
-
-Then you can deploy the Docker Compose services using the following make command:
+Docker container):
 
 .. tab-set::
 

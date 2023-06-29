@@ -41,9 +41,8 @@ In the naming scheme, the various qualifiers determine the type of deployment:
 
     * - Qualifier
       - Description
-    * - ``build/create``
-      - *Optional:*  Indicates that the constituent Docker Compose services
-        should only be built and their containers optionally created but not run
+    * - ``build/create/up``
+      - Designates what Docker Compose operation should be applied to the services
     * - ``onboard/offboard``
       - Designates whether the target is intended for :term:`onboard` or :term:`offboard` use
     * - ``sitl/hil``

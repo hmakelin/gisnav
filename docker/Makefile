@@ -81,7 +81,8 @@ define up_rule
 .PHONY: $(addprefix up-$(1)-, $(AUTOPILOTS))
 
 $(addprefix up-$(1)-, $(AUTOPILOTS)): create-$(1)-%
-	@docker compose up -d $(4)
+	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
+	@docker compose $$(compose_files) up -d $(4)
 endef
 
 # Use the new macro to generate build, create and up rules

@@ -1,7 +1,3 @@
-After you have your supporting services deployed you would typically
-:ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your
-locally installed development version of GISNav:
-
 .. tab-set::
 
     .. tab-item:: PX4

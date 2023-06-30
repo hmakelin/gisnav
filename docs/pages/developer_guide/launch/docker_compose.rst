@@ -212,6 +212,10 @@ Deploy
 Launch GISNav
 ***********
 
+After you have your supporting services deployed you would typically
+:ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your
+locally installed development version of GISNav:
+
 .. include:: _launch_gisnav_with_ros2_launch.rst
 
 Shutdown

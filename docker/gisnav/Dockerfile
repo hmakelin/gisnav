@@ -15,8 +15,9 @@ RUN cd /opt/colcon_ws/src/gisnav/gisnav && \
     rosdep update --include-eol-distros && \
     rosdep install --from-paths . -y -r --ignore-src && \
     apt-get -y install python3-pip && \
-    pip install -r requirements.txt && \
-    pip install -r requirements-dev.txt
+    pip install . && \
+    pip install .[mock_gps_node] && \
+    pip install .[dev]
 
 # Install GDAL
 RUN apt-get -y install software-properties-common && \

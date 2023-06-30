@@ -31,7 +31,7 @@ following scheme:
     :caption: Make target naming scheme
 
     cd ~/colcon_ws/src/gisnav
-    make -C docker <build/create>-<onboard/offboard>-<sitl/hil>-<middleware>-<dev/test>-<px4/ardupilot>
+    make -C docker <build/create/up>-<onboard/offboard>-<sitl/hil>-<middleware>-<dev/test>-<px4/ardupilot>
 
 In the naming scheme, the various qualifiers determine the type of deployment:
 
@@ -86,7 +86,7 @@ Docker container):
             :caption: Deploy GISNav supporting services for local development
 
             cd ~/colcon_ws/src/gisnav
-            make -C docker offboard-sitl-dev-px4
+            make -C docker up-offboard-sitl-dev-px4
 
     .. tab-item:: ArduPilot
 
@@ -94,7 +94,7 @@ Docker container):
             :caption: Deploy GISNav supporting services for local development
 
             cd ~/colcon_ws/src/gisnav
-            make -C docker offboard-sitl-dev-ardupilot
+            make -C docker up-offboard-sitl-dev-ardupilot
 
 .. include:: _launch_gisnav_with_ros2_launch.rst
 
@@ -113,7 +113,7 @@ in headless mode for automated :term:`SITL` testing:
             :caption: Deploy GISNav supporting services for automated SITL testing
 
             cd ~/colcon_ws/src/gisnav
-            make -C docker offboard-sitl-test-px4
+            make -C docker up-offboard-sitl-test-px4
 
     .. tab-item:: ArduPilot
 
@@ -121,7 +121,7 @@ in headless mode for automated :term:`SITL` testing:
             :caption: Deploy GISNav supporting services for automated SITL testing
 
             cd ~/colcon_ws/src/gisnav
-            make -C docker offboard-sitl-test-ardupilot
+            make -C docker up-offboard-sitl-test-ardupilot
 
 .. note::
     In headless mode you will not see a :term:`GCS` :term:`GUI` so you will

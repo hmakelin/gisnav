@@ -14,6 +14,7 @@ it to match your use case.
     launch/service_orchestration
     launch/docker_compose
     launch/ros2_launch_system
+    launch/run_individual_node
     launch/modify_params
     launch/troubleshooting
 

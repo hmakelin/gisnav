@@ -16,6 +16,8 @@ Prerequisites
 
 .. include:: _prerequisites_gisnav.rst
 
+.. include:: _prerequisites_compose_project_name_env_variable.rst
+
 List of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -216,23 +218,3 @@ Shutdown
 ***********
 
 .. include:: _docker_compose_shutdown.rst
-
-Mapproxy
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Run the SITL simulation with a WMS proxy instead of locally hosted maps.
-
-.. note::
-
-    Replace the example ``MAPPROXY_TILE_URL`` string below with your tile-based
-    endpoint URL (e.g. WMTS). See `MapProxy configuration examples`_ for more
-    information on how to format the string.
-
-    .. _MapProxy configuration examples: https://mapproxy.org/docs/latest/configuration_examples.html
-
-
-.. code-block:: bash
-
-    docker compose build \
-      --build-arg MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s" \
-      mapproxy px4 micro-ros-agent gisnav qgc torch-serve gisnav
-    docker compose up mapproxy px4 micro-ros-agent qgc torch-serve gisnav

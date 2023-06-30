@@ -45,6 +45,9 @@ SHELL := /bin/bash
 # Supported autopilots, must match docker/docker-compose.yaml service name
 AUTOPILOTS := px4 ardupilot
 
+# Prefix for Docker Compose service images
+PROJECT_NAME := gisnav
+
 define compose_template
 # $(1) - The prefix to use for the build, create, and up targets
 # $(2) - The dependency target for the build and create rules
@@ -52,7 +55,7 @@ define compose_template
 # $(4) - The services to include in the build, create, and up operations
 
 # Define a macro for generating build and create rules
-define generate_rules
+define build_and_create_rule
 # $(1) - The operation type (either "build" or "create")
 # $(2) - The prefix to use for the target
 # $(3) - The dependency target (if any)
@@ -63,9 +66,15 @@ define generate_rules
 
 $(addprefix $(1)-$(2)-, $(AUTOPILOTS)): $(if $(3),$(1)-$(2)-%: $(1)-$(3)-%,$(1)-$(2)-%)
 	$$(eval compose_files := $(if $(4),-f docker-compose.yaml $(foreach file,$(4),-f $(file))))
-	@docker compose $$(compose_files) $(1) $(5)
+	@if [ "$(1)" = "create" ]; then \
+		COMPOSE_COMMAND="create --build"; \
+	else \
+		COMPOSE_COMMAND="$(1)"; \
+	fi; \
+	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) $$COMPOSE_COMMAND $(5)
+	# Expose xhost to containers to make GUI applications work
 	@if [ "$(1)" = "create" -o "$(1)" = "up" ]; then \
-		for containerId in $$(docker ps -f name=gisnav -aq); do \
+		for containerId in $$(docker ps -f name=$(PROJECT_NAME) -aq); do \
 			xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
 		done \
 	fi
@@ -82,12 +91,12 @@ define up_rule
 
 $(addprefix up-$(1)-, $(AUTOPILOTS)): create-$(1)-%
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
-	@docker compose $$(compose_files) up -d $(4)
+	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) up -d $(4)
 endef
 
-# Use the new macro to generate build, create and up rules
-$(eval $(call generate_rules, build, $(1), $(2), $(3), $(4)))
-$(eval $(call generate_rules, create, $(1), $(2), $(3), $(4)))
+# Use the new macros to generate build, create and up rules
+$(eval $(call build_and_create_rule, build, $(1), $(2), $(3), $(4)))
+$(eval $(call build_and_create_rule, create, $(1), $(2), $(3), $(4)))
 $(eval $(call up_rule, $(1), $(2), $(3), $(4)))
 endef
 
@@ -110,6 +119,9 @@ $(1)-%:
 
 build-$(1)-%:
 	$$(call run_middleware, $(2), build)
+
+create-$(1)-%:
+	$$(call run_middleware, $(2), create --build)
 endef
 
 # The run_middleware function is a helper function for executing middleware
@@ -151,10 +163,10 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
-# shortcut for demo-px4
+# shortcut for up-demo-px4
 .PHONY: demo
 demo:
-	@$(MAKE) -C . demo-px4
+	@$(MAKE) -C . up-demo-px4
 
 # shutdown any and all services
 .PHONY: down

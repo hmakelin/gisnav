@@ -1,19 +1,25 @@
 Modify ROS parameters
 ____________________________________________________
-You can provide overrides for the ROS parameters at launch by modifying the node-specific YAML files in the
-``launch/params/`` folder. For example, to provide parameter overrides to :class:`.MapNode` at launch, you would modify
-the ``launch/params/map_node.yaml`` file:
 
-.. literalinclude:: ../../../../launch/params/map_node.yaml
-    :caption: launch/params/map_node.yaml
+When deploying GISNav :ref:`with Make <Deploy using Makefile>`,
+:ref:`with Docker Compose <Deploy with Docker Compose>`, :ref:`using the
+ROS 2 launch system <Use ROS 2 launch system>`, or :ref:`when running individual
+ROS nodes <Run individual ROS nodes>`, you can provide overrides for the ROS
+parameters at launch by modifying the node-specific YAML files in the
+``launch/params/`` folder. For example, to provide parameter overrides to
+:class:`.GISNode` at launch, you would modify the ``launch/params/gis_node.yaml``
+file:
+
+.. literalinclude:: ../../../../gisnav/launch/params/gis_node.yaml
+    :caption: :class:`.GISNode` ROS parameter configuration at launch
     :language: yaml
 
-You can take a look at the :py:attr:`.MapNode.ROS_PARAM_DEFAULTS` property for the hard-coded default values as well as
-get an exhaustive list of all ROS parameters declared by the node (not everything is necessarily included in the YAML
-file). Each node will have this property and use it if no overrides are provided in the YAML files.
+See the :class:`.GISNode` API reference for the
+hard-coded default values as well an exhaustive list of all ROS parameters
+declared by the node (not everything is necessarily included in the YAML
+file).
 
 .. note::
-    You should at least configure your :ref:`GIS server` WMS endpoint in the ``launch/params/map_node.yaml`` file unless
-    you are using the `gisnav-docker`_ ``sitl`` service, in which case the defaults should work.
-
-    .. _gisnav-docker: https://github.com/hmakelin/gisnav-docker
+    You should at least configure your :ref:`GIS server` WMS endpoint ``wms_url``
+    in the ``launch/params/gis_node.yaml`` file unless you are using the ``mapserver``
+    Docker Compose service, in which case the defaults should work.

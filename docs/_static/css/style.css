@@ -52,6 +52,10 @@ html[data-theme="dark"] {
     --pst-color-primary: #ff4136;
     --pst-color-h1: var(--pst-color-text-base);
     --pst-color-h2: var(--pst-color-text-base);
+
+    .mermaid {
+        background-color: white;
+    }
 }
 
 

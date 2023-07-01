@@ -26,16 +26,16 @@ Core data flow graph
         end
 
         subgraph GISNode
-            geopose[gisnav/vehicle/geopose]
-            altitude[gisnav/vehicle/altitude]
-            geopoint_track[gisnav/ground_track/geopoint]
-            altitude_track[gisnav/ground_track/altitude]
-            orthoimage[gisnav/orthoimage]
+            geopose[gisnav/gis_node/vehicle/geopose]
+            altitude[gisnav/gis_node/vehicle/altitude]
+            geopose_track[gisnav/gis_node/ground_track/geopose]
+            altitude_track[gisnav/gis_node/ground_track/altitude]
+            orthoimage[gisnav/gis_node/orthoimage]
         end
 
         subgraph CVNode
-            geopose_estimate[gisnav/vehicle/geopose/estimate]
-            altitude_estimate[gisnav/vehicle/altitude/estimate]
+            geopose_estimate[gisnav/cv_node/vehicle/estimated/geopose]
+            altitude_estimate[gisnav/cv_node/vehicle/estimated/altitude]
         end
 
         pose -->|geometry_msgs/Pose| GISNode
@@ -49,7 +49,7 @@ Core data flow graph
         camera_info -->|sensor_msgs/CameraInfo| CVNode
         orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
         altitude_track -->|mavros_msgs/Altitude| CVNode
-        geopoint_track -->|geographic_msgs/GeoPoint| CVNode
+        geopose_track -->|geographic_msgs/GeoPoint| CVNode
         image_raw -->|sensor_msgs/Image| CVNode
 
 
@@ -57,33 +57,36 @@ Motivation for the data flow graph design:
 
 1. **Unidirectional Flow:**
 
-  The system is designed to avoid bidirectional loops that could potentially
-  cause significant delays. This streamlined, one-way flow facilitates real-time
-  operation and enhances performance.
+The system is designed to avoid bidirectional loops that could potentially
+cause significant delays. This streamlined, one-way flow facilitates real-time
+operation and enhances performance.
 
 2. **Modular Structure:**
 
-  Rather than having a monolithic single node, which can be challenging to
-  maintain, the architecture is broken down into multiple specialized nodes.
-  This modular approach allows for focused expertise within each node, such as
-  the dedicated OpenCV node for image processing and the GIS library node for
-  geographic information processing.
+Rather than having a monolithic single node, which can be challenging to
+maintain, the architecture is broken down into multiple specialized nodes.
+This modular approach allows for focused expertise within each node, such as
+the dedicated OpenCV node for image processing and the GIS library node for
+geographic information processing. For the GIS node, optimization is concerned
+more about efficient IO and multithreading, while for the CV node optimization
+may mean minimizing unnecessary image array transformations and using
+multiprocessing.
 
-3. **Application Integration:**
+3. **Extensibility:**
 
-  The architecture includes specific nodes for application integration, such as
-  the MockGPSNode. This design facilitates integration with various applications
-  and aids in the maintainability and extensibility of the system.
-
+The architecture allows for :term:`extended functionality` via ROS messaging.
+This design facilitates integration with various applications and helps with
+the maintainability of the :term:`core` system.
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To integrate GISNav with your own ROS system, you will likely have to do some topic name remapping. See the examples
-below on how to :ref:`Launch from ROS launch file` and :ref:`Run individual node` with remapped topic names:
+To integrate GISNav with your own ROS system, you will likely have to do some
+topic name remapping. See the examples below on how to :ref:`Use ROS 2 launch system`
+and :ref:`Run individual ROS node` with remapped topic names:
 
 .. tab-set::
 
-    .. tab-item:: Launch file
+    .. tab-item:: ROS 2 launch with topic name remapping
         :selected:
 
         The below diff is an example remapping for the camera topics for :class:`.PoseEstimationNode`:
@@ -100,7 +103,7 @@ below on how to :ref:`Launch from ROS launch file` and :ref:`Run individual node
 
             ros2 launch gisnav examples/base_camera_topic_remap.launch.py
 
-    .. tab-item:: Run individual node
+    .. tab-item:: Run individual ROS node with topic name remapping
 
         The below command launches camera topics for :class:`.PoseEstimationNode`:
 
@@ -113,60 +116,11 @@ below on how to :ref:`Launch from ROS launch file` and :ref:`Run individual node
                  -r camera/camera_info:=camera_info \
                  -r camera/image_raw:=image
 
-All\* default ROS topic names used by GISNav are listed in the :py:mod:`.messaging` module:
-
-.. note::
-    \* :class:`.CameraSubscriberNode` currently uses its own hard-coded topic names and does not use the
-    :py:mod:`.messaging` module.
-
-.. literalinclude:: ../../../../gisnav/nodes/messaging.py
-    :caption: :py:mod:`.messaging` module ROS topic name defaults
-    :start-after: # region ROS topic names
-    :end-before: # endregion ROS topic names
-    :language: python
-
-Camera topics
+Note on camera topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-GISNav's nodes use the :class:`.CameraSubscriberNode` abstract base class to subscribe to
-:class:`sensor_msgs.msg.CameraInfo` and :class:`sensor_msgs.msg.Image` topics. The topic default names are stored in
-the :py:attr:`.CameraSubscriberNode.ROS_CAMERA_INFO_TOPIC` and :py:attr:`.CameraSubscriberNode.ROS_IMAGE_TOPIC`
-class constants.
 
-The :class:`.CameraSubscriberNode` parent class handles the :class:`sensor_msgs.msg.CameraInfo` message and provides
-the info through the :py:attr:`.CameraSubscriberNode.camera_data` property, but leaves the handling of the
-:class:`sensor_msgs.msg.Image` to the extending classes:
-
-.. literalinclude:: ../../../../gisnav/nodes/base/camera_subscriber_node.py
-    :caption: :py:meth:`.CameraSubscriberNode.__camera_info_callback` method
-    :pyobject: CameraSubscriberNode.__camera_info_callback
-
-.. literalinclude:: ../../../../gisnav/nodes/base/camera_subscriber_node.py
-    :caption: :py:meth:`.CameraSubscriberNode.camera_data` property
-    :pyobject: CameraSubscriberNode.camera_data
-
-.. literalinclude:: ../../../../gisnav/nodes/base/camera_subscriber_node.py
-    :caption: :py:meth:`.CameraSubscriberNode.image_callback` abstract method
-    :pyobject: CameraSubscriberNode.image_callback
-
-.. note::
-    In the KSQL airport SITL demo, ``gscam`` was used in earlier versions of GISNav to publish the
-    :class:`sensor_msgs.msg.CameraInfo` and :class:`sensor_msgs.msg.Image` messages. Newer versions use the Gazebo
-    ROS camera plugin which is also based on gstreamer. The camera topics are not published over the PX4-ROS 2 bridge.
-
-Aircraft GeoPose estimate topics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-:class:`.PoseEstimationNode` is responsible for outputting the aircraft's geographical pose estimate to the
-:py:attr:`.messaging.ROS_TOPIC_VEHICLE_GEOPOSE_ESTIMATE` and :py:attr:`.messaging.ROS_TOPIC_VEHICLE_ALTITUDE_ESTIMATE`
-topics. The altitude topic provides `additional altitude types such as above-mean-sea-level (AMSL)`_ altitude. You can
-see the message types defined in the class's ``__init__`` method:
-
-.. _additional altitude types such as above-mean-sea-level (AMSL): https://ardupilot.org/copter/docs/common-understanding-altitude.html
-
-.. literalinclude:: ../../../../gisnav/nodes/pose_estimation_node.py
-    :caption: :meth:`.PoseEstimationNode.__init__` publishers assignment
-    :start-after: # region publishers
-    :end-before: # endregion publishers
-    :language: python
-
-These two messages are used by :class:`.MockGPSNode` to generate and publish the mock GPS message that the autopilot
-will use for navigation.
+:term:`GSCam` was used in earlier versions of GISNav to publish the
+:class:`sensor_msgs.msg.CameraInfo` and :class:`sensor_msgs.msg.Image` messages.
+Newer versions use the :term:`Gazebo` ROS camera plugin which is also based on
+:term:`GStreamer`. The camera topics are not published over the :term:`MAVROS`
+middleware.

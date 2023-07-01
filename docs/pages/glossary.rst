@@ -41,6 +41,9 @@ correct alternative should be easily inferred from the context they are used in.
         bounds an area of interest to be used as a :term:`reference` for pose
         estimation.
 
+        .. seealso:: Learn more
+            https://wiki.openstreetmap.org/wiki/Bounding_Box
+
     Bucket
         An :term:`AWS` S3 bucket
 
@@ -123,6 +126,9 @@ correct alternative should be easily inferred from the context they are used in.
     GetMap
         A :term:`WMS` operation for requesting :term:`raster` images from
         :term:`GIS` servers.
+
+        .. seealso:: Learn more
+            https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
 
     Absolute position
     Global position
@@ -264,6 +270,9 @@ correct alternative should be easily inferred from the context they are used in.
           which the :term:`bounding box` is known, retrieved from a :term:`GIS`
           system.
 
+        .. seealso:: Learn more
+             https://en.wikipedia.org/wiki/Orthophoto
+
         .. todo::
             The jargon here is still a bit fuzzy: sometimes the aligned and
             stacked :term:`DEM` :term:`raster` is included in the term
@@ -293,9 +302,10 @@ correct alternative should be easily inferred from the context they are used in.
     Perspective-n-Point
         A problem in computer vision where a camera :term:`pose` is estimated
         from 2D image to 3D :term:`world` coordinate point correspondences.
+        :term:`PnP` is used as an acronym.
 
-        .. seealso::
-            :term:`PnP` for acronym
+        .. seealso:: Learn more
+            https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
 
     Pose
         A spatial pose in three dimensions including :term:`position` and
@@ -321,6 +331,9 @@ correct alternative should be easily inferred from the context they are used in.
         A rasterized image retrieved from a :term:`GIS` system, as opposed
         to a vectorized image. Used exclusively for geographical imagery,
         not e.g. for an :term:`image` from the :term:`camera`.
+
+        .. seealso:: Learn more
+            https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
 
     Reference
     Reference image
@@ -445,6 +458,9 @@ ____________________________________________________
     DEM
         Digital Elevation Model
 
+        .. seealso::
+            https://en.wikipedia.org/wiki/Digital_elevation_model
+
     ENU
         East-North-Up coordinate system
 
@@ -463,6 +479,9 @@ ____________________________________________________
 
     FOSS
         Free and Open Source Software
+
+        .. seealso::
+            https://en.wikipedia.org/wiki/Free_and_open-source_software
 
     FoV
     FOV
@@ -503,6 +522,9 @@ ____________________________________________________
     NAIP
         National Agriculture Imagery Program
 
+        .. seealso::
+            https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip
+
     NED
         North-East-Down coordinate system
 
@@ -535,7 +557,17 @@ ____________________________________________________
         United States Geological Survey
 
     WMS
-        Web Map Service (an :term:`OGC` developed protocol)
+    WMTS
+        Web Map Service / Web Map Tile Service, two separate :term:`OGC`
+        developed communication protocols. WMS allows querying by arbitrary
+        :term:`bounding box` while WMTS returns pre-computed tiles in a
+        standardized grid.
+
+        .. seealso::
+            * https://www.ogc.org/standards/wms
+
+            * https://www.ogc.org/standards/wmts
+
 
 Proper names
 ____________________________________________________
@@ -570,6 +602,12 @@ relate to external interfaces.
     GDAL
     Geospatial Data Abstraction Library
         Software library for handling geospatial data: `gdal.org <https://gdal.org/>`_
+
+    GSCam
+        :term:`ROS` :term:`GStreamer` camera driver: https://github.com/ros-drivers/gscam
+
+    GStreamer
+        Open source multimedia framework: `gstreamer.freedesktop.org <https://gstreamer.freedesktop.org/>`_
 
     Nano
     Jetson Nano
@@ -626,8 +664,7 @@ relate to external interfaces.
         Robot Operating System: `ros.org <https://www.ros.org/>`_
 
     RViz
-        :term:`ROS` 3D visualization software:
-        `github.com/ros2/rviz <https://github.com/ros2/rviz>`_
+        :term:`ROS` 3D visualization software: https://github.com/ros2/rviz
 
     Torch
         An open source machine learning software library: `torch.ch <http://torch.ch/>`_

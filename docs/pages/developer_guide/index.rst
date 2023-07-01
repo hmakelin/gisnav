@@ -28,15 +28,14 @@ it to match your use case.
 .. toctree::
     :caption: Onboard SITL & HIL
 
-    sitl/autopilot
-    sitl/qgroundcontrol
-    sitl/gis_server
     sitl/companion_computer
+    sitl/autopilot
     hil/jetson_pixhawk
 
 .. toctree::
     :caption: Integrate with your own project
 
+    sitl/gis_server
     integrate/ros_messaging
     integrate/mock_gps
     integrate/pose_estimators

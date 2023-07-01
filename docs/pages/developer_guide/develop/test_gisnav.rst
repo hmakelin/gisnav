@@ -20,16 +20,16 @@ launch configurations in the :py:mod:`test.launch` package:
     :caption: Run ROS launch tests
 
     cd ~/colcon_ws
-    launch_test src/gisnav/test/launch/test_px4_launch.py
+    launch_test src/gisnav/gisnav/test/launch/test_px4_launch.py
 
 SITL tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-SITL tests are under the ``test/sitl`` folder. Use the below ``make`` command to run the
-SITL test:
+SITL tests are under the ``gisnav/test/sitl`` folder. Use the below ``make``
+command to run the SITL test:
 
 .. code-block:: bash
 
-    cd ~/colcon_ws/src/gisnav
+    cd ~/colcon_ws/src/gisnav/gisnav
     make test-sitl
 
 .. note::
@@ -43,7 +43,7 @@ You must first start ``jupyter-notebook``:
 
 .. code-block:: bash
 
-    cd ~/px4_ros_com_ros2/src/gisnav/test/sitl/ulog_analysis
+    cd ~/px4_ros_com_ros2/src/gisnav/gisnav/test/sitl/ulog_analysis
     jupyter-notebook
 
 The notebook documents the analysis and displays the results. Download the example ULog file from Google Drive `here
@@ -59,5 +59,5 @@ to measure:
     :caption: Run and inspect code coverage report for ROS launch tests for PX4 (Fast DDS) launch configuration
 
     cd ~/colcon_ws
-    python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/test/test_px4_launch.py
+    python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/gisnav/test/test_px4_launch.py
     python3 -m coverage report

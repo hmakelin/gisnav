@@ -62,7 +62,7 @@ Prerequisites
                 Laptop_ETH[Ethernet Port]
             end
             subgraph "Jetson Nano"
-                Nano_USB[USB Port]
+                Nano_USB[USB Port x4]
                 Nano_micro_USB[Micro USB Port]
                 Nano_HDMI[HDMI Port]
                 Nano_ETH[Ethernet]
@@ -77,16 +77,16 @@ Prerequisites
             Display[External Display]
             Mouse[USB Mouse]
             Keyboard[USB Keyboard]
-            FMU_TELEM1_TX -->|To UART RX| Converter_RX
-            FMU_TELEM1_RX -->|To UART TX| Converter_TX
-            FMU_TELEM1_GND -->|To UART GND| Converter_GND
-            FMU_USB -->|To Laptop USB| Laptop_USB
-            Converter_USB -->|To Nano USB| Nano_USB
-            Nano_micro_USB -->|Micro USB Power| Socket
-            Nano_HDMI -->|HDMI| Display
-            Nano_USB -->|USB| Mouse
-            Nano_USB -->|USB| Keyboard
-            Nano_ETH -->|To Laptop ETH| Laptop_ETH
+            FMU_TELEM1_TX ---|To UART RX| Converter_RX
+            FMU_TELEM1_RX ---|To UART TX| Converter_TX
+            FMU_TELEM1_GND ---|To UART GND| Converter_GND
+            FMU_USB ---|To Laptop USB| Laptop_USB
+            Converter_USB ---|To Nano USB| Nano_USB
+            Nano_micro_USB ---|Micro USB Power| Socket
+            Nano_HDMI ---|HDMI| Display
+            Nano_USB ---|USB| Mouse
+            Nano_USB ---|USB| Keyboard
+            Nano_ETH ---|To Laptop ETH| Laptop_ETH
 
     .. tab-item:: Picture
 

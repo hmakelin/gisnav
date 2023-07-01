@@ -207,3 +207,20 @@ see `this gisnav-docker setup script`_.
 
 .. _OSM Buildings: https://osmbuildings.org/
 .. _this gisnav-docker setup script: https://github.com/hmakelin/gisnav-docker/blob/master/scripts/setup_mapserver.sh
+
+SITL simulation quirks with DEMs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The `KSQL Airport Gazebo model`_ buildings in the SITL simulation demo are
+featureless grey blocks, so any pose estimation model will most likely not use
+them for matching. This means any building elevation data (see :ref:`Rasterizing
+vector data`) will not technically be used to improve pose estimates in the
+SITL simulation. The below figure illustrates how :term:`LoFTR` finds keypoints
+at an even density throughout the simulated drone's field of view except on the
+featureless buildings.
+
+.. _KSQL Airport Gazebo model: https://docs.px4.io/main/en/simulation/gazebo_worlds.html#ksql-airport
+
+.. figure:: ../../../_static/img/gisnav_sitl_featureless_buildings.jpg
+
+    LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)

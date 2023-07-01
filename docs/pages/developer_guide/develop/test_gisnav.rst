@@ -8,7 +8,8 @@ development work on GISNav.
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Install the development dependencies as described :ref:`here <Install Python dependencies>`
+* Install GISNav along with all :term:`extended <Extension>` and development
+  dependencies as described :ref:`here <Install locally>`
 
 Launch tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -15,7 +15,6 @@ it to match your use case.
     launch/docker_compose
     launch/ros2_launch_system
     launch/run_individual_node
-    launch/modify_params
     launch/troubleshooting
 
 .. toctree::
@@ -33,9 +32,9 @@ it to match your use case.
     hil/jetson_pixhawk
 
 .. toctree::
-    :caption: Integrate with your own project
+    :caption: Configure & integrate
 
     sitl/gis_server
+    launch/modify_params
     integrate/ros_messaging
     integrate/mock_gps
-    integrate/pose_estimators

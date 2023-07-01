@@ -1,4 +1,4 @@
-ROS messaging
+Remap ROS topics
 ____________________________________________________
 The natural way to integrate GISNav with other systems is via `ROS 2 <https://docs.ros.org/>`_. GISNav depends on ROS 2
 for both external and internal communication. If you have a ROS 2 node, you can talk to GISNav.

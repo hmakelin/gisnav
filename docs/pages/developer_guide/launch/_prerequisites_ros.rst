@@ -1,2 +1,3 @@
-* You will need to have a matching :term:`ROS 2` version installed (e.g. ROS
-  Foxy Fitzroy for Ubuntu Focal Fossa).
+* Install ROS 2 by following the official `ROS 2 install instructions`_.
+
+.. _ROS 2 install instructions: https://docs.ros.org/

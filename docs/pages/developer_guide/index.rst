@@ -1,5 +1,5 @@
 **************************************************
-Developer Guide
+User Guide
 **************************************************
 This section provides instruction on how you can integrate GISNav with your project as well as configure and extend
 it to match your use case.
@@ -9,7 +9,7 @@ it to match your use case.
     software-in-the-loop (SITL) simulation environment.
 
 .. toctree::
-    :caption: Run GISNav
+    :caption: Use GISNav
 
     launch/service_orchestration
     launch/docker_compose
@@ -19,27 +19,20 @@ it to match your use case.
     launch/troubleshooting
 
 .. toctree::
-    :caption: Setup SITL
+    :caption: Develop GISNav
 
-    sitl/prerequisites
+    develop/system_requirements
+    develop/install_gisnav
+    develop/test_gisnav
+
+.. toctree::
+    :caption: Onboard SITL & HIL
+
     sitl/autopilot
     sitl/qgroundcontrol
     sitl/gis_server
-    sitl/install_gisnav
     sitl/companion_computer
-
-.. toctree::
-    :caption: Setup HIL
-
     hil/jetson_pixhawk
-
-.. toctree::
-    :caption: Run tests
-
-    test/test_prerequisites
-    test/launch_tests
-    test/code_coverage
-    test/sitl_tests
 
 .. toctree::
     :caption: Integrate with your own project

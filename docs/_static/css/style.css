@@ -95,3 +95,25 @@ html[data-theme="dark"] {
 .bd-sidebar-primary::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+@keyframes bounce {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(20px); }
+  100% { transform: translateY(0); }
+}
+
+body.bounce {
+  animation: bounce 0.5s ease;
+}
+
+/* New bounce animation for the navbar */
+@keyframes navbarBounce {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(-20px); }
+  100% { transform: translateY(0); }
+}
+
+/* Add the bounce animation to the navbar when body has 'bounce' class */
+body.bounce .navbar {
+  animation: navbarBounce 0.5s ease;
+}

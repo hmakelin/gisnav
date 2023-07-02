@@ -23,28 +23,17 @@ You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolk
 
 ## Build and run SITL simulation
 
-Build the Docker images (may take a long time):
+Build the Docker images and create and run the containers (downloading and building
+everything will take a long time):
+
+> **Note** This script will automatically expose your xhost to the created
+> Docker containers to make the GUI applications work.
+
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
 cd gisnav
-make -C gisnav/docker build-demo-px4
+make -C docker demo
 ```
-
-Run GISNav along with supporting services:
-```bash
-make -C gisnav/docker demo
-```
-
-> **Note**
-> If the Gazebo and QGroundControl windows do not appear on your screen you may need to expose your ``xhost`` to your
-> Docker containers (see e.g. [ROS GUI Tutorial][4]):
-> ```bash
-> for containerId in $(docker ps -f name=docker -q); do
->   xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
-> done
-> ```
-> See the [Docker troubleshooting section](https://www.gisnav.org/pages/developer_guide/sitl/docker.html#troubleshooting)
-> in the developer documentation for more information.
 
 [4]: http://wiki.ros.org/docker/Tutorials/GUI
 

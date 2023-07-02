@@ -1,63 +1,52 @@
-GIS server
+Setup GIS server
 ______________________________________________________
-Overview
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-GISNav requires access to a GIS server that serves high resolution `orthoimagery`_ and optional
-`digital elevation models`_ (DEM) for the approximate location of the aircraft. The orthoimage and DEM `rasters`_ are
-requested from an `OGC Web Map Service`_ (WMS) which allows querying map images by an arbitrary `bounding box`_ via
-its `GetMap`_ operation.
 
-.. _orthoimagery: https://en.wikipedia.org/wiki/Orthophoto
-.. _digital elevation models: https://en.wikipedia.org/wiki/Digital_elevation_model
-.. _rasters: https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
-.. _OGC Web Map Service: https://www.ogc.org/standards/wms
-.. _bounding box: https://wiki.openstreetmap.org/wiki/Bounding_Box
-.. _GetMap: https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
+GISNav requires access to a :term:`GIS` server that serves high resolution
+:term:`orthoimagery <Orthoimagery>` for the approximate :term:`global position`
+of the :term:`vehicle`. The orthoimagery consisting of :term:`orthophoto` and
+optional :term:`DEM` rasters are requested from a :term:`WMS` service which
+allows querying rasters by an arbitrary :term:`bounding box`, and DEM elevation
+values by an arbitrary global position via its :term:`GetMap` and
+:term:`GetFeatureInfo` requests.
 
-.. seealso::
-    The DEM is optionally used to input terrain z-coordinates (depth, or altitude) to the `PnP`_ problem solved by
-    the current pose estimation algorithm. If a DEM is not available GISNav simply assumes a planar terrain which
-    may be less accurate. See :ref:`Pose Estimators` for more information on how GISNav estimates aircraft pose from
-    the map rasters.
-
-    .. _PnP: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+The DEM is optionally used to input ground elevation z-coordinates to the
+:term:`PnP` problem solved by GISNav's :term:`pose` estimation algorithm. If
+a DEM is not available GISNav simply assumes a planar ground elevation.
 
 Example setups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-You are encouraged to self-host a GIS server with public domain :ref:`Orthoimagery and DEMs`, although it may be more
-convenient to proxy an existing commercial tile-based endpoint.
+
+You are encouraged to self-host an :term:`onboard` GIS server with public domain
+orthoimagery because in a realistic scenario the GIS should be embedded onboard
+and not depend on an internet connection. For development it may sometimes be
+more convenient to proxy an existing commercial tile-based endpoint.
 
 .. tab-set::
 
-    .. tab-item:: Self-hosted GIS
+    .. tab-item:: Self-hosted GIS (recommended)
         :selected:
 
-        The primary benefit of a self-hosted WMS service is that you can embed it onboard the drone and not rely on an
-        internet connection. Here we provide an example on how to host your own maps using `MapServer`_. If you are
-        fine with using maps for the SITL simulation demo area only, then you can simply use the Docker images from the
-        `gisnav-docker`_ repository. Otherwise see the instructions below.
-
-        .. _MapServer: https://mapserver.org/
-        .. _gisnav-docker: https://github.com/hmakelin/gisnav-docker
+        If you are fine with using maps for the KSQL airport area only, then you
+        can use the :ref:`provided Docker Compose mapserver service
+        <List of services>`, otherwise follow these instructions to self-host
+        a :term:`MapServer` instance:
 
         .. seealso::
-            See :ref:`GIS software` for `free and open-source software`_ (FOSS) MapServer alternatives
-
-        .. _free and open-source software: https://en.wikipedia.org/wiki/Free_and_open-source_software
+            See :ref:`GIS software` for :term:`free and open-source software (FOSS)
+            <FOSS>` alternatives for MapServer
 
         To follow these instructions you will need:
 
-        * An AWS account and AWS CLI, **or alternatively**, an `EarthExplorer`_ account
-        * `GDAL`_ installed
+        * An :term:`AWS` account and AWS CLI, **or alternatively**, an `EarthExplorer`_ account
+        * :term:`GDAL` installed
 
         .. _EarthExplorer: https://earthexplorer.usgs.gov
-        .. _GDAL: https://gdal.org
 
-        In this example we will download `NAIP`_ imagery and host it using the `MapServer docker image`_ from Docker
-        Hub. You can download the GeoTIFF imagery from EarthExplorer, or from the Esri-maintained `AWS S3 bucket`_ if
-        you already have AWS CLI set up:
+        In this example we will download :term:`NAIP` imagery and host it using
+        the `MapServer docker image`_ from Docker Hub. You can download the
+        GeoTIFF imagery from EarthExplorer, or from the Esri-maintained `AWS S3 bucket`_
+        if you already have AWS CLI set up:
 
-        .. _NAIP: https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip
         .. _MapServer docker image: https://hub.docker.com/r/camptocamp/mapserver
         .. _AWS S3 bucket: https://registry.opendata.aws/naip/
 
@@ -65,7 +54,7 @@ convenient to proxy an existing commercial tile-based endpoint.
             This is a **Requester Pays** bucket and the files can be very large so download only what you need.
 
         .. code-block:: bash
-            :caption: Example: Downloading a NAIP imagery product from the AWS S3 bucket
+            :caption: Download a NAIP imagery product from the AWS S3 bucket
 
             cd ~/gisnav-docker
             mkdir -p mapfiles/
@@ -112,9 +101,25 @@ convenient to proxy an existing commercial tile-based endpoint.
 
     .. tab-item:: WMS proxy
 
-        If you already have a third party high-resolution aerial or satellite imagery endpoint available, you only need
-        to proxy it through a WMS service. You can follow the `gisnav-docker README.md`_ to set up a WMS MapProxy using
-        the provided Docker image.
+        If you already have a third party high-resolution aerial or satellite
+        imagery endpoint available, you only need to proxy it through a WMS service.
+        Run the SITL simulation with a WMS proxy instead of locally hosted maps
+        using the following instructions:
+
+        .. note::
+
+            Replace the example ``MAPPROXY_TILE_URL`` string below with your tile-based
+            endpoint URL (e.g. WMTS). See `MapProxy configuration examples`_ for more
+            information on how to format the string.
+
+            .. _MapProxy configuration examples: https://mapproxy.org/docs/latest/configuration_examples.html
+
+        .. code-block:: bash
+
+            docker compose build \
+              --build-arg MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s" \
+              mapproxy px4 micro-ros-agent gisnav qgc torch-serve gisnav
+            docker compose up mapproxy px4 micro-ros-agent qgc torch-serve gisnav
 
         .. _gisnav-docker README.md: https://github.com/hmakelin/gisnav-docker
 
@@ -136,27 +141,30 @@ convenient to proxy an existing commercial tile-based endpoint.
 
 GIS software
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you want to run your own GIS server or WMS proxy, you may want to consider e.g. these
-`free and open-source software`_ (FOSS) options:
+If you want to run your own GIS server or WMS proxy, you may want to consider
+e.g. these :term:`FOSS` options:
 
-    * `MapServer`_
+* :term:`MapServer`
 
-    * `GeoServer`_ (full-fledged OGC-compliant GIS server)
+* `GeoServer`_ (full-fledged OGC-compliant GIS server)
 
-    * `Mapnik`_ and `MapProxy`_
+* `Mapnik`_ and `MapProxy`_
 
-.. _free and open-source software: https://en.wikipedia.org/wiki/Free_and_open-source_software
 .. _GeoServer: https://geoserver.org
 .. _Mapnik: https://mapnik.org
 .. _MapProxy: https://mapproxy.org
 
 Orthoimagery and DEMs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-If you do not want to use commercial (=not free) high-resolution imagery, various national agencies often provide
-country-specific aerial imagery in the public domain or with public-domain-like licensing terms. You should look for
-imagery available in `GDAL`_ supported formats with coverage for your area. These may be provided as
-downloadable products or through OGC-compliant web services such as WMS or WMTS. Below are just a few examples of
-national agencies providing high-resolution orthoimagery that should be suitable for use with GISNav:
+If you do not want to use commercial (=not free) high-resolution imagery, various
+national agencies often provide country-specific aerial imagery in the public
+domain or with public-domain-like licensing terms. You should look for imagery
+available in :term:`GDAL` supported formats with coverage for your flight mission
+region. These may be provided as downloadable products or through
+:term:`OGC`-compliant web services such as :term:`WMS` or :term:`WMTS`.
+
+Below are just a few examples of national agencies providing high-resolution
+orthoimagery that should be suitable for use with GISNav:
 
 * `USGS High Resolution Orthoimagery`_ (USA)
 * `Environment Agency Vertical Aerial Photography`_ (United Kingdom)
@@ -187,3 +195,20 @@ see `this gisnav-docker setup script`_.
 
 .. _OSM Buildings: https://osmbuildings.org/
 .. _this gisnav-docker setup script: https://github.com/hmakelin/gisnav-docker/blob/master/scripts/setup_mapserver.sh
+
+SITL simulation quirks with DEMs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The `KSQL Airport Gazebo model`_ buildings in the SITL simulation demo are
+featureless grey blocks, so any pose estimation model will most likely not use
+them for matching. This means any building elevation data (see :ref:`Rasterizing
+vector data`) will not technically be used to improve pose estimates in the
+SITL simulation. The below figure illustrates how :term:`LoFTR` finds keypoints
+at an even density throughout the simulated drone's field of view except on the
+featureless buildings.
+
+.. _KSQL Airport Gazebo model: https://docs.px4.io/main/en/simulation/gazebo_worlds.html#ksql-airport
+
+.. figure:: ../../../_static/img/gisnav_sitl_featureless_buildings.jpg
+
+    LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)

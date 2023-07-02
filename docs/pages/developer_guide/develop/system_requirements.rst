@@ -1,12 +1,15 @@
-Prerequisites
+System requirements
 ____________________________________________________
-These instructions assume you are running **Ubuntu 20.04 (Focal Fossa)**, although with small changes other releases
+
+These instructions assume you are running **Ubuntu 20.04 (Focal Fossa)** or
+**Ubuntu 22.04 (Jammy Jellyfish)**, although with minor changes other releases
 might also work.
 
-It is strongly recommended that you have an **NVIDIA GPU and CUDA** installed. You can inspect your NVIDIA driver and
-CUDA versions with the ``nvidia-smi`` command line utility. If you don't have it installed, follow the `NVIDIA CUDA
-Installation Guide for Linux <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_. The output of
-the ``nvidia-smi`` command should look something like this:
+It is strongly recommended that you have an **NVIDIA GPU and CUDA** installed.
+You can inspect your NVIDIA driver and CUDA versions with the ``nvidia-smi``
+command line utility. If you don't have it installed, follow the `NVIDIA CUDA
+Installation Guide for Linux <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_.
+The output of the ``nvidia-smi`` command should look something like this:
 
 .. code-block:: text
     :caption: Example output of nvidia-smi command

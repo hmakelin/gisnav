@@ -25,11 +25,13 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.todo",
+    "sphinx.ext.viewcode",
     "sphinx_design",
     "autodocsumm",
     "myst_parser",
     "sphinxcontrib.video",
     "sphinxcontrib.mermaid",
+    "sphinx_copybutton",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

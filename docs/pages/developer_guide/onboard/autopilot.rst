@@ -1,14 +1,17 @@
-Autopilots
+Upload autopilot firmware
 ==================================================
-GISNav supports PX4 via both `MAVROS`_ and `RTPS/DDS`_, and ArduPilot via MAVROS
-only.
+To do :term:`HIL` simulation you must install one of the supported
+:term:`autopilots` locally to be able to upload the autopilot firmware to your
+:term:`FMU` board.
+
+GISNav supports the :term:`PX4` and :term:`ArduPilot` autopilots via the
+:term:`MAVROS` middleware only.
 
 .. warning::
     ArduPilot is licensed under `GPLv3`_ which is more restrictive than PX4's `BSD`_ license
 
 .. _GPLv3: https://ardupilot.org/dev/docs/license-gplv3.html
 .. _BSD: https://docs.px4.io/main/en/contribute/licenses.html
-.. _RTPS/DDS: https://docs.px4.io/main/en/middleware/micrortps.html
 .. _MAVROS: https://ardupilot.org/dev/docs/ros-connecting.html
 
 Setup PX4

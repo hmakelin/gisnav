@@ -1,4 +1,4 @@
-Jetson Nano & Pixhawk
+Pixhawk HIL
 ____________________________________________________
 
 .. note::

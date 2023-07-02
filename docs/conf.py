@@ -91,6 +91,17 @@ html_theme_options = {
     ],
 }
 
+# Handle dark mode mermaid diagrams - see also _static/js/custom.js
+mermaid_init_js = """
+    document.addEventListener('DOMContentLoaded', function(event) {
+        var mermaidDivs = document.querySelectorAll('.mermaid');
+        mermaidDivs.forEach(function(div) {
+            div.setAttribute('data-mermaid', div.textContent);
+        });
+        mermaid.initialize({startOnLoad: true, theme: 'default'});
+    });
+"""
+
 # Make version number accessible in .rst files
 # rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
 version = package_data.version

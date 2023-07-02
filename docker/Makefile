@@ -156,10 +156,10 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
-# shortcut for demo-px4
+# shortcut for demo
 .PHONY: demo
 demo:
-	@$(MAKE) -C . demo-px4
+	@$(MAKE) -C . up-offboard-sitl-px4
 
 # shutdown any and all services
 .PHONY: down

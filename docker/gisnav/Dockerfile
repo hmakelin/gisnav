@@ -1,4 +1,7 @@
-FROM ros:foxy
+ARG ROS_VERSION
+FROM ros:${ROS_VERSION}
+
+ARG ROS_VERSION
 
 RUN apt-get update && \
     apt-get -y dist-upgrade
@@ -12,7 +15,7 @@ ENV FASTRTPS_DEFAULT_PROFILES_FILE \
 
 # Install GISNav dependencies
 RUN cd /opt/colcon_ws/src/gisnav/gisnav && \
-    rosdep update --include-eol-distros && \
+    rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     apt-get -y install python3-pip && \
     pip install . && \
@@ -27,7 +30,7 @@ RUN apt-get -y install software-properties-common && \
     apt-get -y install gdal-bin libgdal-dev
 
 # Install GeographicLib
-RUN apt-get -y install ros-foxy-mavros ros-foxy-mavros-extras && \
+RUN apt-get -y install ros-${ROS_VERSION}-mavros ros-${ROS_VERSION}-mavros-extras && \
     wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
     bash install_geographiclib_datasets.sh
 
@@ -43,7 +46,7 @@ RUN cd /opt/colcon_ws/src/ && \
 # Build
 SHELL ["/bin/bash", "-c"]
 RUN cd /opt/colcon_ws/ && \
-    source /opt/ros/foxy/setup.bash && \
+    source /opt/ros/${ROS_VERSION}/setup.bash && \
     colcon build
 
 # Upgrade & clean
@@ -54,10 +57,9 @@ RUN apt-get update && \
 
 # TODO: add better health check (are the core nodes publishing?)
 HEALTHCHECK --interval=10s --timeout=3s \
-  CMD /bin/bash -c "source /opt/ros/foxy/setup.bash && \
+  CMD /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && \
   ros2 node list | grep -q cv_node && \
   ros2 node list | grep -q gis_node" || exit 1
-
 
 WORKDIR /opt/colcon_ws/src/gisnav/gisnav
 ENTRYPOINT ["../docker/gisnav/entrypoint.sh"]

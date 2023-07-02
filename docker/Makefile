@@ -25,7 +25,7 @@
 #
 # The target options in the Makefile are as follows:
 #   - onboard-hil-*: Targets for onboard hardware-in-the-loop services,
-#		including GIS server, ROS middleware, and GISNav.
+#		including GIS server, ROS middleware, autoheal, and GISNav.
 #   - onboard-sitl-*: Targets for onboard software-in-the-loop services, with
 #		the same services as onboard HIL but using a different middleware
 #		configuration.
@@ -138,8 +138,8 @@ $(eval $(call middleware_template,onboard-hil-middleware,-f docker-compose.yaml 
 $(eval $(call middleware_template,onboard-sitl-middleware,))
 $(eval $(call middleware_template,offboard-sitl-middleware,))  # same as onboard
 
-# onboard HIL services: GIS server, ROS middleware, and GISNav
-$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
+# onboard HIL services: GIS server, ROS middleware, autoheal, and GISNav
+$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve autoheal gisnav))
 
 # onboard SITL services: Same as with HIL but middleware is same as offboard (UDP, not serial)
 $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))

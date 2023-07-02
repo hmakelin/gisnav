@@ -27,14 +27,14 @@ it to match your use case.
 .. toctree::
     :caption: Onboard SITL & HIL
 
-    sitl/companion_computer
-    sitl/autopilot
-    hil/jetson_pixhawk
+    onboard/companion_computer
+    onboard/autopilot
+    onboard/jetson_pixhawk
 
 .. toctree::
     :caption: Configure & integrate
 
-    sitl/gis_server
-    launch/modify_params
+    integrate/gis_server
+    integrate/modify_params
     integrate/ros_messaging
     integrate/mock_gps

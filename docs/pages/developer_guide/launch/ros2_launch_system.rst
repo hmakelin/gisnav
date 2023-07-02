@@ -10,11 +10,7 @@ developing locally or when making custom deployments.
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: _prerequisites_ros.rst
-
-.. include:: _prerequisites_gisnav.rst
-
-.. include:: _prerequisites_source_workspace.rst
+.. include:: _prerequisites_install_locally.rst
 
 Build colcon workspace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

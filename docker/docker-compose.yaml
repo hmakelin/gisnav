@@ -64,6 +64,8 @@ services:
     build:
       context: ..
       dockerfile: docker/gisnav/Dockerfile
+      args:
+        ROS_VERSION: humble
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     env_file:
       - env/x11.env

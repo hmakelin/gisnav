@@ -28,7 +28,6 @@ it to match your use case.
     :caption: Onboard SITL & HIL
 
     onboard/companion_computer
-    onboard/autopilot
     onboard/jetson_pixhawk
 
 .. toctree::

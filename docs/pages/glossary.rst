@@ -547,6 +547,9 @@ ____________________________________________________
     QGC
         :term:`QGroundControl`
 
+    RDP
+        Remote Desktop Protocol
+
     RPY
         Roll, pitch, yaw
 
@@ -555,6 +558,9 @@ ____________________________________________________
 
     USGS
         United States Geological Survey
+
+    VNC
+        Virtual Network Computing
 
     WMS
     WMTS

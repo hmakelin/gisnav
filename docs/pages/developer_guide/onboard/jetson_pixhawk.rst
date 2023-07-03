@@ -1,12 +1,10 @@
-Pixhawk HIL
+Pixhawk & Jetson Nano HIL
 ____________________________________________________
 
-.. note::
-    These instructions are still **incomplete** but they may already help you get started with HIL simulation.
-
-This section provides an example on how to run GISNav on a Jetson Nano in a PX4 HIL simulation on a Pixhawk board. The
-example adds a simulated ROS camera to the default PX4 Gazebo ``iris_hitl`` model. The example also assumes you have a
-`NXP FMUK66-E board`_, but it should be adaptable to any `PX4 supported board`_.
+This section provides an example on how to run GISNav on a :term:`Jetson Nano`
+in a :term:`PX4` :term:`HIL` simulation on a :term:`Pixhawk` :term:`FMU`. This
+example uses the `NXP FMUK66-E board`_ as an example but any `PX4 supported board`_
+should work.
 
 .. _NXP FMUK66-E board: https://docs.px4.io/main/en/flight_controller/nxp_rddrone_fmuk66.html
 .. _PX4 supported board: https://px4.io/autopilots/
@@ -15,31 +13,29 @@ example adds a simulated ROS camera to the default PX4 Gazebo ``iris_hitl`` mode
     Keep the propellers **off** your drone throughout the HIL simulation.
 
 Prerequisites
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-* Connect your Jetson Nano to your desktop (simulation host) computer via Ethernet cable (see :ref:`Onboard computer`
-  for more information).
-* Connect your Pixhawk board to your desktop (simulation host) computer via USB cable.
-* Connect your Pixhawk board to your Jetson Nano via TELEM1 (set PX4 ``XRCE_DDS_0_CFG`` parameter to 101)
-* Install a bootloader on your Pixhawk board if your board does not yet have one. See your board manufacturer's
-  instructions on how to load one onto your specific board.
-* (1) Install the ``v1.14.0-1.0.1-beta`` tag of the `https://github.com/hmakelin/PX4-Autopilot.git`_ custom fork of
-  PX4-Autopilot which includes required modifications to the microDDS bridge ``dds_topics.yaml`` configuration file, or
-  (2) configure the bridge yourself (see :ref:`PX4-ROS 2 bridge topic configuration`).
-* Install `QEMU`_ emulator to make ``linux/amd64`` images run on the ``linux/arm64`` Jetson Nano:
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. code-block:: bash
+.. include:: ../launch/_prerequisites_gisnav.rst
 
-         docker run --privileged --rm tonistiigi/binfmt --install all
+Connect Jetson Nano and Pixhawk
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    .. _QEMU: https://docs.docker.com/build/building/multi-platform/#building-multi-platform-images
+In this example we will power the Pixhawk from the development computer via USB
+and the Jetson Nano from a wall socket via a DC adapter to avoid having to handle
+LiPo batteries. In a more realistic setup you would supply power to both boards
+from the :term:`onboard` battery.
 
-  .. _https://github.com/hmakelin/PX4-Autopilot.git: https://github.com/hmakelin/PX4-Autopilot.git
+Follow the below steps and diagram to setup your HIL simulation hardware:
 
-.. note::
-
-    In this example we have powered both the Pixhawk and Jetson Nano boards from the desktop computer via USB for
-    convenience and to avoid having to handle LiPo batteries. In a more realistic setup you would supply power to both
-    boards from the onboard battery.
+* **Install a bootloader on your Pixhawk board if your board does not yet have
+  one.** See your board manufacturer's instructions on how to load one onto your
+  specific board.
+* Connect your Jetson Nano to your development computer via Ethernet cable
+  (see :ref:`Jetson Nano SITL` for more information).
+* Connect your Jetson Nano to a wall socket using a micro-USB power adapter.
+* Connect your Pixhawk board to your development computer via micro-USB cable.
+* Connect your Pixhawk board to your Jetson Nano via TELEM1 (set PX4
+  ``XRCE_DDS_0_CFG`` parameter value to ``101``) using a USB to UART converter.
 
 .. tab-set::
 
@@ -57,9 +53,9 @@ Prerequisites
                 end
                 FMU_USB[micro-USB Port]
             end
-            subgraph "Laptop"
-                Laptop_USB[USB Port]
+            subgraph "Development computer"
                 Laptop_ETH[Ethernet Port]
+                Laptop_USB[USB Port]
             end
             subgraph "Jetson Nano"
                 Nano_USB[USB Port x4]
@@ -74,33 +70,59 @@ Prerequisites
                 Converter_USB[USB]
             end
             Socket[Wall Socket]
-            Display[External Display]
-            Mouse[USB Mouse]
-            Keyboard[USB Keyboard]
+            subgraph "Optional (can also use RDP or VNC)"
+                Display[External Display]
+                Mouse[USB Mouse]
+                Keyboard[USB Keyboard]
+            end
             FMU_TELEM1_TX ---|To UART RX| Converter_RX
             FMU_TELEM1_RX ---|To UART TX| Converter_TX
             FMU_TELEM1_GND ---|To UART GND| Converter_GND
-            FMU_USB ---|To Laptop USB| Laptop_USB
+            FMU_USB ---|To Dev Computer USB| Laptop_USB
             Converter_USB ---|To Nano USB| Nano_USB
             Nano_micro_USB ---|Micro USB Power| Socket
             Nano_HDMI ---|HDMI| Display
             Nano_USB ---|USB| Mouse
             Nano_USB ---|USB| Keyboard
-            Nano_ETH ---|To Laptop ETH| Laptop_ETH
+            Nano_ETH ---|To Dev Computer ETH| Laptop_ETH
 
     .. tab-item:: Picture
 
         .. figure:: ../../../_static/img/gisnav_hil_fmuk66-e_setup.jpg
 
-NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM1. Other wires as per
-`manufacturer's instructions`_, except for missing telemetry radio. FMU draws power from laptop via micro-USB, and
-Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed. Connection from
-FMU to Jetson Nano via TELEM1 serial port using USB to UART converter. See `FMUK66-E revision C pin layout`_ for
-how to wire the TELEM1 JST-GH connector (only GND, RX and TX used here). Note that the TX from one board connects
-to the RX of the other board, and vice versa.
+        * NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson
+          Nano via TELEM1.
 
-.. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
-.. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-1
+        * FMU draws power from laptop via micro-USB, and Jetson Nano from wall
+          socket via dedicated micro-USB DC adapter, so no LiPo batteries needed.
+
+        * Connection from FMU to Jetson Nano via TELEM1 serial port using USB to
+          UART converter. See `FMUK66-E revision C pin layout`_ for how to wire
+          the TELEM1 JST-GH connector (only GND, RX and TX used here).
+
+        * Other wires as per `manufacturer's instructions`_, except for missing
+          telemetry radio.
+
+        .. note::
+            The TX from one board connects to the RX of the other board and vice
+            versa.
+
+        .. _manufacturer's instructions: https://nxp.gitbook.io/hovergames/userguide/assembly/connecting-all-fmu-wires
+        .. _FMUK66-E revision C pin layout: https://nxp.gitbook.io/hovergames/rddrone-fmuk66/connectors/telemetry-1
+
+
+Install QEMU emulators
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Install `QEMU`_ emulators on your Jetson Nano to make ``linux/amd64`` images
+run on the ``linux/arm64`` Jetson Nano:
+
+.. code-block:: bash
+    :caption: Install QEMU emulators
+
+     docker run --privileged --rm tonistiigi/binfmt --install all
+
+.. _QEMU: https://docs.docker.com/build/building/multi-platform/#building-multi-platform-images
 
 Upload PX4 firmware
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -111,200 +133,62 @@ command:
 .. _PX4 uploading firmware instructions: https://docs.px4.io/main/en/dev_setup/building_px4.html#uploading-firmware-flashing-the-board
 
 .. code-block:: bash
+    :caption: List PX4 supported FMU boards
 
-    cd ~/PX4-Autopilot
-    make list_config_targets
+    cd ~/colcon_ws/src/gisnav/docker
+    export COMPOSE_PROJECT_NAME=gisnav
+    docker compose run px4 make list_config_targets
 
-The output will look like the following:
-
-.. code-block:: text
-    :caption: Example output of ``make list_config_targets`` command
-
-    hmakelin@hmakelin-Nitro-AN515-54:~/PX4-Autopilot$ make list_config_targets
-    airmind_mindpx-v2[_default]
-    ark_can-flow_canbootloader
-    ark_can-flow[_default]
-    ark_can-gps_canbootloader
-    ark_can-gps[_default]
-    ark_cannode_canbootloader
-    ark_cannode[_default]
-    ark_can-rtk-gps_canbootloader
-    ark_can-rtk-gps_debug
-    ark_can-rtk-gps[_default]
-    ark_fmu-v6x_bootloader
-    ark_fmu-v6x[_default]
-    atl_mantis-edu[_default]
-    av_x-v1[_default]
-    beaglebone_blue[_default]
-    bitcraze_crazyflie21[_default]
-    bitcraze_crazyflie[_default]
-    cuav_can-gps-v1_canbootloader
-    cuav_can-gps-v1[_default]
-    cuav_nora_bootloader
-    cuav_nora[_default]
-    cuav_x7pro_bootloader
-    cuav_x7pro[_default]
-    cuav_x7pro_test
-    cubepilot_cubeorange_bootloader
-    cubepilot_cubeorange[_default]
-    cubepilot_cubeorange_test
-    cubepilot_cubeyellow[_default]
-    cubepilot_io-v2[_default]
-    diatone_mamba-f405-mk2[_default]
-    emlid_navio2[_default]
-    flywoo_gn-f405[_default]
-    freefly_can-rtk-gps_canbootloader
-    freefly_can-rtk-gps[_default]
-    holybro_can-gps-v1_canbootloader
-    holybro_can-gps-v1[_default]
-    holybro_durandal-v1_bootloader
-    holybro_durandal-v1[_default]
-    holybro_kakutef7[_default]
-    holybro_kakuteh7_bootloader
-    holybro_kakuteh7[_default]
-    holybro_pix32v5[_default]
-    matek_gnss-m9n-f4_canbootloader
-    matek_gnss-m9n-f4[_default]
-    matek_h743_bootloader
-    matek_h743[_default]
-    matek_h743-mini_bootloader
-    matek_h743-mini[_default]
-    matek_h743-slim_bootloader
-    matek_h743-slim[_default]
-    modalai_fc-v1[_default]
-    modalai_fc-v2_bootloader
-    modalai_fc-v2[_default]
-    modalai_voxl2[_default]
-    modalai_voxl2-io[_default]
-    modalai_voxl2-slpi[_default]
-    mro_ctrl-zero-classic_bootloader
-    mro_ctrl-zero-classic[_default]
-    mro_ctrl-zero-f7[_default]
-    mro_ctrl-zero-f7-oem[_default]
-    mro_ctrl-zero-h7_bootloader
-    mro_ctrl-zero-h7[_default]
-    mro_ctrl-zero-h7-oem_bootloader
-    mro_ctrl-zero-h7-oem[_default]
-    mro_pixracerpro_bootloader
-    mro_pixracerpro[_default]
-    mro_x21-777[_default]
-    mro_x21[_default]
-    nxp_fmuk66-e[_default]
-    nxp_fmuk66-e_socketcan
-    nxp_fmuk66-v3[_default]
-    nxp_fmuk66-v3_socketcan
-    nxp_fmuk66-v3_test
-    nxp_fmurt1062-v1[_default]
-    nxp_ucans32k146_canbootloader
-    nxp_ucans32k146_cyphal
-    nxp_ucans32k146[_default]
-    omnibus_f4sd[_default]
-    omnibus_f4sd_icm20608g
-    px4_fmu-v2[_default]
-    px4_fmu-v2_fixedwing
-    px4_fmu-v2_lto
-    px4_fmu-v2_multicopter
-    px4_fmu-v2_rover
-    px4_fmu-v3[_default]
-    px4_fmu-v3_test
-    px4_fmu-v4[_default]
-    px4_fmu-v4pro[_default]
-    px4_fmu-v4pro_test
-    px4_fmu-v4_test
-    px4_fmu-v5_cryptotest
-    px4_fmu-v5_cyphal
-    px4_fmu-v5_debug
-    px4_fmu-v5[_default]
-    px4_fmu-v5_lto
-    px4_fmu-v5_protected
-    px4_fmu-v5_stackcheck
-    px4_fmu-v5_test
-    px4_fmu-v5_uavcanv0periph
-    px4_fmu-v5x[_default]
-    px4_fmu-v5x_test
-    px4_fmu-v6c_bootloader
-    px4_fmu-v6c[_default]
-    px4_fmu-v6u_bootloader
-    px4_fmu-v6u[_default]
-    px4_fmu-v6x_bootloader
-    px4_fmu-v6x[_default]
-    px4_io-v2[_default]
-    px4_raspberrypi[_default]
-    px4_sitl[_default]
-    px4_sitl_nolockstep
-    px4_sitl_replay
-    px4_sitl_test
-    raspberrypi_pico[_default]
-    scumaker_pilotpi_arm64
-    scumaker_pilotpi[_default]
-    sky-drones_smartap-airlink[_default]
-    spracing_h7extreme[_default]
-    uvify_core[_default]
-
-Then choose your appropriate board for the following examples.
+Then choose your appropriate board for the following examples. We are going to
+choose ``nxp_fmuk66-e_default`` for this example:
 
 .. code-block:: bash
-    :caption: Upload PX4 to NXP FMU66K board
+    :caption: Upload PX4 firmware to FMU
 
-    git submodule update --recursive
-    make distclean
-    make nxp_fmuk66-e_default upload
+    export COMPOSE_PROJECT_NAME=gisnav
+    #docker compose run px4 git submodule update --recursive
+    docker compose run px4 make distclean
+    docker compose run px4 make nxp_fmuk66-e_default upload
 
-Add simulated ROS camera to ``iris_hitl`` model
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Add the below configuration to the ``Tools/simulation/sitl/gazebo/sitl_gazebo/models/iris_hitl/iris_hitl.sdf`` file as a
-child to the ``base_link`` link:
-
-.. code-block:: xml
-    :caption: Example simulated ROS camera
-
-    <sensor name="camera" type="camera">
-      <pose>0 0 0 1.57 1.57 0</pose>
-      <camera>
-        <horizontal_fov>2.0</horizontal_fov>
-        <image>
-          <width>640</width>
-          <height>480</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.1</near>
-          <far>15000</far>
-        </clip>
-      </camera>
-      <always_on>1</always_on>
-      <update_rate>10</update_rate>
-      <visualize>1</visualize>
-      <plugin name="camera_controller" filename="libgazebo_ros_camera.so"></plugin>
-    </sensor>
-
-Create KSQL Airport world with ``iris_hitl`` model
+Deploy offboard services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. note::
-    TODO: Instructions for combining ``iris_hitl`` model with ``ksql_airport.world`` file.
-
-Run HIL simulation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Follow the steps in `PX4 HIL simulation instructions`_. Make sure that you precisely match the ``COM_RC_IN_MODE``
-parameter setting if mentioned in the instructions. Also ensure that you have HITL enabled in QGC Safety settings, and
-virtual joystick enabled in QGC General settings. At the end you would type commands such as these:
+Follow the steps in `PX4 HIL simulation instructions`_ to deploy the :term:`offboard`
+services. These example commands should match the instructions:
 
 .. _PX4 HIL simulation instructions: https://docs.px4.io/main/en/simulation/hitl.html
 
- .. code-block:: bash
+.. code-block:: bash
+    :caption: Deploy HIL simulation offboard services
 
-    cd ~/PX4-Autopilot
-    make clean
-    DONT_RUN=1 make px4_sitl gazebo___ksql_airport
-    source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
-    gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world
+    export COMPOSE_PROJECT_NAME=gisnav
+    #docker compose run px4 make clean
+    docker compose run px4 DONT_RUN=1 make px4_sitl gazebo___ksql_airport
+    docker compose run px4 source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
+    docker compose run px4 gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world
 
-Once you have the HIL simulation running, login to your Jetson Nano and build and deploy the onboard services:
+    # Important: Start QGroundControl last
+    docker compose up qgc
+
+After deploying the HIL simulation, adjust the settings via the :term:`QGC`
+application as follows:
+
+* Precisely match the ``COM_RC_IN_MODE`` parameter setting if mentioned in the
+  instructions.
+* Ensure that you have HITL enabled in QGC Safety settings.
+* Ensure you have the virtual joystick enabled in QGC General settings.
+
+Deploy onboard services
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Once you have the HIL simulation running, login to your Jetson Nano and deploy
+the onboard services:
 
 .. code-block:: bash
-    :caption: Run GISNav and GIS server on onboard computer
+    :caption: Deploy HIL simulation onboard services
 
+    mkdir -p ~/colcon_ws/src
+    cd ~/colcon_ws/src
+    git clone https://github.com/hmakelin/gisnav.git
     cd ~/colcon_ws/src/gisnav
-    make -C docker build-companion-hil-px4
-    make -C docker up-companion-hil-px4
+    make -C docker up-onboard-hil-px4

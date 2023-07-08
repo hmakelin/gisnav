@@ -64,7 +64,7 @@ $(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services and create the containers
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) create --build $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
 	# Expose xhost to containers to make GUI applications work
 	for containerId in $$(docker ps -f name=$(PROJECT_NAME) -aq); do \
 		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
@@ -78,7 +78,7 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) build $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) build $(4)
 
 # Create phony up targets with the specified prefix for each autopilot
 .PHONY: $(addprefix up-$(1)-, $(AUTOPILOTS))
@@ -91,7 +91,7 @@ $(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% up-$(2)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Run Docker Compose with the specified services
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) up -d $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
 endef
 
 
@@ -125,9 +125,9 @@ endef
 #   2. The Docker Compose command to execute (either 'up -d' or 'build').
 define run_middleware
 	@if [ "$*" = "px4" ]; then \
-		docker compose $(1) $(2) micro-ros-agent mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose $(1) $(2) mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi

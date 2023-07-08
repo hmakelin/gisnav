@@ -66,6 +66,7 @@ $(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%
 	# Build the specified Docker Compose services and create the containers
 	@docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
 	# Expose xhost to containers to make GUI applications work
+	# TODO: only expose to containers that need GUI
 	for containerId in $$(docker ps -f name=$(PROJECT_NAME) -aq); do \
 		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
 	done

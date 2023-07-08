@@ -160,14 +160,14 @@ $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 # shortcut for demo
 .PHONY: demo
 demo:
-	@$(MAKE) -C . up-offboard-sitl-px4
+	@$(MAKE) -C . -p $(PROJECT_NAME) up-offboard-sitl-px4
 
 # shutdown any and all services
 .PHONY: down
 down:
-	@docker compose down
+	@docker compose -p $(PROJECT_NAME) down
 
 # build all services
 .PHONY: build
 build:
-	@docker compose build
+	@docker compose -p $(PROJECT_NAME) build

@@ -153,8 +153,10 @@ choose ``nxp_fmuk66-e_default`` for this example:
 Deploy offboard services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Follow the steps in `PX4 HIL simulation instructions`_ to deploy the :term:`offboard`
-services. These example commands should match the instructions:
+The following steps to deploy the :term:`offboard` servuces are based on the
+official `PX4 HIL simulation instructions`_. The ``px4`` Docker compose service
+has a custom ``iris_hitl`` model and a ``hitl_iris_ksql_airport.world`` Gazebo world
+that we are going to use in this example:
 
 .. _PX4 HIL simulation instructions: https://docs.px4.io/main/en/simulation/hitl.html
 
@@ -163,9 +165,9 @@ services. These example commands should match the instructions:
 
     export COMPOSE_PROJECT_NAME=gisnav
     #docker compose run px4 make clean
-    docker compose run px4 DONT_RUN=1 make px4_sitl gazebo___ksql_airport
-    docker compose run px4 source Tools/simulation/gazebo/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
-    docker compose run px4 gazebo Tools/simulation/gazebo/sitl_gazebo/worlds/hitl_iris_ksql_airport.world
+    docker compose run -e DONT_RUN=1 px4 make px4_sitl_default gazebo-classic
+    docker compose run px4 source Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
+    docker compose run px4 gazebo Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world
 
     # Important: Start QGroundControl last
     docker compose up qgc

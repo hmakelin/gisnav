@@ -1,178 +1,126 @@
 version: "3.4"
 
+x-base: &base
+  build:
+    dockerfile: Dockerfile
+  network_mode: host
+
+x-nvidia-gpu: &nvidia-gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [ gpu ]
+
+x-x11: &x11
+  environment:
+    QT_X11_NO_MITSHM: 1
+    DISPLAY: ${DISPLAY}
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix:ro
+
+x-ros: &ros
+  environment:
+    ROS_DOMAIN_ID: 0
+    FASTRTPS_DEFAULT_PROFILES_FILE: /disable_shared_memory.xml
+
+x-tty: &tty
+  stdin_open: true
+  tty: true
+
 services:
   mapserver:
+    <<: *base
     build:
       context: mapserver
-      dockerfile: Dockerfile
       args:
         - DOCKER_TAG=latest
-    network_mode: host
     command: /usr/local/bin/start-server
 
   mapproxy:
+    <<: *base
     build:
       context: mapproxy
-      dockerfile: Dockerfile
       args:
         - MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s"
         - CONFIG_FILE=yaml/mapproxy.yaml
         - HOST=localhost
         - PORT=80
-    network_mode: host
     command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
   micro-ros-agent:
+    <<: [*base, *ros]
     build:
       context: micro-ros-agent
-      dockerfile: Dockerfile
-    network_mode: host
-    environment:
-      - ROS_DOMAIN_ID=0
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
-    volumes:
-      - /dev/shm:/dev/shm
     command: udp4 -p 8888
 
   mavros:
+    <<: [*base, *ros]
     build:
       context: mavros
-      dockerfile: Dockerfile
-    environment:
-      - ROS_DOMAIN_ID=0
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
-    network_mode: host
-    volumes:
-      - /dev/shm:/dev/shm
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
+    <<: [*base, *x11]
     build:
       context: qgc
-      dockerfile: Dockerfile
-    env_file:
-      - env/x11.env
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
-    network_mode: host
     privileged: true
 
   # Note: build context is repository root
   gisnav:
+    <<: [*base, *x11, *ros, *tty, *nvidia-gpu]
     build:
       context: ..
       dockerfile: docker/gisnav/Dockerfile
       args:
         ROS_VERSION: humble
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
-    env_file:
-      - env/x11.env
     environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
+      FASTRTPS_DEFAULT_PROFILES_FILE: /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
       - /dev/dri:/dev/dri
-    network_mode: host
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     command: ros2 launch gisnav px4.launch.py
 
   px4:
+    <<: [*base, *x11, *tty, *nvidia-gpu]
     build:
       context: px4
-      dockerfile: Dockerfile
-    env_file:
-      - env/x11.env
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
-    network_mode: host
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
   ardupilot:
+    <<: [*base, *x11, *nvidia-gpu]
     build:
       context: ardupilot
-      dockerfile: Dockerfile
-    env_file:
-      - env/x11.env
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
-    network_mode: host
     privileged: True
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     command: bash -c "cd ~ && make sim_vehicle"
 
   torch-serve:
+    <<: [*base, *x11, *nvidia-gpu ]
     build:
       context: torch-serve
-      dockerfile: Dockerfile
       args:
         - BASE_IMAGE=pytorch/torchserve:latest-gpu
-    env_file:
-      - env/x11.env
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-    network_mode: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
 
   # Note: build context is repository root
   rviz:
+    <<: [*base, *x11, *ros, *tty, *nvidia-gpu]
     build:
       context: rviz
-      dockerfile: Dockerfile
-    env_file:
-      - env/x11.env
-    environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/disable_shared_memory.xml
-    volumes:
-      - /dev/dri:/dev/dri
-    network_mode: host
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
     command: rviz2 -d gisnav_config.rviz
 
   autoheal:
+    <<: [*base]
     image: willfarrell/autoheal
     restart: always
     environment:

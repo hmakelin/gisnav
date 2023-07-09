@@ -84,17 +84,13 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 # dependency target
 # IMPORTANT: Need to depend on create targets here before up targets to first
 # expose xhost to containers before running them
-$(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% up-$(2)-%,up-$(1)-%: create-$(1)-%)
+$(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% expose-xhost up-$(2)-%,up-$(1)-%: create-$(1)-% expose-xhost)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
-	for containerId in `docker ps -f name=$(PROJECT_NAME) -aq`; do \
-		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$(containerId)`; \
-	done
 	# Run Docker Compose with the specified services
 	docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
 endef
-
 
 # Define a reusable template for creating Docker Compose middleware targets
 #
@@ -156,6 +152,13 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
+
+# Expose xhost to containers to make GUI applications work
+# TODO: only expose to containers that need GUI
+expose-xhost:
+	for containerId in `docker ps -f name=$(PROJECT_NAME) -aq`; do \
+		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
+	done
 
 # shortcut for demo
 .PHONY: demo

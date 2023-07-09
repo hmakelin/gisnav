@@ -31,11 +31,7 @@ RUN cd PX4-Autopilot && \
 # Apply configuration files
 #RUN cat 6011_typhoon_h480 >> PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
 
-# Make entrypoint executable
-RUN chmod +x /entrypoint.sh
-
 RUN rm -rf /var/lib/apt/lists/* && \
     apt clean
 
 WORKDIR PX4-Autopilot
-ENTRYPOINT ["/entrypoint.sh"]

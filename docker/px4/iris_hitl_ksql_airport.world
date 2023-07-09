@@ -1,0 +1,14 @@
+<sdf version="1.4">
+  <world name="hitl_iris_world">
+    <include>
+      <uri>model://ksql_airport</uri>
+    </include>
+
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>37.523640</latitude_deg>
+      <longitude_deg>-122.255122</longitude_deg>
+      <elevation>1.7</elevation>
+    </spherical_coordinates>
+  </world>
+</sdf>

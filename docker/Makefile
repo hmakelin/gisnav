@@ -56,29 +56,26 @@ PROJECT_NAME := gisnav
 #   4. The Docker Compose services to start or build - use $$* here for
 #		autopilot, the first '$' is to escape the second '$'.
 define compose_template
+
 # Create phony create targets with the specified prefix for each autopilot
 .PHONY: $(addprefix create-$(1)-, $(AUTOPILOTS))
 
 # Generate rules for the build prefixed targets, depending on the specified build dependency target
-$(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%,create-$(1)-%)
+$(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(2)-%,)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services and create the containers
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) create --build $(4)
-	# Expose xhost to containers to make GUI applications work
-	for containerId in $$(docker ps -f name=$(PROJECT_NAME) -aq); do \
-		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
-	done
+	docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
 
 # Create phony build targets with the specified prefix for each autopilot
 .PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))
 
 # Generate rules for the build prefixed targets, depending on the specified build dependency target
-$(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,build-$(1)-%)
+$(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,build-$(2)-%)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) build $(4)
+	docker compose -p $(PROJECT_NAME) $$(compose_files) build $(4)
 
 # Create phony up targets with the specified prefix for each autopilot
 .PHONY: $(addprefix up-$(1)-, $(AUTOPILOTS))
@@ -87,13 +84,13 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 # dependency target
 # IMPORTANT: Need to depend on create targets here before up targets to first
 # expose xhost to containers before running them
-$(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% up-$(2)-%,create-$(1)-% up-$(1)-%)
+$(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% expose-xhost up-$(2)-%,up-$(1)-%: create-$(1)-% expose-xhost)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
+	docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
 	# Run Docker Compose with the specified services
-	@COMPOSE_PROJECT_NAME=$(PROJECT_NAME) docker compose $$(compose_files) up -d $(4)
+	docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
 endef
-
 
 # Define a reusable template for creating Docker Compose middleware targets
 #
@@ -125,9 +122,9 @@ endef
 #   2. The Docker Compose command to execute (either 'up -d' or 'build').
 define run_middleware
 	@if [ "$*" = "px4" ]; then \
-		docker compose $(1) $(2) micro-ros-agent mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) micro-ros-agent mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
-		docker compose $(1) $(2) mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	else \
 		echo "Unsupported target '$*' (try 'px4' or 'ardupilot')."; \
 	fi
@@ -145,7 +142,7 @@ $(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose
 $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
 
 # offboard SITL services: Gazebo simulation, QGC
-$(eval $(call compose_template,offboard-sitl,offboard-sitl-dev,,qgc))
+$(eval $(call compose_template,offboard-sitl,,,$$* qgc))
 
 # SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
 $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve mapserver))
@@ -156,17 +153,24 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
+# Expose xhost to containers to make GUI applications work
+# TODO: only expose to containers that need GUI
+expose-xhost:
+	for containerId in `docker ps -f name=$(PROJECT_NAME) -aq`; do \
+		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
+	done
+
 # shortcut for demo
 .PHONY: demo
 demo:
-	@$(MAKE) -C . up-offboard-sitl-px4
+	@$(MAKE) -C . -p $(PROJECT_NAME) up-offboard-sitl-px4
 
 # shutdown any and all services
 .PHONY: down
 down:
-	@docker compose down
+	@docker compose -p $(PROJECT_NAME) down
 
 # build all services
 .PHONY: build
 build:
-	@docker compose build
+	@docker compose -p $(PROJECT_NAME) build

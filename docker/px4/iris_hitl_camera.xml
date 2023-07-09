@@ -1,8 +1,10 @@
 <sdf version='1.5'>
     <model name='typhoon_h480'>
-        <link name="cgo3_camera_link">
+        <link name="base_link">
             <sensor name="camera" type="camera">
+                <pose>0 0 0 1.57 1.57 0</pose>
                 <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
+                    <horizontal_fov>2.0</horizontal_fov>
                     <alwaysOn>true</alwaysOn>
                     <imageTopicName>image_raw</imageTopicName>
                     <cameraInfoTopicName>camera_info</cameraInfoTopicName>

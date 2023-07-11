@@ -35,9 +35,11 @@ RUN apt-get -y install ros-${ROS_VERSION}-mavros ros-${ROS_VERSION}-mavros-extra
     bash install_geographiclib_datasets.sh
 
 # Custom ROS messages (px4_msgs and mavros mavlink gimbal protocl v2 support)
+# sed edits px4_msgs CMakeLists.txt so that only SensorGps message is built
 RUN cd /opt/colcon_ws/src/ && \
     git clone --branch release/1.14  \
       https://github.com/px4/px4_msgs.git && \
+    sed -i 's/\*\.msg/SensorGps.msg/g' px4_msgs/CMakeLists.txt && \
     git clone --branch gimbal-protocol-v2-plugin \
       https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
     sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g'  \

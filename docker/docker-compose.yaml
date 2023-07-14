@@ -5,8 +5,8 @@ version: "3.4"
 x-base: &base
   build:
     dockerfile: Dockerfile
-    platforms:
-      - "linux/amd64"
+    #platforms:
+    #  - "linux/amd64"
   network_mode: host
 
 # devices is a sequence not a mapping so careful when merging
@@ -45,9 +45,9 @@ services:
       context: mapserver
       args:
         DOCKER_TAG: latest
-      platforms:
-        - "linux/amd64"
-        - "linux/arm64"
+      #platforms:
+      #  - "linux/amd64"
+      #  - "linux/arm64"
     command: /usr/local/bin/start-server
 
   mapproxy:
@@ -65,18 +65,18 @@ services:
     <<: [*base, *ros]
     build:
       context: micro-ros-agent
-      platforms:
-        - "linux/amd64"
-        - "linux/arm64"
+      #platforms:
+      #  - "linux/amd64"
+      #  - "linux/arm64"
     command: udp4 -p 8888
 
   mavros:
     <<: [*base, *ros]
     build:
       context: mavros
-      platforms:
-        - "linux/amd64"
-        - "linux/arm64"
+      #platforms:
+      #  - "linux/amd64"
+      #  - "linux/arm64"
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
@@ -97,9 +97,9 @@ services:
       dockerfile: docker/gisnav/Dockerfile
       args:
         ROS_VERSION: humble
-      platforms:
-        - "linux/amd64"
-        - "linux/arm64"
+      #platforms:
+      #  - "linux/amd64"
+      #  - "linux/arm64"
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     environment:
       FASTRTPS_DEFAULT_PROFILES_FILE: /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
@@ -135,9 +135,9 @@ services:
       context: torch-serve
       args:
         BASE_IMAGE: pytorch/torchserve:latest-gpu
-      platforms:
-        - "linux/amd64"
-        - "linux/arm64"
+      #platforms:
+      #  - "linux/amd64"
+      #  - "linux/arm64"
 
   # Note: build context is repository root
   rviz:

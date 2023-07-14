@@ -3,4 +3,26 @@ services:
   mapserver:
     build:
       args:
-        - DOCKER_TAG=latest-arm64
+        DOCKER_TAG: latest-arm64
+      platforms:
+        - linux/arm64
+
+  micro-ros-agent:
+    build:
+      platforms:
+        - linux/arm64
+
+  mavros:
+    build:
+      platforms:
+        - linux/arm64
+
+  gisnav:
+    build:
+      platforms:
+        - linux/arm64
+
+  torch-serve:
+    build:
+      platforms:
+        - linux/arm64

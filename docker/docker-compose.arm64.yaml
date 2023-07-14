@@ -1,28 +1,24 @@
+x-arm64: &arm64
+  build:
+    platforms:
+      - linux/arm64
+
 services:
   # User arm64 version of mapserver docker image (e.g. for Jetson Nano)
   mapserver:
+    <<: *arm64
     build:
       args:
         DOCKER_TAG: latest-arm64
-      platforms:
-        - linux/arm64
 
   micro-ros-agent:
-    build:
-      platforms:
-        - linux/arm64
+    <<: *arm64
 
   mavros:
-    build:
-      platforms:
-        - linux/arm64
+    <<: *arm64
 
   gisnav:
-    build:
-      platforms:
-        - linux/arm64
+    <<: *arm64
 
   torch-serve:
-    build:
-      platforms:
-        - linux/arm64
+    <<: *arm64

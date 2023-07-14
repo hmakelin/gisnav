@@ -130,6 +130,25 @@ define run_middleware
 	fi
 endef
 
+# The empty argument check for some reason is not working in the compose_template.
+# So we will pass a dummy dependency as a dependency target instead of an empty
+# argument.
+.PHONY: $(addprefix build-dummy-dependency-, $(AUTOPILOTS))
+.PHONY: $(addprefix create-dummy-dependency-, $(AUTOPILOTS))
+.PHONY: $(addprefix up-dummy-dependency-, $(AUTOPILOTS))
+
+build-dummy-dependency-px4:
+
+create-dummy-dependency-px4:
+
+up-dummy-dependency-px4:
+
+build-dummy-dependency-ardupilot:
+
+create-dummy-dependency-ardupilot:
+
+up-dummy-dependency-ardupilot:
+
 # Define middleware targets
 $(eval $(call middleware_template,onboard-hil-middleware,-f docker-compose.yaml -f docker-compose.serial.yaml))
 $(eval $(call middleware_template,onboard-sitl-middleware,))
@@ -142,7 +161,7 @@ $(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose
 $(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
 
 # offboard SITL services: Gazebo simulation, QGC
-$(eval $(call compose_template,offboard-sitl,,,$$* qgc))
+$(eval $(call compose_template,offboard-sitl,dummy-dependency,,$$* qgc))
 
 # SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
 $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve mapserver))

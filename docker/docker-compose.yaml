@@ -1,10 +1,16 @@
 version: "3.4"
 
+# platforms is a sequence not a mapping so careful when merging
+# with something that defines its own platforms
 x-base: &base
   build:
     dockerfile: Dockerfile
+    platforms:
+      - "linux/amd64"
   network_mode: host
 
+# devices is a sequence not a mapping so careful when merging
+# with something that defines its own devices
 x-nvidia-gpu: &nvidia-gpu
   deploy:
     resources:
@@ -14,6 +20,8 @@ x-nvidia-gpu: &nvidia-gpu
             count: 1
             capabilities: [ gpu ]
 
+# volumes is a sequence not a mapping so careful when merging
+# with something that defines its own volumes
 x-x11: &x11
   environment:
     QT_X11_NO_MITSHM: 1
@@ -36,7 +44,10 @@ services:
     build:
       context: mapserver
       args:
-        - DOCKER_TAG=latest
+        DOCKER_TAG: latest
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
     command: /usr/local/bin/start-server
 
   mapproxy:
@@ -44,22 +55,28 @@ services:
     build:
       context: mapproxy
       args:
-        - MAPPROXY_TILE_URL="https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s"
-        - CONFIG_FILE=yaml/mapproxy.yaml
-        - HOST=localhost
-        - PORT=80
+        MAPPROXY_TILE_URL: "https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s"
+        CONFIG_FILE: yaml/mapproxy.yaml
+        HOST: localhost
+        PORT: 80
     command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
 
   micro-ros-agent:
     <<: [*base, *ros]
     build:
       context: micro-ros-agent
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
     command: udp4 -p 8888
 
   mavros:
     <<: [*base, *ros]
     build:
       context: mavros
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
@@ -67,6 +84,7 @@ services:
     build:
       context: qgc
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     privileged: true
@@ -79,10 +97,14 @@ services:
       dockerfile: docker/gisnav/Dockerfile
       args:
         ROS_VERSION: humble
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     environment:
       FASTRTPS_DEFAULT_PROFILES_FILE: /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri
     command: ros2 launch gisnav px4.launch.py
 
@@ -91,6 +113,7 @@ services:
     build:
       context: px4
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
@@ -100,6 +123,7 @@ services:
     build:
       context: ardupilot
     volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     privileged: True
@@ -110,7 +134,10 @@ services:
     build:
       context: torch-serve
       args:
-        - BASE_IMAGE=pytorch/torchserve:latest-gpu
+        BASE_IMAGE: pytorch/torchserve:latest-gpu
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
 
   # Note: build context is repository root
   rviz:
@@ -124,6 +151,6 @@ services:
     image: willfarrell/autoheal
     restart: always
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=all
+      AUTOHEAL_CONTAINER_LABEL: all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

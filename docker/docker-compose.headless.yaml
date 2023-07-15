@@ -2,8 +2,8 @@ services:
   # Sets Gazebo to run in headless mode
   px4:
     environment:
-      - HEADLESS=1
+      HEADLESS: 1
 
   ardupilot:
     environment:
-      - HEADLESS=1
+      HEADLESS: 1

@@ -30,7 +30,7 @@ RUN apt-get -y install software-properties-common && \
     apt-get -y install gdal-bin libgdal-dev
 
 # Install GeographicLib
-RUN apt-get -y install ros-${ROS_VERSION}-mavros ros-${ROS_VERSION}-mavros-extras && \
+RUN apt-get install -y wget ros-${ROS_VERSION}-mavros ros-${ROS_VERSION}-mavros-extras && \
     wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh && \
     bash install_geographiclib_datasets.sh
 
@@ -52,9 +52,9 @@ RUN cd /opt/colcon_ws/ && \
     colcon build
 
 # Upgrade & clean
-RUN apt-get update && \
-    apt-get -y upgrade && \
-    apt-get clean && \
+#RUN apt-get update && \
+#    apt-get -y upgrade && \
+RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # TODO: add better health check (are the core nodes publishing?)

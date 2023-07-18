@@ -45,11 +45,11 @@ RUN cd /opt/colcon_ws/src/ && \
     sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g'  \
       mavros/mavros_extras/src/plugins/gimbal_control.cpp
 
-# Build
+# Build (only need mavros_msgs from mavros)
 SHELL ["/bin/bash", "-c"]
 RUN cd /opt/colcon_ws/ && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
-    colcon build
+    colcon build --packages-ignore mavros mavros_extras libmavconn
 
 # Upgrade & clean
 #RUN apt-get update && \

@@ -28,6 +28,7 @@ x-x11: &x11
     DISPLAY: ${DISPLAY}
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix:ro
+    - /dev/dri:/dev/dri  # Needed at least by rviz
 
 x-ros: &ros
   environment:
@@ -74,6 +75,8 @@ services:
     <<: [*base, *ros]
     build:
       context: mavros
+      args:
+        ROS_VERSION: humble
       #platforms:
       #  - "linux/amd64"
       #  - "linux/arm64"
@@ -141,9 +144,11 @@ services:
 
   # Note: build context is repository root
   rviz:
-    <<: [*base, *x11, *ros, *tty, *nvidia-gpu]
+    <<: [*base, *x11, *ros, *nvidia-gpu]
     build:
       context: rviz
+      args:
+        ROS_VERSION: humble
     command: rviz2 -d gisnav_config.rviz
 
   autoheal:

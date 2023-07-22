@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-source "/opt/ros/foxy/setup.bash"
-source "/colcon_ws/install/setup.bash" --
+source "/opt/ros/$ROS_VERSION/setup.bash"
+source "/opt/colcon_ws/install/setup.bash" --
 
 exec "$@"

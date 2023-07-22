@@ -30,10 +30,10 @@ SHELL ["/bin/bash", "-c"]
 
 # List required mavros plugins, extras, messages and services
 # TODO: do not include servo_state_publisher
-ENV ENABLED_PLUGINS="command local_position global_position home_position altitude"
+ENV ENABLED_PLUGINS="command param sys_status sys_time manual_control local_position global_position home_position altitude"
 ENV ENABLED_EXTRAS="gps_input hil gimbal_control"
-ENV ENABLED_MSGS="Mavlink RCOut JointState GimbalDeviceInformation GimbalManagerSetPitchyaw GimbalManagerStatus GimbalManagerInformation HilControls HilActuatorControls HilStateQuaternion HilGPS HilSensor OpticalFlowRad RCIn GimbalDeviceAttitudeStatus GimbalManagerSetAttitude GimbalDeviceSetAttitude Altitude HomePosition HilGPS GPSINPUT"
-ENV ENABLED_SRVS="CommandLong CommandAck CommandInt CommandBool CommandHome CommandTOL CommandTriggerControl CommandTriggerInterval CommandVtolTransition EndpointAdd EndpointDel GimbalGetInformation GimbalManagerCameraTrack GimbalManagerConfigure GimbalManagerPitchyaw GimbalManagerSetRoi"
+ENV ENABLED_MSGS="State EstimatorStatus ExtendedState StatusText VehicleInfo TimesyncStatus Param ParamEvent ParamValue ManualControl Mavlink RCOut JointState GimbalDeviceInformation GimbalManagerSetPitchyaw GimbalManagerStatus GimbalManagerInformation HilControls HilActuatorControls HilStateQuaternion HilGPS HilSensor OpticalFlowRad RCIn GimbalDeviceAttitudeStatus GimbalManagerSetAttitude GimbalDeviceSetAttitude Altitude HomePosition HilGPS GPSINPUT"
+ENV ENABLED_SRVS="ParamGet ParamPull ParamPush ParamSet ParamSetV2 StreamRate VehicleInfoGet MessageInterval SetMode CommandLong CommandAck CommandInt CommandBool CommandHome CommandTOL CommandTriggerControl CommandTriggerInterval CommandVtolTransition EndpointAdd EndpointDel GimbalGetInformation GimbalManagerCameraTrack GimbalManagerConfigure GimbalManagerPitchyaw GimbalManagerSetRoi"
 
 # All available mavros plugins, extras, messages and services based on CMakeLists.txt
 ENV ALL_PLUGINS="actuator_control altitude command dummy ftp geofence global_position home_position imu local_position manual_control mission_protocol_base nav_controller_output param rallypoint rc_io setpoint_accel setpoint_attitude setpoint_position setpoint_raw setpoint_trajectory setpoint_velocity sys_status sys_time waypoint wind_estimation"
@@ -68,8 +68,8 @@ RUN for plugin in $ALL_PLUGINS; do \
 # Custom MAVROS patches to make this work
 # The clock type one is needed for ArduPilot SITL
 RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
-    sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g' \
-      src/mavros/mavros_extras/src/plugins/gimbal_control.cpp && \
+    #sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g' \
+    #  src/mavros/mavros_extras/src/plugins/gimbal_control.cpp && \
     sed -i 's/rclcpp::Time last_pos_time;/rclcpp::Time last_pos_time{0, 0, get_clock()->get_clock_type()};/' \
       src/mavros/mavros_extras/src/plugins/gps_input.cpp && \
     colcon build

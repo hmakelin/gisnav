@@ -40,7 +40,7 @@ RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     sed -i 's/\*\.msg/SensorGps.msg/g' px4_msgs/CMakeLists.txt && \
     git clone --branch gimbal-protocol-v2-plugin \
       https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
-    sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g' mavros/mavros_extras/src/plugins/gimbal_control.cpp && \
+    #sed -i 's/tf2_eigen.hpp/tf2_eigen.h/g' mavros/mavros_extras/src/plugins/gimbal_control.cpp && \
     for msg in $ALL_MSGS; do \
     if [[ $ENABLED_MSGS != *"$msg"* ]]; then \
       sed -i "s|msg/${msg}.msg|#&|g" mavros/mavros_msgs/CMakeLists.txt; \

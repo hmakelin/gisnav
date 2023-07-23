@@ -109,7 +109,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri
-    command: ros2 launch gisnav px4.launch.py
+    command: ros2 launch gisnav px4.dev.launch.py
 
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu]

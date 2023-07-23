@@ -61,11 +61,11 @@ define compose_template
 .PHONY: $(addprefix create-$(1)-, $(AUTOPILOTS))
 
 # Generate rules for the build prefixed targets, depending on the specified build dependency target
-$(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(2)-%,)
+$(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%,create-$(2)-%)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services and create the containers
-	docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
+	docker compose -p $(PROJECT_NAME) $$(compose_files) create --no-recreate $(4)
 
 # Create phony build targets with the specified prefix for each autopilot
 .PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))
@@ -87,7 +87,6 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 $(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% expose-xhost up-$(2)-%,up-$(1)-%: create-$(1)-% expose-xhost)
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
-	docker compose -p $(PROJECT_NAME) $$(compose_files) create --build $(4)
 	# Run Docker Compose with the specified services
 	docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
 endef
@@ -111,7 +110,7 @@ build-$(1)-%:
 	$$(call run_middleware, $(2), build)
 
 create-$(1)-%:
-	$$(call run_middleware, $(2), create --build)
+	$$(call run_middleware, $(2), create --no-recreate)
 endef
 
 # The run_middleware function is a helper function for executing middleware
@@ -181,8 +180,8 @@ expose-xhost:
 
 # shortcut for demo
 .PHONY: demo
-demo:
-	@$(MAKE) -C . -p $(PROJECT_NAME) up-offboard-sitl-px4
+demo: up-offboard-sitl-dev-px4
+	docker compose -p $(PROJECT_NAME) up gisnav
 
 # shutdown any and all services
 .PHONY: down

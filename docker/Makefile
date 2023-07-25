@@ -171,11 +171,16 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
-# Expose xhost to containers to make GUI applications work
-# TODO: only expose to containers that need GUI
+# List of Docker Compose service names that need GUI access
+GUI_SERVICES = px4 ardupilot qgc rviz torch-serve
+
+# Expose xhost to containers that need GUI (see x11 extension in docker-compose.yaml)
 expose-xhost:
-	for containerId in `docker ps -f name=$(PROJECT_NAME) -aq`; do \
-		xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
+	@for containerId in `docker ps -f name=$(PROJECT_NAME) -aq`; do \
+		serviceName=`docker inspect --format '{{index .Config.Labels "com.docker.compose.service" }}' $$containerId`; \
+		if [ ! -z $$serviceName ] && echo $(GUI_SERVICES) | grep -w $$serviceName > /dev/null; then \
+			xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $$containerId`; \
+		fi; \
 	done
 
 # shortcut for demo

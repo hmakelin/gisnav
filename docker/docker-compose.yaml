@@ -112,6 +112,8 @@ services:
     <<: [*base, *x11, *tty, *nvidia-gpu]
     build:
       context: px4
+      args:
+        ROS_VERSION: foxy
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm

@@ -65,7 +65,7 @@ $(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services and create the containers
-	@docker compose -p $(PROJECT_NAME) $$(compose_files) create --no-recreate $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) create $(4)
 
 # Create phony build targets with the specified prefix for each autopilot
 .PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))

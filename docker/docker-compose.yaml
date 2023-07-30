@@ -94,7 +94,7 @@ services:
 
   # Note: build context is repository root
   gisnav:
-    <<: [*base, *x11, *ros, *tty, *nvidia-gpu]
+    <<: [*base, *ros, *tty, *nvidia-gpu]
     build:
       context: ..
       dockerfile: docker/gisnav/Dockerfile
@@ -106,15 +106,14 @@ services:
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     environment:
       FASTRTPS_DEFAULT_PROFILES_FILE: /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/dri:/dev/dri
     command: ros2 launch gisnav px4.dev.launch.py
 
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu]
     build:
       context: px4
+      args:
+        ROS_VERSION: foxy
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm

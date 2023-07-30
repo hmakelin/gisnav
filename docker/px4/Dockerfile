@@ -12,7 +12,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 
-# Clone and setup PX4-Autopilotwnlo
+# Clone and setup PX4-Autopilot
 RUN git clone --branch v1.14.0-beta2 --single-branch \
         https://github.com/PX4/PX4-Autopilot.git && \
     cd PX4-Autopilot && \

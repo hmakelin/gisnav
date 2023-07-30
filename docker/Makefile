@@ -65,7 +65,7 @@ $(addprefix create-$(1)-, $(AUTOPILOTS)): $(if $(2),create-$(1)-%: create-$(2)-%
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services and create the containers
-	docker compose -p $(PROJECT_NAME) $$(compose_files) create --no-recreate $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) create $(4)
 
 # Create phony build targets with the specified prefix for each autopilot
 .PHONY: $(addprefix build-$(1)-, $(AUTOPILOTS))
@@ -75,7 +75,7 @@ $(addprefix build-$(1)-, $(AUTOPILOTS)): $(if $(2),build-$(1)-%: build-$(2)-%,bu
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Build the specified Docker Compose services
-	docker compose -p $(PROJECT_NAME) $$(compose_files) build $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) build $(4)
 
 # Create phony up targets with the specified prefix for each autopilot
 .PHONY: $(addprefix up-$(1)-, $(AUTOPILOTS))
@@ -88,7 +88,7 @@ $(addprefix up-$(1)-, $(AUTOPILOTS)): $(if $(2),up-$(1)-%: create-$(1)-% expose-
 	# Evaluate the additional Docker Compose files
 	$$(eval compose_files := $(if $(3),-f docker-compose.yaml $(foreach file,$(3),-f $(file))))
 	# Run Docker Compose with the specified services
-	docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
+	@docker compose -p $(PROJECT_NAME) $$(compose_files) up -d $(4)
 endef
 
 # Define a reusable template for creating Docker Compose middleware targets
@@ -110,7 +110,7 @@ build-$(1)-%:
 	$$(call run_middleware, $(2), build)
 
 create-$(1)-%:
-	$$(call run_middleware, $(2), create --no-recreate)
+	$$(call run_middleware, $(2), create)
 endef
 
 # The run_middleware function is a helper function for executing middleware
@@ -186,14 +186,29 @@ expose-xhost:
 # shortcut for demo
 .PHONY: demo
 demo: up-offboard-sitl-dev-px4
-	docker compose -p $(PROJECT_NAME) up gisnav
+	@docker compose -p $(PROJECT_NAME) up gisnav
 
-# shutdown any and all services
+# shutdown any and all services (stop and remove containers)
 .PHONY: down
 down:
 	@docker compose -p $(PROJECT_NAME) down
 
+# start existing containers
+# Note: You should create the containers with the "make create-..." first,
+# otherwise you will get an error like "no container found for project "gisnav":
+# not found"
+.PHONY: start
+start:
+	@docker compose -p $(PROJECT_NAME) start
+
+# shutdown any and all services (stop but do not remove containers)
+.PHONY: stop
+stop:
+	@docker compose -p $(PROJECT_NAME) stop
+
 # build all services
+# Note: This builds many services with overlapping functionality such as px4 and
+# arudpilot, you may want to be more specific about what to build
 .PHONY: build
 build:
 	@docker compose -p $(PROJECT_NAME) build

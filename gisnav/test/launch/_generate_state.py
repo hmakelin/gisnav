@@ -56,6 +56,8 @@ def generate_state_messages(
     :param home_altitude: Home altitude in meters
     :param calibration_file: Path to the camera calibration matrix file, containing intrinsic parameters
     :param image_file: Path to the image file to be loaded for the :term:`Image` message
+    :param dem_file: Path to the DEM file (saved as a NumPy array), optional. If not provided, a zero array will be used for the DEM.
+    :param bbox: Bounding box for the orthoimage, optional. Represents the geographical box or rectangle that bounds the area of interest.
     :return: A list or dictionary of ROS messages representing the input state to the nodes being tested
     """
     # Generate the NavSatFix message

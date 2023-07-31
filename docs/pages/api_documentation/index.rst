@@ -30,6 +30,11 @@ what you are looking for.
     public/gisnav
 
 .. toctree::
+    :caption: Tests
+
+    test/launch
+
+.. toctree::
     :caption: Private API
 
     private/assertions

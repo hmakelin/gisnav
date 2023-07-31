@@ -1,4 +1,4 @@
-"""Tests PX4 launch"""
+"""Tests :term:`ROS` launch file for :term:`PX4` configuration"""
 import os
 import time
 import unittest
@@ -19,6 +19,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
+from gisnav import static_configuration
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
@@ -36,11 +37,12 @@ def generate_test_description():
     )
 
 
-class TestPX4Launch(unittest.TestCase):
-    """Test that all nodes initialize with correct ROS topics"""
+class TestComputationalGraph(unittest.TestCase):
+    """Tests that all nodes initialize with the correct :term:`ROS` computational
+    graph structure"""
 
     GISNAV_TOPIC_NAMES_AND_TYPES = [
-        ("/gisnav/orthoimage_3d", OrthoImage3D),
+        ("/gisnav/gis_node/orthoimage_3d", OrthoImage3D),
         ("/gisnav/bounding_box", BoundingBox),
         ("/gisnav/vehicle_geopose", GeoPoseStamped),
         ("/gisnav/vehicle_geopose/estimate", GeoPoseStamped),
@@ -89,7 +91,7 @@ class TestPX4Launch(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestPX4Launch, self).__init__(*args, **kwargs)
+        super(TestComputationalGraph, self).__init__(*args, **kwargs)
         self.test_node = None
 
     def _get_names_and_namespaces_within_timeout(
@@ -184,6 +186,126 @@ class TestPX4Launch(unittest.TestCase):
                 type_.__class__.__name__.replace("Metaclass_", ""),
                 types[0].split("/")[-1],
             )
+
+
+class TestGISNode(unittest.TestCase):
+    """Tests that :class:`.GISNode` produces expected output from given input
+
+    TODO: link external interfaces, mavros, camera, and WMS server here
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initializer override for declaring attributes used in the test case"""
+        super(TestGISNode, self).__init__(*args, **kwargs)
+        self.state_publisher_node = None
+        self.state_listener_node = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Initialize :term:`ROS` context"""
+        rclpy.init()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Shutdown :term:`ROS` context"""
+        rclpy.shutdown()
+
+    def setUp(self) -> None:
+        """Creates the :term:`ROS` helper nodes used for the tests"""
+        self.state_publisher_node = Node("state_publisher_node")
+        self.state_listener_node = Node("state_listener_node")
+
+    def tearDown(self) -> None:
+        """Destroys the :term:`ROS` helper nodes used for the tests"""
+        self.state_publisher_node.destroy_node()
+        self.state_listener_node.destroy_node()
+
+    def test_correct_output(self):
+        """Tests that output for a given input state is correct"""
+        raise NotImplementedError
+
+    def test_vehicle_global_position_valid_range(self):
+        """Tests that output is correct regardless of input :term:`global position`
+
+        Tests full range of expected input latitude (-90, 90), longitude
+        (-180, 180) and altitude for the input :class:`sensor_msgs.msg.NavSatFix`
+        message.
+
+        :raise: :class:`.AssertionError` if output odes not match expected
+            output within :param timeout_sec:
+        """
+        raise NotImplementedError
+
+    def test_vehicle_global_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_vehicle_local_position_valid_range(self):
+        raise NotImplementedError
+
+    def test_vehicle_local_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_gimbal_device_attitude_status_valid_range(self):
+        raise NotImplementedError
+
+    def test_gimbal_device_attitude_status_invalid_range(self):
+        raise NotImplementedError
+
+    def test_home_position_valid_range(self):
+        raise NotImplementedError
+
+    def test_home_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_camera_info_valid_range(self):
+        """Tests for behavior invariance for valid
+        :class:`sensor_msgs.msg.CameraInfo` messages
+        """
+        raise NotImplementedError
+
+    def test_camera_info_invalid_range(self):
+        """Tests for behavior invariance for invalid
+        :class:`sensor_msgs.msg.CameraInfo` messages
+        """
+        raise NotImplementedError
+
+    def test_path_invariance(self):
+        """Tests for behavior invariance in path dependent situations where input
+        messages are received in different temporal order
+        """
+        raise NotImplementedError
+
+    def test_wms_not_available(self):
+        raise NotImplementedError
+
+    def test_wms_disconnect(self):
+        raise NotImplementedError
+
+    def test_wms_reconnect(self):
+        raise NotImplementedError
+
+    def test_get_map_not_available(self):
+        raise NotImplementedError
+
+    def test_get_map_timeout(self):
+        raise NotImplementedError
+
+    def test_get_feature_info_not_available(self):
+        raise NotImplementedError
+
+    def test_get_feature_info_timeout(self):
+        raise NotImplementedError
+
+    def test_orthoimagery_not_available(self):
+        raise NotImplementedError
+
+    def test_dem_not_available(self):
+        raise NotImplementedError
+
+
+class TestCVNode(unittest.TestCase):
+    """Tests that :class:`.CVNode` produces expected output from given input"""
+
 
 
 if __name__ == "__main__":

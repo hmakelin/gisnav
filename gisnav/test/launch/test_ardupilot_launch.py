@@ -23,7 +23,7 @@ from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 @pytest.mark.launch_test
 def generate_test_description():
-    """Generates a PX4 launch description"""
+    """Generates an ArduPilot launch description"""
     dirname = os.path.dirname(__file__)
     filename = os.path.join(dirname, "../../launch/ardupilot.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))

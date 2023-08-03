@@ -228,13 +228,58 @@ class TestGISNode(unittest.TestCase):
         """Tests that output is correct regardless of input :term:`global position`
 
         Tests full range of expected input latitude (-90, 90), longitude
-        (-180, 180) and altitude for the input :class:`sensor_msgs.msg.NavSatFix`
-        message.
+        (-180, 180), and altitude for the input :class:`NavSatFix` message.
 
-        :raise: :class:`.AssertionError` if output odes not match expected
+        :raise: :class:`.AssertionError` if output does not match expected
             output within :param timeout_sec:
         """
-        raise NotImplementedError
+
+        def _assert_output_correct(self, lat, lon, alt):
+            """Checks that the last output message from the GISNode is correct for the given latitude, longitude, and altitude"""
+            # Wait for a message to be received
+            rclpy.spin_once(self.state_listener_node, timeout_sec=1)
+
+            # Check that a message was received
+            self.assertIsNotNone(self.last_output_message, "No output message received from GISNode")
+
+            # Check that the message has the expected values
+            # You'll need to replace this with the actual checks for your specific output message
+            expected_value = self.calculate_expected_value(lat, lon, alt)
+            self.assertEqual(self.last_output_message.some_field, expected_value,
+                             "Output value does not match expected value")
+
+        def _calculate_expected_value(self, lat, lon, alt):
+            """Calculates the expected output value for the given latitude, longitude, and altitude"""
+            # Implement this method to calculate the expected output value based on the input values
+            # The details will depend on how the GISNode processes the NavSatFix message
+            pass
+
+        # Define the valid range for latitude, longitude, and altitude
+        latitudes = range(-90, 91, 10)
+        longitudes = range(-180, 181, 10)
+        altitudes = range(0, 10001, 1000)
+
+        # Iterate through the valid range and test each combination
+        for lat in latitudes:
+            for lon in longitudes:
+                for alt in altitudes:
+                    # Create and publish the NavSatFix message
+                    # TODO: use the generate state messages method or state
+                    #  publisher method here (do not import generate states method
+                    #  int his module?)
+                    navsat_msg = NavSatFix()
+                    navsat_msg.latitude = lat
+                    navsat_msg.longitude = lon
+                    navsat_msg.altitude = alt
+                    self.state_publisher_node.publish(navsat_msg)
+
+                    # Wait for the GISNode to process the message
+                    rclpy.spin_once(self.state_publisher_node, timeout_sec=1)
+
+                    # Check the output of the GISNode
+                    # You'll need to implement a method to get the output from the GISNode
+                    # and compare it to the expected output for the given latitude, longitude, and altitude
+                    self._assert_output_correct(lat, lon, alt)
 
     def test_vehicle_global_position_invalid_range(self):
         raise NotImplementedError

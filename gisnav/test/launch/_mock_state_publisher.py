@@ -45,23 +45,23 @@ class MockStatePublisher(Node):
         self,
         vehicle_lat_degrees: float,
         vehicle_lon_degrees: float,
-        vehicle_alt_agl_meters: float,
+        vehicle_alt_ellipsoid_meters: float,
     ) -> NavSatFix:
         """
         Publishes a :class:`sensor_msgs.msg.NavSatFix` :term:`ROS` message
         based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
-        coordinates and :term:`AGL` altitude in meters.
+        coordinates and :term:`ellipsoide` altitude in meters.
 
         :param vehicle_lat_degrees: Vehicle WGS 84 latitude coordinate in degrees
         :param vehicle_lon_degrees: Vehicle WGS 84 longitude coordinate in degrees
-        :param vehicle_alt_agl_meters: Vehicle altitude AGL in meters
+        :param vehicle_alt_ellipsoid_meters: Vehicle ellipsoid altitude in meters
         :return: A :class:`sensor_msgs.msg.NavSatFix` message representing
             the vehicle's :term:`global position`
         """
         navsatfix_msg = NavSatFix()
         navsatfix_msg.latitude = vehicle_lat_degrees
         navsatfix_msg.longitude = vehicle_lon_degrees
-        navsatfix_msg.altitude = vehicle_alt_agl_meters
+        navsatfix_msg.altitude = vehicle_alt_ellipsoid_meters
         return navsatfix_msg
 
     @ROS.publish(
@@ -244,7 +244,8 @@ class MockStatePublisher(Node):
 
         :param vehicle_lat: Vehicle :term:`WGS 84` latitude coordinate in degrees
         :param vehicle_lon: Vehicle :term:`WGS 84` longitude coordinate in degrees
-        :param vehicle_alt_agl_meters: Vehicle :term:`altitude` :term:`AGL` in meters
+        :param vehicle_alt_ellipsoid_meters: Vehicle :term:`ellipsoid` :term:`altitude`
+            in meters
         :param vehicle_heading_ned: Vehicle heading in :term:`NED` frame in degrees
         :param camera_pitch_ned_deg: :term:`Camera` pitch angle in :term:`NED` frame
             in degrees. Origin is defined as facing :term:`nadir`, with image
@@ -260,12 +261,8 @@ class MockStatePublisher(Node):
         :param home_elevation_ellipsoid_meters: Home :term:`ellipsoid`
             :term:`elevation` in meters
         """
-        # Publish vehicle global position as NavSatFix message
-        self.nav_sat_fix(vehicle_lat, vehicle_lon, vehicle_alt_agl_meters)
-
-        # Publish home global position as the HomePosition message
+        self.nav_sat_fix(vehicle_lat, vehicle_lon, vehicle_alt_ellipsoid_meters)
         self.home_position(self, home_lat, home_lon, home_elevation_ellipsoid_meters)
-
         self.gimbal_device_attitude_status(
             camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
         )

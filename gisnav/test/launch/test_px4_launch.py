@@ -53,7 +53,7 @@ class TestComputationalGraph(unittest.TestCase):
     """Tests that all nodes initialize with the correct :term:`ROS` computational
     graph structure"""
 
-    GISNAV_TOPIC_NAMES_AND_TYPES = [
+    GIS_NODE_TOPIC_NAMES_AND_TYPES = [
         (
             f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
             OrthoImage3D,
@@ -63,15 +63,7 @@ class TestComputationalGraph(unittest.TestCase):
             GeoPoseStamped,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
-            GeoPoseStamped,
-        ),
-        (
             f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
-            Altitude,
-        ),
-        (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
             Altitude,
         ),
         (
@@ -87,7 +79,19 @@ class TestComputationalGraph(unittest.TestCase):
             GeoPoseStamped,
         ),
     ]
-    """List of GISNav internal topic names and types"""
+    """List of :class:`.GISNode` published topic names and types"""
+
+    CV_NODE_TOPIC_NAMES_AND_TYPES = [
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
+            Altitude,
+        ),
+    ]
+    """List of :class:`.CVNode` published topic names and types"""
 
     CAMERA_TOPIC_NAMES_AND_TYPES = [
         ("/camera/camera_info", CameraInfo),
@@ -95,19 +99,26 @@ class TestComputationalGraph(unittest.TestCase):
     ]
     """List of camera topic names and types"""
 
-    AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
+    MAVROS_TOPIC_NAMES_AND_TYPES = [
         ("/mavros/global_position/global", NavSatFix),
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
         ("/fmu/in/sensor_gps", SensorGps),
     ]
-    """List of autopilot topic names and types"""
+    """List of :term:`MAVROS` published topic names and types"""
+
+    UROS_TOPIC_NAMES_AND_TYPES = [
+        ("/fmu/in/sensor_gps", SensorGps),
+    ]
+    """List of :term:`micro-ros-agent` subscribed topic names and types"""
 
     TOPIC_NAMES_AND_TYPES = (
-        GISNAV_TOPIC_NAMES_AND_TYPES
-        + CAMERA_TOPIC_NAMES_AND_TYPES
-        + AUTOPILOT_TOPIC_NAMES_AND_TYPES
+            GIS_NODE_TOPIC_NAMES_AND_TYPES
+            + CV_NODE_TOPIC_NAMES_AND_TYPES
+            + CAMERA_TOPIC_NAMES_AND_TYPES
+            + MAVROS_TOPIC_NAMES_AND_TYPES
+            + UROS_TOPIC_NAMES_AND_TYPES
     )
     """List of all expected topic names and types"""
 
@@ -289,28 +300,24 @@ class TestGISNode(unittest.TestCase):
         # Define the valid range for latitude, longitude, and altitude
         latitudes = range(-90, 91, 10)
         longitudes = range(-180, 181, 10)
-        altitudes = range(0, 10001, 1000)
+        amsl_altitudes = range(-1000, 10001, 1000)
 
         # Iterate through the valid range and test each combination
         for lat in latitudes:
             for lon in longitudes:
-                for alt in altitudes:
-                    # Create and publish the NavSatFix message
-                    # TODO: use the generate state messages method or state
-                    #  publisher method here (do not import generate states method
-                    #  int his module?)
-                    navsat_msg = NavSatFix()
-                    navsat_msg.latitude = lat
-                    navsat_msg.longitude = lon
-                    navsat_msg.altitude = alt
-                    self.state_publisher_node.publish(navsat_msg)
+                for alt in amsl_altitudes:
+                    # GISNode expects input from camera and MAVROS
+                    self.state_publisher_node.publish_camera_state(
+                        lat, lon, alt
+                    )
+                    self.state_publisher_node.publish_mavros_state(
+                        lat, lon, alt
+                    )
 
                     # Wait for the GISNode to process the message
                     rclpy.spin_once(self.state_publisher_node, timeout_sec=1)
 
                     # Check the output of the GISNode
-                    # You'll need to implement a method to get the output from the GISNode
-                    # and compare it to the expected output for the given latitude, longitude, and altitude
                     self._assert_output_correct(lat, lon, alt)
 
     """

@@ -19,7 +19,19 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
 
-from gisnav import static_configuration
+from gisnav.static_configuration import (
+    CV_NODE_NAME,
+    GIS_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
+)
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
@@ -42,19 +54,38 @@ class TestComputationalGraph(unittest.TestCase):
     graph structure"""
 
     GISNAV_TOPIC_NAMES_AND_TYPES = [
-        ("/gisnav/gis_node/orthoimage_3d", OrthoImage3D),
-        ("/gisnav/bounding_box", BoundingBox),
-        ("/gisnav/vehicle_geopose", GeoPoseStamped),
-        ("/gisnav/vehicle_geopose/estimate", GeoPoseStamped),
-        ("/gisnav/vehicle_altitude", Altitude),
-        ("/gisnav/vehicle_altitude/estimate", Altitude),
-        ("/gisnav/gimbal_quaternion", Quaternion),
-        ("/gisnav/home_geopoint", GeoPointStamped),
-        ("/gisnav/terrain_altitude", Altitude),
-        ("/gisnav/terrain_geopoint", GeoPointStamped),
-        ("/gisnav/egm96_height", Float32),
-        ("/autopilot_node/pose_stamped", PoseStamped),
-        ("/autopilot_node/path", Path),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
+            OrthoImage3D,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
+            Altitude,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
+            Altitude,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+            Quaternion,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
+            Altitude,
+        ),
+        (
+            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
     ]
     """List of GISNav internal topic names and types"""
 
@@ -81,11 +112,8 @@ class TestComputationalGraph(unittest.TestCase):
     """List of all expected topic names and types"""
 
     NODE_NAMES_AND_NAMESPACES = {
-        ("mock_gps_node", "/"),
-        ("bbox_node", "/"),
-        ("map_node", "/"),
-        ("pose_estimation_node", "/"),
-        ("autopilot_node", "/"),
+        (GIS_NODE_NAME, ROS_NAMESPACE),
+        (CV_NODE_NAME, ROS_NAMESPACE),
     }
     """List of tuples of node names and namespaces"""
 
@@ -166,7 +194,7 @@ class TestComputationalGraph(unittest.TestCase):
         ), f"Not all nodes ({names}) were discovered ({found_names})."
         for name, namespace in self.NODE_NAMES_AND_NAMESPACES:
             self.assertEqual(
-                namespace, dict(found_names_and_namespaces).get(name, None)
+                namespace, dict(found_names_and_namespaces).get(name, None).lstrip("/")
             )
 
     def test_topic_names_and_types(self):
@@ -240,19 +268,23 @@ class TestGISNode(unittest.TestCase):
             rclpy.spin_once(self.state_listener_node, timeout_sec=1)
 
             # Check that a message was received
-            self.assertIsNotNone(self.last_output_message, "No output message received from GISNode")
+            self.assertIsNotNone(
+                self.last_output_message, "No output message received from GISNode"
+            )
 
             # Check that the message has the expected values
             # You'll need to replace this with the actual checks for your specific output message
             expected_value = self.calculate_expected_value(lat, lon, alt)
-            self.assertEqual(self.last_output_message.some_field, expected_value,
-                             "Output value does not match expected value")
+            self.assertEqual(
+                self.last_output_message.some_field,
+                expected_value,
+                "Output value does not match expected value",
+            )
 
         def _calculate_expected_value(self, lat, lon, alt):
             """Calculates the expected output value for the given latitude, longitude, and altitude"""
             # Implement this method to calculate the expected output value based on the input values
             # The details will depend on how the GISNode processes the NavSatFix message
-            pass
 
         # Define the valid range for latitude, longitude, and altitude
         latitudes = range(-90, 91, 10)
@@ -281,6 +313,7 @@ class TestGISNode(unittest.TestCase):
                     # and compare it to the expected output for the given latitude, longitude, and altitude
                     self._assert_output_correct(lat, lon, alt)
 
+    """
     def test_vehicle_global_position_invalid_range(self):
         raise NotImplementedError
 
@@ -303,21 +336,12 @@ class TestGISNode(unittest.TestCase):
         raise NotImplementedError
 
     def test_camera_info_valid_range(self):
-        """Tests for behavior invariance for valid
-        :class:`sensor_msgs.msg.CameraInfo` messages
-        """
         raise NotImplementedError
 
     def test_camera_info_invalid_range(self):
-        """Tests for behavior invariance for invalid
-        :class:`sensor_msgs.msg.CameraInfo` messages
-        """
         raise NotImplementedError
 
     def test_path_invariance(self):
-        """Tests for behavior invariance in path dependent situations where input
-        messages are received in different temporal order
-        """
         raise NotImplementedError
 
     def test_wms_not_available(self):
@@ -346,11 +370,11 @@ class TestGISNode(unittest.TestCase):
 
     def test_dem_not_available(self):
         raise NotImplementedError
+    """
 
 
 class TestCVNode(unittest.TestCase):
     """Tests that :class:`.CVNode` produces expected output from given input"""
-
 
 
 if __name__ == "__main__":

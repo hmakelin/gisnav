@@ -40,4 +40,4 @@ what you are looking for.
     private/assertions
     private/rclpy_decorators
     private/state_listener
-    private/state_publisher
+    private/mock_state_publisher

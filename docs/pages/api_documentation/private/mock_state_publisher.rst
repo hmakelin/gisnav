@@ -1,6 +1,6 @@
 Decorators
 ____________________________________________________
-.. automodule:: gisnav.test._state_publisher
+.. automodule:: gisnav.test._mock_state_publisher
    :autosummary:
    :members:
    :undoc-members:

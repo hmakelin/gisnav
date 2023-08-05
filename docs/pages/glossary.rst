@@ -67,6 +67,9 @@ correct alternative should be easily inferred from the context they are used in.
         :term:`nodes` instead of adding new features to :term:`core` nodes.
         Consists of :class:`.GISNode` and :class:`.CVNode`.
 
+        .. seealso::
+            :ref:`Core data flow graph`
+
     Coverage
         * Code coverage
         * :term:`Onboard` :term:`GIS` embedded orthoimagery coverage over

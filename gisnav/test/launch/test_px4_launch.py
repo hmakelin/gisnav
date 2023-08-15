@@ -49,7 +49,7 @@ def generate_test_description():
     )
 
 
-class TestComputationalGraph(unittest.TestCase):
+class TestComputationalGraphCase(unittest.TestCase):
     """Tests that all nodes initialize with the correct :term:`ROS` computational
     graph structure"""
 
@@ -114,11 +114,11 @@ class TestComputationalGraph(unittest.TestCase):
     """List of :term:`micro-ros-agent` subscribed topic names and types"""
 
     TOPIC_NAMES_AND_TYPES = (
-            GIS_NODE_TOPIC_NAMES_AND_TYPES
-            + CV_NODE_TOPIC_NAMES_AND_TYPES
-            + CAMERA_TOPIC_NAMES_AND_TYPES
-            + MAVROS_TOPIC_NAMES_AND_TYPES
-            + UROS_TOPIC_NAMES_AND_TYPES
+        GIS_NODE_TOPIC_NAMES_AND_TYPES
+        + CV_NODE_TOPIC_NAMES_AND_TYPES
+        + CAMERA_TOPIC_NAMES_AND_TYPES
+        + MAVROS_TOPIC_NAMES_AND_TYPES
+        + UROS_TOPIC_NAMES_AND_TYPES
     )
     """List of all expected topic names and types"""
 
@@ -130,7 +130,7 @@ class TestComputationalGraph(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestComputationalGraph, self).__init__(*args, **kwargs)
+        super(TestComputationalGraphCase, self).__init__(*args, **kwargs)
         self.test_node = None
 
     def _get_names_and_namespaces_within_timeout(
@@ -227,7 +227,7 @@ class TestComputationalGraph(unittest.TestCase):
             )
 
 
-class TestGISNode(unittest.TestCase):
+class TestGISNodeCase(unittest.TestCase):
     """Tests that :class:`.GISNode` produces expected output from given input
 
     TODO: link external interfaces, mavros, camera, and WMS server here
@@ -235,7 +235,7 @@ class TestGISNode(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestGISNode, self).__init__(*args, **kwargs)
+        super(TestGISNodeCase, self).__init__(*args, **kwargs)
         self.state_publisher_node = None
         self.state_listener_node = None
 
@@ -259,12 +259,9 @@ class TestGISNode(unittest.TestCase):
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
 
-    def test_correct_output(self):
-        """Tests that output for a given input state is correct"""
-        raise NotImplementedError
-
     def test_vehicle_global_position_valid_range(self):
-        """Tests that output is correct regardless of input :term:`global position`
+        """
+        Tests that output is correct regardless of input :term:`global position`
 
         Tests full range of expected input latitude (-90, 90), longitude
         (-180, 180), and altitude for the input :class:`NavSatFix` message.
@@ -274,9 +271,10 @@ class TestGISNode(unittest.TestCase):
         """
 
         def _assert_output_correct(self, lat, lon, alt):
-            """Checks that the last output message from the GISNode is correct for the given latitude, longitude, and altitude"""
-            # Wait for a message to be received
-            rclpy.spin_once(self.state_listener_node, timeout_sec=1)
+            """
+            Checks that the last output message from the GISNode is correct
+            for the given latitude, longitude, and altitude
+            """
 
             # Check that a message was received
             self.assertIsNotNone(
@@ -285,7 +283,7 @@ class TestGISNode(unittest.TestCase):
 
             # Check that the message has the expected values
             # You'll need to replace this with the actual checks for your specific output message
-            expected_value = self.calculate_expected_value(lat, lon, alt)
+            expected_value = self._calculate_expected_value(lat, lon, alt)
             self.assertEqual(
                 self.last_output_message.some_field,
                 expected_value,
@@ -307,18 +305,21 @@ class TestGISNode(unittest.TestCase):
             for lon in longitudes:
                 for alt in amsl_altitudes:
                     # GISNode expects input from camera and MAVROS
-                    self.state_publisher_node.publish_camera_state(
-                        lat, lon, alt
-                    )
+                    self.state_publisher_node.publish_camera_state()
                     self.state_publisher_node.publish_mavros_state(
-                        lat, lon, alt
+                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_agl_meters=alt
                     )
 
                     # Wait for the GISNode to process the message
                     rclpy.spin_once(self.state_publisher_node, timeout_sec=1)
 
+                    # Wait for a message to be received
+                    rclpy.spin_once(self.state_listener_node, timeout_sec=1)
+
                     # Check the output of the GISNode
-                    self._assert_output_correct(lat, lon, alt)
+                    self.state_listener_node.assert_output(
+                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
+                    )
 
     """
     def test_vehicle_global_position_invalid_range(self):
@@ -380,7 +381,7 @@ class TestGISNode(unittest.TestCase):
     """
 
 
-class TestCVNode(unittest.TestCase):
+class TestCVNodeCase(unittest.TestCase):
     """Tests that :class:`.CVNode` produces expected output from given input"""
 
 

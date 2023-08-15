@@ -1,10 +1,11 @@
 import rclpy
-from geographic_msgs.msg import GeoPose
+from geographic_msgs.msg import BoundingBox, GeoPose
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
+from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import Image, NavSatFix
 
-from gisnav.gisnav._decorators import ROS
+from gisnav._decorators import ROS
 from gisnav.static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
@@ -13,7 +14,7 @@ from gisnav.static_configuration import (
 from gisnav_msgs.msg import OrthoImage3D
 
 
-class MockStatePublisher(Node):
+class MockStatePublisherNode(Node):
     """
     A :term:`ROS` node that publishes sets of :term:`messages` mocking the
     external interfaces of the :term:`core` ROS nodes.

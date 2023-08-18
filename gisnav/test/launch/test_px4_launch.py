@@ -34,6 +34,8 @@ from gisnav.static_configuration import (
 )
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
+from test.launch.mock_state_publisher import MockStatePublisherNode
+from test.launch.state_listener import StateListenerNode
 
 @pytest.mark.launch_test
 def generate_test_description():
@@ -251,8 +253,8 @@ class TestGISNodeCase(unittest.TestCase):
 
     def setUp(self) -> None:
         """Creates the :term:`ROS` helper nodes used for the tests"""
-        self.state_publisher_node = Node("state_publisher_node")
-        self.state_listener_node = Node("state_listener_node")
+        self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
+        self.state_listener_node = StateListenerNode("state_listener_node")
 
     def tearDown(self) -> None:
         """Destroys the :term:`ROS` helper nodes used for the tests"""

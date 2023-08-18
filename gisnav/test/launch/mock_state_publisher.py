@@ -19,24 +19,11 @@ class MockStatePublisherNode(Node):
     A :term:`ROS` node that publishes sets of :term:`messages` mocking the
     external interfaces of the :term:`core` ROS nodes.
 
-    :param Node: Inherits from rclpy's Node class
+    :param name: Node name
     """
 
-    def __init__(self):
-        super().__init__("state_publisher")
-
-        # Publishers for each message type
-        # self.navsatfix_pub = self.create_publisher(NavSatFix, 'mavros/global_position/global', 10)
-        # self.geopose_pub = self.create_publisher(GeoPose, 'gisnav/gis_node/vehicle/geopose', 10)
-        # self.altitude_pub = self.create_publisher(Altitude, 'gisnav/gis_node/vehicle/altitude', 10)
-        # self.home_position_pub = self.create_publisher(HomePosition, 'mavros/home_position/home', 10)
-        self.gimbal_attitude_pub = self.create_publisher(
-            GimbalDeviceAttitudeStatus,
-            "mavros/gimbal_control/device/attitude_status",
-            10,
-        )
-        self.image_pub = self.create_publisher(Image, "camera/image_raw", 10)
-        # self.ortho_image_3d_pub = self.create_publisher(OrthoImage3D, 'gisnav_msgs/OrthoImage3D', 10)
+    def __init__(self, name):
+        super().__init__(name)
 
     @ROS.publish(
         "mavros/global_position/global",

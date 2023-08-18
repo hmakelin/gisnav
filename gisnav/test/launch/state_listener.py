@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import rclpy
 from geographic_msgs.msg import BoundingBox, GeoPoseStamped
@@ -7,6 +7,7 @@ from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import Image, NavSatFix
+from pygeodesy.geoids import GeoidPGM
 
 from gisnav import messaging
 from gisnav._decorators import ROS
@@ -30,11 +31,11 @@ class StateListenerNode(Node):
     """
     A ROS node that subscribes to GISNav's output messages
 
-    :param Node: Inherits from rclpy's Node class
+    :param name: Node name
     """
 
-    def __init__(self):
-        super().__init__("state_listener")
+    def __init__(self, name):
+        super().__init__(name)
         # TODO: do not hard code path
         self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
 

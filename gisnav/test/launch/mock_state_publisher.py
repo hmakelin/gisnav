@@ -1,9 +1,11 @@
 import rclpy
+import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPose
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import Image, NavSatFix
+from sensor_msgs.msg import Image, NavSatFix, CameraInfo
+from cv_bridge import CvBridge
 
 from gisnav._decorators import ROS
 from gisnav.static_configuration import (
@@ -24,6 +26,41 @@ class MockStatePublisherNode(Node):
 
     def __init__(self, name):
         super().__init__(name)
+        self._cv_bridge = CvBridge()
+
+    @ROS.publish(
+        "camera/camera_info",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def camera_info(self, k: np.ndarray) -> CameraInfo:
+        """
+        Publishes a :class:`sensor_msgs.msg.CameraInfo` :term:`ROS` message
+        based on given camera intrinsics matrix.
+    
+        :param k: Camera intrinsics matrix of shape (3, 3)
+        :return: A :class:`sensor_msgs.msg.CameraInfo` message representing
+            the camera intrinsics
+        """
+        camera_info = CameraInfo()
+        camera_info.height, camera_info.width = 2 * int(k[0][2]), 2 * int(k[1][2])
+        camera_info.k = k.reshape(-1)
+        return camera_info
+
+    @ROS.publish(
+        "camera/image_raw",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def image(self, image_rgb8: np.ndarray) -> CameraInfo:
+        """
+        Publishes a :class:`sensor_msgs.msg.Image` :term:`ROS` message
+        based on image matrix (height, width, channels) where channels is 3 (RGB)
+
+        :param image_rgb8: RGB image (height, width, channels). Will be encoded
+            to rgb8 (even if e.g. np.float32).
+        :return: A :class:`sensor_msgs.msg.Image` message
+        """
+        # return self._cv_bridge.cv2_to_imgmsg(image, encoding="passthrough")
+        return self._cv_bridge.cv2_to_imgmsg(image_rgb8, encoding="rgb8")
 
     @ROS.publish(
         "mavros/global_position/global",
@@ -80,7 +117,6 @@ class MockStatePublisherNode(Node):
         geopose_msg.position.latitude = vehicle_lat_degrees
         geopose_msg.position.longitude = vehicle_lon_degrees
         geopose_msg.position.altitude = vehicle_alt_ellipsoid_meters
-        assert False  # TODO use gisnav to ros quaternion utility function
         geopose_msg.orientation = heading_to_quaternion(vehicle_heading_ned)
         return geopose_msg
 
@@ -260,24 +296,20 @@ class MockStatePublisherNode(Node):
 
     def publish_camera_state(
         self,
-        calibration_file: str,
-        image_file: str,
+        intrinsics_matrix: np.ndarray,
+        image: np.ndarray,
     ) -> None:
         """
         Publishes :term:`ROS` messages describing the state of the :term:`camera.
 
-        :param calibration_file: Path to the :term:`camera` calibration matrix
-            file, containing camera intrinsic parameters
-        :param image_file: Path to the image file to be loaded for the
-            :term:`query image` :term:`ROS` message
+        :param intrinsics_matrix: Camera intrinsics matrix of shape (3, 3)
+        :param image: Camera :term:`query image` of shape (height, width, channels)
+            where channels is 3 (RGB)
         """
+        self.camera_info(intrinsics_matrix)
+        self.image(image)
 
-        # Generate the CameraInfo message
-        _generate_camera_info_message(calibration_file)
-
-        # Generate the Image message
-        _generate_image_message(image_file)
-
+    # TODO: add default values
     def publish_gisnode_state(
         self,
         vehicle_lat: float,

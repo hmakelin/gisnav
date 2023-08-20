@@ -24,6 +24,21 @@ class MockStatePublisherNode(Node):
     :param name: Node name
     """
 
+    D_VEHICLE_LAT: float = 37.523640
+    D_VEHICLE_LON: float = -122.255122
+    D_VEHICLE_ALT_ELLIPSOID_METERS: float = 120.0
+    D_VEHICLE_ALT_ELLIPSOID_METERS: float = 120.0  # TODO : make consistent with ellipsoid alt
+    D_VEHICLE_HEADING_NED_DEG: float = 0.0
+    D_CAMERA_PITCH_NED_DEG: float = 0.0
+    D_CAMERA_YAW_NED_DEG: float = 0.0
+    D_CAMERA_ROLL_NED_DEG: float = 0.0
+    D_HOME_LAT: float = 37.523640
+    D_HOME_LON: float = -122.255122
+    D_HOME_ELEVATION_ELLIPSOID_METERS: float = 0.0
+    D_DEM = np.zeros((735, 735), np.uint16)  # TODO: should be uint16 because 255 meters is not enough
+    D_ORTHOPHOTO = np.zeros((735, 735, 3), np.uint8)
+    D_BBOX = None # TODO
+
     def __init__(self, name):
         super().__init__(name)
         self._cv_bridge = CvBridge()
@@ -251,26 +266,34 @@ class MockStatePublisherNode(Node):
 
     def publish_mavros_state(
         self,
-        vehicle_lat: float,
-        vehicle_lon: float,
-        vehicle_alt_agl_meters: float,
-        vehicle_heading_ned: float,
-        camera_pitch_ned_deg: float,
-        camera_yaw_ned_deg: float,
-        camera_roll_ned_deg: float,
-        home_lat: float,
-        home_lon: float,
-        home_elevation_ellipsoid_meters: float,
+        vehicle_lat: float = D_VEHICLE_LAT,
+        vehicle_lon: float = D_VEHICLE_LON,
+        vehicle_alt_ellipsoid_meters: float = D_VEHICLE_ALT_ELLIPSOID_METERS,
+        camera_pitch_ned_deg: float = D_CAMERA_PITCH_NED_DEG,
+        camera_yaw_ned_deg: float = D_CAMERA_YAW_NED_DEG,
+        camera_roll_ned_deg: float = D_CAMERA_ROLL_NED_DEG,
+        home_lat: float = D_HOME_LAT,
+        home_lon: float = D_HOME_LON,
+        home_elevation_ellipsoid_meters: float = D_HOME_ELEVATION_ELLIPSOID_METERS,
     ) -> None:
         """
         Publishes :term:`ROS` messages describing the state of the :term:`vehicle`
         described as received from :term:`MAVROS` in the :term:`core` configuration.
 
+        The default state has the vehicle heading facing north with camera at origin
+        in NED frame, defined as pointing down nadir with image top facing north
+        with the vehicle as well. :term:`Global position` is the starting location
+        of the KSQL airport simulation with :term:`ellipsoid` altitude
+        at 120 meters. :term:`Home position` is defined as the simulation
+        starting location.
+
+        # TODO: fix home position ellipsoide altitude (AMSL altitude should be
+            around 1.7 meters)
+
         :param vehicle_lat: Vehicle :term:`WGS 84` latitude coordinate in degrees
         :param vehicle_lon: Vehicle :term:`WGS 84` longitude coordinate in degrees
         :param vehicle_alt_ellipsoid_meters: Vehicle :term:`ellipsoid` :term:`altitude`
             in meters
-        :param vehicle_heading_ned: Vehicle heading in :term:`NED` frame in degrees
         :param camera_pitch_ned_deg: :term:`Camera` pitch angle in :term:`NED` frame
             in degrees. Origin is defined as facing :term:`nadir`, with image
             top side facing north.
@@ -296,8 +319,8 @@ class MockStatePublisherNode(Node):
 
     def publish_camera_state(
         self,
-        intrinsics_matrix: np.ndarray,
-        image: np.ndarray,
+        intrinsics_matrix: np.ndarray = np.array([[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float32),
+        image: np.ndarray = np.zeros((640, 480, 3), np.uint8),
     ) -> None:
         """
         Publishes :term:`ROS` messages describing the state of the :term:`camera.
@@ -312,15 +335,16 @@ class MockStatePublisherNode(Node):
     # TODO: add default values
     def publish_gisnode_state(
         self,
-        vehicle_lat: float,
-        vehicle_lon: float,
-        vehicle_alt_agl_meters: float,
-        vehicle_heading_ned: float,
-        camera_pitch_ned_deg: float,
-        camera_yaw_ned_deg: float,
-        camera_roll_ned_deg: float,
-        dem_file: str = None,
-        bbox: BoundingBox = None,
+        vehicle_lat: float = D_VEHICLE_LAT,
+        vehicle_lon: float = D_VEHICLE_LON,
+        vehicle_alt_agl_meters: float = D_VEHICLE_ALT_AGL_METERS,
+        vehicle_heading_ned: float = D_VEHICLE_HEADING_NED_DEG,
+        camera_pitch_ned_deg: float = D_CAMERA_PITCH_NED_DEG,
+        camera_yaw_ned_deg: float = D_CAMERA_YAW_NED_DEG,
+        camera_roll_ned_deg: float = D_CAMERA_ROLL_NED_DEG,
+        dem: np.ndarray = D_DEM,
+        orthophoto: np.ndarray = D_ORTHOPHOTO,
+        bbox: BoundingBox = D_BBOX,
     ) -> None:
         """
         Publishes :term:`ROS` messages describing the state of the :term:`vehicle`
@@ -339,19 +363,19 @@ class MockStatePublisherNode(Node):
         :param camera_roll_ned_deg: :term:`Camera` roll angle in :term:`NED` frame
             in degrees. Origin is defined as facing :term:`nadir`, with image
             top side facing north.
-        :param dem_file: Path to the :term:`DEM` file (saved as a NumPy array),
-            optional. If not provided, a zero array will be used for the DEM.
+        :param dem: :term:`DEM` (saved as a NumPy array) raster
+        :param orthophoto: :term:`Orthophoto` (saved as a NumPy array) raster
         :param bbox: :term:`Bounding box` for the :term:`orthoimage`, optional.
-        :return: A list or dictionary of :term:`ROS` messages representing the
-            input state to the :term:`nodes <node>` being tested.
         """
         # TODO: add many more here
         self.geopose(
             vehicle_lat, vehicle_lon, vehicle_alt_agl_meters, vehicle_heading_ned
         )
         self.altitude(vehicle_alt_agl_meters)
-        self.orthoimage(image_file, dem_file, bbox)
+        self.orthoimage(orthophoto, dem, bbox)
         # TODO: terrain elevation, terrain geopose, camera quaternion (not in mermaid graph)
+
+        self.camera_quaternion(camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg)
 
     def quaternion_from_euler(roll, pitch, yaw):
         # Calculate the sine and cosine values

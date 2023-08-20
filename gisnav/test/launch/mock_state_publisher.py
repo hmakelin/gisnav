@@ -38,6 +38,15 @@ class MockStatePublisherNode(Node):
     D_DEM = np.zeros((735, 735), np.uint16)  # TODO: should be uint16 because 255 meters is not enough
     D_ORTHOPHOTO = np.zeros((735, 735, 3), np.uint8)
     D_BBOX = None # TODO
+    D_VEHICLE_POSE_X = 0.0
+    D_VEHICLE_POSE_Y = 0.0
+    D_VEHICLE_POSE_Z = 120.0  # TODO: make consistent with other altitudes, assume home is local position home
+
+    # Vehicle quaternion origin defined differently from camera quaternion origin!
+    D_VEHICLE_POSE_Q_X = 0.0
+    D_VEHICLE_POSE_Q_Y = 0.0
+    D_VEHICLE_POSE_Q_Z = 0.0
+    D_VEHICLE_POSE_Q_W = 0.0
 
     def __init__(self, name):
         super().__init__(name)
@@ -229,6 +238,33 @@ class MockStatePublisherNode(Node):
         return ortho_image_3d_msg
 
     @ROS.publish(
+        "mavros/local_position/pose",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def local_position(
+        self,
+        x: float = D_VEHICLE_POSE_X,
+        y: float = D_VEHICLE_POSE_Y,
+        z: float = D_VEHICLE_POSE_Z,
+        q_x: float = D_VEHICLE_POSE_Q_X,
+        q_y: float = D_VEHICLE_POSE_Q_Y,
+        q_z: float = D_VEHICLE_POSE_Q_Z,
+        q_w: float = D_VEHICLE_POSE_Q_W,
+    ) -> None:
+        """:term:`Vehicle` :term:`local position` as published by :term:`MAVROS`"""
+        pose = Pose()
+        pose.position.x = x
+        pose.position.y = y
+        pose.position.z = z
+        pose.orientation.q = Quaternion(
+            x=q_x,
+            y=q_y,
+            z=q_z,
+            w=q_w
+        )
+        return pose
+
+    @ROS.publish(
         "mavros/gimbal_control/device/attitude_status",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
@@ -313,8 +349,6 @@ class MockStatePublisherNode(Node):
         self.gimbal_device_attitude_status(
             camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
         )
-
-        # TODO: local position Pose (need home altitude, relative altitude?)
         self.local_position(vehicle_alt_agl_meters)
 
     def publish_camera_state(

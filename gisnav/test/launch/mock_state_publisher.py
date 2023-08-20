@@ -27,7 +27,7 @@ class MockStatePublisherNode(Node):
     D_VEHICLE_LAT: float = 37.523640
     D_VEHICLE_LON: float = -122.255122
     D_VEHICLE_ALT_ELLIPSOID_METERS: float = 120.0
-    D_VEHICLE_ALT_ELLIPSOID_METERS: float = 120.0  # TODO : make consistent with ellipsoid alt
+    D_VEHICLE_ALT_AMSL_METERS: float = 120.0  # TODO : make consistent with ellipsoid alt
     D_VEHICLE_HEADING_NED_DEG: float = 0.0
     D_CAMERA_PITCH_NED_DEG: float = 0.0
     D_CAMERA_YAW_NED_DEG: float = 0.0
@@ -37,7 +37,7 @@ class MockStatePublisherNode(Node):
     D_HOME_ELEVATION_ELLIPSOID_METERS: float = 0.0
     D_DEM = np.zeros((735, 735), np.uint16)  # TODO: should be uint16 because 255 meters is not enough
     D_ORTHOPHOTO = np.zeros((735, 735, 3), np.uint8)
-    D_BBOX = None # TODO
+    D_BBOX = None  # TODO
     D_VEHICLE_POSE_X = 0.0
     D_VEHICLE_POSE_Y = 0.0
     D_VEHICLE_POSE_Z = 120.0  # TODO: make consistent with other altitudes, assume home is local position home
@@ -60,7 +60,7 @@ class MockStatePublisherNode(Node):
         """
         Publishes a :class:`sensor_msgs.msg.CameraInfo` :term:`ROS` message
         based on given camera intrinsics matrix.
-    
+
         :param k: Camera intrinsics matrix of shape (3, 3)
         :return: A :class:`sensor_msgs.msg.CameraInfo` message representing
             the camera intrinsics
@@ -353,7 +353,7 @@ class MockStatePublisherNode(Node):
 
     def publish_camera_state(
         self,
-        intrinsics_matrix: np.ndarray = np.array([[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float32),
+        intrinsics_matrix: np.ndarray = np.array([[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float64),
         image: np.ndarray = np.zeros((640, 480, 3), np.uint8),
     ) -> None:
         """
@@ -371,7 +371,7 @@ class MockStatePublisherNode(Node):
         self,
         vehicle_lat: float = D_VEHICLE_LAT,
         vehicle_lon: float = D_VEHICLE_LON,
-        vehicle_alt_agl_meters: float = D_VEHICLE_ALT_AGL_METERS,
+        vehicle_alt_agl_meters: float = D_VEHICLE_ALT_AMSL_METERS,
         vehicle_heading_ned: float = D_VEHICLE_HEADING_NED_DEG,
         camera_pitch_ned_deg: float = D_CAMERA_PITCH_NED_DEG,
         camera_yaw_ned_deg: float = D_CAMERA_YAW_NED_DEG,
@@ -403,7 +403,7 @@ class MockStatePublisherNode(Node):
         """
         # TODO: add many more here
         self.geopose(
-            vehicle_lat, vehicle_lon, vehicle_alt_agl_meters, vehicle_heading_ned
+            vehicle_lat, vehicle_lon, vehicle_alt_amsl_meters, vehicle_heading_ned
         )
         self.altitude(vehicle_alt_agl_meters)
         self.orthoimage(orthophoto, dem, bbox)

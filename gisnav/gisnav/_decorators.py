@@ -399,9 +399,12 @@ class ROS:
 
                 if not hasattr(wrapper, cached_publisher_name):
                     optional_type = get_type_hints(func)["return"]
-                    topic_type = get_args(optional_type)[
-                        0
-                    ]  # brittle? handle this better
+                    if get_origin(optional_type) is not None:
+                        topic_type = get_args(optional_type)[
+                            0
+                        ]  # brittle? handle this better
+                    else:
+                        topic_type = optional_type
                     publisher = self.create_publisher(
                         topic_type,
                         topic_name,

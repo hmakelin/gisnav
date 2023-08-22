@@ -74,7 +74,7 @@ class MockStatePublisherNode(Node):
         "camera/image_raw",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def image(self, image_rgb8: np.ndarray) -> CameraInfo:
+    def image(self, image_rgb8: np.ndarray) -> Image:
         """
         Publishes a :class:`sensor_msgs.msg.Image` :term:`ROS` message
         based on image matrix (height, width, channels) where channels is 3 (RGB)

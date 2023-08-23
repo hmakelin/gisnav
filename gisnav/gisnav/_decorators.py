@@ -76,13 +76,14 @@ def narrow_types(
     """
     Function decorator to narrow provided argument types to match the decorated
     method's type hints *in a ``mypy`` compatible way*. Can also be used to
-    *enforce* types at runtime. Can be used on an instance method, or a static
-    method if the ``node_instance`` argument is provided (None by default).
+    *enforce* types at runtime (which is a more exotic use case). Can be used
+    on an instance method, or a static method if the ``node_instance`` argument
+    is provided (None by default).
 
     If any of the arguments do not match their corresponding type hints, this
     decorator logs the mismatches and then returns None without executing the
     original method. Otherwise, it proceeds to call the original method with
-    the given arguments and keyword argumwhich is a more exotic use case).ents.
+    the given arguments and keyword arguments.
 
     .. warning::
         * If the decorated method can also return None after execution you will

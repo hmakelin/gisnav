@@ -1,11 +1,14 @@
 import rclpy
 import numpy as np
+from typing import Optional, Tuple
 from geographic_msgs.msg import BoundingBox, GeoPose
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import Image, NavSatFix, CameraInfo
+from geometry_msgs.msg import Quaternion
 from cv_bridge import CvBridge
+from pygeodesy.geoids import GeoidPGM
 
 from gisnav._decorators import ROS
 from gisnav.static_configuration import (
@@ -51,6 +54,8 @@ class MockStatePublisherNode(Node):
     def __init__(self, name):
         super().__init__(name)
         self._cv_bridge = CvBridge()
+        # TODO: do not hard code path
+        self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
 
     @ROS.publish(
         "camera/camera_info",
@@ -171,7 +176,7 @@ class MockStatePublisherNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def home_position(
-        self, home_lat: float, home_lon: float, home_elevation_amsl_meters: float
+        self, home_lat: float, home_lon: float, home_elevation_ellipsoid_meters: float
     ) -> HomePosition:
         """
         Generates a :class:`mavros_msgs.msg.HomePosition` :term:`ROS` message
@@ -180,14 +185,14 @@ class MockStatePublisherNode(Node):
 
         :param home_lat: Home WGS 84 latitude coordinate in degrees
         :param home_lon: Home WGS 84 longitude coordinate in degrees
-        :param home_elevation_amsl_meters: Home AMSL elevation in meters
+        :param home_elevation_ellipsoid_meters: Home AMSL elevation in meters
         :return: A :class:`mavros_msgs.msg.HomePosition` message representing
             the vehicle's home :term:`global position`
         """
         home_position_msg = HomePosition()
-        home_position_msg.latitude = home_lat
-        home_position_msg.longitude = home_lon
-        home_position_msg.altitude = home_elevation_amsl_meters
+        home_position_msg.geo.latitude = home_lat
+        home_position_msg.geo.longitude = home_lon
+        home_position_msg.geo.altitude = home_elevation_ellipsoid_meters
         return home_position_msg
 
     @ROS.publish(
@@ -295,7 +300,13 @@ class MockStatePublisherNode(Node):
         roll_rad = np.radians(camera_roll_ned_deg)
 
         # Convert Euler angles to quaternion
-        quaternion = quaternion_from_euler(roll_rad, pitch_rad, yaw_rad)
+        q = self.quaternion_from_euler(roll_rad, pitch_rad, yaw_rad)
+        quaternion = Quaternion(
+            w=q[0],
+            x=q[1],
+            y=q[2],
+            z=q[3],
+        )
 
         gimbal_attitude_msg.q = quaternion
         return gimbal_attitude_msg
@@ -305,6 +316,7 @@ class MockStatePublisherNode(Node):
         vehicle_lat: float = D_VEHICLE_LAT,
         vehicle_lon: float = D_VEHICLE_LON,
         vehicle_alt_ellipsoid_meters: float = D_VEHICLE_ALT_ELLIPSOID_METERS,
+        vehicle_alt_amsl_meters: Optional[float] = None,
         camera_pitch_ned_deg: float = D_CAMERA_PITCH_NED_DEG,
         camera_yaw_ned_deg: float = D_CAMERA_YAW_NED_DEG,
         camera_roll_ned_deg: float = D_CAMERA_ROLL_NED_DEG,
@@ -330,6 +342,8 @@ class MockStatePublisherNode(Node):
         :param vehicle_lon: Vehicle :term:`WGS 84` longitude coordinate in degrees
         :param vehicle_alt_ellipsoid_meters: Vehicle :term:`ellipsoid` :term:`altitude`
             in meters
+        :param vehicle_alt_amsl_meters: Vehicle :term:`altitude` :term:`AMSL` in meters
+            Takes precedence over ``vehicle_alt_ellipsoid_meters`` if provided.
         :param camera_pitch_ned_deg: :term:`Camera` pitch angle in :term:`NED` frame
             in degrees. Origin is defined as facing :term:`nadir`, with image
             top side facing north.
@@ -344,8 +358,14 @@ class MockStatePublisherNode(Node):
         :param home_elevation_ellipsoid_meters: Home :term:`ellipsoid`
             :term:`elevation` in meters
         """
+        if vehicle_alt_amsl_meters is not None:
+            vehicle_alt_ellipsoid_meters = vehicle_alt_amsl_meters + self._egm96.height(
+                vehicle_lat,
+                vehicle_lon,
+            )
+
         self.nav_sat_fix(vehicle_lat, vehicle_lon, vehicle_alt_ellipsoid_meters)
-        self.home_position(self, home_lat, home_lon, home_elevation_ellipsoid_meters)
+        self.home_position(home_lat, home_lon, home_elevation_ellipsoid_meters)
         self.gimbal_device_attitude_status(
             camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
         )
@@ -411,7 +431,17 @@ class MockStatePublisherNode(Node):
 
         self.camera_quaternion(camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg)
 
-    def quaternion_from_euler(roll, pitch, yaw):
+    @staticmethod
+    def quaternion_from_euler(roll: float, pitch: float, yaw: float) -> Tuple[float, float, float, float]:
+        """Returns a (w, x, y, z) quaternion tuple
+        
+        :param roll: Roll euler angle in degrees
+        :param pitch: Pitch euler angle in degrees
+        :param yaw: Yaw euler angle in degrees
+        :return: A (w, x, y, z) quaternion tuple
+        """
+        roll, pitch, yaw = tuple(map(np.radians, (roll, pitch, yaw)))
+
         # Calculate the sine and cosine values
         cy = np.cos(yaw * 0.5)
         sy = np.sin(yaw * 0.5)

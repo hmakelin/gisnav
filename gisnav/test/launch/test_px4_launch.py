@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 import pytest
 import rclpy
+import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from launch import LaunchDescription  # type: ignore
@@ -298,9 +299,9 @@ class TestGISNodeCase(unittest.TestCase):
             # The details will depend on how the GISNode processes the NavSatFix message
 
         # Define the valid range for latitude, longitude, and altitude
-        latitudes = range(-90, 91, 10)
-        longitudes = range(-180, 181, 10)
-        amsl_altitudes = range(-1000, 10001, 1000)
+        latitudes = tuple(np.arange(-90, 91, 10.0))
+        longitudes = tuple(np.arange(-180, 181, 10.0))
+        amsl_altitudes = tuple(np.arange(-1000, 10001, 1000.0))
 
         # Iterate through the valid range and test each combination
         for lat in latitudes:
@@ -309,7 +310,7 @@ class TestGISNodeCase(unittest.TestCase):
                     # GISNode expects input from camera and MAVROS
                     self.state_publisher_node.publish_camera_state()
                     self.state_publisher_node.publish_mavros_state(
-                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_agl_meters=alt
+                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
                     )
 
                     # Wait for the GISNode to process the message

@@ -414,7 +414,7 @@ class MockStatePublisherNode(Node):
         intrinsics_matrix: np.ndarray = np.array(
             [[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float64
         ),
-        image: np.ndarray = np.zeros((640, 480, 3), np.uint8),
+        image: np.ndarray = np.zeros((480, 640, 3), np.uint8),
     ) -> None:
         """
         Publishes :term:`ROS` messages describing the state of the :term:`camera.

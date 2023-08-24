@@ -1,14 +1,18 @@
-import rclpy
-import numpy as np
 from typing import Optional, Tuple
+
+import numpy as np
+import rclpy
+from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPose
+from geometry_msgs.msg import Pose, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from pygeodesy.ellipsoidalNvector import LatLon, Nvector
+from pygeodesy.geoids import GeoidPGM
+from pygeodesy.ltpTuples import Enu
+from pygeodesy.ltp import LocalCartesian
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import Image, NavSatFix, CameraInfo
-from geometry_msgs.msg import Quaternion
-from cv_bridge import CvBridge
-from pygeodesy.geoids import GeoidPGM
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 
 from gisnav._decorators import ROS
 from gisnav.static_configuration import (
@@ -30,7 +34,9 @@ class MockStatePublisherNode(Node):
     D_VEHICLE_LAT: float = 37.523640
     D_VEHICLE_LON: float = -122.255122
     D_VEHICLE_ALT_ELLIPSOID_METERS: float = 120.0
-    D_VEHICLE_ALT_AMSL_METERS: float = 120.0  # TODO : make consistent with ellipsoid alt
+    D_VEHICLE_ALT_AMSL_METERS: float = (
+        120.0  # TODO : make consistent with ellipsoid alt
+    )
     D_VEHICLE_HEADING_NED_DEG: float = 0.0
     D_CAMERA_PITCH_NED_DEG: float = 0.0
     D_CAMERA_YAW_NED_DEG: float = 0.0
@@ -38,18 +44,11 @@ class MockStatePublisherNode(Node):
     D_HOME_LAT: float = 37.523640
     D_HOME_LON: float = -122.255122
     D_HOME_ELEVATION_ELLIPSOID_METERS: float = 0.0
-    D_DEM = np.zeros((735, 735), np.uint16)  # TODO: should be uint16 because 255 meters is not enough
+    D_DEM = np.zeros(
+        (735, 735), np.uint16
+    )  # TODO: should be uint16 because 255 meters is not enough
     D_ORTHOPHOTO = np.zeros((735, 735, 3), np.uint8)
     D_BBOX = None  # TODO
-    D_VEHICLE_POSE_X = 0.0
-    D_VEHICLE_POSE_Y = 0.0
-    D_VEHICLE_POSE_Z = 120.0  # TODO: make consistent with other altitudes, assume home is local position home
-
-    # Vehicle quaternion origin defined differently from camera quaternion origin!
-    D_VEHICLE_POSE_Q_X = 0.0
-    D_VEHICLE_POSE_Q_Y = 0.0
-    D_VEHICLE_POSE_Q_Z = 0.0
-    D_VEHICLE_POSE_Q_W = 0.0
 
     def __init__(self, name):
         super().__init__(name)
@@ -248,25 +247,57 @@ class MockStatePublisherNode(Node):
     )
     def local_position(
         self,
-        x: float = D_VEHICLE_POSE_X,
-        y: float = D_VEHICLE_POSE_Y,
-        z: float = D_VEHICLE_POSE_Z,
-        q_x: float = D_VEHICLE_POSE_Q_X,
-        q_y: float = D_VEHICLE_POSE_Q_Y,
-        q_z: float = D_VEHICLE_POSE_Q_Z,
-        q_w: float = D_VEHICLE_POSE_Q_W,
-    ) -> None:
-        """:term:`Vehicle` :term:`local position` as published by :term:`MAVROS`"""
-        pose = Pose()
-        pose.position.x = x
-        pose.position.y = y
-        pose.position.z = z
-        pose.orientation.q = Quaternion(
-            x=q_x,
-            y=q_y,
-            z=q_z,
-            w=q_w
+        vehicle_lat: float = D_VEHICLE_LAT,
+        vehicle_lon: float = D_VEHICLE_LON,
+        vehicle_alt_ellipsoid_meters: float = D_VEHICLE_ALT_ELLIPSOID_METERS,
+        home_lat: float = D_HOME_LAT,
+        home_lon: float = D_HOME_LON,
+        home_elevation_ellipsoid_meters: float = D_HOME_ELEVATION_ELLIPSOID_METERS,
+    ) -> Pose:
+        """Publishes a :class:`geometry_msgs.msg.Pose` :term:`ROS` message
+        based on the given :term:`vehicle` :term:`global position` and
+        :term:`home` position in :term:`NED` frame.
+
+        :param vehicle_lat: Vehicle :term:`WGS 84` latitude coordinate in degrees
+        :param vehicle_lon: Vehicle :term:`WGS 84` longitude coordinate in degrees
+        :param vehicle_alt_ellipsoid_meters: Vehicle :term:`ellipsoid` :term:`altitude`
+            in meters
+        :param home_lat: Home :term:`WGS 84` latitude coordinate in degrees
+        :param home_lon: Home :term:`WGS 84` longitude coordinate in degrees
+        :param home_elevation_ellipsoid_meters: Home :term:`ellipsoid`
+            :term:`elevation` in meters
+        :return: A :class:`geometry_msgs.msg.Pose` message representing the vehicle's
+            local position
+        """
+
+        def _wgs84_to_enu(lat, lon, alt, origin_lat, origin_lon, origin_alt):
+            """Convert WGS84 to ENU using pygeodesy"""
+            # Define the origin point (home position)
+            origin = LatLon(origin_lat, origin_lon, origin_alt)
+            local_cartesian = LocalCartesian(origin)
+
+            # Convert vehicle position to local cartesian coordinates
+            local_coords = local_cartesian.forward(LatLon(lat, lon, alt))
+
+            # Extract ENU coordinates from the Local9Tuple
+            e, n, u = local_coords.x, local_coords.y, local_coords.z
+
+            return e, n, u
+
+        e, n, u = _wgs84_to_enu(
+            vehicle_lat,
+            vehicle_lon,
+            vehicle_alt_ellipsoid_meters,
+            home_lat,
+            home_lon,
+            home_elevation_ellipsoid_meters,
         )
+
+        pose = Pose()
+        pose.position.x = e
+        pose.position.y = n
+        pose.position.z = u
+
         return pose
 
     @ROS.publish(
@@ -369,11 +400,20 @@ class MockStatePublisherNode(Node):
         self.gimbal_device_attitude_status(
             camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
         )
-        self.local_position(vehicle_alt_agl_meters)
+        self.local_position(
+            vehicle_lat,
+            vehicle_lon,
+            vehicle_alt_ellipsoid_meters,
+            home_lat,
+            home_lon,
+            home_elevation_ellipsoid_meters,
+        )
 
     def publish_camera_state(
         self,
-        intrinsics_matrix: np.ndarray = np.array([[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float64),
+        intrinsics_matrix: np.ndarray = np.array(
+            [[205, 0, 240], [0, 205, 320], [0, 0, 1]], np.float64
+        ),
         image: np.ndarray = np.zeros((640, 480, 3), np.uint8),
     ) -> None:
         """
@@ -429,12 +469,16 @@ class MockStatePublisherNode(Node):
         self.orthoimage(orthophoto, dem, bbox)
         # TODO: terrain elevation, terrain geopose, camera quaternion (not in mermaid graph)
 
-        self.camera_quaternion(camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg)
+        self.camera_quaternion(
+            camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
+        )
 
     @staticmethod
-    def quaternion_from_euler(roll: float, pitch: float, yaw: float) -> Tuple[float, float, float, float]:
+    def quaternion_from_euler(
+        roll: float, pitch: float, yaw: float
+    ) -> Tuple[float, float, float, float]:
         """Returns a (w, x, y, z) quaternion tuple
-        
+
         :param roll: Roll euler angle in degrees
         :param pitch: Pitch euler angle in degrees
         :param yaw: Yaw euler angle in degrees

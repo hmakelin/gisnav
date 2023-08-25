@@ -2,6 +2,7 @@
 import os
 import time
 import unittest
+import logging
 from typing import List, Tuple
 
 import pytest
@@ -51,6 +52,9 @@ def generate_test_description():
         ]
     )
 
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class TestComputationalGraphCase(unittest.TestCase):
     """Tests that all nodes initialize with the correct :term:`ROS` computational
@@ -236,31 +240,84 @@ class TestGISNodeCase(unittest.TestCase):
     TODO: link external interfaces, mavros, camera, and WMS server here
     """
 
+    DOCKER_COMPOSE_SERVICES = "mapserver torch-serve"
+    """:term:`Docker Compose` services required to support this test case"""
+
+    DOCKER_COMPOSE_FILE_PATH = os.path.join(
+        os.path.dirname(__file__),
+        "../../../docker/docker-compose.yaml"
+    )
+    """Path to :term:`Docker Compose` configuration
+    
+    Needed to launch :attr:`.DOCKER_COMPOSE_SERVICES`
+    """
+
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
         super(TestGISNodeCase, self).__init__(*args, **kwargs)
         self.state_publisher_node = None
         self.state_listener_node = None
 
+        # Tear down test case on Ctrl-C (do not leave Docker containers running)
+        import signal
+        def custom_sigint_handler(signal, frame):
+            self.tearDown()
+            self.tearDownClass()
+            self.fail(
+                "Test failure caused by keyboard interrupt. Tear down "
+                "methods called."
+            )
+        signal.signal(signal.SIGINT, custom_sigint_handler)
+
     @classmethod
     def setUpClass(cls):
-        """Initialize :term:`ROS` context"""
+        """Ensure that supporting :term:`Docker Compose` service containers
+        are available and initialize :term:`ROS` context
+        """
+        if not os.path.exists(cls.DOCKER_COMPOSE_FILE_PATH):
+            raise FileNotFoundError(
+                f"Could not find Docker Compose configuration at "
+                f"{cls.DOCKER_COMPOSE_FILE_PATH}. {cls.__name__} requires the "
+                f"configuration to start the "
+                f"{' and '.join(cls.DOCKER_COMPOSE_SERVICES.split(' '))} "
+                f"services to support launch testing."
+            )
+
+        logger.info(
+            f"Creating docker containers ({cls.DOCKER_COMPOSE_SERVICES}) to support "
+            f"launch testing. This may take several minutes..."
+        )
+        os.system(f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} create {cls.DOCKER_COMPOSE_SERVICES}")
+
         rclpy.init()
 
     @classmethod
     def tearDownClass(cls):
         """Shutdown :term:`ROS` context"""
+        logger.info(
+            f"Tearing down test case. Will not delete containers for "
+            f"Docker Compose services ({cls.DOCKER_COMPOSE_SERVICES}). You "
+            f"can delete all unused containers by typing "
+            f"'docker system prune' into your system shell."
+        )
+
         rclpy.shutdown()
 
     def setUp(self) -> None:
         """Creates the :term:`ROS` helper nodes used for the tests"""
+        logger.info("Starting launch testing state publisher and listener nodes...")
         self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
         self.state_listener_node = StateListenerNode("state_listener_node")
+        logger.info(f"Starting launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})...")
+        os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} up -d {self.DOCKER_COMPOSE_SERVICES}")
 
     def tearDown(self) -> None:
         """Destroys the :term:`ROS` helper nodes used for the tests"""
+        logger.info("Destroying launch testing state publisher and listener nodes...")
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
+        logger.info(f"Shutting down launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})...")
+        os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} down")
 
     def test_vehicle_global_position_valid_range(self):
         """
@@ -272,32 +329,6 @@ class TestGISNodeCase(unittest.TestCase):
         :raise: :class:`.AssertionError` if output does not match expected
             output within :param timeout_sec:
         """
-
-        def _assert_output_correct(self, lat, lon, alt):
-            """
-            Checks that the last output message from the GISNode is correct
-            for the given latitude, longitude, and altitude
-            """
-
-            # Check that a message was received
-            self.assertIsNotNone(
-                self.last_output_message, "No output message received from GISNode"
-            )
-
-            # Check that the message has the expected values
-            # You'll need to replace this with the actual checks for your specific output message
-            expected_value = self._calculate_expected_value(lat, lon, alt)
-            self.assertEqual(
-                self.last_output_message.some_field,
-                expected_value,
-                "Output value does not match expected value",
-            )
-
-        def _calculate_expected_value(self, lat, lon, alt):
-            """Calculates the expected output value for the given latitude, longitude, and altitude"""
-            # Implement this method to calculate the expected output value based on the input values
-            # The details will depend on how the GISNode processes the NavSatFix message
-
         # Define the valid range for latitude, longitude, and altitude
         latitudes = tuple(np.arange(-90, 91, 10.0))
         longitudes = tuple(np.arange(-180, 181, 10.0))
@@ -314,13 +345,13 @@ class TestGISNodeCase(unittest.TestCase):
                     )
 
                     # Wait for the GISNode to process the message
-                    rclpy.spin_once(self.state_publisher_node, timeout_sec=1)
+                    rclpy.spin_once(self.state_publisher_node, timeout_sec=3)
 
                     # Wait for a message to be received
-                    rclpy.spin_once(self.state_listener_node, timeout_sec=1)
+                    rclpy.spin_once(self.state_listener_node, timeout_sec=3)
 
                     # Check the output of the GISNode
-                    self.state_listener_node.assert_output(
+                    self.state_listener_node.assert_state(
                         vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
                     )
 
@@ -386,7 +417,7 @@ class TestGISNodeCase(unittest.TestCase):
 
 class TestCVNodeCase(unittest.TestCase):
     """Tests that :class:`.CVNode` produces expected output from given input"""
-
+    pass
 
 if __name__ == "__main__":
     unittest.main()

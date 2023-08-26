@@ -1,13 +1,15 @@
 """Tests :term:`ROS` launch file for :term:`PX4` configuration"""
+import logging
 import os
 import time
 import unittest
-import logging
+from test.launch.mock_state_publisher import MockStatePublisherNode
+from test.launch.state_listener import StateListenerNode
 from typing import List, Tuple
 
+import numpy as np
 import pytest
 import rclpy
-import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from launch import LaunchDescription  # type: ignore
@@ -17,10 +19,10 @@ from launch_testing.actions import ReadyToTest
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from nav_msgs.msg import Path
 from px4_msgs.msg import SensorGps
+from pygeodesy import ellipsoidalVincenty as ev
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
-from pygeodesy import ellipsoidalVincenty as ev
 
 from gisnav.static_configuration import (
     CV_NODE_NAME,
@@ -37,8 +39,6 @@ from gisnav.static_configuration import (
 )
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
-from test.launch.mock_state_publisher import MockStatePublisherNode
-from test.launch.state_listener import StateListenerNode
 
 @pytest.mark.launch_test
 def generate_test_description():
@@ -53,9 +53,11 @@ def generate_test_description():
         ]
     )
 
+
 # Setup logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 class TestComputationalGraphCase(unittest.TestCase):
     """Tests that all nodes initialize with the correct :term:`ROS` computational
@@ -245,11 +247,10 @@ class TestGISNodeCase(unittest.TestCase):
     """:term:`Docker Compose` services required to support this test case"""
 
     DOCKER_COMPOSE_FILE_PATH = os.path.join(
-        os.path.dirname(__file__),
-        "../../../docker/docker-compose.yaml"
+        os.path.dirname(__file__), "../../../docker/docker-compose.yaml"
     )
     """Path to :term:`Docker Compose` configuration
-    
+
     Needed to launch :attr:`.DOCKER_COMPOSE_SERVICES`
     """
 
@@ -261,6 +262,7 @@ class TestGISNodeCase(unittest.TestCase):
 
         # Tear down test case on Ctrl-C (do not leave Docker containers running)
         import signal
+
         def custom_sigint_handler(signal, frame):
             self.tearDown()
             self.tearDownClass()
@@ -268,6 +270,7 @@ class TestGISNodeCase(unittest.TestCase):
                 "Test failure caused by keyboard interrupt. Tear down "
                 "methods called."
             )
+
         signal.signal(signal.SIGINT, custom_sigint_handler)
 
     @classmethod
@@ -288,7 +291,9 @@ class TestGISNodeCase(unittest.TestCase):
             f"Creating docker containers ({cls.DOCKER_COMPOSE_SERVICES}) to support "
             f"launch testing. This may take several minutes..."
         )
-        os.system(f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} create {cls.DOCKER_COMPOSE_SERVICES}")
+        os.system(
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} create {cls.DOCKER_COMPOSE_SERVICES}"
+        )
 
         rclpy.init()
 
@@ -305,7 +310,9 @@ class TestGISNodeCase(unittest.TestCase):
         rclpy.shutdown()
 
     @staticmethod
-    def _add_meters_to_coordinates(lat_lon: Tuple[float, float], meters_north: float, meters_east: float):
+    def _add_meters_to_coordinates(
+        lat_lon: Tuple[float, float], meters_north: float, meters_east: float
+    ):
         """Adds meters to :term:`WGS 84` latitude and longitude degrees"""
         point = ev.LatLon(*lat_lon)
         new_point_north = point.destination(meters_north, 0)  # 0 degrees for North
@@ -317,15 +324,21 @@ class TestGISNodeCase(unittest.TestCase):
         logger.info("Starting launch testing state publisher and listener nodes...")
         self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
         self.state_listener_node = StateListenerNode("state_listener_node")
-        logger.info(f"Starting launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})...")
-        os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} up -d {self.DOCKER_COMPOSE_SERVICES}")
+        logger.info(
+            f"Starting launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})..."
+        )
+        os.system(
+            f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} up -d {self.DOCKER_COMPOSE_SERVICES}"
+        )
 
     def tearDown(self) -> None:
         """Destroys the :term:`ROS` helper nodes used for the tests"""
         logger.info("Destroying launch testing state publisher and listener nodes...")
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
-        logger.info(f"Shutting down launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})...")
+        logger.info(
+            f"Shutting down launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})..."
+        )
         os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} down")
 
     def test_valid_vehicle_global_position(self) -> None:
@@ -338,9 +351,10 @@ class TestGISNodeCase(unittest.TestCase):
         :attr:`.GISNode.vehicle_geopose` and :attr:`.GISNode.vehicle_altitude`
         match the input.
 
-        This test assumes the ``mapserver`` service is running and has orthoimagery
-        coverage for the region for the default global position values published by
-        :meth:`.publish_mavros_state` (:term:`KSQL airport <KSQl>`).
+        This test assumes the :ref:`mapserver Docker Compose service
+        <List of services>` is running and has :term:`orthoimagery` coverage
+        for the region defined by the global position input argument default values
+        published by :meth:`.publish_mavros_state` (:term:`KSQL airport <KSQl>`).
 
         :raise: :class:`.AssertionError` if output does not match what is
             expected based on input
@@ -351,11 +365,17 @@ class TestGISNodeCase(unittest.TestCase):
             for delta_lon_meters in delta_meters:
                 for delta_alt_meters in delta_meters:
                     lat, lon = self._add_meters_to_coordinates(
-                        (MockStatePublisherNode.D_VEHICLE_LAT, MockStatePublisherNode.D_VEHICLE_LON),
+                        (
+                            MockStatePublisherNode.D_VEHICLE_LAT,
+                            MockStatePublisherNode.D_VEHICLE_LON,
+                        ),
                         delta_lat_meters,
-                        delta_lon_meters
+                        delta_lon_meters,
                     )
-                    alt = MockStatePublisherNode.D_VEHICLE_ALT_AMSL_METERS + delta_alt_meters
+                    alt = (
+                        MockStatePublisherNode.D_VEHICLE_ALT_AMSL_METERS
+                        + delta_alt_meters
+                    )
 
                     # GISNode expects input from camera and MAVROS
                     self.state_publisher_node.publish_camera_state()
@@ -439,7 +459,8 @@ class TestGISNodeCase(unittest.TestCase):
 
 class TestCVNodeCase(unittest.TestCase):
     """Tests that :class:`.CVNode` produces expected output from given input"""
-    pass
+
+
 
 if __name__ == "__main__":
     unittest.main()

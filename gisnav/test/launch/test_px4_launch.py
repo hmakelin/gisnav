@@ -330,15 +330,6 @@ class TestGISNodeCase(unittest.TestCase):
         new_point = new_point_north.destination(meters_east, 90)  # 90 degrees for East
         return new_point.lat, new_point.lon
 
-    @staticmethod
-    def _spin_once(node: Node, timeout_sec: int):
-        """Spins a :term:`ROS` node for given amount of seconds
-
-        :param timeout_sec: Timeout in seconds
-        """
-        with threading.Lock():
-            rclpy.spin_once(node, timeout_sec=timeout_sec)
-
     def setUp(self) -> None:
         """Creates the :term:`ROS` helper nodes used for the tests"""
         logger.info("Starting launch testing state publisher and listener nodes...")
@@ -361,6 +352,8 @@ class TestGISNodeCase(unittest.TestCase):
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
 
+        # Call shutdown first before joining to ensure executor thread stops
+        # spinning nodes
         rclpy.shutdown()
         self.executor_thread.join()
 

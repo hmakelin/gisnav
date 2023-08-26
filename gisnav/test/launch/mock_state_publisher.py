@@ -15,6 +15,7 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 
 from gisnav._decorators import ROS
+from gisnav.messaging import create_header
 from gisnav.static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
@@ -112,6 +113,7 @@ class MockStatePublisherNode(Node):
             the vehicle's :term:`global position`
         """
         navsatfix_msg = NavSatFix()
+        navsatfix_msg.header = create_header("base_link")
         navsatfix_msg.latitude = vehicle_lat_degrees
         navsatfix_msg.longitude = vehicle_lon_degrees
         navsatfix_msg.altitude = vehicle_alt_ellipsoid_meters
@@ -142,6 +144,7 @@ class MockStatePublisherNode(Node):
             vehicle's :term:`geopose`
         """
         geopose_msg = GeoPose()
+        geopose_msg.header = create_header("base_link")
         geopose_msg.position.latitude = vehicle_lat_degrees
         geopose_msg.position.longitude = vehicle_lon_degrees
         geopose_msg.position.altitude = vehicle_alt_ellipsoid_meters
@@ -166,6 +169,7 @@ class MockStatePublisherNode(Node):
             vehicle's altitude
         """
         altitude_msg = Altitude()
+        altitude_msg.header = create_header("base_link")
         altitude_msg.amsl = vehicle_alt_amsl_meters
         altitude_msg.terrain = vehicle_alt_agl_meters
         return altitude_msg
@@ -189,6 +193,7 @@ class MockStatePublisherNode(Node):
             the vehicle's home :term:`global position`
         """
         home_position_msg = HomePosition()
+        home_position_msg.header = create_header("base_link")
         home_position_msg.geo.latitude = home_lat
         home_position_msg.geo.longitude = home_lon
         home_position_msg.geo.altitude = home_elevation_ellipsoid_meters
@@ -217,6 +222,7 @@ class MockStatePublisherNode(Node):
         # Load the image from the file
         image_data = cv2.imread(image_file)
         image_msg = Image()
+        image_msg.header = create_header("base_link")
         image_msg.height, image_msg.width, image_msg.channels = image_data.shape
         image_msg.encoding = "bgr8"  # Assuming the image is in BGR format
         image_msg.data = image_data.flatten().tolist()
@@ -294,6 +300,7 @@ class MockStatePublisherNode(Node):
         )
 
         pose = Pose()
+        #pose.header = create_header("base_link")
         pose.position.x = e
         pose.position.y = n
         pose.position.z = u
@@ -322,6 +329,7 @@ class MockStatePublisherNode(Node):
             representing the camera's orientation
         """
         gimbal_attitude_msg = GimbalDeviceAttitudeStatus()
+        gimbal_attitude_msg.header = create_header("base_link")
 
         # Convert the nadir frame orientation to NED frame
         pitch_rad = np.radians(

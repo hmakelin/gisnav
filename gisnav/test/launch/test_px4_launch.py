@@ -1,6 +1,7 @@
 """Tests :term:`ROS` launch file for :term:`PX4` configuration"""
 import logging
 import os
+import threading
 import time
 import unittest
 from test.launch.mock_state_publisher import MockStatePublisherNode
@@ -20,6 +21,7 @@ from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from nav_msgs.msg import Path
 from px4_msgs.msg import SensorGps
 from pygeodesy import ellipsoidalVincenty as ev
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
@@ -257,8 +259,9 @@ class TestGISNodeCase(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
         super(TestGISNodeCase, self).__init__(*args, **kwargs)
-        self.state_publisher_node = None
-        self.state_listener_node = None
+        self.state_publisher_node: Optional[MockStatePublisherNode] = None
+        self.state_listener_node: Optional[StateListenerNode] = None
+        self.executor: Optional[MultiThreadedExecutor] = None
 
         # Tear down test case on Ctrl-C (do not leave Docker containers running)
         import signal
@@ -295,7 +298,12 @@ class TestGISNodeCase(unittest.TestCase):
             f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} create {cls.DOCKER_COMPOSE_SERVICES}"
         )
 
-        rclpy.init()
+        logger.info(
+            f"Starting launch testing docker services ({cls.DOCKER_COMPOSE_SERVICES})..."
+        )
+        os.system(
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} up -d {cls.DOCKER_COMPOSE_SERVICES}"
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -307,7 +315,10 @@ class TestGISNodeCase(unittest.TestCase):
             f"'docker system prune' into your system shell."
         )
 
-        rclpy.shutdown()
+        logger.info(
+            f"Shutting down launch testing docker services ({cls.DOCKER_COMPOSE_SERVICES})..."
+        )
+        os.system(f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} down")
 
     @staticmethod
     def _add_meters_to_coordinates(
@@ -319,27 +330,39 @@ class TestGISNodeCase(unittest.TestCase):
         new_point = new_point_north.destination(meters_east, 90)  # 90 degrees for East
         return new_point.lat, new_point.lon
 
+    @staticmethod
+    def _spin_once(node: Node, timeout_sec: int):
+        """Spins a :term:`ROS` node for given amount of seconds
+
+        :param timeout_sec: Timeout in seconds
+        """
+        with threading.Lock():
+            rclpy.spin_once(node, timeout_sec=timeout_sec)
+
     def setUp(self) -> None:
         """Creates the :term:`ROS` helper nodes used for the tests"""
         logger.info("Starting launch testing state publisher and listener nodes...")
+        rclpy.init()
         self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
         self.state_listener_node = StateListenerNode("state_listener_node")
-        logger.info(
-            f"Starting launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})..."
-        )
-        os.system(
-            f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} up -d {self.DOCKER_COMPOSE_SERVICES}"
-        )
+
+        # Create a MultiThreadedExecutor
+        self.executor = MultiThreadedExecutor()
+        self.executor.add_node(self.state_publisher_node)
+        self.executor.add_node(self.state_listener_node)
+
+        # Spin the publisher and listener nodes in a separate thread
+        self.executor_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self.executor_thread.start()
 
     def tearDown(self) -> None:
         """Destroys the :term:`ROS` helper nodes used for the tests"""
         logger.info("Destroying launch testing state publisher and listener nodes...")
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
-        logger.info(
-            f"Shutting down launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})..."
-        )
-        os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} down")
+
+        rclpy.shutdown()
+        self.executor_thread.join()
 
     def test_valid_vehicle_global_position(self) -> None:
         """Tests that :class:`.GISNode` :term:`vehicle` :term:`global position`
@@ -360,6 +383,7 @@ class TestGISNodeCase(unittest.TestCase):
             expected based on input
         """
         delta_meters = tuple(np.arange(-10.0, 10.0, 10.0))
+
         # Iterate through the valid range and test each combination
         for delta_lat_meters in delta_meters:
             for delta_lon_meters in delta_meters:
@@ -384,10 +408,16 @@ class TestGISNodeCase(unittest.TestCase):
                     )
 
                     # Wait for the GISNode to process the message
-                    rclpy.spin_once(self.state_publisher_node, timeout_sec=3)
+                    # rclpy.spin_once(self.state_publisher_node, timeout_sec=3)
 
                     # Wait for a message to be received
-                    rclpy.spin_once(self.state_listener_node, timeout_sec=3)
+                    # rclpy.spin_once(self.state_listener_node, timeout_sec=3)
+
+                    # Since the nodes are being spun in a separate thread,
+                    # we don't need to manually spin them here.
+                    # Just introduce a delay or a condition to wait for the
+                    # expected output.
+                    time.sleep(6)  # Adjust this delay as needed
 
                     # Check the output of the GISNode
                     self.state_listener_node.assert_state(
@@ -459,7 +489,6 @@ class TestGISNodeCase(unittest.TestCase):
 
 class TestCVNodeCase(unittest.TestCase):
     """Tests that :class:`.CVNode` produces expected output from given input"""
-
 
 
 if __name__ == "__main__":

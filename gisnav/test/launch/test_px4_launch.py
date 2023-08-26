@@ -20,6 +20,7 @@ from px4_msgs.msg import SensorGps
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from std_msgs.msg import Float32
+from pygeodesy import ellipsoidalVincenty as ev
 
 from gisnav.static_configuration import (
     CV_NODE_NAME,
@@ -303,6 +304,14 @@ class TestGISNodeCase(unittest.TestCase):
 
         rclpy.shutdown()
 
+    @staticmethod
+    def _add_meters_to_coordinates(lat_lon: Tuple[float, float], meters_north: float, meters_east: float):
+        """Adds meters to :term:`WGS 84` latitude and longitude degrees"""
+        point = ev.LatLon(*lat_lon)
+        new_point_north = point.destination(meters_north, 0)  # 0 degrees for North
+        new_point = new_point_north.destination(meters_east, 90)  # 90 degrees for East
+        return new_point.lat, new_point.lon
+
     def setUp(self) -> None:
         """Creates the :term:`ROS` helper nodes used for the tests"""
         logger.info("Starting launch testing state publisher and listener nodes...")
@@ -319,25 +328,35 @@ class TestGISNodeCase(unittest.TestCase):
         logger.info(f"Shutting down launch testing docker services ({self.DOCKER_COMPOSE_SERVICES})...")
         os.system(f"docker compose -p gisnav -f {self.DOCKER_COMPOSE_FILE_PATH} down")
 
-    def test_vehicle_global_position_valid_range(self):
+    def test_valid_vehicle_global_position(self) -> None:
+        """Tests that :class:`.GISNode` :term:`vehicle` :term:`global position`
+        output is correct when valid :ref:`MAVROS and camera messages
+        <Core data flow graph>` are published from :class:`.MockStatePublisherNode`.
+
+        This test varies the sent input by a few meters around the defaults
+        defined in :meth:`.publish_mavros_state` and checks that
+        :attr:`.GISNode.vehicle_geopose` and :attr:`.GISNode.vehicle_altitude`
+        match the input.
+
+        This test assumes the ``mapserver`` service is running and has orthoimagery
+        coverage for the region for the default global position values published by
+        :meth:`.publish_mavros_state` (:term:`KSQL airport <KSQl>`).
+
+        :raise: :class:`.AssertionError` if output does not match what is
+            expected based on input
         """
-        Tests that output is correct regardless of input :term:`global position`
-
-        Tests full range of expected input latitude (-90, 90), longitude
-        (-180, 180), and altitude for the input :class:`NavSatFix` message.
-
-        :raise: :class:`.AssertionError` if output does not match expected
-            output within :param timeout_sec:
-        """
-        # Define the valid range for latitude, longitude, and altitude
-        latitudes = tuple(np.arange(-90, 91, 10.0))
-        longitudes = tuple(np.arange(-180, 181, 10.0))
-        amsl_altitudes = tuple(np.arange(-1000, 10001, 1000.0))
-
+        delta_meters = tuple(np.arange(-10.0, 10.0, 10.0))
         # Iterate through the valid range and test each combination
-        for lat in latitudes:
-            for lon in longitudes:
-                for alt in amsl_altitudes:
+        for delta_lat_meters in delta_meters:
+            for delta_lon_meters in delta_meters:
+                for delta_alt_meters in delta_meters:
+                    lat, lon = self._add_meters_to_coordinates(
+                        (MockStatePublisherNode.D_VEHICLE_LAT, MockStatePublisherNode.D_VEHICLE_LON),
+                        delta_lat_meters,
+                        delta_lon_meters
+                    )
+                    alt = MockStatePublisherNode.D_VEHICLE_ALT_AMSL_METERS + delta_alt_meters
+
                     # GISNode expects input from camera and MAVROS
                     self.state_publisher_node.publish_camera_state()
                     self.state_publisher_node.publish_mavros_state(
@@ -411,6 +430,9 @@ class TestGISNodeCase(unittest.TestCase):
         raise NotImplementedError
 
     def test_dem_not_available(self):
+        raise NotImplementedError
+
+    def test_message_timestamp_too_old(self):
         raise NotImplementedError
     """
 

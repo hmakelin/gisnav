@@ -394,23 +394,19 @@ class TestGISNodeCase(unittest.TestCase):
                         + delta_alt_meters
                     )
 
-                    # GISNode expects input from camera and MAVROS
-                    self.state_publisher_node.publish_camera_state()
-                    self.state_publisher_node.publish_mavros_state(
-                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
-                    )
-
-                    # Wait for the GISNode to process the message
-                    # rclpy.spin_once(self.state_publisher_node, timeout_sec=3)
-
-                    # Wait for a message to be received
-                    # rclpy.spin_once(self.state_listener_node, timeout_sec=3)
-
                     # Since the nodes are being spun in a separate thread,
                     # we don't need to manually spin them here.
                     # Just introduce a delay or a condition to wait for the
                     # expected output.
-                    time.sleep(6)  # Adjust this delay as needed
+                    for _ in range(2):
+                        time.sleep(3)
+                        # GISNode expects input from camera and MAVROS
+                        self.state_publisher_node.publish_camera_state()
+                        self.state_publisher_node.publish_mavros_state(
+                            vehicle_lat=lat,
+                            vehicle_lon=lon,
+                            vehicle_alt_amsl_meters=alt,
+                        )
 
                     # Check the output of the GISNode
                     self.state_listener_node.assert_state(

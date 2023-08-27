@@ -13,6 +13,7 @@ ROS namespace and :term:`core` node names are hard-coded inside the static
 public node entrypoints defined here. Other node initialization arguments are p
 rovided via ROS 2 launch arguments.
 """
+import cProfile
 import io
 import pstats
 from typing import Optional
@@ -40,12 +41,11 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
     :param **kwargs: Node constructor kwargs
     :return:
     """
-    # if __debug__:
-    #    profile = cProfile.Profile()
-    #    profile.enable()
-    # else:
-    #    profile = None
-    profile = None
+    if __debug__:
+        profile = cProfile.Profile()
+        profile.enable()
+    else:
+        profile = None
 
     node: Optional[Node] = None
     try:

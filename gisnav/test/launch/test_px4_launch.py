@@ -417,7 +417,7 @@ class TestGISNodeCase(unittest.TestCase):
                     for _ in range(2):
                         # Geopose is sent in NavSatFix callback so we send
                         # messages at least twice - once to get the geopose
-                        # dependency messages cahced and a second time to
+                        # dependency messages cached and a second time to
                         # successfully publish inside the callback
                         assert self.state_publisher_node is not None
                         # GISNode expects input from camera and MAVROS

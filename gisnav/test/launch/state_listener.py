@@ -175,7 +175,7 @@ class StateListenerNode(Node):
         """
         # TODO: do not use latitude from the message being tested, assert
         #  latitude together with longitude
-        # polynomial approximation for the length of a degree of longitude as
+        # approximation for the length of a degree of longitude as
         # a function of latitude
         latitude_rad = np.radians(geopose_msg.pose.position.latitude)
         meters_per_degree_longitude = (

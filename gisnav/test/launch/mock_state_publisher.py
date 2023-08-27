@@ -4,7 +4,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPose
-from geometry_msgs.msg import Pose, Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from pygeodesy.ellipsoidalNvector import LatLon, Nvector
 from pygeodesy.geoids import GeoidPGM
@@ -92,7 +92,7 @@ class MockStatePublisherNode(Node):
         return self._cv_bridge.cv2_to_imgmsg(image_rgb8, encoding="rgb8")
 
     @ROS.publish(
-        "mavros/global_position/global",
+        "/mavros/global_position/global",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def nav_sat_fix(
@@ -175,7 +175,7 @@ class MockStatePublisherNode(Node):
         return altitude_msg
 
     @ROS.publish(
-        "mavros/home_position/home",
+        "/mavros/home_position/home",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def home_position(
@@ -248,7 +248,7 @@ class MockStatePublisherNode(Node):
         return ortho_image_3d_msg
 
     @ROS.publish(
-        "mavros/local_position/pose",
+        "/mavros/local_position/pose",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def local_position(
@@ -259,8 +259,8 @@ class MockStatePublisherNode(Node):
         home_lat: float = D_HOME_LAT,
         home_lon: float = D_HOME_LON,
         home_elevation_ellipsoid_meters: float = D_HOME_ELEVATION_ELLIPSOID_METERS,
-    ) -> Pose:
-        """Publishes a :class:`geometry_msgs.msg.Pose` :term:`ROS` message
+    ) -> PoseStamped:
+        """Publishes a :class:`geometry_msgs.msg.PoseStamped` :term:`ROS` message
         based on the given :term:`vehicle` :term:`global position` and
         :term:`home` position in :term:`NED` frame.
 
@@ -272,7 +272,7 @@ class MockStatePublisherNode(Node):
         :param home_lon: Home :term:`WGS 84` longitude coordinate in degrees
         :param home_elevation_ellipsoid_meters: Home :term:`ellipsoid`
             :term:`elevation` in meters
-        :return: A :class:`geometry_msgs.msg.Pose` message representing the vehicle's
+        :return: A :class:`geometry_msgs.msg.PoseStamped` message representing the vehicle's
             local position
         """
 
@@ -299,16 +299,16 @@ class MockStatePublisherNode(Node):
             home_elevation_ellipsoid_meters,
         )
 
-        pose = Pose()
-        #pose.header = create_header("base_link")
-        pose.position.x = e
-        pose.position.y = n
-        pose.position.z = u
+        pose = PoseStamped()
+        pose.header = create_header("base_link")
+        pose.pose.position.x = e
+        pose.pose.position.y = n
+        pose.pose.position.z = u
 
         return pose
 
     @ROS.publish(
-        "mavros/gimbal_control/device/attitude_status",
+        "/mavros/gimbal_control/device/attitude_status",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def gimbal_device_attitude_status(

@@ -6,25 +6,23 @@ import time
 import unittest
 from test.launch.mock_state_publisher import MockStatePublisherNode
 from test.launch.state_listener import StateListenerNode
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pytest
 import rclpy
-from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
+from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from nav_msgs.msg import Path
 from px4_msgs.msg import SensorGps
 from pygeodesy import ellipsoidalVincenty as ev
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
-from std_msgs.msg import Float32
 
 from gisnav.static_configuration import (
     CV_NODE_NAME,
@@ -67,27 +65,33 @@ class TestComputationalGraphCase(unittest.TestCase):
 
     GIS_NODE_TOPIC_NAMES_AND_TYPES = [
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
             OrthoImage3D,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
             GeoPoseStamped,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
             Altitude,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
             Quaternion,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
             Altitude,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
             GeoPoseStamped,
         ),
     ]
@@ -95,11 +99,13 @@ class TestComputationalGraphCase(unittest.TestCase):
 
     CV_NODE_TOPIC_NAMES_AND_TYPES = [
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',  # noqa: E501
             GeoPoseStamped,
         ),
         (
-            f'/{ROS_NAMESPACE}/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',  # noqa: E501
             Altitude,
         ),
     ]
@@ -295,14 +301,17 @@ class TestGISNodeCase(unittest.TestCase):
             f"launch testing. This may take several minutes..."
         )
         os.system(
-            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} create {cls.DOCKER_COMPOSE_SERVICES}"
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} "
+            f"create {cls.DOCKER_COMPOSE_SERVICES}"
         )
 
         logger.info(
-            f"Starting launch testing docker services ({cls.DOCKER_COMPOSE_SERVICES})..."
+            f"Starting launch testing docker services "
+            f"({cls.DOCKER_COMPOSE_SERVICES})..."
         )
         os.system(
-            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} up -d {cls.DOCKER_COMPOSE_SERVICES}"
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} "
+            f"up -d {cls.DOCKER_COMPOSE_SERVICES}"
         )
 
     @classmethod
@@ -316,7 +325,8 @@ class TestGISNodeCase(unittest.TestCase):
         )
 
         logger.info(
-            f"Shutting down launch testing docker services ({cls.DOCKER_COMPOSE_SERVICES})..."
+            f"Shutting down launch testing docker services "
+            f"({cls.DOCKER_COMPOSE_SERVICES})..."
         )
         os.system(f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} down")
 
@@ -334,9 +344,9 @@ class TestGISNodeCase(unittest.TestCase):
         """Creates the :term:`ROS` helper nodes used for the tests"""
         logger.info("Starting launch testing state publisher and listener nodes...")
         rclpy.init()
+
         self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
         self.state_listener_node = StateListenerNode("state_listener_node")
-
         # Create a MultiThreadedExecutor
         self.executor = MultiThreadedExecutor()
         self.executor.add_node(self.state_publisher_node)
@@ -349,6 +359,9 @@ class TestGISNodeCase(unittest.TestCase):
     def tearDown(self) -> None:
         """Destroys the :term:`ROS` helper nodes used for the tests"""
         logger.info("Destroying launch testing state publisher and listener nodes...")
+
+        assert self.state_publisher_node is not None
+        assert self.state_listener_node is not None
         self.state_publisher_node.destroy_node()
         self.state_listener_node.destroy_node()
 
@@ -399,6 +412,7 @@ class TestGISNodeCase(unittest.TestCase):
                     # Just introduce a delay or a condition to wait for the
                     # expected output.
                     for _ in range(2):
+                        assert self.state_publisher_node is not None
                         time.sleep(3)
                         # GISNode expects input from camera and MAVROS
                         self.state_publisher_node.publish_camera_state()
@@ -409,6 +423,7 @@ class TestGISNodeCase(unittest.TestCase):
                         )
 
                     # Check the output of the GISNode
+                    assert self.state_listener_node is not None
                     self.state_listener_node.assert_state(
                         vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
                     )

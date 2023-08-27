@@ -1,18 +1,16 @@
 from typing import Optional, Tuple
 
-import rclpy
+import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
-from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
+from mavros_msgs.msg import Altitude
+from pygeodesy.geoids import GeoidPGM
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import Image, NavSatFix
-from pygeodesy.geoids import GeoidPGM
 
 from gisnav import messaging
 from gisnav._decorators import ROS
 from gisnav.static_configuration import (
-    CV_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
@@ -20,8 +18,6 @@ from gisnav.static_configuration import (
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
-    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
-    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
     ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
 )
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
@@ -160,8 +156,7 @@ class StateListenerNode(Node):
             geopose_msg.pose.position.latitude == lon
         ), f"Expected longitude: {lon}, but got: {geopose_msg.longitude}."
 
-    @staticmethod
-    def _assert_amsl_altitude(geopose_msg, altitude_msg, alt_amsl_meters: float):
+    def _assert_amsl_altitude(self, geopose_msg, altitude_msg, alt_amsl_meters: float):
         """Asserts given :term:`vehicle` or :term:`ground track` :term:`AMSL`
         :term:`altitude` or :term:`elevation` in meters
 
@@ -180,21 +175,22 @@ class StateListenerNode(Node):
                 vehicle_alt_amsl_from_geopose = (
                     geopose_msg.pose.position.altitude - egm96_height
                 )
-                assert (
-                    vehicle_alt_amsl_from_geopose == alt_amsl_meters
-                ), f"Expected AMSL altitude: {alt_amsl_meters}, but got: {vehicle_alt_amsl_from_geopose}"
+                assert vehicle_alt_amsl_from_geopose == alt_amsl_meters, (
+                    f"Expected AMSL altitude: {alt_amsl_meters}, "
+                    f"but got: {vehicle_alt_amsl_from_geopose}"
+                )
         elif altitude_msg is not None:
             assert (
                 altitude_msg.amsl == alt_amsl_meters
             ), f"Expected altitude: {alt_amsl_meters}, but got: {altitude_msg.amsl}"
         else:
-            assert (
-                False
-            ), f"Expected AMSL altitude: {alt_amsl_meters}, but no altitude message received."
+            assert False, (
+                f"Expected AMSL altitude: {alt_amsl_meters}, "
+                f"but no altitude message received."
+            )
 
-    @staticmethod
     def _assert_ellipsoid_altitude(
-        geopose_msg, altitude_msg, alt_ellipsoid_meters: float
+        self, geopose_msg, altitude_msg, alt_ellipsoid_meters: float
     ):
         """Asserts given :term:`vehicle` or :term:`ground track` :term:`ellipsoid`
         :term:`altitude` or :term:`elevation` in meters
@@ -209,23 +205,25 @@ class StateListenerNode(Node):
         :raise: AssertionError if altitude does not match received ROS messages
         """
         if geopose_msg is not None:
-            assert (
-                geopose_msg.pose.position.altitude == alt_ellipsoid_meters
-            ), f"Expected altitude: {alt_ellipsoid_meters}, but got: {geopose_msg.pose.position.altitude}"
+            assert geopose_msg.pose.position.altitude == alt_ellipsoid_meters, (
+                f"Expected altitude: {alt_ellipsoid_meters}, "
+                f"but got: {geopose_msg.pose.position.altitude}"
+            )
         elif altitude_msg is not None:
             egm96_height = self._egm96_height
             if self._egm96_height is not None:
                 vehicle_alt_ellipsoid_from_altitude = altitude_msg.amsl + egm96_height
-                assert (
-                    alt_ellipsoid_meters == vehicle_alt_ellipsoid_from_altitude
-                ), f"Expected ellipsoid altitude: {alt_ellipsoid_meters}, but got: {vehicle_alt_ellipsoid_from_altitude}"
+                assert alt_ellipsoid_meters == vehicle_alt_ellipsoid_from_altitude, (
+                    f"Expected ellipsoid altitude: {alt_ellipsoid_meters}, "
+                    f"but got: {vehicle_alt_ellipsoid_from_altitude}"
+                )
         else:
-            assert (
-                False
-            ), f"Expected ellipsoid altitude: {alt_ellipsoid_meters}, but no altitude message received."
+            assert False, (
+                f"Expected ellipsoid altitude: {alt_ellipsoid_meters}, "
+                f"but no altitude message received."
+            )
 
-    @staticmethod
-    def _assert_pitch(quaternion: Quaternion, pitch_degrees: float) -> None:
+    def _assert_pitch(self, quaternion: Quaternion, pitch_degrees: float) -> None:
         """Asserts given :term:`camera` pitch in degrees
 
         Origin is defined as facing :term:`nadir`, with image top side facing
@@ -249,8 +247,7 @@ class StateListenerNode(Node):
                 False
             ), f"Expected pitch of {pitch_degrees}, but no ROS message received."
 
-    @staticmethod
-    def _assert_roll(quaternion: Quaternion, roll_degrees: float) -> None:
+    def _assert_roll(self, quaternion: Quaternion, roll_degrees: float) -> None:
         """Asserts given :term:`camera` roll in degrees
 
         Origin is defined as facing :term:`nadir`, with image top side facing
@@ -274,8 +271,7 @@ class StateListenerNode(Node):
                 False
             ), f"Expected roll of {roll_degrees}, but no ROS message received."
 
-    @staticmethod
-    def _assert_yaw(quaternion: Quaternion, yaw_degrees: float) -> None:
+    def _assert_yaw(self, quaternion: Quaternion, yaw_degrees: float) -> None:
         """Asserts given :term:`camera` yaw in degrees
 
         Origin is defined as facing :term:`nadir`, with image top side facing
@@ -385,17 +381,17 @@ class StateListenerNode(Node):
             self._assert_ellipsoid_altitude(
                 self.ground_track_geopose,
                 self.ground_track_elevation,
-                vehicle_alt_ellipsoid_meters,
+                ground_track_elevation_ellipsoid_meters,
             )
 
         if camera_pitch_ned_deg is not None:
-            self._assert_pitch(self.camera_quaternion)
+            self._assert_pitch(self.camera_quaternion, camera_pitch_ned_deg)
 
         if camera_yaw_ned_deg is not None:
-            self._assert_yaw(self.camera_quaternion)
+            self._assert_yaw(self.camera_quaternion, camera_yaw_ned_deg)
 
         if camera_roll_ned_deg is not None:
-            self._assert_roll(self.camera_quaternion)
+            self._assert_roll(self.camera_quaternion, camera_roll_ned_deg)
 
         if bbox is not None:
             raise NotImplementedError
@@ -411,7 +407,8 @@ class StateListenerNode(Node):
         Calculate and return yaw, pitch, and roll in degrees from a given quaternion.
 
         .. todo::
-            This method overlaps with :class:`.CVNode._get_yaw_pitch_degrees_from_quaternion`
+            This method overlaps with
+            :class:`.CVNode._get_yaw_pitch_degrees_from_quaternion`
 
         :param quaternion: A quaternion :term:`ROS` message with origin defined
             as facing :term:`nadir`, with image top side facing north.

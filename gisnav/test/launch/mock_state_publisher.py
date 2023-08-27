@@ -1,14 +1,13 @@
 from typing import Optional, Tuple
 
+import cv2
 import numpy as np
-import rclpy
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPose
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from pygeodesy.ellipsoidalNvector import LatLon, Nvector
+from pygeodesy.ellipsoidalNvector import LatLon
 from pygeodesy.geoids import GeoidPGM
-from pygeodesy.ltpTuples import Enu
 from pygeodesy.ltp import LocalCartesian
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -21,7 +20,7 @@ from gisnav.static_configuration import (
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
 )
-from gisnav_msgs.msg import OrthoImage3D
+from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
 class MockStatePublisherNode(Node):
@@ -148,7 +147,9 @@ class MockStatePublisherNode(Node):
         geopose_msg.position.latitude = vehicle_lat_degrees
         geopose_msg.position.longitude = vehicle_lon_degrees
         geopose_msg.position.altitude = vehicle_alt_ellipsoid_meters
-        geopose_msg.orientation = heading_to_quaternion(vehicle_heading_ned)
+
+        # TODO: implement heading_to_quaternion
+        # geopose_msg.orientation = heading_to_quaternion(vehicle_heading_ned)
         return geopose_msg
 
     @ROS.publish(
@@ -205,7 +206,7 @@ class MockStatePublisherNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def orthoimage(
-        self, image_file: str, bbox: BoundingBox, dem_file: str = None
+        self, image_file: str, bbox: BoundingBox, dem_file: Optional[str] = None
     ) -> OrthoImage3D:
         """
         Publishes a :class:`gisnav_msgs.msg.OrthoImage3D` :term:`ROS` message
@@ -230,7 +231,7 @@ class MockStatePublisherNode(Node):
 
         # Load the DEM from the file or create a zero array if not provided
         dem_msg = Image()
-        if dem_file:
+        if dem_file is not None:
             dem_data = np.load(dem_file)
         else:
             dem_data = np.zeros_like(
@@ -272,8 +273,8 @@ class MockStatePublisherNode(Node):
         :param home_lon: Home :term:`WGS 84` longitude coordinate in degrees
         :param home_elevation_ellipsoid_meters: Home :term:`ellipsoid`
             :term:`elevation` in meters
-        :return: A :class:`geometry_msgs.msg.PoseStamped` message representing the vehicle's
-            local position
+        :return: A :class:`geometry_msgs.msg.PoseStamped` message representing
+            the vehicle's local position
         """
 
         def _wgs84_to_enu(lat, lon, alt, origin_lat, origin_lon, origin_alt):
@@ -439,7 +440,7 @@ class MockStatePublisherNode(Node):
         self,
         vehicle_lat: float = D_VEHICLE_LAT,
         vehicle_lon: float = D_VEHICLE_LON,
-        vehicle_alt_agl_meters: float = D_VEHICLE_ALT_AMSL_METERS,
+        vehicle_alt_amsl_meters: float = D_VEHICLE_ALT_AMSL_METERS,
         vehicle_heading_ned: float = D_VEHICLE_HEADING_NED_DEG,
         camera_pitch_ned_deg: float = D_CAMERA_PITCH_NED_DEG,
         camera_yaw_ned_deg: float = D_CAMERA_YAW_NED_DEG,
@@ -454,7 +455,8 @@ class MockStatePublisherNode(Node):
 
         :param vehicle_lat: Vehicle :term:`WGS 84` latitude coordinate in degrees
         :param vehicle_lon: Vehicle :term:`WGS 84` longitude coordinate in degrees
-        :param vehicle_alt_agl_meters: Vehicle :term:`altitude` :term:`AGL` in meters
+        :param vehicle_alt_amsl_meters: Vehicle :term:`altitude` :term:`AMSL`
+            in meters
         :param vehicle_heading_ned: Vehicle heading in :term:`NED` frame in degrees
         :param camera_pitch_ned_deg: :term:`Camera` pitch angle in :term:`NED` frame
             in degrees. Origin is defined as facing :term:`nadir`, with image
@@ -473,9 +475,10 @@ class MockStatePublisherNode(Node):
         self.geopose(
             vehicle_lat, vehicle_lon, vehicle_alt_amsl_meters, vehicle_heading_ned
         )
-        self.altitude(vehicle_alt_agl_meters)
+        self.altitude(vehicle_alt_amsl_meters)  # TODO: need to compute AGL altitude
         self.orthoimage(orthophoto, dem, bbox)
-        # TODO: terrain elevation, terrain geopose, camera quaternion (not in mermaid graph)
+        # TODO: terrain elevation, terrain geopose, camera quaternion
+        #  (not in mermaid graph)
 
         self.camera_quaternion(
             camera_pitch_ned_deg, camera_yaw_ned_deg, camera_roll_ned_deg
@@ -508,4 +511,4 @@ class MockStatePublisherNode(Node):
         y = cr * sp * cy + sr * cp * sy
         z = cr * cp * sy - sr * sp * cy
 
-        return [w, x, y, z]
+        return (w, x, y, z)

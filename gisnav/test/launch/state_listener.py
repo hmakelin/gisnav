@@ -35,6 +35,14 @@ class StateListenerNode(Node):
         # TODO: do not hard code path
         self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
 
+        # Subscribe to topics
+        self.vehicle_geopose
+        self.vehicle_altitude
+        self.orthoimage
+        self.ground_track_geopose
+        self.ground_track_elevation
+        self.camera_quaternion
+
     @property
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
@@ -126,35 +134,65 @@ class StateListenerNode(Node):
         return None
 
     @staticmethod
-    def _assert_latitude(geopose_msg: GeoPoseStamped, lat: float) -> None:
+    def _assert_latitude(
+        geopose_msg: GeoPoseStamped, lat: float, tolerance_meters: float = 1.0
+    ) -> None:
         """Asserts given :term:`vehicle` or :term:`ground track` :term:`WGS 84`
-        latitude in degrees
+        latitude in degrees with a given tolerance in meters.
 
         Compares input latitude against appropriate :term:`geopose` message
 
         :param geopose_msg: Vehicle or ground track geopose
-        :param vehicle_lat: Vehicle or ground track WGS 84 latitude in degrees
-        :raise: AssertionError if latitude does not match received :term:`ROS` geopose
+        :param lat: Vehicle or ground track WGS 84 latitude in degrees
+        :param tolerance_meters: Tolerance in meters for latitude comparison
+        :raise: AssertionError if latitude difference exceeds the given
+            tolerance in meters
         """
-        assert (
-            geopose_msg.pose.position.latitude == lat
-        ), f"Expected latitude: {lat}, but got: {geopose_msg.latitude}."
+        meters_per_degree = 111000  # Approximate value
+        difference_meters = (
+            abs(geopose_msg.pose.position.latitude - lat) * meters_per_degree
+        )
+
+        assert difference_meters <= tolerance_meters, (
+            f"Expected latitude: {lat}, but got: {geopose_msg.pose.position.latitude}. "
+            f"Difference: {difference_meters} meters."
+        )
 
     @staticmethod
-    def _assert_longitude(geopose_msg: GeoPoseStamped, lon: float) -> None:
+    def _assert_longitude(
+        geopose_msg: GeoPoseStamped, lon: float, tolerance_meters: float = 1.0
+    ) -> None:
         """Asserts given :term:`vehicle` or :term:`ground track` :term:`WGS 84`
-        longitude in degrees
+        longitude in degrees with a given tolerance in meters.
 
         Compares input longitude against appropriate :term:`geopose` message
 
         :param geopose_msg: Vehicle or ground track geopose
-        :param vehicle_lat: Vehicle or ground track WGS 84 longitude in degrees
-        :raise: AssertionError if longitude does not match received :term:`ROS`
-            geopose
+        :param lon: Vehicle or ground track WGS 84 longitude in degrees
+        :param tolerance_meters: Tolerance in meters for longitude comparison
+        :raise: AssertionError if longitude difference exceeds the given
+            tolerance in meters
         """
-        assert (
-            geopose_msg.pose.position.latitude == lon
-        ), f"Expected longitude: {lon}, but got: {geopose_msg.longitude}."
+        # TODO: do not use latitude from the message being tested, assert
+        #  latitude together with longitude
+        # polynomial approximation for the length of a degree of longitude as
+        # a function of latitude
+        latitude_rad = np.radians(geopose_msg.pose.position.latitude)
+        meters_per_degree_longitude = (
+            111412.84 * np.cos(latitude_rad)
+            - 93.5 * np.cos(3 * latitude_rad)
+            + 0.118 * np.cos(5 * latitude_rad)
+        )
+
+        difference_meters = (
+            abs(geopose_msg.pose.position.longitude - lon) * meters_per_degree_longitude
+        )
+
+        assert difference_meters <= tolerance_meters, (
+            f"Expected longitude: {lon}, "
+            f"but got: {geopose_msg.pose.position.longitude}. "
+            f"Difference: {difference_meters} meters."
+        )
 
     def _assert_amsl_altitude(self, geopose_msg, altitude_msg, alt_amsl_meters: float):
         """Asserts given :term:`vehicle` or :term:`ground track` :term:`AMSL`

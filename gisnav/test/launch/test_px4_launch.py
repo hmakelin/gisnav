@@ -388,6 +388,9 @@ class TestGISNodeCase(unittest.TestCase):
         :raise: :class:`.AssertionError` if output does not match what is
             expected based on input
         """
+        # Give some time for nodes to spin up (setUp method)
+        time.sleep(3)
+
         delta_meters = tuple(np.arange(-10.0, 10.0, 10.0))
 
         # Iterate through the valid range and test each combination
@@ -412,8 +415,11 @@ class TestGISNodeCase(unittest.TestCase):
                     # Just introduce a delay or a condition to wait for the
                     # expected output.
                     for _ in range(2):
+                        # Geopose is sent in NavSatFix callback so we send
+                        # messages at least twice - once to get the geopose
+                        # dependency messages cached and a second time to
+                        # successfully publish inside the callback
                         assert self.state_publisher_node is not None
-                        time.sleep(3)
                         # GISNode expects input from camera and MAVROS
                         self.state_publisher_node.publish_camera_state()
                         self.state_publisher_node.publish_mavros_state(
@@ -421,6 +427,7 @@ class TestGISNodeCase(unittest.TestCase):
                             vehicle_lon=lon,
                             vehicle_alt_amsl_meters=alt,
                         )
+                        time.sleep(1)
 
                     # Check the output of the GISNode
                     assert self.state_listener_node is not None

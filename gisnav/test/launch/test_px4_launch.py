@@ -1,24 +1,42 @@
-"""Tests PX4 launch"""
+"""Tests :term:`ROS` launch file for :term:`PX4` configuration"""
+import logging
 import os
+import threading
 import time
 import unittest
-from typing import List, Tuple
+from test.launch.mock_state_publisher import MockStatePublisherNode
+from test.launch.state_listener import StateListenerNode
+from typing import List, Optional, Tuple
 
+import numpy as np
 import pytest
 import rclpy
-from geographic_msgs.msg import BoundingBox, GeoPointStamped, GeoPoseStamped
+from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
-from nav_msgs.msg import Path
 from px4_msgs.msg import SensorGps
+from pygeodesy import ellipsoidalVincenty as ev
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
-from std_msgs.msg import Float32
 
+from gisnav.static_configuration import (
+    CV_NODE_NAME,
+    GIS_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
+    ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
+    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
+    ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
+)
 from gisnav_msgs.msg import OrthoImage3D  # type: ignore
 
 
@@ -36,25 +54,62 @@ def generate_test_description():
     )
 
 
-class TestPX4Launch(unittest.TestCase):
-    """Test that all nodes initialize with correct ROS topics"""
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-    GISNAV_TOPIC_NAMES_AND_TYPES = [
-        ("/gisnav/orthoimage_3d", OrthoImage3D),
-        ("/gisnav/bounding_box", BoundingBox),
-        ("/gisnav/vehicle_geopose", GeoPoseStamped),
-        ("/gisnav/vehicle_geopose/estimate", GeoPoseStamped),
-        ("/gisnav/vehicle_altitude", Altitude),
-        ("/gisnav/vehicle_altitude/estimate", Altitude),
-        ("/gisnav/gimbal_quaternion", Quaternion),
-        ("/gisnav/home_geopoint", GeoPointStamped),
-        ("/gisnav/terrain_altitude", Altitude),
-        ("/gisnav/terrain_geopoint", GeoPointStamped),
-        ("/gisnav/egm96_height", Float32),
-        ("/autopilot_node/pose_stamped", PoseStamped),
-        ("/autopilot_node/path", Path),
+
+class TestComputationalGraphCase(unittest.TestCase):
+    """Tests that all nodes initialize with the correct :term:`ROS` computational
+    graph structure"""
+
+    GIS_NODE_TOPIC_NAMES_AND_TYPES = [
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
+            OrthoImage3D,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',
+            Altitude,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+            Quaternion,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION.replace("~", GIS_NODE_NAME)}',
+            Altitude,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            GeoPoseStamped,
+        ),
     ]
-    """List of GISNav internal topic names and types"""
+    """List of :class:`.GISNode` published topic names and types"""
+
+    CV_NODE_TOPIC_NAMES_AND_TYPES = [
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',  # noqa: E501
+            GeoPoseStamped,
+        ),
+        (
+            f"/{ROS_NAMESPACE}"
+            f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',  # noqa: E501
+            Altitude,
+        ),
+    ]
+    """List of :class:`.CVNode` published topic names and types"""
 
     CAMERA_TOPIC_NAMES_AND_TYPES = [
         ("/camera/camera_info", CameraInfo),
@@ -62,34 +117,38 @@ class TestPX4Launch(unittest.TestCase):
     ]
     """List of camera topic names and types"""
 
-    AUTOPILOT_TOPIC_NAMES_AND_TYPES = [
+    MAVROS_TOPIC_NAMES_AND_TYPES = [
         ("/mavros/global_position/global", NavSatFix),
         ("/mavros/local_position/pose", PoseStamped),
         ("/mavros/home_position/home", HomePosition),
         ("/mavros/gimbal_control/device/attitude_status", GimbalDeviceAttitudeStatus),
         ("/fmu/in/sensor_gps", SensorGps),
     ]
-    """List of autopilot topic names and types"""
+    """List of :term:`MAVROS` published topic names and types"""
+
+    UROS_TOPIC_NAMES_AND_TYPES = [
+        ("/fmu/in/sensor_gps", SensorGps),
+    ]
+    """List of :term:`micro-ros-agent` subscribed topic names and types"""
 
     TOPIC_NAMES_AND_TYPES = (
-        GISNAV_TOPIC_NAMES_AND_TYPES
+        GIS_NODE_TOPIC_NAMES_AND_TYPES
+        + CV_NODE_TOPIC_NAMES_AND_TYPES
         + CAMERA_TOPIC_NAMES_AND_TYPES
-        + AUTOPILOT_TOPIC_NAMES_AND_TYPES
+        + MAVROS_TOPIC_NAMES_AND_TYPES
+        + UROS_TOPIC_NAMES_AND_TYPES
     )
     """List of all expected topic names and types"""
 
     NODE_NAMES_AND_NAMESPACES = {
-        ("mock_gps_node", "/"),
-        ("bbox_node", "/"),
-        ("map_node", "/"),
-        ("pose_estimation_node", "/"),
-        ("autopilot_node", "/"),
+        (GIS_NODE_NAME, ROS_NAMESPACE),
+        (CV_NODE_NAME, ROS_NAMESPACE),
     }
     """List of tuples of node names and namespaces"""
 
     def __init__(self, *args, **kwargs):
         """Initializer override for declaring attributes used in the test case"""
-        super(TestPX4Launch, self).__init__(*args, **kwargs)
+        super(TestComputationalGraphCase, self).__init__(*args, **kwargs)
         self.test_node = None
 
     def _get_names_and_namespaces_within_timeout(
@@ -164,7 +223,7 @@ class TestPX4Launch(unittest.TestCase):
         ), f"Not all nodes ({names}) were discovered ({found_names})."
         for name, namespace in self.NODE_NAMES_AND_NAMESPACES:
             self.assertEqual(
-                namespace, dict(found_names_and_namespaces).get(name, None)
+                namespace, dict(found_names_and_namespaces).get(name, None).lstrip("/")
             )
 
     def test_topic_names_and_types(self):
@@ -184,6 +243,256 @@ class TestPX4Launch(unittest.TestCase):
                 type_.__class__.__name__.replace("Metaclass_", ""),
                 types[0].split("/")[-1],
             )
+
+
+class TestGISNodeCase(unittest.TestCase):
+    """Tests that :class:`.GISNode` produces expected output from given input
+
+    TODO: link external interfaces, mavros, camera, and WMS server here
+    """
+
+    DOCKER_COMPOSE_SERVICES = "mapserver torch-serve"
+    """:term:`Docker Compose` services required to support this test case"""
+
+    DOCKER_COMPOSE_FILE_PATH = os.path.join(
+        os.path.dirname(__file__), "../../../docker/docker-compose.yaml"
+    )
+    """Path to :term:`Docker Compose` configuration
+
+    Needed to launch :attr:`.DOCKER_COMPOSE_SERVICES`
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initializer override for declaring attributes used in the test case"""
+        super(TestGISNodeCase, self).__init__(*args, **kwargs)
+        self.state_publisher_node: Optional[MockStatePublisherNode] = None
+        self.state_listener_node: Optional[StateListenerNode] = None
+        self.executor: Optional[MultiThreadedExecutor] = None
+
+        # Tear down test case on Ctrl-C (do not leave Docker containers running)
+        import signal
+
+        def custom_sigint_handler(signal, frame):
+            self.tearDown()
+            self.tearDownClass()
+            self.fail(
+                "Test failure caused by keyboard interrupt. Tear down "
+                "methods called."
+            )
+
+        signal.signal(signal.SIGINT, custom_sigint_handler)
+
+    @classmethod
+    def setUpClass(cls):
+        """Ensure that supporting :term:`Docker Compose` service containers
+        are available and initialize :term:`ROS` context
+        """
+        if not os.path.exists(cls.DOCKER_COMPOSE_FILE_PATH):
+            raise FileNotFoundError(
+                f"Could not find Docker Compose configuration at "
+                f"{cls.DOCKER_COMPOSE_FILE_PATH}. {cls.__name__} requires the "
+                f"configuration to start the "
+                f"{' and '.join(cls.DOCKER_COMPOSE_SERVICES.split(' '))} "
+                f"services to support launch testing."
+            )
+
+        logger.info(
+            f"Creating docker containers ({cls.DOCKER_COMPOSE_SERVICES}) to support "
+            f"launch testing. This may take several minutes..."
+        )
+        os.system(
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} "
+            f"create {cls.DOCKER_COMPOSE_SERVICES}"
+        )
+
+        logger.info(
+            f"Starting launch testing docker services "
+            f"({cls.DOCKER_COMPOSE_SERVICES})..."
+        )
+        os.system(
+            f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} "
+            f"up -d {cls.DOCKER_COMPOSE_SERVICES}"
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        """Shutdown :term:`ROS` context"""
+        logger.info(
+            f"Tearing down test case. Will not delete containers for "
+            f"Docker Compose services ({cls.DOCKER_COMPOSE_SERVICES}). You "
+            f"can delete all unused containers by typing "
+            f"'docker system prune' into your system shell."
+        )
+
+        logger.info(
+            f"Shutting down launch testing docker services "
+            f"({cls.DOCKER_COMPOSE_SERVICES})..."
+        )
+        os.system(f"docker compose -p gisnav -f {cls.DOCKER_COMPOSE_FILE_PATH} down")
+
+    @staticmethod
+    def _add_meters_to_coordinates(
+        lat_lon: Tuple[float, float], meters_north: float, meters_east: float
+    ):
+        """Adds meters to :term:`WGS 84` latitude and longitude degrees"""
+        point = ev.LatLon(*lat_lon)
+        new_point_north = point.destination(meters_north, 0)  # 0 degrees for North
+        new_point = new_point_north.destination(meters_east, 90)  # 90 degrees for East
+        return new_point.lat, new_point.lon
+
+    def setUp(self) -> None:
+        """Creates the :term:`ROS` helper nodes used for the tests"""
+        logger.info("Starting launch testing state publisher and listener nodes...")
+        rclpy.init()
+
+        self.state_publisher_node = MockStatePublisherNode("state_publisher_node")
+        self.state_listener_node = StateListenerNode("state_listener_node")
+        # Create a MultiThreadedExecutor
+        self.executor = MultiThreadedExecutor()
+        self.executor.add_node(self.state_publisher_node)
+        self.executor.add_node(self.state_listener_node)
+
+        # Spin the publisher and listener nodes in a separate thread
+        self.executor_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self.executor_thread.start()
+
+    def tearDown(self) -> None:
+        """Destroys the :term:`ROS` helper nodes used for the tests"""
+        logger.info("Destroying launch testing state publisher and listener nodes...")
+
+        assert self.state_publisher_node is not None
+        assert self.state_listener_node is not None
+        self.state_publisher_node.destroy_node()
+        self.state_listener_node.destroy_node()
+
+        # Call shutdown first before joining to ensure executor thread stops
+        # spinning nodes
+        rclpy.shutdown()
+        self.executor_thread.join()
+
+    def test_valid_vehicle_global_position(self) -> None:
+        """Tests that :class:`.GISNode` :term:`vehicle` :term:`global position`
+        output is correct when valid :ref:`MAVROS and camera messages
+        <Core data flow graph>` are published from :class:`.MockStatePublisherNode`.
+
+        This test varies the sent input by a few meters around the defaults
+        defined in :meth:`.publish_mavros_state` and checks that
+        :attr:`.GISNode.vehicle_geopose` and :attr:`.GISNode.vehicle_altitude`
+        match the input.
+
+        This test assumes the :ref:`mapserver Docker Compose service
+        <List of services>` is running and has :term:`orthoimagery` coverage
+        for the region defined by the global position input argument default values
+        published by :meth:`.publish_mavros_state` (:term:`KSQL airport <KSQl>`).
+
+        :raise: :class:`.AssertionError` if output does not match what is
+            expected based on input
+        """
+        delta_meters = tuple(np.arange(-10.0, 10.0, 10.0))
+
+        # Iterate through the valid range and test each combination
+        for delta_lat_meters in delta_meters:
+            for delta_lon_meters in delta_meters:
+                for delta_alt_meters in delta_meters:
+                    lat, lon = self._add_meters_to_coordinates(
+                        (
+                            MockStatePublisherNode.D_VEHICLE_LAT,
+                            MockStatePublisherNode.D_VEHICLE_LON,
+                        ),
+                        delta_lat_meters,
+                        delta_lon_meters,
+                    )
+                    alt = (
+                        MockStatePublisherNode.D_VEHICLE_ALT_AMSL_METERS
+                        + delta_alt_meters
+                    )
+
+                    # Since the nodes are being spun in a separate thread,
+                    # we don't need to manually spin them here.
+                    # Just introduce a delay or a condition to wait for the
+                    # expected output.
+                    for _ in range(2):
+                        assert self.state_publisher_node is not None
+                        time.sleep(3)
+                        # GISNode expects input from camera and MAVROS
+                        self.state_publisher_node.publish_camera_state()
+                        self.state_publisher_node.publish_mavros_state(
+                            vehicle_lat=lat,
+                            vehicle_lon=lon,
+                            vehicle_alt_amsl_meters=alt,
+                        )
+
+                    # Check the output of the GISNode
+                    assert self.state_listener_node is not None
+                    self.state_listener_node.assert_state(
+                        vehicle_lat=lat, vehicle_lon=lon, vehicle_alt_amsl_meters=alt
+                    )
+
+    """
+    def test_vehicle_global_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_vehicle_local_position_valid_range(self):
+        raise NotImplementedError
+
+    def test_vehicle_local_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_gimbal_device_attitude_status_valid_range(self):
+        raise NotImplementedError
+
+    def test_gimbal_device_attitude_status_invalid_range(self):
+        raise NotImplementedError
+
+    def test_home_position_valid_range(self):
+        raise NotImplementedError
+
+    def test_home_position_invalid_range(self):
+        raise NotImplementedError
+
+    def test_camera_info_valid_range(self):
+        raise NotImplementedError
+
+    def test_camera_info_invalid_range(self):
+        raise NotImplementedError
+
+    def test_path_invariance(self):
+        raise NotImplementedError
+
+    def test_wms_not_available(self):
+        raise NotImplementedError
+
+    def test_wms_disconnect(self):
+        raise NotImplementedError
+
+    def test_wms_reconnect(self):
+        raise NotImplementedError
+
+    def test_get_map_not_available(self):
+        raise NotImplementedError
+
+    def test_get_map_timeout(self):
+        raise NotImplementedError
+
+    def test_get_feature_info_not_available(self):
+        raise NotImplementedError
+
+    def test_get_feature_info_timeout(self):
+        raise NotImplementedError
+
+    def test_orthoimagery_not_available(self):
+        raise NotImplementedError
+
+    def test_dem_not_available(self):
+        raise NotImplementedError
+
+    def test_message_timestamp_too_old(self):
+        raise NotImplementedError
+    """
+
+
+class TestCVNodeCase(unittest.TestCase):
+    """Tests that :class:`.CVNode` produces expected output from given input"""
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""This module contains unit tests for the :attr:`.GISNode.vehicle_geopose` property"""
+"""This module contains unit tests for :class:`.GISNode`"""
 import unittest
 from unittest.mock import PropertyMock, patch
 
@@ -18,21 +18,7 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
     MOCK_ENU_LATITUDE = 37.523640
     MOCK_ENU_LONGITUDE = -122.255122
     MOCK_ENU_ALTITUDE = 100.0
-    MOCK_ENU_ROLL_DEG = 45
-    MOCK_ENU_PITCH_DEG = 30
-    MOCK_ENU_YAW_DEG = 60
-
-    # Expected NED values
-    EXPECTED_NED_ROLL_DEG = -MOCK_ENU_PITCH_DEG
-    EXPECTED_NED_PITCH_DEG = MOCK_ENU_ROLL_DEG
-    EXPECTED_NED_YAW_DEG = (
-        MOCK_ENU_YAW_DEG + 90
-    ) % 360  # Adding 90 and ensuring it's within [0, 360)
-    EXPECTED_NED_QUAT = Rotation.from_euler(
-        "XYZ",
-        [EXPECTED_NED_ROLL_DEG, EXPECTED_NED_PITCH_DEG, EXPECTED_NED_YAW_DEG],
-        degrees=True,
-    ).as_quat()
+    MOCK_ENU_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])  # x, y, z, w
 
     def __init__(self, *args, **kwargs):
         """Initializes the test case"""
@@ -59,15 +45,7 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
     def _valid_vehicle_pose(self) -> PoseStamped:
         """Valid mock :class:`geometry_msgs.msg.PoseStamped` message"""
         mock_vehicle_pose = PoseStamped()
-
-        # Convert Euler angles (roll, pitch, yaw) to quaternion
-        roll, pitch, yaw = (
-            np.radians(self.MOCK_ENU_ROLL_DEG),
-            np.radians(self.MOCK_ENU_PITCH_DEG),
-            np.radians(self.MOCK_ENU_YAW_DEG),
-        )
-        quaternion = Rotation.from_euler("XYZ", [roll, pitch, yaw]).as_quat()
-
+        quaternion = self.MOCK_ENU_QUATERNION
         mock_vehicle_pose.pose.orientation.x = quaternion[0]
         mock_vehicle_pose.pose.orientation.y = quaternion[1]
         mock_vehicle_pose.pose.orientation.z = quaternion[2]
@@ -84,6 +62,30 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         it's available.
         """
         return True
+
+    @staticmethod
+    def _enu_to_ned_quaternion(enu_quat: np.ndarray):
+        """Converts an :term:`ENU` quaternion to a :term:`NED` quaternion
+
+        Expects quaternion in (x, y, z, w) order.
+        """
+        # TODO: check if this is correct, alternative implementation below
+        # Define the transformation from ENU to NED
+        # enu_to_ned_transform = Rotation.from_euler("ZY", [np.pi, np.pi / 2])
+        # Convert the orientation from ENU to NED
+        # attitude_ned = Rotation.from_quat(enu_quat) * enu_to_ned_transform
+        # Return the quaternion representation of the orientation in NED
+        # return attitude_ned.as_quat()
+
+        enu_to_ned_transform = Rotation.from_euler(
+            "XYZ", np.array([np.pi, 0, np.pi / 2])
+        )
+        attitude_ned = Rotation.from_quat(enu_quat) * enu_to_ned_transform.inv()
+
+        rpy = attitude_ned.as_euler("XYZ", degrees=True)
+        rpy[0] = (rpy[0] + 180) % 360
+        attitude_ned = Rotation.from_euler("XYZ", rpy, degrees=True)
+        return attitude_ned.as_quat()
 
     def test_valid_inputs(self):
         """Tests that :attr:`.GISNode.vehicle_geopose` is correctly computed
@@ -116,15 +118,9 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
             self.assertEqual(pose.position.altitude, self.MOCK_ENU_ALTITUDE)
 
             # Assert NED orientation
-            expected_ned_quaternion = Rotation.from_euler(
-                "XYZ",
-                [
-                    self.EXPECTED_NED_ROLL_DEG,
-                    self.EXPECTED_NED_PITCH_DEG,
-                    self.EXPECTED_NED_YAW_DEG,
-                ],
-                degrees=True,
-            ).as_quat()
+            expected_ned_quaternion = self._enu_to_ned_quaternion(
+                self.MOCK_ENU_QUATERNION
+            )
             computed_orientation = np.array(
                 [
                     pose.orientation.x,
@@ -138,6 +134,18 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
             )
 
     # TODO: test attitude edge cases (e.g. gimbal lock, flying upside down, etc.)
+
+    def test_invalid_inputs(self):
+        raise NotImplementedError
+
+    def test_missing_inputs(self):
+        raise NotImplementedError
+
+    def test_orientation_edge_cases(self):
+        raise NotImplementedError
+
+    def test_global_position_edge_cases(self):
+        raise NotImplementedError
 
 
 if __name__ == "__main__":

@@ -10,7 +10,10 @@ test-sitl:
 test-launch:
 	@launch_test test/launch/test_px4_launch.py
 	@launch_test test/launch/test_ardupilot_launch.py
-# test end
+
+.PHONY: test-unit
+test-unit:
+	@python3 -m unittest discover -s test/unit -p "test_*.py"
 
 .PHONY: test-static
 test-static:

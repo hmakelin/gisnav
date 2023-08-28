@@ -71,6 +71,7 @@ packages_ = [
     pdata.package_name + ".core",
     pdata.package_name + ".extensions",
     "test",
+    "test.unit",
     "test.launch",
     "test.sitl",
 ]

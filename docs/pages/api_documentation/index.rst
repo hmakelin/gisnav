@@ -32,6 +32,7 @@ what you are looking for.
 .. toctree::
     :caption: Tests
 
+    test/unit
     test/launch
 
 .. toctree::

@@ -53,7 +53,6 @@ high-resolution orthophotos and an optional DEM. It also publishes vehicle
         geopoint_track -->|geographic_msgs/GeoPoint| CVNode
 
 """
-import time
 import xml.etree.ElementTree as ET
 from typing import IO, Final, List, Optional, Tuple
 
@@ -256,12 +255,6 @@ class GISNode(Node):
         handled as unexpected errors.
     """  # noqa: E501
 
-    _WMS_CONNECTION_ATTEMPT_DELAY_SEC = 10
-    """
-    Delay in seconds until a new WMS connection is attempted in case of
-    connection error
-    """
-
     ROS_D_URL = "http://127.0.0.1:80/wms"
     """Default WMS URL"""
 
@@ -273,6 +266,9 @@ class GISNode(Node):
 
     ROS_D_PUBLISH_RATE = 1
     """Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
+
+    ROS_D_WMS_POLL_RATE = 0.1
+    """Default WMS connection status poll rate in Hz"""
 
     ROS_D_LAYERS = ["imagery"]
     """Default WMS GetMap request layers parameter for image raster
@@ -383,9 +379,12 @@ class GISNode(Node):
         # TODO: refactor out CvBridge and use np.frombuffer instead
         self._cv_bridge = CvBridge()
 
-        # TODO: WMS connection handle disconnects, declare property
-        self._connected = False
-        self._connect_wms(self.wms_url, self.wms_version, self.wms_timeout)
+        wms_poll_rate = self.wms_poll_rate
+        assert wms_poll_rate is not None
+        self._wms_client = None  # TODO add type hint if possible
+        self._connect_wms_timer: Optional[Timer] = self._create_connect_wms_timer(
+            wms_poll_rate
+        )
 
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -438,6 +437,11 @@ class GISNode(Node):
         """WMS request format for all :term:`GetMap` requests"""
 
     @property
+    @ROS.parameter(ROS_D_WMS_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def wms_poll_rate(self) -> Optional[int]:
+        """:term:`WMS` connection status poll rate in Hz"""
+
+    @property
     @ROS.parameter(ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD)
     def min_map_overlap_update_threshold(self) -> Optional[float]:
         """Required :term:`bounding box` overlap ratio for new :term:`GetMap`
@@ -477,6 +481,23 @@ class GISNode(Node):
         timer = self.create_timer(1 / publish_rate, self.publish)
         return timer
 
+    @narrow_types
+    def _create_connect_wms_timer(self, poll_rate: float) -> Timer:
+        """Returns a timer that reconnects :term:`WMS` client when needed
+
+        :param poll_rate: WMS connection status poll rate for the timer (in Hz)
+        :return: The :class:`.Timer` instance
+        """
+        if poll_rate <= 0:
+            error_msg = (
+                f"WMS connection status poll rate must be positive ("
+                f"{poll_rate} Hz provided)."
+            )
+            self.get_logger().error(error_msg)
+            raise ValueError(error_msg)
+        timer = self.create_timer(1 / poll_rate, self._try_wms_client_instantiation)
+        return timer
+
     @property
     def _publish_timer(self) -> Timer:
         """:class:`gisnav_msgs.msg.OrthoImage3D` publish and map update timer"""
@@ -495,33 +516,43 @@ class GISNode(Node):
         """
         self.orthoimage
 
-    @narrow_types
-    def _connect_wms(self, url: str, version: str, timeout: int) -> None:
-        """Connects to WMS server"""
-        while not self.connected:
+    def _try_wms_client_instantiation(self) -> None:
+        """Attempts to instantiate :attr:`._wms_client`
+
+        Destroys :attr:`._connect_wms_timer` if instantiation is successful
+        """
+        self.get_logger().error("WMS CONNECTION TIMER")
+
+        @narrow_types
+        def _connect_wms(url: str, version: str, timeout: int, poll_rate: float):
             try:
+                assert self._wms_client is None
                 self.get_logger().info("Connecting to WMS endpoint...")
                 self._wms_client = WebMapService(url, version=version, timeout=timeout)
-                self.connected = True
+                self.get_logger().info("WMS client connection established.")
+
+                # We have the WMS client instance - we can now destroy the timer
+                assert self._connect_wms_timer is not None
+                self._connect_wms_timer.destroy()
             except requests.exceptions.ConnectionError as _:  # noqa: F841
+                # Expected error if no connection
                 self.get_logger().error(
-                    f"Could not connect to WMS endpoint, trying again in "
-                    f"{self._WMS_CONNECTION_ATTEMPT_DELAY_SEC} seconds..."
+                    f"Could not instantiate WMS client due to connection error, "
+                    f"trying again in {1 / poll_rate} seconds..."
                 )
-                time.sleep(self._WMS_CONNECTION_ATTEMPT_DELAY_SEC)
+                assert self._wms_client is None
+            except Exception as e:
+                # TODO: handle other exception types
+                self.get_logger().error(
+                    f"Could not instantiate WMS client due to unexpected exception "
+                    f"type ({type(e)}), trying again in {1 / poll_rate} seconds..."
+                )
+                assert self._wms_client is None
 
-        # TODO: any other errors that might prevent connection?
-        #  handle disconnect & reconnect
-        self.get_logger().info("WMS client setup complete.")
-
-    @property
-    def connected(self) -> bool:
-        """True if connected to WMS server"""
-        return self._connected
-
-    @connected.setter
-    def connected(self, value: bool) -> None:
-        self._connected = value
+        if self._wms_client is None:
+            _connect_wms(
+                self.wms_url, self.wms_version, self.wms_timeout, self.wms_poll_rate
+            )
 
     @narrow_types
     def _bounding_box_with_padding_for_latlon(

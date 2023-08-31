@@ -7,39 +7,39 @@ This module also defines default values for a starting global position and
 orientation that are appropriate for the :term:`KSQL` airport simulation.
 """
 import numpy as np
-from gisnav.messaging import create_header
-from sensor_msgs.msg import NavSatFix
 from geometry_msgs.msg import PoseStamped
+from sensor_msgs.msg import NavSatFix
 
+from gisnav.messaging import create_header
 
 VEHICLE_LATITUDE_DEGREES = 37.523640
-"""Default mock :term:`vehicle` :term:`KSQL` airport starting location 
+"""Default mock :term:`vehicle` :term:`KSQL` airport starting location
 :term:`WGS 84` latitude
 """
 
 
 VEHICLE_LONGITUDE_DEGREES = -122.255122
-"""Default mock :term:`vehicle` :term:`KSQL` airport starting location 
+"""Default mock :term:`vehicle` :term:`KSQL` airport starting location
 :term:`WGS 84` longitude
 """
 
 
 VEHICLE_ELLIPSOID_ALTITUDE_METERS = 100.0
-"""Default mock :term:`vehicle` :term:`KSQL` airport starting location 
+"""Default mock :term:`vehicle` :term:`KSQL` airport starting location
 :term:`ellipsoid` altitude in meters
 """
 
 
 VEHICLE_ENU_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])
-"""Default mock :term:`vehicle` :term:`KSQL` airport starting location 
+"""Default mock :term:`vehicle` :term:`KSQL` airport starting location
 :term:`orientation` quaternion in :term:`ENU` frame in (x, y, z, w) format.
 """
 
 
-def mock_navsatfix(
-        vehicle_lat_degrees: float = VEHICLE_LATITUDE_DEGREES,
-        vehicle_lon_degrees: float = VEHICLE_LONGITUDE_DEGREES,
-        vehicle_alt_ellipsoid_meters: float = VEHICLE_ELLIPSOID_ALTITUDE_METERS,
+def navsatfix(
+    vehicle_lat_degrees: float = VEHICLE_LATITUDE_DEGREES,
+    vehicle_lon_degrees: float = VEHICLE_LONGITUDE_DEGREES,
+    vehicle_alt_ellipsoid_meters: float = VEHICLE_ELLIPSOID_ALTITUDE_METERS,
 ) -> NavSatFix:
     """Returns a mock :class:`sensor_msgs.msg.NavSatFix` :term:`ROS` message
     based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
@@ -59,8 +59,8 @@ def mock_navsatfix(
     return navsatfix_msg
 
 
-def mock_vehicle_pose(
-        vehicle_enu_quaternion: float = VEHICLE_ENU_QUATERNION
+def vehicle_pose(
+    vehicle_enu_quaternion: np.ndarray = VEHICLE_ENU_QUATERNION,
 ) -> PoseStamped:
     """Returns a mock :class:`sensor_msgs.msg.PoseStamped` :term:`ROS` message
     based on given :term:`vehicle` :term:`ENU` quaternion.

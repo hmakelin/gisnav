@@ -1,9 +1,10 @@
+import test._mocks as mocks
 from typing import Optional, Tuple
 
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
-from geographic_msgs.msg import BoundingBox, GeoPose
+from geographic_msgs.msg import BoundingBox, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from pygeodesy.ellipsoidalNvector import LatLon
@@ -13,7 +14,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 
-from ..mocks import mock_navsatfix
 from gisnav._decorators import ROS
 from gisnav.messaging import create_header
 from gisnav.static_configuration import (
@@ -111,7 +111,9 @@ class MockStatePublisherNode(Node):
         :return: A :class:`sensor_msgs.msg.NavSatFix` message representing
             the vehicle's :term:`global position`
         """
-        return mock_navsatfix(vehicle_lat_degrees, vehicle_lon_degrees, vehicle_alt_ellipsoid_meters)
+        return mocks.navsatfix(
+            vehicle_lat_degrees, vehicle_lon_degrees, vehicle_alt_ellipsoid_meters
+        )
 
     @ROS.publish(
         "gisnav/gis_node/vehicle/geopose",
@@ -136,14 +138,14 @@ class MockStatePublisherNode(Node):
         :return: A :term:`geographic_msgs.msg.GeoPose` message representing the
             vehicle's :term:`geopose`
         """
-        geopose_msg = GeoPose()
+        geopose_msg = GeoPoseStamped()
         geopose_msg.header = create_header("base_link")
-        geopose_msg.position.latitude = vehicle_lat_degrees
-        geopose_msg.position.longitude = vehicle_lon_degrees
-        geopose_msg.position.altitude = vehicle_alt_ellipsoid_meters
+        geopose_msg.pose.position.latitude = vehicle_lat_degrees
+        geopose_msg.pose.position.longitude = vehicle_lon_degrees
+        geopose_msg.pose.position.altitude = vehicle_alt_ellipsoid_meters
 
         # TODO: implement heading_to_quaternion
-        # geopose_msg.orientation = heading_to_quaternion(vehicle_heading_ned)
+        # geopose_msg.pose.orientation = heading_to_quaternion(vehicle_heading_ned)
         return geopose_msg
 
     @ROS.publish(

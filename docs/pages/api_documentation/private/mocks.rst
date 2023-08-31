@@ -1,7 +1,7 @@
-Unit tests
+Mocks
 ____________________________________________________
 
-.. automodule:: test.unit.test_gisnode
+.. automodule:: test._mocks
    :autosummary:
    :members:
    :show-inheritance:

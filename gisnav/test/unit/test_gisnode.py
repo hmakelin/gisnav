@@ -1,15 +1,13 @@
 """This module contains unit tests for :class:`.GISNode`"""
+import test._mocks as mocks
 import unittest
-from unittest.mock import PropertyMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import PoseStamped
 from scipy.spatial.transform import Rotation
-from sensor_msgs.msg import NavSatFix
 
 from gisnav.core import GISNode
-import test._mocks as mocks
 
 
 class TestVehicleGeoPoseCase(unittest.TestCase):
@@ -51,6 +49,8 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         attitude_ned = Rotation.from_euler("XYZ", rpy, degrees=True)
         return attitude_ned.as_quat()
 
+    @patch.object(GISNode, "nav_sat_fix", mocks.navsatfix())
+    @patch.object(GISNode, "vehicle_pose", mocks.vehicle_pose())
     def test_valid_inputs(self):
         """Tests that :attr:`.GISNode.vehicle_geopose` is correctly computed
         when valid inputs ( :attr:`.GISNode.nav_sat_fix` and
@@ -59,45 +59,33 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         Tests both :term:`global position` and :term:`orientation` outputs
         of :attr:`.GISNode.vehicle_geopose`.
         """
-        # Mock the input messages, also need to pretend we are connected to WMS
-        with patch.object(
-            GISNode, "nav_sat_fix", new_callable=PropertyMock
-        ) as mock_nav_sat_fix, patch.object(
-            GISNode, "vehicle_pose", new_callable=PropertyMock
-        ) as mock_vehicle_pose, patch.object(
-            GISNode, "connected", new_callable=PropertyMock
-        ) as mock_connected:
-            mock_nav_sat_fix.return_value = mock_nav_sat_fix()
-            mock_vehicle_pose.return_value = mock_vehicle_pose()
-            mock_connected.return_value = True
+        # Create an instance of GISNode whose vehicle_geopose property is
+        # under test.
+        gis_node = GISNode("gis_node")
+        pose = gis_node.vehicle_geopose.pose
 
-            # Create an instance of GISNode whose vehicle_geopose property is
-            # under test. Instantiate only after patching to make sure any
-            # patches also apply to the initialization itself (e.g. `connected`
-            # property).
-            gis_node = GISNode("gis_node")
-            pose = gis_node.vehicle_geopose.pose
+        # Assert vehicle global position
+        self.assertEqual(pose.position.latitude, mocks.VEHICLE_LATITUDE_DEGREES)
+        self.assertEqual(pose.position.longitude, mocks.VEHICLE_LONGITUDE_DEGREES)
+        self.assertEqual(
+            pose.position.altitude, mocks.VEHICLE_ELLIPSOID_ALTITUDE_METERS
+        )
 
-            # Assert vehicle global position
-            self.assertEqual(pose.position.latitude, mocks.VEHICLE_LATITUDE_DEGREES)
-            self.assertEqual(pose.position.longitude, mocks.VEHICLE_LONGITUDEDEGREES)
-            self.assertEqual(pose.position.altitude, mocks.VEHICLE_ELLIPSOID_ALTITUDE_METERS)
-
-            # Assert vehicle NED frame orientation
-            expected_ned_quaternion = self._enu_to_ned_quaternion(
-                mocks.VEHICLE_ENU_QUATERNION
-            )
-            computed_orientation = np.array(
-                [
-                    pose.orientation.x,
-                    pose.orientation.y,
-                    pose.orientation.z,
-                    pose.orientation.w,
-                ]
-            )
-            np.testing.assert_array_almost_equal(
-                computed_orientation, expected_ned_quaternion, decimal=5
-            )
+        # Assert vehicle NED frame orientation
+        expected_ned_quaternion = self._enu_to_ned_quaternion(
+            mocks.VEHICLE_ENU_QUATERNION
+        )
+        computed_orientation = np.array(
+            [
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+                pose.orientation.w,
+            ]
+        )
+        np.testing.assert_array_almost_equal(
+            computed_orientation, expected_ned_quaternion, decimal=5
+        )
 
     # TODO: test attitude edge cases (e.g. gimbal lock, flying upside down, etc.)
 

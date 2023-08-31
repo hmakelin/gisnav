@@ -13,6 +13,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 
+from ..mocks import mock_navsatfix
 from gisnav._decorators import ROS
 from gisnav.messaging import create_header
 from gisnav.static_configuration import (
@@ -100,10 +101,9 @@ class MockStatePublisherNode(Node):
         vehicle_lon_degrees: float,
         vehicle_alt_ellipsoid_meters: float,
     ) -> NavSatFix:
-        """
-        Publishes a :class:`sensor_msgs.msg.NavSatFix` :term:`ROS` message
+        """Publishes a :class:`sensor_msgs.msg.NavSatFix` :term:`ROS` message
         based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
-        coordinates and :term:`ellipsoide` altitude in meters.
+        coordinates and :term:`ellipsoid` altitude in meters.
 
         :param vehicle_lat_degrees: Vehicle WGS 84 latitude coordinate in degrees
         :param vehicle_lon_degrees: Vehicle WGS 84 longitude coordinate in degrees
@@ -111,12 +111,7 @@ class MockStatePublisherNode(Node):
         :return: A :class:`sensor_msgs.msg.NavSatFix` message representing
             the vehicle's :term:`global position`
         """
-        navsatfix_msg = NavSatFix()
-        navsatfix_msg.header = create_header("base_link")
-        navsatfix_msg.latitude = vehicle_lat_degrees
-        navsatfix_msg.longitude = vehicle_lon_degrees
-        navsatfix_msg.altitude = vehicle_alt_ellipsoid_meters
-        return navsatfix_msg
+        return mock_navsatfix(vehicle_lat_degrees, vehicle_lon_degrees, vehicle_alt_ellipsoid_meters)
 
     @ROS.publish(
         "gisnav/gis_node/vehicle/geopose",
@@ -128,10 +123,9 @@ class MockStatePublisherNode(Node):
         vehicle_lon_degrees: float,
         vehicle_alt_ellipsoid_meters: float,
         vehicle_heading_ned: float,
-    ) -> GeoPose:
-        """
-        Publishes a :term:`geographic_msgs.msg.GeoPose` :term:`ROS` message
-        based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
+    ) -> GeoPoseStamped:
+        """Publishes a :term:`geographic_msgs.msg.GeoPoseStamped` :term:`ROS`
+        message based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
         coordinates and :term:`ellipsoid` altitude in meters, and heading
         in :term:`NED` frame in degrees.
 

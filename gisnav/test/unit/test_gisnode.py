@@ -9,16 +9,11 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import NavSatFix
 
 from gisnav.core import GISNode
+import test._mocks as mocks
 
 
 class TestVehicleGeoPoseCase(unittest.TestCase):
     """Unit tests the :attr:`.GISNode.vehicle_geopose` property"""
-
-    # Mocked ENU values
-    MOCK_ENU_LATITUDE = 37.523640
-    MOCK_ENU_LONGITUDE = -122.255122
-    MOCK_ENU_ALTITUDE = 100.0
-    MOCK_ENU_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])  # x, y, z, w
 
     def __init__(self, *args, **kwargs):
         """Initializes the test case"""
@@ -31,37 +26,6 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
     def tearDown(self):
         """Shuts down rclpy context"""
         rclpy.shutdown()
-
-    @property
-    def _valid_nav_sat_fix(self) -> NavSatFix:
-        """Valid mock :class:`sensor_msgs.msg.NavSatFix` message"""
-        mock_nav_sat_fix = NavSatFix()
-        mock_nav_sat_fix.latitude = self.MOCK_ENU_LATITUDE
-        mock_nav_sat_fix.longitude = self.MOCK_ENU_LONGITUDE
-        mock_nav_sat_fix.altitude = self.MOCK_ENU_ALTITUDE
-        return mock_nav_sat_fix
-
-    @property
-    def _valid_vehicle_pose(self) -> PoseStamped:
-        """Valid mock :class:`geometry_msgs.msg.PoseStamped` message"""
-        mock_vehicle_pose = PoseStamped()
-        quaternion = self.MOCK_ENU_QUATERNION
-        mock_vehicle_pose.pose.orientation.x = quaternion[0]
-        mock_vehicle_pose.pose.orientation.y = quaternion[1]
-        mock_vehicle_pose.pose.orientation.z = quaternion[2]
-        mock_vehicle_pose.pose.orientation.w = quaternion[3]
-
-        return mock_vehicle_pose
-
-    @property
-    def _valid_connected_true(self) -> PoseStamped:
-        """Valid :attr:`.GISNode.connected` is True mock
-
-        Using this mock will enable the test to skip trying to have
-        :class:`.GISNode` connect to the :term:`WMS` service and assume that
-        it's available.
-        """
-        return True
 
     @staticmethod
     def _enu_to_ned_quaternion(enu_quat: np.ndarray):
@@ -95,7 +59,7 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         Tests both :term:`global position` and :term:`orientation` outputs
         of :attr:`.GISNode.vehicle_geopose`.
         """
-        # Mock the my_property of the MyNode class
+        # Mock the input messages, also need to pretend we are connected to WMS
         with patch.object(
             GISNode, "nav_sat_fix", new_callable=PropertyMock
         ) as mock_nav_sat_fix, patch.object(
@@ -103,23 +67,25 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         ) as mock_vehicle_pose, patch.object(
             GISNode, "connected", new_callable=PropertyMock
         ) as mock_connected:
-            mock_nav_sat_fix.return_value = self._valid_nav_sat_fix
-            mock_vehicle_pose.return_value = self._valid_vehicle_pose
-            mock_connected.return_value = self._valid_connected_true
+            mock_nav_sat_fix.return_value = mock_nav_sat_fix()
+            mock_vehicle_pose.return_value = mock_vehicle_pose()
+            mock_connected.return_value = True
 
-            # Create an instance of the node whose properties are under test.
-            # Only after patching to make sure any patches also apply to
-            # initialization
+            # Create an instance of GISNode whose vehicle_geopose property is
+            # under test. Instantiate only after patching to make sure any
+            # patches also apply to the initialization itself (e.g. `connected`
+            # property).
             gis_node = GISNode("gis_node")
             pose = gis_node.vehicle_geopose.pose
-            # Assert global position
-            self.assertEqual(pose.position.latitude, self.MOCK_ENU_LATITUDE)
-            self.assertEqual(pose.position.longitude, self.MOCK_ENU_LONGITUDE)
-            self.assertEqual(pose.position.altitude, self.MOCK_ENU_ALTITUDE)
 
-            # Assert NED orientation
+            # Assert vehicle global position
+            self.assertEqual(pose.position.latitude, mocks.VEHICLE_LATITUDE_DEGREES)
+            self.assertEqual(pose.position.longitude, mocks.VEHICLE_LONGITUDEDEGREES)
+            self.assertEqual(pose.position.altitude, mocks.VEHICLE_ELLIPSOID_ALTITUDE_METERS)
+
+            # Assert vehicle NED frame orientation
             expected_ned_quaternion = self._enu_to_ned_quaternion(
-                self.MOCK_ENU_QUATERNION
+                mocks.VEHICLE_ENU_QUATERNION
             )
             computed_orientation = np.array(
                 [

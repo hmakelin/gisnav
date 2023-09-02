@@ -438,7 +438,7 @@ class GISNode(Node):
 
     @property
     @ROS.parameter(ROS_D_WMS_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def wms_poll_rate(self) -> Optional[int]:
+    def wms_poll_rate(self) -> Optional[float]:
         """:term:`WMS` connection status poll rate in Hz"""
 
     @property

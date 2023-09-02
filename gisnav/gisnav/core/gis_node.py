@@ -522,7 +522,7 @@ class GISNode(Node):
         Destroys :attr:`._connect_wms_timer` if instantiation is successful
         """
 
-        @narrow_types
+        @narrow_types(self)
         def _connect_wms(url: str, version: str, timeout: int, poll_rate: float):
             try:
                 assert self._wms_client is None

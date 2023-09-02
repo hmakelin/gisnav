@@ -1,0 +1,20 @@
+name: Run unit tests
+
+on:
+  workflow_run:
+    workflows: [ "Build and upload gisnav Docker image to GHCR" ]
+    types:
+      - completed
+
+  # Allows running manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Run unit tests
+        run: docker run ghcr.io/${{ github.repository }}:latest make test-unit

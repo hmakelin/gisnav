@@ -32,6 +32,7 @@ what you are looking for.
 .. toctree::
     :caption: Tests
 
+    test/unit
     test/launch
 
 .. toctree::
@@ -41,3 +42,4 @@ what you are looking for.
     private/rclpy_decorators
     private/state_listener
     private/mock_state_publisher
+    test/mocks

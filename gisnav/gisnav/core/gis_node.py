@@ -521,7 +521,6 @@ class GISNode(Node):
 
         Destroys :attr:`._connect_wms_timer` if instantiation is successful
         """
-        self.get_logger().error("WMS CONNECTION TIMER")
 
         @narrow_types
         def _connect_wms(url: str, version: str, timeout: int, poll_rate: float):
@@ -1164,12 +1163,19 @@ class GISNode(Node):
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
     ) -> Optional[np.ndarray]:
         """Sends WMS :term:`GetMap` request and returns response :term:`raster`"""
+        if self._wms_client is None:
+            self.get_logger().warning(
+                "WMS client not instantiated. Skipping sending GetMap request."
+            )
+            return None
+
         self.get_logger().info(
             f"Sending GetMap request for bbox: {bbox}, layers: {layers}."
         )
         try:
             # Do not handle possible requests library related exceptions here
             # (see class docstring)
+            assert self._wms_client is not None
             img: IO = self._wms_client.getmap(
                 layers=layers,
                 styles=styles,
@@ -1236,13 +1242,19 @@ class GISNode(Node):
                 )
                 return None
 
-        """Sends WMS GetFeatureInfo request and returns float value"""
+        if self._wms_client is None:
+            self.get_logger().warning(
+                "WMS client not instantiated. Skipping sending GetFeatureInfo request."
+            )
+            return None
+
         self.get_logger().info(
             f"Sending GetFeatureInfo request for xy: {bbox}, xy {xy}, layers: {layers}."
         )
         try:
             # Do not handle possible requests library related exceptions here
             # (see class docstring)
+            assert self._wms_client is not None
             feature_info: IO = self._wms_client.getfeatureinfo(
                 layers=layers,
                 styles=styles,

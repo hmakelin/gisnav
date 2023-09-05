@@ -905,10 +905,17 @@ class CVNode(Node):
         Performs call to pose estimation service and returns pose as (r, t) tuple,
         or None if not available
         """
-        response = requests.post(
-            pose_estimator_endpoint,
-            data={k: pickle.dumps(v) for k, v in inputs.items()},
-        )
+        try:
+            response = requests.post(
+                pose_estimator_endpoint,
+                data={k: pickle.dumps(v) for k, v in inputs.items()},
+            )
+        except requests.exceptions.ConnectionError as ce:
+            self.get_logger().warn(
+                f"Could not estimate pose because of connection error with"
+                f"pose estimation endpoint: {ce}"
+            )
+            return None
 
         # TODO: timeout, connection errors, exceptions etc.
         if response.status_code == 200:

@@ -264,7 +264,7 @@ class GISNode(Node):
     ROS_D_TIMEOUT = 10
     """Default WMS GetMap request timeout in seconds"""
 
-    ROS_D_PUBLISH_RATE = 1
+    ROS_D_PUBLISH_RATE = 1.0
     """Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
 
     ROS_D_WMS_POLL_RATE = 0.1
@@ -461,11 +461,11 @@ class GISNode(Node):
 
     @property
     @ROS.parameter(ROS_D_PUBLISH_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def publish_rate(self) -> Optional[int]:
+    def publish_rate(self) -> Optional[float]:
         """Publish rate in Hz for the :attr:`.orthoimage` :term:`message`"""
 
     @narrow_types
-    def _create_publish_timer(self, publish_rate: int) -> Timer:
+    def _create_publish_timer(self, publish_rate: float) -> Timer:
         """
         Returns a timer to publish :attr:`.orthoimage` to ROS
 
@@ -1338,8 +1338,10 @@ class GISNode(Node):
 
         # Use cached orthoimage if available, do not try to recompute to avoid
         # circular dependencies
-        dem_height_meters_at_latlon = _dem_elevation_meters_at_latlon(
-            latitude, longitude, self._orthoimage
+        dem_height_meters_at_latlon = (
+            _dem_elevation_meters_at_latlon(latitude, longitude, self._orthoimage)
+            if hasattr(self, "_orthoimage")
+            else None
         )
         if dem_height_meters_at_latlon is None:
             dem_height_meters_at_latlon = self._dem_elevation_meters_at_latlon_wms(

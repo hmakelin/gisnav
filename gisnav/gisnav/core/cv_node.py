@@ -552,6 +552,7 @@ class CVNode(Node):
 
     @property
     @cache_if(_should_estimate_geopose)
+    @ROS.retain_oldest_header
     def _geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
         """
         Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`

@@ -672,6 +672,7 @@ class GISNode(Node):
         """Published :term:`vehicle` :term:`geopose`, or None if not available"""
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
             # Position
             latitude, longitude = (
@@ -788,6 +789,7 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _ground_track_geopose(
             geopose: GeoPoseStamped, ground_track_elevation_ellipsoid: float
         ):
@@ -814,6 +816,7 @@ class GISNode(Node):
         """Published :term:`vehicle` :term:`altitude`, or None if not available"""
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _vehicle_altitude(
             geopose: GeoPoseStamped,
             egm96_height: float,  # Float32,

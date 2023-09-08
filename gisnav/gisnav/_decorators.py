@@ -665,3 +665,33 @@ class ROS:
             return wrapper
 
         return decorator
+
+    @staticmethod
+    def retain_oldest_header(func: Callable):
+        """Edits output :term:`ROS` message to have the same header as the oldest
+        input ROS message
+        """
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Get all ROS message headers from the inputs
+            headers = [arg.header for arg in args if hasattr(arg, "header")]
+
+            # If there are headers, find the oldest timestamp
+            if headers:
+                oldest_timestamp = min(
+                    (header.stamp for header in headers), default=None
+                )
+            else:
+                oldest_timestamp = None
+
+            # Call the original function
+            result = func(*args, **kwargs)
+
+            # If we found a timestamp, set it in the result
+            if oldest_timestamp:
+                result.header.stamp = oldest_timestamp
+
+            return result
+
+        return wrapper

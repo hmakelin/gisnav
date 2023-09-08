@@ -667,18 +667,30 @@ class ROS:
         return decorator
 
     @staticmethod
-    def retain_oldest_header(func: Callable):
-        """Edits output :term:`ROS` message to have the same header as the oldest
-        input ROS message
+    def retain_oldest_header(func: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorator to ensure that the output :term:`ROS` message's timestamp
+        inherits the oldest timestamp from the input ROS messages.
+
+        The decorated function is expected to process input in the form of ROS
+        messages and produce an output, which is another ROS message.
+
+        This decorator assumes:
+        1. Any input argument with a `header` attribute also has a `stamp`
+           attribute within the header.
+        2. The output of the decorated function has a `header` attribute with a
+           `stamp` attribute.
+
+        :param func: The function to be decorated.
+        :returns: The wrapped function.
         """
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs) -> Optional[Any]:
             # Get all ROS message headers from the inputs
             headers = [arg.header for arg in args if hasattr(arg, "header")]
 
             # If there are headers, find the oldest timestamp
-            if headers:
+            if headers:  # empty list evaluates to False
                 oldest_timestamp = min(
                     (header.stamp for header in headers), default=None
                 )
@@ -688,8 +700,12 @@ class ROS:
             # Call the original function
             result = func(*args, **kwargs)
 
-            # If we found a timestamp, set it in the result
-            if oldest_timestamp:
+            # If result is not None and we found a timestamp, set it in the result
+            if (
+                result is not None
+                and oldest_timestamp is not None
+                and hasattr(result, "header")
+            ):
                 result.header.stamp = oldest_timestamp
 
             return result

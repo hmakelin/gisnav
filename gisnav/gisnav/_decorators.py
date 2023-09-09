@@ -695,13 +695,13 @@ class ROS:
             # If there are headers, find the one with oldest timestamp
             # Use timestamp seconds, ignore nanoseconds
             if headers:  # empty list evaluates to False
-                oldest_timestamp = min(
-                    (header.stamp for header in headers),
-                    key=lambda stamp: stamp.sec,
+                oldest_header = min(
+                    headers,
+                    key=lambda header: header.stamp.sec,
                     default=None,
                 )
             else:
-                oldest_timestamp = None
+                oldest_header = None
 
             # Call the original function
             result = func(*args, **kwargs)
@@ -709,10 +709,10 @@ class ROS:
             # If result is not None and we found a timestamp, set it in the result
             if (
                 result is not None
-                and oldest_timestamp is not None
+                and oldest_header is not None
                 and hasattr(result, "header")
             ):
-                result.header.stamp = oldest_timestamp
+                result.header = oldest_header
 
             return result
 

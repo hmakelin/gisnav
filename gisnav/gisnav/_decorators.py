@@ -689,10 +689,13 @@ class ROS:
             # Get all ROS message headers from the inputs
             headers = [arg.header for arg in args if hasattr(arg, "header")]
 
-            # If there are headers, find the oldest timestamp
+            # If there are headers, find the one with oldest timestamp
+            # Use timestamp seconds, ignore nanoseconds
             if headers:  # empty list evaluates to False
                 oldest_timestamp = min(
-                    (header.stamp for header in headers), default=None
+                    (header.stamp for header in headers),
+                    key=lambda stamp: stamp.sec,
+                    default=None,
                 )
             else:
                 oldest_timestamp = None

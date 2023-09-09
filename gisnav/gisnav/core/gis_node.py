@@ -682,7 +682,6 @@ class GISNode(Node):
             altitude = nav_sat_fix.altitude
 
             return GeoPoseStamped(
-                header=messaging.create_header("base_link"),
                 pose=GeoPose(
                     position=GeoPoint(
                         latitude=latitude, longitude=longitude, altitude=altitude
@@ -794,7 +793,6 @@ class GISNode(Node):
             geopose: GeoPoseStamped, ground_track_elevation_ellipsoid: float
         ):
             return GeoPoseStamped(
-                header=messaging.create_header("base_link"),
                 pose=GeoPose(
                     position=GeoPoint(
                         latitude=geopose.pose.position.latitude,
@@ -828,7 +826,6 @@ class GISNode(Node):
 
             # Define local == -relative, terrain == bottom_clearance
             altitude = Altitude(
-                header=messaging.create_header("base_link"),
                 amsl=altitude_amsl,
                 local=local,  # TODO: home altitude ok?
                 relative=-local,  # TODO: check sign

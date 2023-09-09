@@ -164,19 +164,20 @@ class MockGPSNode(Node):
         is ``True``
         """
 
-        @narrow_types
+        @narrow_types(self)
         def _sensor_gps(
             vehicle_estimated_geopose: GeoPoseStamped,
             vehicle_estimated_altitude: Altitude,
+            device_id: int,
         ) -> Optional[SensorGps]:
             # TODO: check yaw sign (NED or ENU?)
-            q = messaging.as_np_quaternion(self._geopose_estimate.pose.orientation)
+            q = messaging.as_np_quaternion(vehicle_estimated_geopose.pose.orientation)
             yaw = Attitude(q=q).yaw
             yaw = int(np.degrees(yaw % (2 * np.pi)))
             yaw = 360 if yaw == 0 else yaw  # MAVLink definition 0 := not available
 
             satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(self._geopose_estimate.header)
+            timestamp = messaging.usec_from_header(vehicle_estimated_geopose.header)
 
             eph = 10.0
             epv = 1.0
@@ -186,15 +187,17 @@ class MockGPSNode(Node):
             msg = SensorGps()
             msg.timestamp = int(timestamp)
             msg.timestamp_sample = int(timestamp)
-            msg.device_id = self._device_id
+            msg.device_id = device_id
             # msg.device_id = 0
             msg.fix_type = 3
             msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
             msg.c_variance_rad = np.nan
-            msg.lat = int(self._geopose_estimate.pose.position.latitude * 1e7)
-            msg.lon = int(self._geopose_estimate.pose.position.longitude * 1e7)
+            msg.lat = int(vehicle_estimated_geopose.pose.position.latitude * 1e7)
+            msg.lon = int(vehicle_estimated_geopose.pose.position.longitude * 1e7)
             msg.alt = int(vehicle_estimated_altitude.amsl * 1e3)
-            msg.alt_ellipsoid = int(self._geopose_estimate.pose.position.altitude * 1e3)
+            msg.alt_ellipsoid = int(
+                vehicle_estimated_geopose.pose.position.altitude * 1e3
+            )
             msg.eph = eph
             msg.epv = epv
             msg.hdop = 0.0
@@ -219,7 +222,9 @@ class MockGPSNode(Node):
             return msg
 
         return _sensor_gps(
-            self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
+            self.vehicle_estimated_geopose,
+            self.vehicle_estimated_altitude,
+            self._device_id,
         )
 
     @property

@@ -967,14 +967,13 @@ class GISNode(Node):
         # used as @cache_if predicate for self.orthoimage
         # Cast None to False (assume bounding box not yet available)
         return (
-            bool(
-                _orthoimage_overlap_is_too_low(
-                    self._bounding_box,
-                    self._orthoimage,
-                    self.min_map_overlap_update_threshold,
-                )
-            )
+            not hasattr(self, "_orthoimage")
             or not self._orthoimage
+            or _orthoimage_overlap_is_too_low(
+                self._bounding_box,
+                self._orthoimage,
+                self.min_map_overlap_update_threshold,
+            )
         )
 
     @property

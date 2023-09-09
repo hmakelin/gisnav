@@ -684,6 +684,9 @@ class ROS:
         :returns: The wrapped function.
         """
 
+        # TODO: it would be better to just retain oldest timestamp, and leave
+        #  header creation explicit (e.g. frame_id might not be same as in
+        #  input messages)
         @wraps(func)
         def wrapper(*args, **kwargs) -> Optional[Any]:
             # Get all ROS message headers from the inputs

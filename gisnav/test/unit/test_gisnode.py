@@ -51,10 +51,14 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
 
     @patch.object(GISNode, "nav_sat_fix", mocks.navsatfix())
     @patch.object(GISNode, "vehicle_pose", mocks.vehicle_pose())
-    def test_valid_inputs(self):
+    def test_default_valid_values(self):
         """Tests that :attr:`.GISNode.vehicle_geopose` is correctly computed
-        when valid inputs ( :attr:`.GISNode.nav_sat_fix` and
-        :attr:`.GISNode.vehicle_pose`) are available.
+        when the default mock inputs for :attr:`.GISNode.nav_sat_fix` and
+        :attr:`.GISNode.vehicle_pose` are available.
+
+        The default location is at :term:`KSQL` airport as determined by
+        :attr:`.GISNode.nav_sat_fix` and the :term:`vehicle` :term:`ENU`
+        orientation is at origin as determined by :attr:`.GISNode.vehicle_pose`.
 
         Tests both :term:`global position` and :term:`orientation` outputs
         of :attr:`.GISNode.vehicle_geopose`.
@@ -87,7 +91,12 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
             computed_orientation, expected_ned_quaternion, decimal=5
         )
 
-    # TODO: test attitude edge cases (e.g. gimbal lock, flying upside down, etc.)
+    def test_enu_orientation_conversion(self):
+        """Tests that :attr:`.GISNode.vehicle_geopose` :term:`NED` orientation
+        is correctly computed when :attr:`.GISNode.vehicle_pose` :term:`ENU`
+        orientation changes.
+        """
+        raise NotImplementedError
 
     def test_invalid_inputs(self):
         raise NotImplementedError

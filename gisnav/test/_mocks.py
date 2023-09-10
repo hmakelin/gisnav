@@ -36,6 +36,18 @@ VEHICLE_ENU_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])
 """
 
 
+CAMERA_FRD_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])
+"""Default mock :term:`camera` :term:`FRD` frame :term:`orientation` in
+(x, y, z, w) format.
+
+Origin defined as looking directly down from body, with top side of image
+perpendicular  to direction the :term:`vehicle` is facing. This is because in
+most use cases camera is expected to be looking down :term:`nadir`, so it makes
+sense to define origin theret (or close to there in case of vehicle body
+relative orientation) to avoid gimbal lock.
+"""
+
+
 def navsatfix(
     vehicle_lat_degrees: float = VEHICLE_LATITUDE_DEGREES,
     vehicle_lon_degrees: float = VEHICLE_LONGITUDE_DEGREES,
@@ -75,3 +87,29 @@ def vehicle_pose(
     pose.pose.orientation.z = vehicle_enu_quaternion[2]
     pose.pose.orientation.w = vehicle_enu_quaternion[3]
     return pose
+
+
+def gimbal_device_attitude_status(
+    vehicle_frd_quaternion: np.ndarray = CAMERA_FRD_QUATERNION,
+) -> GimbalDeviceAttitudeStatus:
+    """Returns a mock :class:`mavros_mssgs.msg.GimbalDeviceAttitudeStatus`
+    :term:`ROS` message based on given :term:`camera` :term:`FRD`
+    :term:`orientation`.
+
+     Origin defined as looking directly down from body, with top side of image
+     perpendicular to direction the :term:`vehicle` is facing. This is because
+     in most use cases camera is expected to be looking down :term:`nadir`, so
+     it makes sense to define origin there to avoid gimbal lock.
+
+    :param vehicle_frd_quaternion: Vehicle ENU quaternion in (x, y, z, w) format
+    :return: A :class:`sensor_msgs.msg.GimbalDeviceAttitudeStatus` message representing
+        the camera's :term:`orientation in :term:`FRD` frame
+    """
+    attitude = GimbalDeviceAttitudeStatus()
+    attitude.q = Quaternion(
+        x=q[0],
+        y=q[1],
+        z=q[2],
+        w=q[3],
+    )
+    return attitude

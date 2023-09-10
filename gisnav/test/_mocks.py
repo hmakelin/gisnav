@@ -7,7 +7,8 @@ This module also defines default values for a starting global position and
 orientation that are appropriate for the :term:`KSQL` airport simulation.
 """
 import numpy as np
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Quaternion
+from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from sensor_msgs.msg import NavSatFix
 
 from gisnav.messaging import create_header
@@ -90,7 +91,7 @@ def vehicle_pose(
 
 
 def gimbal_device_attitude_status(
-    vehicle_frd_quaternion: np.ndarray = CAMERA_FRD_QUATERNION,
+    camera_frd_quaternion: np.ndarray = CAMERA_FRD_QUATERNION,
 ) -> GimbalDeviceAttitudeStatus:
     """Returns a mock :class:`mavros_mssgs.msg.GimbalDeviceAttitudeStatus`
     :term:`ROS` message based on given :term:`camera` :term:`FRD`
@@ -101,15 +102,15 @@ def gimbal_device_attitude_status(
      in most use cases camera is expected to be looking down :term:`nadir`, so
      it makes sense to define origin there to avoid gimbal lock.
 
-    :param vehicle_frd_quaternion: Vehicle ENU quaternion in (x, y, z, w) format
+    :param camera_frd_quaternion: Camera FRD quaternion in (x, y, z, w) format
     :return: A :class:`sensor_msgs.msg.GimbalDeviceAttitudeStatus` message representing
         the camera's :term:`orientation in :term:`FRD` frame
     """
     attitude = GimbalDeviceAttitudeStatus()
     attitude.q = Quaternion(
-        x=q[0],
-        y=q[1],
-        z=q[2],
-        w=q[3],
+        x=camera_frd_quaternion[0],
+        y=camera_frd_quaternion[1],
+        z=camera_frd_quaternion[2],
+        w=camera_frd_quaternion[3],
     )
     return attitude

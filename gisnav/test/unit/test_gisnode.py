@@ -1,7 +1,7 @@
 """This module contains unit tests for :class:`.GISNode`"""
 import test._mocks as mocks
 import unittest
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import numpy as np
 import rclpy
@@ -17,11 +17,13 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         """Initializes the test case"""
         super().__init__(*args, **kwargs)
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """Initializes rclpy context"""
         rclpy.init()
 
-    def tearDown(self):
+    @classmethod
+    def tearDownClass(cls):
         """Shuts down rclpy context"""
         rclpy.shutdown()
 
@@ -49,47 +51,64 @@ class TestVehicleGeoPoseCase(unittest.TestCase):
         attitude_ned = Rotation.from_euler("XYZ", rpy, degrees=True)
         return attitude_ned.as_quat()
 
-    @patch.object(GISNode, "nav_sat_fix", mocks.navsatfix())
+    @staticmethod
+    def _generate_random_quaternions(n):
+        quaternions = []
+        for _ in range(n):
+            rand_nums = np.random.randn(4)
+            norm = np.linalg.norm(rand_nums)
+            quaternion = rand_nums / norm  # Normalize to have a magnitude of 1
+            quaternions.append(quaternion)
+        return np.array(quaternions)
+
     @patch.object(GISNode, "vehicle_pose", mocks.vehicle_pose())
-    def test_default_valid_values(self):
+    def test_valid_navsatfix_input(self):
         """Tests that :attr:`.GISNode.vehicle_geopose` is correctly computed
-        when the default mock inputs for :attr:`.GISNode.nav_sat_fix` and
-        :attr:`.GISNode.vehicle_pose` are available.
-
-        The default location is at :term:`KSQL` airport as determined by
-        :attr:`.GISNode.nav_sat_fix` and the :term:`vehicle` :term:`ENU`
-        orientation is at origin as determined by :attr:`.GISNode.vehicle_pose`.
-
-        Tests both :term:`global position` and :term:`orientation` outputs
-        of :attr:`.GISNode.vehicle_geopose`.
+        given various valid :attr:`.GISNode.nav_sat_fix` values when a valid
+        for :attr:`.GISNode.vehicle_pose` is available.
         """
-        # Create an instance of GISNode whose vehicle_geopose property is
-        # under test.
-        gis_node = GISNode("gis_node")
-        pose = gis_node.vehicle_geopose.pose
+        with patch(
+            "gisnav.core.GISNode.nav_sat_fix", new_callable=PropertyMock
+        ) as mock_navsatfix:
+            mock_navsatfix.return_value = mocks.navsatfix()
+            # Create an instance of GISNode whose vehicle_geopose property is
+            # under test.
+            gis_node = GISNode("gis_node")
+            pose = gis_node.vehicle_geopose.pose
+            self.assertEqual(pose.position.latitude, mocks.VEHICLE_LATITUDE_DEGREES)
+            self.assertEqual(pose.position.longitude, mocks.VEHICLE_LONGITUDE_DEGREES)
+            self.assertEqual(
+                pose.position.altitude, mocks.VEHICLE_ELLIPSOID_ALTITUDE_METERS
+            )
 
-        # Assert vehicle global position
-        self.assertEqual(pose.position.latitude, mocks.VEHICLE_LATITUDE_DEGREES)
-        self.assertEqual(pose.position.longitude, mocks.VEHICLE_LONGITUDE_DEGREES)
-        self.assertEqual(
-            pose.position.altitude, mocks.VEHICLE_ELLIPSOID_ALTITUDE_METERS
-        )
+    @patch.object(GISNode, "nav_sat_fix", mocks.navsatfix())
+    def test_valid_pose_input(self):
+        """Tests that :attr:`.GISNode.vehicle_geopose` is correctly computed
+        given various valid :attr:`.GISNode.vehicle_pose` values when a valid
+        for :attr:`.GISNode.nav_sat_fix` is available.
+        """
+        with patch(
+            "gisnav.core.GISNode.vehicle_pose", new_callable=PropertyMock
+        ) as mock_vehicle_pose:
+            for q in self._generate_random_quaternions(10):
+                mock_vehicle_pose.return_value = mocks.vehicle_pose(q)
+                # Create an instance of GISNode whose vehicle_geopose property is
+                # under test.
+                gis_node = GISNode("gis_node")
+                pose = gis_node.vehicle_geopose.pose
 
-        # Assert vehicle NED frame orientation
-        expected_ned_quaternion = self._enu_to_ned_quaternion(
-            mocks.VEHICLE_ENU_QUATERNION
-        )
-        computed_orientation = np.array(
-            [
-                pose.orientation.x,
-                pose.orientation.y,
-                pose.orientation.z,
-                pose.orientation.w,
-            ]
-        )
-        np.testing.assert_array_almost_equal(
-            computed_orientation, expected_ned_quaternion, decimal=5
-        )
+                expected_ned_quaternion = self._enu_to_ned_quaternion(q)
+                computed_orientation = np.array(
+                    [
+                        pose.orientation.x,
+                        pose.orientation.y,
+                        pose.orientation.z,
+                        pose.orientation.w,
+                    ]
+                )
+                np.testing.assert_array_almost_equal(
+                    computed_orientation, expected_ned_quaternion, decimal=5
+                )
 
     def test_enu_orientation_conversion(self):
         """Tests that :attr:`.GISNode.vehicle_geopose` :term:`NED` orientation

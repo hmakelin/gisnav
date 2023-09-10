@@ -14,7 +14,10 @@ def bgr2gray(bgr):
 
 class LoFTRHandler(BaseHandler):
     MIN_MATCHES = 15
+    """Minimum amount of keypoint matches for a good match"""
+
     CONFIDENCE_THRESHOLD = 0.7
+    """Confidence threshold for filtering out bad matches"""
 
     def _load_pickled_model(self, _, model_file, model_pt_path):
         """Loads the :term:`LoFTR` model"""
@@ -75,7 +78,7 @@ class LoFTRHandler(BaseHandler):
         results, query_img, reference_img, k_matrix, elevation = inferred_data
         mkp_qry, mkp_ref = self._filter_matches_based_on_confidence(results)
 
-        if not mkp_qry or len(mkp_qry) < self.MIN_MATCHES:
+        if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
             return [{}]
 
         mkp2_3d = self._compute_3d_points(mkp_ref, elevation)

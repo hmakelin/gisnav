@@ -265,7 +265,7 @@ class CVNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_ALTITUDE.replace("~", GIS_NODE_NAME)}',

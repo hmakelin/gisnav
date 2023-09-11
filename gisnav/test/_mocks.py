@@ -6,10 +6,13 @@ and are therefore kept in a separate module.
 This module also defines default values for a starting global position and
 orientation that are appropriate for the :term:`KSQL` airport simulation.
 """
-import numpy as np
+import numpy as
+import tf2_ros
+import tf.transformations as tf_transform
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from sensor_msgs.msg import NavSatFix
+from geographic_msgs.msg import GeoPoseStamped
 
 from gisnav.messaging import create_header
 
@@ -34,6 +37,12 @@ VEHICLE_ELLIPSOID_ALTITUDE_METERS = 100.0
 VEHICLE_ENU_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])
 """Default mock :term:`vehicle` :term:`KSQL` airport starting location
 :term:`orientation` quaternion in :term:`ENU` frame in (x, y, z, w) format.
+"""
+
+
+VEHICLE_NED_QUATERNION = np.array([0.0, 0.0, 0.0, 1.0])
+"""Default mock :term:`vehicle` :term:`KSQL` airport starting location
+:term:`orientation` quaternion in :term:`NED` frame in (x, y, z, w) format.
 """
 
 
@@ -64,6 +73,8 @@ def navsatfix(
     :return: A :class:`sensor_msgs.msg.NavSatFix` message representing
         the vehicle's :term:`global position`
     """
+    quaternion = tf_transform.quaternion_from_euler(roll, pitch, yaw)
+
     navsatfix_msg = NavSatFix()
     navsatfix_msg.header = create_header("base_link")
     navsatfix_msg.latitude = vehicle_lat_degrees
@@ -114,3 +125,31 @@ def gimbal_device_attitude_status(
         w=camera_frd_quaternion[3],
     )
     return attitude
+
+
+def vehicle_geopose(
+    vehicle_lat_degrees: float = VEHICLE_LATITUDE_DEGREES,
+    vehicle_lon_degrees: float = VEHICLE_LONGITUDE_DEGREES,
+    vehicle_alt_ellipsoid_meters: float = VEHICLE_ELLIPSOID_ALTITUDE_METERS,
+    vehicle_ned_quaternion: np.ndarray = VEHICLE_NED_QUATERNION,
+) -> PoseStamped:
+    """Returns a mock :class:`geographic_msgs.msg.GeoPoseStamped` :term:`ROS` message
+    based on given :term:`vehicle` :term:`WGS 84` latitude and longitude
+    coordinates and :term:`ellipsoid` altitude in meters and :term:`NED` quaternion.
+
+    :param vehicle_lat_degrees: Vehicle WGS 84 latitude coordinate in degrees
+    :param vehicle_lon_degrees: Vehicle WGS 84 longitude coordinate in degrees
+    :param vehicle_alt_ellipsoid_meters: Vehicle ellipsoid altitude in meters
+    :param vehicle_ned_quaternion: Vehicle NED quaternion in (x, y, z, w) format
+    :return: A :class:`geographic_msgs.msg.GeoPoseStamped` message representing
+        the vehicle's :term:`global position` and :term:`orientation`
+    """
+    geopose = GeoPoseStamped()
+    geopose.pose.position.latitude = vehicle_lat_degrees
+    geopose.pose.position.longitude = vehicle_lon_degrees
+    geopose.pose.position.altitude = vehicle_alt_ellipsoid_meters
+    geopose.pose.orientation.x = vehicle_ned_quaternion[0]
+    geopose.pose.orientation.y = vehicle_ned_quaternion[1]
+    geopose.pose.orientation.z = vehicle_ned_quaternion[2]
+    geopose.pose.orientation.w = vehicle_ned_quaternion[3]
+    return geopose

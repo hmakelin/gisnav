@@ -82,6 +82,7 @@ from .. import messaging
 from .._assertions import assert_len, assert_type
 from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
@@ -1556,3 +1557,18 @@ class GISNode(Node):
             return compound_q
 
         return _camera_quaternion(self.vehicle_geopose)
+
+    @property
+    @ROS.publish(ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value)
+    def camera_geopose(self) -> Optional[Quaternion]:
+        """:term:`Camera` :term:`geopose` or None if not available"""
+
+        @narrow_types(self)
+        def _camera_geopose(
+            vehicle_geopose: GeoPoseStamped, camera_quaternion: Quaternion
+        ):
+            camera_geopose = vehicle_geopose
+            camera_geopose.pose.orientation = camera_quaternion
+            return camera_geopose
+
+        return _camera_geopose(self.vehicle_geopose, self.camera_quaternion)

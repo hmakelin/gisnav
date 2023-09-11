@@ -49,6 +49,11 @@ ROS_TOPIC_RELATIVE_CAMERA_QUATERNION: Final = "~/camera/quaternion"
 :attr:`.GISNode.camera_quaternion`.
 """
 
+ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE: Final = "~/camera/geopose"
+"""Relative :term:`topic` into which :class:`.GISNode` publishes
+:attr:`.GISNode.camera_geopose`.
+"""
+
 ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE: Final = "~/vehicle/estimated/geopose"
 """Relative :term:`topic` into which :class:`.CVNode` publishes
 :attr:`.CVNode.vehicle_estimated_geopose`.

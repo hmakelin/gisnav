@@ -47,18 +47,18 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
-      Color: 255; 25; 0
+      Color: 0; 25; 255
       Enabled: true
       Head Diameter: 0.3
       Head Length: 0.2
       Line Style: Lines
       Line Width: 0.03
-      Name: GISNav Path
+      Name: Camera Path
       Offset:
         X: 0
         Y: 0
         Z: 0
-      Pose Color: 255; 25; 0
+      Pose Color: 0; 25; 255
       Pose Style: Arrows
       Shaft Diameter: 0.1
       Shaft Length: 1.0
@@ -67,7 +67,32 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /gisnav/rviz_node/vehicle/estimated/path
+        Value: /gisnav/rviz_node/camera/path
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Line Style: Lines
+      Line Width: 0.03
+      Name: GPS Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 25; 255; 0
+      Pose Style: Arrows
+      Shaft Diameter: 0.1
+      Shaft Length: 1.0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gisnav/rviz_node/vehicle/path
       Value: true
   Enabled: true
   Global Options:

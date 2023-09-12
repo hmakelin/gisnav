@@ -55,13 +55,7 @@ import numpy as np
 import requests
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
-from geographic_msgs.msg import (
-    BoundingBox,
-    GeoPoint,
-    GeoPointStamped,
-    GeoPose,
-    GeoPoseStamped,
-)
+from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
 from mavros_msgs.msg import Altitude
 from rcl_interfaces.msg import ParameterDescriptor
@@ -79,7 +73,7 @@ from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -131,9 +125,10 @@ class CVNode(Node):
             evaluated in post-processing even though it could already be
             computed earlier - all required information is contained in the
             orthoimage itself.
-        :ivar camera_quaternion: Qimbal quaternion in NED frame. The pose estimation
-            is done against a rotated orthoimage and this is needed to get the
-            pose in the original coordinate frame.
+        :ivar camera_geopose: :term:`Camera` :term:`geopose` with orientation
+            in :term:`ENU` frame. The pose estimation is done against a
+            rotated orthoimage and this is needed to get the pose in the
+            original coordinate frame.
         :ivar ground_track_elevation: :term:`Ground track` :term:`elevation`.
             The pose estimation estimates :term:`vehicle` :term:`AGL`
             :term:`altitude`, and context of ground track elevation is required
@@ -144,9 +139,9 @@ class CVNode(Node):
         """
 
         orthoimage: OrthoImage3D
-        camera_quaternion: Quaternion
+        camera_geopose: GeoPoseStamped
         ground_track_elevation: Altitude
-        ground_track_geopose: GeoPointStamped
+        ground_track_geopose: GeoPoseStamped
 
     # _IMAGE_ENCODING = "bgr8"
     # """
@@ -196,7 +191,7 @@ class CVNode(Node):
         self.ground_track_elevation
         self.ground_track_geopose
         self.altitude
-        self.camera_quaternion
+        self.camera_geopose
         self.geopose
         self.camera_info
         self.image
@@ -278,13 +273,11 @@ class CVNode(Node):
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def camera_quaternion(self) -> Optional[Quaternion]:
-        """:term:`Camera` :term:`orientation` as :class:`geometry_msgs.msg.Quaternion`
-        message, or None if not available
-        """
+    def camera_geopose(self) -> Optional[GeoPoseStamped]:
+        """:term:`Camera` :term:`geopose`, or None if not available"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: re-enable
@@ -426,7 +419,7 @@ class CVNode(Node):
 
         # Rotate and crop orthoimage stack
         camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
-            context.camera_quaternion
+            context.camera_geopose.pose.orientation
         )
         crop_shape: Tuple[int, int] = query_array.shape[0:2]
         orthoimage_stack = np.dstack((orthophoto, dem))
@@ -465,14 +458,16 @@ class CVNode(Node):
         estimates.
         """
         yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-            context.camera_quaternion
+            context.camera_geopose.pose.orientation
         )
 
         # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
         # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
 
         r_guess = Rotation.from_matrix(
-            messaging.quaternion_to_rotation_matrix(context.camera_quaternion)
+            messaging.quaternion_to_rotation_matrix(
+                context.camera_geopose.pose.orientation
+            )
         )
         r, t = pose
 
@@ -665,10 +660,11 @@ class CVNode(Node):
                 geopoint,
                 altitude,
                 camera_quaternion,
-            ) = post_processed_pose  # TODO: quaternion might be in ESD and not NED
+            ) = post_processed_pose
 
             return (
                 # TODO: use timestamp from input context instead of creating new one
+                # TODO: should have vehicle not camera quaternion
                 GeoPoseStamped(
                     header=messaging.create_header("base_link"),
                     pose=GeoPose(
@@ -735,20 +731,20 @@ class CVNode(Node):
         @narrow_types(self)
         def _pose_estimation_context(
             orthoimage: OrthoImage3D,
-            camera_quaternion: Quaternion,
+            camera_geopose: GeoPoseStamped,
             ground_track_elevation: Altitude,
             ground_track_geopose: GeoPoseStamped,
         ):
             return self._PoseEstimationContext(
                 orthoimage=orthoimage,
-                camera_quaternion=camera_quaternion,
+                camera_geopose=camera_geopose,
                 ground_track_elevation=ground_track_elevation,
                 ground_track_geopose=ground_track_geopose,
             )
 
         return _pose_estimation_context(
             self.orthoimage,
-            self.camera_quaternion,
+            self.camera_geopose,
             self.ground_track_elevation,
             self.ground_track_geopose,
         )
@@ -1007,8 +1003,8 @@ class CVNode(Node):
         :return: True if pitch is too high
         """
         assert_type(max_pitch, get_args(Union[int, float]))
-        if self.camera_quaternion is not None:
-            off_nadir_deg = self._off_nadir_angle(self.camera_quaternion)
+        if self.camera_geopose is not None:
+            off_nadir_deg = self._off_nadir_angle(self.camera_geopose)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

@@ -83,7 +83,6 @@ from .._assertions import assert_len, assert_type
 from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
-    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -1427,7 +1426,7 @@ class GISNode(Node):
             return principal_point_ground
 
         return _principal_point_on_ground_plane(
-            self.vehicle_geopose, self.vehicle_altitude, self.camera_quaternion
+            self.vehicle_geopose, self.vehicle_altitude, self._camera_quaternion
         )
 
     @property
@@ -1450,7 +1449,7 @@ class GISNode(Node):
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
         """
-        self.camera_quaternion
+        self._camera_quaternion
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
@@ -1465,10 +1464,7 @@ class GISNode(Node):
         """
 
     @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_CAMERA_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
-    )
-    def camera_quaternion(self) -> Optional[Quaternion]:
+    def _camera_quaternion(self) -> Optional[Quaternion]:
         """:term:`Camera` :term:`orientation` or None if not available
 
         .. note::
@@ -1523,4 +1519,4 @@ class GISNode(Node):
             camera_geopose.pose.orientation = camera_quaternion
             return camera_geopose
 
-        return _camera_geopose(self.vehicle_geopose, self.camera_quaternion)
+        return _camera_geopose(self.vehicle_geopose, self._camera_quaternion)

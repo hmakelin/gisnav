@@ -1499,11 +1499,12 @@ class GISNode(Node):
                 # body FRD frame with origin pointing forward along vehicle nose.
                 # TODO: check gimbal lock flags (especially yaw lock)
                 q = tf_transformations.quaternion_multiply(
-                    geopose.pose.orientation, gimbal_device_attitude_status.q
+                    tuple(messaging.as_np_quaternion(geopose.pose.orientation)),
+                    tuple(messaging.as_np_quaternion(gimbal_device_attitude_status.q)),
                 )
 
             assert q is not None
-            return q
+            return messaging.as_ros_quaternion(np.array(q))
 
         return _camera_quaternion(
             self.vehicle_geopose, self.gimbal_device_attitude_status

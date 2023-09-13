@@ -1449,7 +1449,7 @@ class GISNode(Node):
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
         """
-        self._camera_quaternion
+        self.camera_geopose
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
@@ -1508,13 +1508,13 @@ class GISNode(Node):
 
     @property
     @ROS.publish(ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value)
-    def camera_geopose(self) -> Optional[Quaternion]:
+    def camera_geopose(self) -> Optional[GeoPoseStamped]:
         """:term:`Camera` :term:`geopose` or None if not available"""
 
         @narrow_types(self)
         def _camera_geopose(
             vehicle_geopose: GeoPoseStamped, camera_quaternion: Quaternion
-        ):
+        ) -> GeoPoseStamped:
             camera_geopose = vehicle_geopose
             camera_geopose.pose.orientation = camera_quaternion
             return camera_geopose

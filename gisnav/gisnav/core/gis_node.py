@@ -1508,6 +1508,7 @@ class GISNode(Node):
                     "GimbalDeviceAttitudeStatus message flags has value 12 i.e. "
                     "1100 for bit mask)."
                 )
+                # TODO: handle failure flags (e.g. gimbal at physical limit)
 
                 # Extract yaw-only quaternion from vehicle's quaternion
                 # because the gimbal quaternion has floating yaw

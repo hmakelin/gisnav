@@ -54,7 +54,6 @@ high-resolution orthophotos and an optional DEM. It also publishes vehicle
 
 """
 import xml.etree.ElementTree as ET
-from copy import copy
 from typing import IO, Final, List, Optional, Tuple
 
 import cv2
@@ -1481,12 +1480,11 @@ class GISNode(Node):
 
         def _normalize_quaternion(q: Quaternion) -> Quaternion:
             norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
-            new_q = copy(q)
-            new_q.w = q.w / norm
-            new_q.x = q.x / norm
-            new_q.y = q.y / norm
-            new_q.z = q.z / norm
-            return new_q
+            q.w = q.w / norm
+            q.x = q.x / norm
+            q.y = q.y / norm
+            q.z = q.z / norm
+            return q
 
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         @narrow_types(self)

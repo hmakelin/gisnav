@@ -1486,7 +1486,6 @@ class GISNode(Node):
             q.z = q.z / norm
             return q
 
-        # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         @narrow_types(self)
         def _camera_quaternion(
             geopose: GeoPoseStamped,

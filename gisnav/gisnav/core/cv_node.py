@@ -950,7 +950,13 @@ class CVNode(Node):
         return 2 * width_meters + 2 * height_meters
 
     @staticmethod
-    def _off_nadir_angle(q):
+    def _off_nadir_angle(q: Quaternion):
+        """Returns :term:`off-nadir <nadir>` angle in degrees of input
+        :term:`ENU` quaternion
+
+        :param q: Quaternion in ENU frame
+        :return: Off-nadir angle in degrees of the input quaternion
+        """
         # Rotated vector
         rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
         rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
@@ -963,13 +969,13 @@ class CVNode(Node):
         dot_product = rotated_x * down_x + rotated_y * down_y + rotated_z * down_z
 
         # Clamp dot_product to avoid floating-point precision issues
-        dot_product = max(min(dot_product, 1.0), -1.0)
+        dot_product = np.clip(dot_product, -1.0, 1.0)
 
         # Compute the angle between the rotated vector and down direction
-        angle_rad = math.acos(dot_product)
+        angle_rad = np.arccos(dot_product)
 
         # Convert the angle to degrees
-        angle_deg = math.degrees(angle_rad)
+        angle_deg = np.degrees(angle_rad)
 
         return angle_deg
 
@@ -1004,7 +1010,7 @@ class CVNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.camera_geopose is not None:
-            off_nadir_deg = self._off_nadir_angle(self.camera_geopose)
+            off_nadir_deg = self._off_nadir_angle(self.camera_geopose.pose.orientation)
 
             if off_nadir_deg > max_pitch:
                 self.get_logger().warn(

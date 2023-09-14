@@ -227,8 +227,8 @@ class RVizNode(Node):
 
         :param pose: :class:`.GeoPoseStamped` message to append
         """
-        self._append_geopose_to_queue(geopose, self._vehicle_path_queue)
-        self.vehicle_path
+        self._append_geopose_to_queue(geopose, self._camera_path_queue)
+        self.camera_path
 
     def _append_vehicle_estimated_geopose_to_queue(
         self, geopose: GeoPoseStamped

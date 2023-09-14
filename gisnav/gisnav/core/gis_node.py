@@ -54,6 +54,7 @@ high-resolution orthophotos and an optional DEM. It also publishes vehicle
 
 """
 import xml.etree.ElementTree as ET
+from copy import copy
 from typing import IO, Final, List, Optional, Tuple
 
 import cv2
@@ -1465,14 +1466,27 @@ class GISNode(Node):
 
     @property
     def _camera_quaternion(self) -> Optional[Quaternion]:
-        """:term:`Camera` :term:`orientation` or None if not available
+        """:term:`Camera` :term:`ENU` :term:`orientation` or None if not available
 
         .. note::
-            Current implementation assumes camera faces directly down from
-            :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
-            (:term:`MAVLink` gimbal protocol v2) is not available. Should
-            probably not be used for estimating :term:`vehicle` :term:`orientation`.
+            * Current implementation assumes camera faces directly down from
+              :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
+              (:term:`MAVLink` gimbal protocol v2) is not available. Should
+              probably not be used for estimating :term:`vehicle` :term:`orientation`.
+            * If GimbalDeviceAttitudeStatus :term:`message`
+              (:term:`MAVLink` gimbal protocol v2) is available, only the flags
+              value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
+              floating yaw) is supported.
         """
+
+        def _normalize_quaternion(q: Quaternion) -> Quaternion:
+            norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
+            new_q = copy(q)
+            new_q.w = q.w / norm
+            new_q.x = q.x / norm
+            new_q.y = q.y / norm
+            new_q.z = q.z / norm
+            return new_q
 
         # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         @narrow_types(self)
@@ -1484,23 +1498,36 @@ class GISNode(Node):
             if gimbal_device_attitude_status is None:
                 # Identity quaternion: assume down facing camera if no
                 # information received from autopilot bridge
-                q = Quaternion(
+                camera_enu_q = Quaternion(
                     x=0.0,
                     y=0.0,
                     z=0.0,
                     w=1.0,
                 )
             else:
-                # PX4 over MAVROS gives GimbalDeviceAttitudeStatus in vehicle
-                # body FRD frame with origin pointing forward along vehicle nose.
-                # TODO: check gimbal lock flags (especially yaw lock)
-                q = tf_transformations.quaternion_multiply(
-                    tuple(messaging.as_np_quaternion(geopose.pose.orientation)),
+                assert gimbal_device_attitude_status.flags == 12, (
+                    "Currently GISNav only supports a two-axis gimbal that has "
+                    "horizon-locked roll and pitch (MAVLink Gimbal Protocol v2 "
+                    "GimbalDeviceAttitudeStatus message flags has value 12 i.e. "
+                    "1100 for bit mask)."
+                )
+
+                # Extract yaw-only quaternion from vehicle's quaternion
+                # because the gimbal quaternion has floating yaw
+                vehicle_q = geopose.pose.orientation
+                vehicle_yaw_only_q = Quaternion(
+                    w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z
+                )
+                vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
+
+                # TODO: check gimbal lock flags (especially yaw lock, flags == 16)
+                camera_enu_q = tf_transformations.quaternion_multiply(
+                    tuple(messaging.as_np_quaternion(vehicle_yaw_only_q)),
                     tuple(messaging.as_np_quaternion(gimbal_device_attitude_status.q)),
                 )
 
-            assert q is not None
-            return messaging.as_ros_quaternion(np.array(q))
+            assert camera_enu_q is not None
+            return messaging.as_ros_quaternion(np.array(camera_enu_q))
 
         return _camera_quaternion(
             self.vehicle_geopose, self.gimbal_device_attitude_status

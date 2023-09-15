@@ -1173,7 +1173,19 @@ class GISNode(Node):
             )
         except ServiceException as se:
             self.get_logger().error(
-                f"GetMap request for image ran into an unexpected exception: {se}"
+                f"GetMap request failed likely because of a connection error: {se}"
+            )
+            return None
+        except requests.exceptions.ConnectionError as ce:  # noqa: F841
+            # Expected error if no connection
+            self.get_logger().error(
+                f"GetMap request failed because of a connection error: {ce}"
+            )
+            return None
+        except Exception as e:
+            # TODO: handle other exception types
+            self.get_logger().error(
+                f"GetMap request for image ran into an unexpected exception: {e}"
             )
             return None
         finally:
@@ -1255,7 +1267,21 @@ class GISNode(Node):
 
         except ServiceException as se:
             self.get_logger().error(
-                f"GetFeatureInfo request ran into an unexpected exception: {se}"
+                f"GetFeatureInfo request failed likely because of a connection "
+                f"error: {se}"
+            )
+            return None
+        except requests.exceptions.ConnectionError as ce:  # noqa: F841
+            # Expected error if no connection
+            self.get_logger().error(
+                f"GetFeatureInfo request failed because of a connection error: {ce}"
+            )
+            return None
+        except Exception as e:
+            # TODO: handle other exception types
+            self.get_logger().error(
+                f"GetFeatureInfo request for image ran into an unexpected "
+                f"exception: {e}"
             )
             return None
         finally:

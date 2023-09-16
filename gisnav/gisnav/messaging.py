@@ -92,8 +92,8 @@ def as_ros_quaternion(q: np.ndarray) -> Quaternion:
 
 
 def as_np_quaternion(q: Quaternion) -> np.ndarray:
-    """Converts (x, y, z, w) format numpy array quaternion to ROS
-    :class:`geometric_msg.msg.Quaternion`
+    """Converts ROS :class:`geometric_msg.msg.Quaternion` to (x, y, z, w)
+    format numpy array quaternion
 
     .. seealso:
         :meth:`.np_to_ros_quaternion`

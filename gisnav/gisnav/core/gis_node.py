@@ -1535,6 +1535,7 @@ class GISNode(Node):
                     "1100 for bit mask)."
                 )
                 # TODO: handle failure flags (e.g. gimbal at physical limit)
+                # TODO: handle gimbal lock flags (especially yaw lock, flags == 16)
 
                 # Extract yaw-only quaternion from vehicle's quaternion
                 # because the gimbal quaternion has floating yaw
@@ -1544,10 +1545,19 @@ class GISNode(Node):
                 )
                 vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
 
-                # TODO: check gimbal lock flags (especially yaw lock, flags == 16)
+                # Need to mirror gimbal orientation along vehicle Y and Z-axis in
+                # FRD frame to get the camera ENU quaternion to display
+                # correctly in rviz - TODO figure out why
+                gimbal_enu_mirrored_q = (
+                    gimbal_device_attitude_status.q.x,
+                    -gimbal_device_attitude_status.q.y,
+                    -gimbal_device_attitude_status.q.z,
+                    gimbal_device_attitude_status.q.w,
+                )
+
                 camera_enu_q = tf_transformations.quaternion_multiply(
                     tuple(messaging.as_np_quaternion(vehicle_yaw_only_q)),
-                    tuple(messaging.as_np_quaternion(gimbal_device_attitude_status.q)),
+                    gimbal_enu_mirrored_q,
                 )
 
             assert camera_enu_q is not None

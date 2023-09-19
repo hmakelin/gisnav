@@ -58,6 +58,7 @@ from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import pyproj
 import requests
 import tf_transformations
 from cv_bridge import CvBridge
@@ -66,9 +67,7 @@ from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
-from pygeodesy.ellipsoidalVincenty import LatLon
 from pygeodesy.geoids import GeoidPGM
-from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -324,9 +323,6 @@ class GISNode(Node):
     :term:`orthoimage` bounding box, under which a new map will be requested.
     """
 
-    ROS_D_MAX_MAP_RADIUS = 1000
-    """Max radius for circle inside the maps (half map side length)"""
-
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
     """Default delay in seconds for throttling WMS GetMap requests
 
@@ -374,7 +370,7 @@ class GISNode(Node):
 
         # TODO: make configurable / use shared folder home path instead
         self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
-        self._transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
+        self._transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857")
 
         # TODO: refactor out CvBridge and use np.frombuffer instead
         self._cv_bridge = CvBridge()
@@ -450,13 +446,6 @@ class GISNode(Node):
         If the overlap between the candidate new bounding box and the current
         :term:`orthoimage` bounding box is below this value, a new map will be
         requested.
-        """
-
-    @property
-    @ROS.parameter(ROS_D_MAX_MAP_RADIUS)
-    def max_map_radius(self) -> Optional[int]:
-        """Max radius in meters for circle inside the requested :term:`bounding box`
-        (half map side length)
         """
 
     @property
@@ -1006,48 +995,164 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
-        def _bounding_box(
-            latlon: LatLon,
+        def _fov_and_principal_point_on_ground_plane(
+            camera_quaternion: Quaternion,
+            vehicle_pose: PoseStamped,
             camera_info: CameraInfo,
-            altitude: Altitude,
-            max_map_radius: int,
-        ):
-            # TODO: log messages for what's going on, or split into multiple methods
-            def get_dynamic_map_radius(
-                camera_info: CameraInfo, max_map_radius: int, elevation: float
-            ) -> float:
-                """Returns map radius that adjusts for camera altitude to be used
-                for new map requests"""
-                hfov = 2 * np.arctan(camera_info.width / (2 * camera_info.k[0]))
-                map_radius = 1.5 * hfov * elevation  # Arbitrary padding of 50%
-                return min(map_radius, max_map_radius)
+        ) -> Optional[np.ndarray]:
+            """Projects :term:`camera` principal point and :term:`FOV` corners
+             on ground plane
 
-            assert all((camera_info, max_map_radius, altitude.terrain))
-            map_radius = get_dynamic_map_radius(
-                camera_info, max_map_radius, altitude.terrain
-            )
-            return self._bounding_box_with_padding_for_latlon(
-                latlon.lat, latlon.lon, map_radius
-            )
+            .. note::
+                Assumes ground is a flat plane, does not take :term:`DEM` into account
 
-        latlon = self._principal_point_on_ground_plane
-        bounding_box = _bounding_box(
-            latlon, self.camera_info, self.vehicle_altitude, self.max_map_radius
-        )
+            :return: Numpy array of FOV corners and principal point projected onto
+                ground (vehicle :term:`local position` z==0) plane in following
+                order: top-left, top-right, bottom-right, bottom-left, principal point.
+                Shape is (5, 2). Coordinates are meters in local tangent plane
+                :term:`ENU`.
+            """
+            R = tf_transformations.quaternion_matrix(
+                tuple(messaging.as_np_quaternion(camera_quaternion))
+            )[:3, :3]
+            # R = np.transpose(R)  # TODO: this required? Otherwise the d_enu[2] >= 0:
+            #  intersection check will fail
 
-        if bounding_box is None:
-            geopose = self.vehicle_geopose
-            if geopose is None:
-                if self.home_position is not None:
-                    geopoint = self.home_position.geo
-                else:
+            # Camera position - assume local frame z is altitude AGL
+            position = vehicle_pose.pose.position
+            C = np.array((position.x, position.y, position.z))
+
+            intrinsics = camera_info.k.reshape((3, 3))
+
+            # List of image points: top-left, top-right, bottom-right, bottom-left, principal point
+            img_points = [
+                [0, 0],
+                [camera_info.width - 1, 0],
+                [camera_info.width - 1, camera_info.height - 1],
+                [0, camera_info.height - 1],
+                [camera_info.width / 2, camera_info.height / 2],
+            ]
+
+            # Project each point to the ground
+            ground_points = []
+            for pt in img_points:
+                u, v = pt
+
+                # Convert to normalized image coordinates
+                d_img = np.array([u, v, 1])
+
+                try:
+                    d_cam = np.linalg.inv(intrinsics) @ d_img
+                except np.linalg.LinAlgError as _:  # noqa: F841
+                    self.get_logger().error(
+                        "Could not invert camera intrinsics matrix. Cannot"
+                        "project FOV on ground."
+                    )
                     return None
-            else:
-                geopoint = geopose.pose.position
 
-            bounding_box = self._bounding_box_with_padding_for_latlon(
-                geopoint.latitude, geopoint.longitude
+                # Convert direction to ENU frame
+                d_enu = R @ d_cam
+                # d_enu = R @ d_img
+                # d_enu = -R.T @ d_cam
+
+                # Check for intersection with ground plane
+                # if d_enu[2] >= 0:
+                #    self.get_logger().error(str(C))
+                #    self.get_logger().error(str(d_enu))
+                #    self.get_logger().warn(
+                #        f"Ray for pixel {pt} does not intersect with the ground."
+                #        f"Cannot project FOV or principal point on ground."
+                #    )
+                #    return None
+
+                # Find intersection with ground plane
+                t = -C[2] / d_enu[2]
+                intersection = C + t * d_enu
+
+                ground_points.append(intersection[:2])
+
+            return np.vstack(ground_points)
+
+        @narrow_types(self)
+        def _enu_to_latlon(
+            enu_coords: np.ndarray, home: HomePosition
+        ) -> Optional[np.ndarray]:
+            """Convert :term:`ENU` local tangent plane coordinates to
+            latitude and longitude.
+
+            :param enu_coords: A 4x2 numpy array of [E, N] coordinates.
+            :param home: :term:`Home` :term:`global position`
+
+            Returns: A 4x2 numpy array of [longitude, latitude].
+            """
+
+            def _determine_utm_zone(longitude):
+                """Determine the UTM zone for a given longitude."""
+                return int((longitude + 180) / 6) + 1
+
+            # Filter out principal point if it's there
+            enu_coords = enu_coords[:4]
+
+            # Define the UTM zone and conversion
+            proj_latlon = pyproj.Proj(proj="latlong", datum="WGS84")
+            utm_zone = _determine_utm_zone(home.geo.longitude)
+            proj_utm = pyproj.Proj(proj="utm", zone=utm_zone, datum="WGS84")
+
+            # Convert origin to UTM
+            origin_x, origin_y = pyproj.transform(
+                proj_latlon, proj_utm, home.geo.longitude, home.geo.latitude
             )
+
+            # Add ENU offsets to the UTM origin
+            utm_x = origin_x + enu_coords[:, 0]
+            utm_y = origin_y + enu_coords[:, 1]
+
+            # Convert back to lat/lon
+            lon, lat = pyproj.transform(proj_utm, proj_latlon, utm_x, utm_y)
+
+            return np.column_stack((lon, lat))
+
+        @narrow_types(self)
+        def _bounding_box(
+            fov_local_enu: np.ndarray,
+        ) -> BoundingBox:
+            """Create a BoundingBox :term:`message` that envelops the provided
+            :term:`FOV` coordinates.
+
+            fov_local_enu: A 4x2 numpy array where N is the number of points,
+                        and each row represents [longitude, latitude].
+
+            Returns: geographic_msgs.msg.BoundingBox
+            """
+
+            # Find the min and max values for longitude and latitude
+            min_lon, min_lat = np.min(fov_local_enu, axis=0)
+            max_lon, max_lat = np.max(fov_local_enu, axis=0)
+
+            # Create and populate the BoundingBox message
+            bbox = BoundingBox()
+            bbox.min_pt.latitude = min_lat
+            bbox.min_pt.longitude = min_lon
+            bbox.max_pt.latitude = max_lat
+            bbox.max_pt.longitude = max_lon
+
+            return bbox
+
+        fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
+            self._camera_quaternion, self.vehicle_pose, self.camera_info
+        )
+        self.get_logger().error(str(fov_and_c_on_ground_local_enu))
+        fov_and_c_on_ground_global_enu = _enu_to_latlon(
+            fov_and_c_on_ground_local_enu, self.home_position
+        )
+        self.get_logger().error(str(fov_and_c_on_ground_global_enu))
+        bounding_box = _bounding_box(fov_and_c_on_ground_global_enu)
+        self.get_logger().error(str(bounding_box))
+
+        # TODO: here there used to be a fallback that would get bbox u
+        #  nder
+        #  vehicle if FOV could not be projected. But that should not be needed
+        #  if everything works so it was removed from here.
 
         return bounding_box
 
@@ -1411,49 +1516,6 @@ class GISNode(Node):
         )
 
         return np.degrees(yaw)
-
-    @property
-    def _principal_point_on_ground_plane(self) -> LatLon:
-        """Projects :term:`camera` principal point on ground plane
-
-        .. note::
-            Assumes ground is a flat plane, does not take :term:`DEM` into account
-        """
-
-        @narrow_types(self)
-        def _principal_point_on_ground_plane(
-            geopose: GeoPoseStamped,
-            vehicle_altitude: Altitude,
-            camera_quaternion: Quaternion,
-        ) -> LatLon:
-            # Your off-nadir angle and camera yaw
-            off_nadir_angle_deg = messaging.off_nadir_angle(camera_quaternion)
-
-            camera_yaw = self._quaternion_to_yaw_degrees(camera_quaternion)
-
-            # Convert the off-nadir angle to a distance on the ground.
-            # This step assumes a simple spherical Earth model, not taking
-            # into account ellipsoid shape or ground track elevation.
-            ground_distance = vehicle_altitude.terrain / np.cos(
-                np.radians(off_nadir_angle_deg)
-            )  # in meters
-
-            # Use pygeodesy to calculate new position
-            current_pos = LatLon(
-                geopose.pose.position.latitude, geopose.pose.position.longitude
-            )
-
-            # Get the latitude and longitude of the principal point projected
-            # on the ground
-            principal_point_ground = current_pos.destination(
-                ground_distance, camera_yaw
-            )
-
-            return principal_point_ground
-
-        return _principal_point_on_ground_plane(
-            self.vehicle_geopose, self.vehicle_altitude, self._camera_quaternion
-        )
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)

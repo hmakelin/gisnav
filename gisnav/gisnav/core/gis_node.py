@@ -1080,18 +1080,15 @@ class GISNode(Node):
             """Convert :term:`ENU` local tangent plane coordinates to
             latitude and longitude.
 
-            :param enu_coords: A 4x2 numpy array of [E, N] coordinates.
+            :param enu_coords: A numpy array of ENU coordinates.
             :param home: :term:`Home` :term:`global position`
 
-            Returns: A 4x2 numpy array of [longitude, latitude].
+            Returns: A numpy array of [longitude, latitude].
             """
 
             def _determine_utm_zone(longitude):
                 """Determine the UTM zone for a given longitude."""
                 return int((longitude + 180) / 6) + 1
-
-            # Filter out principal point if it's there
-            enu_coords = enu_coords[:4]
 
             # Define the UTM zone and conversion
             proj_latlon = pyproj.Proj(proj="latlong", datum="WGS84")
@@ -1110,7 +1107,46 @@ class GISNode(Node):
             # Convert back to lat/lon
             lon, lat = pyproj.transform(proj_utm, proj_latlon, utm_x, utm_y)
 
-            return np.column_stack((lon, lat))
+            latlon_coords = np.column_stack((lon, lat))
+            assert latlon_coords.shape == enu_coords.shape
+
+            return latlon_coords
+
+        def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
+            """
+            Adjust the given bounding box to ensure it's square in the ENU frame.
+
+            :param enu_coords: A numpy array of shape (N, 2) representing ENU coordinates.
+            :return: A numpy array of shape (N, 2) representing the adjusted square bounding box.
+            """
+            min_e, min_n = np.min(enu_coords, axis=0)
+            max_e, max_n = np.max(enu_coords, axis=0)
+
+            delta_e = max_e - min_e
+            delta_n = max_n - min_n
+
+            if delta_e > delta_n:
+                # Expand in the north direction
+                difference = (delta_e - delta_n) / 2
+                min_n -= difference
+                max_n += difference
+            elif delta_n > delta_e:
+                # Expand in the east direction
+                difference = (delta_n - delta_e) / 2
+                min_e -= difference
+                max_e += difference
+
+            # Construct the squared bounding box coordinates
+            square_box = np.array([
+                [min_e, min_n],
+                [max_e, min_n],
+                [max_e, max_n],
+                [min_e, max_n]
+            ])
+
+            assert square_box.shape == enu_coords.shape
+
+            return square_box
 
         @narrow_types(self)
         def _bounding_box(
@@ -1124,6 +1160,7 @@ class GISNode(Node):
 
             Returns: geographic_msgs.msg.BoundingBox
             """
+            assert fov_local_enu.shape == (4, 2)
 
             # Find the min and max values for longitude and latitude
             min_lon, min_lat = np.min(fov_local_enu, axis=0)
@@ -1142,11 +1179,14 @@ class GISNode(Node):
             self._camera_quaternion, self.vehicle_pose, self.camera_info
         )
         self.get_logger().error(str(fov_and_c_on_ground_local_enu))
+
+        # TODO: take shorter dimension and expand it so that the bbox is a square
         fov_and_c_on_ground_global_enu = _enu_to_latlon(
             fov_and_c_on_ground_local_enu, self.home_position
         )
         self.get_logger().error(str(fov_and_c_on_ground_global_enu))
-        bounding_box = _bounding_box(fov_and_c_on_ground_global_enu)
+        fov_and_c_on_ground_local_enu_square = _square_bounding_box(fov_and_c_on_ground_global_enu)
+        bounding_box = _bounding_box(fov_and_c_on_ground_local_enu_square[:4])
         self.get_logger().error(str(bounding_box))
 
         # TODO: here there used to be a fallback that would get bbox u

@@ -53,6 +53,7 @@ from typing import Final, List, Optional, Tuple, TypedDict, Union, get_args
 import cv2
 import numpy as np
 import requests
+import tf_transformations
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
@@ -950,31 +951,37 @@ class CVNode(Node):
         return 2 * width_meters + 2 * height_meters
 
     @staticmethod
-    def _off_nadir_angle(q: Quaternion):
-        """Returns :term:`off-nadir <nadir>` angle in degrees of input
+    def _off_nadir_pitch(q: Quaternion) -> float:
+        """Returns :term:`off-nadir <nadir>`pitch angle in degrees of input
         :term:`ENU` quaternion
 
         :param q: Quaternion in ENU frame
         :return: Off-nadir angle in degrees of the input quaternion
         """
-        # Rotated vector
-        rotated_x = 2.0 * (q.x * q.z - q.w * q.y)
-        rotated_y = 2.0 * (q.y * q.z + q.w * q.x)
-        rotated_z = q.w * q.w - q.x * q.x - q.y * q.y + q.z * q.z
+        rotation_matrix = tf_transformations.quaternion_matrix(
+            tuple(messaging.as_np_quaternion(q))
+        )[:3, :3]
 
-        # Down direction
-        down_x, down_y, down_z = 0.0, 0.0, -1.0
+        # Define the nadir direction in the ENU frame [x, y, z]
+        nadir_enu = np.array([0, 0, -1])
 
-        # Dot product of rotated vector and down direction
-        dot_product = rotated_x * down_x + rotated_y * down_y + rotated_z * down_z
+        # Rotate the nadir vector into the body frame
+        nadir_body = rotation_matrix.dot(nadir_enu)
 
-        # Clamp dot_product to avoid floating-point precision issues
-        dot_product = np.clip(dot_product, -1.0, 1.0)
+        # Compute the forward direction in the body frame [x, y, z]
+        forward_body = np.array([1, 0, 0])
 
-        # Compute the angle between the rotated vector and down direction
-        angle_rad = np.arccos(dot_product)
+        # Project nadir_body onto the plane perpendicular to the forward direction
+        nadir_projected = nadir_body - np.dot(nadir_body, forward_body) * forward_body
 
-        # Convert the angle to degrees
+        # Calculate the cosine of the angle between nadir_projected and nadir_enu
+        cos_angle = np.dot(nadir_projected, nadir_enu) / (np.linalg.norm(nadir_projected) * np.linalg.norm(nadir_enu))
+
+        # Clip the cosine value to handle numerical errors
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)
+
+        # Calculate the angle in radians and convert it to degrees
+        angle_rad = np.arccos(cos_angle)
         angle_deg = np.degrees(angle_rad)
 
         return angle_deg
@@ -1010,17 +1017,17 @@ class CVNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.camera_geopose is not None:
-            off_nadir_deg = self._off_nadir_angle(self.camera_geopose.pose.orientation)
+            off_nadir_pitch_deg = self._off_nadir_pitch(self.camera_geopose.pose.orientation)
 
-            if off_nadir_deg > max_pitch:
+            if off_nadir_pitch_deg > max_pitch:
                 self.get_logger().warn(
-                    f"Camera is {off_nadir_deg} degrees off nadir and above "
+                    f"Camera pitch is {off_nadir_pitch_deg} degrees off nadir and above "
                     f"limit {max_pitch}."
                 )
                 return True
             else:
                 self.get_logger().debug(
-                    f"Camera pitch is {off_nadir_deg} degrees off nadir"
+                    f"Camera pitch is {off_nadir_pitch_deg} degrees off nadir"
                 )
                 return False
         else:

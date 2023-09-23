@@ -962,24 +962,6 @@ class CVNode(Node):
         self.get_logger().error(f"pitch {np.degrees(off_nadir_angle)}")
         return np.degrees(off_nadir_angle)
 
-    @staticmethod
-    def _euler_from_quaternion(q):
-        # Convert quaternion to euler angles
-        t0 = 2.0 * (q.w * q.x + q.y * q.z)
-        t1 = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
-        roll = math.arctan2(t0, t1)
-
-        t2 = 2.0 * (q.w * q.y - q.z * q.x)
-        t2 = 1.0 if t2 > 1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        pitch = math.arcsin(t2)
-
-        t3 = 2.0 * (q.w * q.z + q.x * q.y)
-        t4 = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw = math.arctan2(t3, t4)
-
-        return roll, pitch, yaw
-
     def _camera_roll_or_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:
         """Returns True if (set) camera roll or pitch exceeds given limit OR
         camera pitch is unknown

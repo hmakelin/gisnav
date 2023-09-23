@@ -441,68 +441,6 @@ class CVNode(Node):
         )
         return pre_processed_inputs, intermediate_outputs
 
-    # TODO: fix and re-enable
-    @narrow_types
-    def _is_valid_pose_estimate(
-        self,
-        pose: Tuple[np.ndarray, np.ndarray],
-        context: _PoseEstimationContext,
-        intermediate_outputs: _PoseEstimationIntermediateOutputs,
-        threshold: int,
-    ):
-        """Returns True if the estimate is valid
-
-        Compares computed estimate to guess based on earlier gimbal attitude.
-        This will reject estimates made when the gimbal was not stable (which
-        is strictly not necessary) if gimbal attitude is based on set attitude
-        and not actual attitude, which is assumed to filter out more inaccurate
-        estimates.
-        """
-        yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-            context.camera_geopose.pose.orientation
-        )
-
-        # yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(pose.orientation)
-        # self.get_logger().error(f"raw pose yaw pitch {yaw} {pitch}")
-
-        r_guess = Rotation.from_matrix(
-            messaging.quaternion_to_rotation_matrix(
-                context.camera_geopose.pose.orientation
-            )
-        )
-        r, t = pose
-
-        rot_90_Z = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-
-        r_estimate = (
-            self._seu_to_ned_matrix
-            @ np.linalg.inv(intermediate_outputs.affine_transform)
-            @ np.linalg.inv(rot_90_Z)
-            @ r.T
-            # @ np.linalg.inv(messaging.quaternion_to_rotation_matrix(
-            # pose.orientation))
-        )
-        # r_estimate = Rotation.from_matrix(np.transpose(r, (1,0)))
-
-        # self.get_logger().error(f"{r_estimate.shape} {np.matmul(-r.T, t)}")
-        r_estimate = Rotation.from_matrix(r_estimate)
-        yaw, pitch = self._get_yaw_pitch_degrees_from_quaternion(
-            messaging.as_ros_quaternion(Rotation.as_quat(r_estimate))
-        )
-
-        magnitude = Rotation.magnitude(r_estimate * r_guess.inv())
-
-        threshold = np.radians(threshold)
-
-        if magnitude > threshold:
-            self.get_logger().warn(
-                f"Estimated rotation difference to expected was too high "
-                f"(magnitude {np.degrees(magnitude)})."
-            )
-            return False
-
-        return True
-
     @narrow_types
     def _post_process_pose(
         self,

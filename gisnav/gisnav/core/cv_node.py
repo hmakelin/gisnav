@@ -374,29 +374,24 @@ class CVNode(Node):
         )
 
     @staticmethod
-    def _get_yaw_pitch_degrees_from_quaternion(
-        quaternion,
-    ) -> Tuple[float, float]:
+    def _extract_yaw(q: Quaternion) -> float:
+        """Calculate the yaw angle from a quaternion in the ENU frame.
+
+        Returns yaw with origin centered at North (i.e. applies a 90 degree adjustment).
+
+        :param q: A list containing the quaternion [qx, qy, qz, qw].
+        :return: The yaw angle in degrees.
         """
-        To avoid gimbal lock when facing nadir (pitch -90 degrees in NED),
-        assumes roll is close to zero (i.e roll can be slightly non-zero).
-        """
-        # Unpack quaternion
-        x = quaternion.x
-        y = quaternion.y
-        z = quaternion.z
-        w = quaternion.w
+        enu_yaw = np.arctan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y ** 2 + q.z ** 2))
+        enu_yaw_deg = np.degrees(enu_yaw)
 
-        # Calculate yaw and pitch directly from the quaternion to
-        # avoid gimbal lock. Assumption/constraint: roll is close to zero.
-        yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-        pitch = np.arcsin(2.0 * (w * y - z * x))
+        # Convert ENU yaw to heading with North as origin
+        heading = 90.0 - enu_yaw_deg
 
-        # Convert yaw and pitch from radians to degrees
-        yaw_degrees = yaw * 180.0 / np.pi
-        pitch_degrees = pitch * 180.0 / np.pi
+        # Normalize to [0, 360) range
+        heading = (heading + 360) % 360
 
-        return yaw_degrees, pitch_degrees
+        return heading
 
     @narrow_types
     def _preprocess_geopose_inputs(
@@ -419,7 +414,7 @@ class CVNode(Node):
         )
 
         # Rotate and crop orthoimage stack
-        camera_yaw_degrees, _ = self._get_yaw_pitch_degrees_from_quaternion(
+        camera_yaw_degrees = self._extract_yaw(
             context.camera_geopose.pose.orientation
         )
         crop_shape: Tuple[int, int] = query_array.shape[0:2]

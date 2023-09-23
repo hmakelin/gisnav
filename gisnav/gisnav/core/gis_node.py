@@ -1015,8 +1015,6 @@ class GISNode(Node):
             R = tf_transformations.quaternion_matrix(
                 tuple(messaging.as_np_quaternion(camera_quaternion))
             )[:3, :3]
-            # R = np.transpose(R)  # TODO: this required? Otherwise the d_enu[2] >= 0:
-            #  intersection check will fail
 
             # Camera position - assume local frame z is altitude AGL
             position = vehicle_pose.pose.position
@@ -1052,18 +1050,6 @@ class GISNode(Node):
 
                 # Convert direction to ENU frame
                 d_enu = R @ d_cam
-                # d_enu = R @ d_img
-                # d_enu = -R.T @ d_cam
-
-                # Check for intersection with ground plane
-                # if d_enu[2] >= 0:
-                #    self.get_logger().error(str(C))
-                #    self.get_logger().error(str(d_enu))
-                #    self.get_logger().warn(
-                #        f"Ray for pixel {pt} does not intersect with the ground."
-                #        f"Cannot project FOV or principal point on ground."
-                #    )
-                #    return None
 
                 # Find intersection with ground plane
                 t = -C[2] / d_enu[2]
@@ -1179,17 +1165,17 @@ class GISNode(Node):
         fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
             self._camera_quaternion, self.vehicle_pose, self.camera_info
         )
-        self.get_logger().error(str(fov_and_c_on_ground_local_enu))
 
         # TODO: take shorter dimension and expand it so that the bbox is a square
         fov_and_c_on_ground_global_enu = _enu_to_latlon(
             fov_and_c_on_ground_local_enu, self.home_position
         )
-        self.get_logger().error(str(fov_and_c_on_ground_global_enu))
-        fov_and_c_on_ground_local_enu_square = _square_bounding_box(fov_and_c_on_ground_global_enu)
-        bounding_box = _bounding_box(fov_and_c_on_ground_local_enu_square[:4])
-        self.get_logger().error(str(bounding_box))
-
+        if fov_and_c_on_ground_global_enu is not None:
+            fov_on_ground_global_enu = fov_and_c_on_ground_global_enu[:4]
+            fov_on_ground_global_enu_square = _square_bounding_box(fov_on_ground_global_enu)
+            bounding_box = _bounding_box(fov_on_ground_global_enu_square)
+        else:
+            bounding_box = None
         # TODO: here there used to be a fallback that would get bbox u
         #  nder
         #  vehicle if FOV could not be projected. But that should not be needed

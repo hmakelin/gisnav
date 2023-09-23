@@ -1112,6 +1112,7 @@ class GISNode(Node):
 
             return latlon_coords
 
+        @narrow_types(self)
         def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
             """
             Adjust the given bounding box to ensure it's square in the ENU frame.

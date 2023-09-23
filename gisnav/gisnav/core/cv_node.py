@@ -950,41 +950,17 @@ class CVNode(Node):
         )
         return 2 * width_meters + 2 * height_meters
 
-    @staticmethod
-    def _off_nadir_pitch(q: Quaternion) -> float:
+    def _off_nadir_pitch(self, q: Quaternion) -> float:
         """Returns :term:`off-nadir <nadir>`pitch angle in degrees of input
         :term:`ENU` quaternion
 
         :param q: Quaternion in ENU frame
         :return: Off-nadir angle in degrees of the input quaternion
         """
-        rotation_matrix = tf_transformations.quaternion_matrix(
-            tuple(messaging.as_np_quaternion(q))
-        )[:3, :3]
-
-        # Define the nadir direction in the ENU frame [x, y, z]
-        nadir_enu = np.array([0, 0, -1])
-
-        # Rotate the nadir vector into the body frame
-        nadir_body = rotation_matrix.dot(nadir_enu)
-
-        # Compute the forward direction in the body frame [x, y, z]
-        forward_body = np.array([1, 0, 0])
-
-        # Project nadir_body onto the plane perpendicular to the forward direction
-        nadir_projected = nadir_body - np.dot(nadir_body, forward_body) * forward_body
-
-        # Calculate the cosine of the angle between nadir_projected and nadir_enu
-        cos_angle = np.dot(nadir_projected, nadir_enu) / (np.linalg.norm(nadir_projected) * np.linalg.norm(nadir_enu))
-
-        # Clip the cosine value to handle numerical errors
-        cos_angle = np.clip(cos_angle, -1.0, 1.0)
-
-        # Calculate the angle in radians and convert it to degrees
-        angle_rad = np.arccos(cos_angle)
-        angle_deg = np.degrees(angle_rad)
-
-        return angle_deg
+        pitch_angle = np.arcsin(2 * (q.w * q.y - q.x * q.z))
+        off_nadir_angle = np.pi / 2 - pitch_angle  # in radians
+        self.get_logger().error(f"pitch {np.degrees(off_nadir_angle)}")
+        return np.degrees(off_nadir_angle)
 
     @staticmethod
     def _euler_from_quaternion(q):

@@ -665,3 +665,55 @@ class ROS:
             return wrapper
 
         return decorator
+
+    @staticmethod
+    def retain_oldest_header(func: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorator to ensure that the output :term:`ROS` message's timestamp
+        inherits the oldest timestamp from the input ROS messages.
+
+        The decorated function is expected to process input in the form of ROS
+        messages and produce an output, which is another ROS message.
+
+        This decorator assumes:
+        1. Any input argument with a `header` attribute also has a `stamp`
+           attribute within the header.
+        2. The output of the decorated function has a `header` attribute with a
+           `stamp` attribute.
+
+        :param func: The function to be decorated.
+        :returns: The wrapped function.
+        """
+
+        # TODO: it would be better to just retain oldest timestamp, and leave
+        #  header creation explicit (e.g. frame_id might not be same as in
+        #  input messages)
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Optional[Any]:
+            # Get all ROS message headers from the inputs
+            headers = [arg.header for arg in args if hasattr(arg, "header")]
+
+            # If there are headers, find the one with oldest timestamp
+            # Use timestamp seconds, ignore nanoseconds
+            if headers:  # empty list evaluates to False
+                oldest_header = min(
+                    headers,
+                    key=lambda header: header.stamp.sec,
+                    default=None,
+                )
+            else:
+                oldest_header = None
+
+            # Call the original function
+            result = func(*args, **kwargs)
+
+            # If result is not None and we found a timestamp, set it in the result
+            if (
+                result is not None
+                and oldest_header is not None
+                and hasattr(result, "header")
+            ):
+                result.header = oldest_header
+
+            return result
+
+        return wrapper

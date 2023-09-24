@@ -672,6 +672,7 @@ class GISNode(Node):
         """Published :term:`vehicle` :term:`geopose`, or None if not available"""
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
             # Position
             latitude, longitude = (
@@ -681,7 +682,6 @@ class GISNode(Node):
             altitude = nav_sat_fix.altitude
 
             return GeoPoseStamped(
-                header=messaging.create_header("base_link"),
                 pose=GeoPose(
                     position=GeoPoint(
                         latitude=latitude, longitude=longitude, altitude=altitude
@@ -788,11 +788,11 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _ground_track_geopose(
             geopose: GeoPoseStamped, ground_track_elevation_ellipsoid: float
         ):
             return GeoPoseStamped(
-                header=messaging.create_header("base_link"),
                 pose=GeoPose(
                     position=GeoPoint(
                         latitude=geopose.pose.position.latitude,
@@ -814,6 +814,7 @@ class GISNode(Node):
         """Published :term:`vehicle` :term:`altitude`, or None if not available"""
 
         @narrow_types(self)
+        @ROS.retain_oldest_header
         def _vehicle_altitude(
             geopose: GeoPoseStamped,
             egm96_height: float,  # Float32,
@@ -825,7 +826,6 @@ class GISNode(Node):
 
             # Define local == -relative, terrain == bottom_clearance
             altitude = Altitude(
-                header=messaging.create_header("base_link"),
                 amsl=altitude_amsl,
                 local=local,  # TODO: home altitude ok?
                 relative=-local,  # TODO: check sign
@@ -967,14 +967,13 @@ class GISNode(Node):
         # used as @cache_if predicate for self.orthoimage
         # Cast None to False (assume bounding box not yet available)
         return (
-            bool(
-                _orthoimage_overlap_is_too_low(
-                    self._bounding_box,
-                    self._orthoimage,
-                    self.min_map_overlap_update_threshold,
-                )
-            )
+            not hasattr(self, "_orthoimage")
             or not self._orthoimage
+            or _orthoimage_overlap_is_too_low(
+                self._bounding_box,
+                self._orthoimage,
+                self.min_map_overlap_update_threshold,
+            )
         )
 
     @property
@@ -1022,7 +1021,8 @@ class GISNode(Node):
 
             intrinsics = camera_info.k.reshape((3, 3))
 
-            # List of image points: top-left, top-right, bottom-right, bottom-left, principal point
+            # List of image points: top-left, top-right, bottom-right, bottom-left,
+            # principal point
             img_points = [
                 [0, 0],
                 [camera_info.width - 1, 0],
@@ -1101,13 +1101,17 @@ class GISNode(Node):
         @narrow_types(self)
         def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
             """
-            Adjust the given bounding box to ensure it's square in the ENU local tangent plane (meters).
+            Adjust the given bounding box to ensure it's square in the ENU local
+            tangent plane (meters).
 
-            Adds padding in X (easting) and Y (northing) directions to ensure camera FOV is fully enclosed
-            by the bounding box, and to reduce need to update the reference image so often.
+            Adds padding in X (easting) and Y (northing) directions to ensure
+            camera FOV is fully enclosed by the bounding box, and to reduce need
+            to update the reference image so often.
 
-            :param enu_coords: A numpy array of shape (N, 2) representing ENU coordinates.
-            :return: A numpy array of shape (N, 2) representing the adjusted square bounding box.
+            :param enu_coords: A numpy array of shape (N, 2) representing ENU
+                coordinates.
+            :return: A numpy array of shape (N, 2) representing the adjusted
+                square bounding box.
             """
             min_e, min_n = np.min(enu_coords, axis=0)
             max_e, max_n = np.max(enu_coords, axis=0)
@@ -1127,14 +1131,17 @@ class GISNode(Node):
                 max_e += difference
 
             # Construct the squared bounding box coordinates
-            # Add padding to bounding box by expanding field of view bounding box width in each direction
+            # Add padding to bounding box by expanding field of view bounding
+            # box width in each direction
             padding = max_n - min_n
-            square_box = np.array([
-                [min_e - padding, min_n - padding],
-                [max_e + padding, min_n - padding],
-                [max_e + padding, max_n + padding],
-                [min_e - padding, max_n + padding]
-            ])
+            square_box = np.array(
+                [
+                    [min_e - padding, min_n - padding],
+                    [max_e + padding, min_n - padding],
+                    [max_e + padding, max_n + padding],
+                    [min_e - padding, max_n + padding],
+                ]
+            )
 
             assert square_box.shape == enu_coords.shape
 

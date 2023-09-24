@@ -52,6 +52,7 @@ from ..static_configuration import (
     CV_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
     ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE,
@@ -69,6 +70,11 @@ class RVizNode(Node):
     ROS_TOPIC_RELATIVE_VEHICLE_PATH: Final = "~/vehicle/path"
     """Relative :term:`topic` into which this node publishes
     :attr:`.vehicle_path`
+    """
+
+    ROS_TOPIC_RELATIVE_CAMERA_PATH: Final = "~/camera/path"
+    """Relative :term:`topic` into which this node publishes
+    :attr:`.camera_path`
     """
 
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_PATH: Final = "~/vehicle/estimated/path"
@@ -92,11 +98,13 @@ class RVizNode(Node):
         # Initialize ROS subscriptions by calling the decorated properties once
         self.home_position
         self.vehicle_geopose
+        self.camera_geopose
         self.vehicle_estimated_geopose
         self.ground_track_geopose
 
         # Store poses for outgoing path messages in dedicated queues
         self._vehicle_path_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
+        self._camera_path_queue: deque = deque(maxlen=self._MAX_POSE_STAMPED_MESSAGES)
         self._vehicle_estimated_path_queue: deque = deque(
             maxlen=self._MAX_POSE_STAMPED_MESSAGES
         )
@@ -214,6 +222,14 @@ class RVizNode(Node):
         self._append_geopose_to_queue(geopose, self._vehicle_path_queue)
         self.vehicle_path
 
+    def _append_camera_geopose_to_queue(self, geopose: GeoPoseStamped) -> None:
+        """Appends the geopose message to the camera pose Path queue
+
+        :param pose: :class:`.GeoPoseStamped` message to append
+        """
+        self._append_geopose_to_queue(geopose, self._camera_path_queue)
+        self.camera_path
+
     def _append_vehicle_estimated_geopose_to_queue(
         self, geopose: GeoPoseStamped
     ) -> None:
@@ -272,6 +288,19 @@ class RVizNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_append_camera_geopose_to_queue,
+    )
+    def camera_geopose(self) -> Optional[GeoPoseStamped]:
+        """Subscribed :term:`camera` :term:`geopose`, or None if not available
+        or too old
+        """
+
+    @property
+    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_vehicle_estimated_geopose_to_queue,
@@ -308,6 +337,17 @@ class RVizNode(Node):
         if not available
         """
         return self._get_path(self._vehicle_path_queue)
+
+    @property
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_CAMERA_PATH,
+        QoSPresetProfiles.SYSTEM_DEFAULT.value,
+    )
+    def camera_path(self) -> Optional[Path]:
+        """Published :term:`camera` :term:`global position` :term:`path`, or None
+        if not available
+        """
+        return self._get_path(self._camera_path_queue)
 
     @property
     @ROS.publish(

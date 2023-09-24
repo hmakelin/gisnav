@@ -25,3 +25,5 @@ gisnav/test/sitl/output/
 gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 .benchmarks/
+
+*.egg-info

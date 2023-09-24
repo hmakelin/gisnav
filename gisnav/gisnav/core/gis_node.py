@@ -58,21 +58,20 @@ from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import pyproj
 import requests
+import tf_transformations
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus, HomePosition
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
-from pygeodesy.ellipsoidalVincenty import LatLon
 from pygeodesy.geoids import GeoidPGM
-from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from shapely.geometry import box
 
@@ -82,7 +81,7 @@ from .. import messaging
 from .._assertions import assert_len, assert_type
 from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
-    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -324,9 +323,6 @@ class GISNode(Node):
     :term:`orthoimage` bounding box, under which a new map will be requested.
     """
 
-    ROS_D_MAX_MAP_RADIUS = 1000
-    """Max radius for circle inside the maps (half map side length)"""
-
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
     """Default delay in seconds for throttling WMS GetMap requests
 
@@ -374,7 +370,7 @@ class GISNode(Node):
 
         # TODO: make configurable / use shared folder home path instead
         self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
-        self._transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857")
+        self._transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3857")
 
         # TODO: refactor out CvBridge and use np.frombuffer instead
         self._cv_bridge = CvBridge()
@@ -450,13 +446,6 @@ class GISNode(Node):
         If the overlap between the candidate new bounding box and the current
         :term:`orthoimage` bounding box is below this value, a new map will be
         requested.
-        """
-
-    @property
-    @ROS.parameter(ROS_D_MAX_MAP_RADIUS)
-    def max_map_radius(self) -> Optional[int]:
-        """Max radius in meters for circle inside the requested :term:`bounding box`
-        (half map side length)
         """
 
     @property
@@ -691,27 +680,13 @@ class GISNode(Node):
             )
             altitude = nav_sat_fix.altitude
 
-            # Convert ENU->NED + re-center yaw
-            enu_to_ned = Rotation.from_euler("XYZ", np.array([np.pi, 0, np.pi / 2]))
-            attitude_ned = (
-                Rotation.from_quat(
-                    messaging.as_np_quaternion(pose_stamped.pose.orientation)
-                )
-                * enu_to_ned.inv()
-            )
-            rpy = attitude_ned.as_euler("XYZ", degrees=True)
-            rpy[0] = (rpy[0] + 180) % 360
-            attitude_ned = Rotation.from_euler("XYZ", rpy, degrees=True)
-            attitude_ned = attitude_ned.as_quat()
-            orientation = messaging.as_ros_quaternion(attitude_ned)
-
             return GeoPoseStamped(
                 header=messaging.create_header("base_link"),
                 pose=GeoPose(
                     position=GeoPoint(
                         latitude=latitude, longitude=longitude, altitude=altitude
                     ),
-                    orientation=orientation,  # TODO: is this NED or ENU?
+                    orientation=pose_stamped.pose.orientation,
                 ),
             )
 
@@ -1020,48 +995,196 @@ class GISNode(Node):
         """
 
         @narrow_types(self)
-        def _bounding_box(
-            latlon: LatLon,
+        def _fov_and_principal_point_on_ground_plane(
+            camera_quaternion: Quaternion,
+            vehicle_pose: PoseStamped,
             camera_info: CameraInfo,
-            altitude: Altitude,
-            max_map_radius: int,
-        ):
-            # TODO: log messages for what's going on, or split into multiple methods
-            def get_dynamic_map_radius(
-                camera_info: CameraInfo, max_map_radius: int, elevation: float
-            ) -> float:
-                """Returns map radius that adjusts for camera altitude to be used
-                for new map requests"""
-                hfov = 2 * np.arctan(camera_info.width / (2 * camera_info.k[0]))
-                map_radius = 1.5 * hfov * elevation  # Arbitrary padding of 50%
-                return min(map_radius, max_map_radius)
+        ) -> Optional[np.ndarray]:
+            """Projects :term:`camera` principal point and :term:`FOV` corners
+             on ground plane
 
-            assert all((camera_info, max_map_radius, altitude.terrain))
-            map_radius = get_dynamic_map_radius(
-                camera_info, max_map_radius, altitude.terrain
-            )
-            return self._bounding_box_with_padding_for_latlon(
-                latlon.lat, latlon.lon, map_radius
-            )
+            .. note::
+                Assumes ground is a flat plane, does not take :term:`DEM` into account
 
-        latlon = self._principal_point_on_ground_plane
-        bounding_box = _bounding_box(
-            latlon, self.camera_info, self.vehicle_altitude, self.max_map_radius
-        )
+            :return: Numpy array of FOV corners and principal point projected onto
+                ground (vehicle :term:`local position` z==0) plane in following
+                order: top-left, top-right, bottom-right, bottom-left, principal point.
+                Shape is (5, 2). Coordinates are meters in local tangent plane
+                :term:`ENU`.
+            """
+            R = tf_transformations.quaternion_matrix(
+                tuple(messaging.as_np_quaternion(camera_quaternion))
+            )[:3, :3]
 
-        if bounding_box is None:
-            geopose = self.vehicle_geopose
-            if geopose is None:
-                if self.home_position is not None:
-                    geopoint = self.home_position.geo
-                else:
+            # Camera position - assume local frame z is altitude AGL
+            position = vehicle_pose.pose.position
+            C = np.array((position.x, position.y, position.z))
+
+            intrinsics = camera_info.k.reshape((3, 3))
+
+            # List of image points: top-left, top-right, bottom-right, bottom-left, principal point
+            img_points = [
+                [0, 0],
+                [camera_info.width - 1, 0],
+                [camera_info.width - 1, camera_info.height - 1],
+                [0, camera_info.height - 1],
+                [camera_info.width / 2, camera_info.height / 2],
+            ]
+
+            # Project each point to the ground
+            ground_points = []
+            for pt in img_points:
+                u, v = pt
+
+                # Convert to normalized image coordinates
+                d_img = np.array([u, v, 1])
+
+                try:
+                    d_cam = np.linalg.inv(intrinsics) @ d_img
+                except np.linalg.LinAlgError as _:  # noqa: F841
+                    self.get_logger().error(
+                        "Could not invert camera intrinsics matrix. Cannot"
+                        "project FOV on ground."
+                    )
                     return None
-            else:
-                geopoint = geopose.pose.position
 
-            bounding_box = self._bounding_box_with_padding_for_latlon(
-                geopoint.latitude, geopoint.longitude
+                # Convert direction to ENU frame
+                d_enu = R @ d_cam
+
+                # Find intersection with ground plane
+                t = -C[2] / d_enu[2]
+                intersection = C + t * d_enu
+
+                ground_points.append(intersection[:2])
+
+            return np.vstack(ground_points)
+
+        @narrow_types(self)
+        def _enu_to_latlon(
+            bbox_coords: np.ndarray, home: HomePosition
+        ) -> Optional[np.ndarray]:
+            """Convert :term:`ENU` local tangent plane coordinates to
+            latitude and longitude.
+
+            :param bbox_coords: A bounding box in local ENU frame (units in meters)
+            :param home: :term:`Home` :term:`global position`
+
+            :return: Same bounding box in WGS 84 coordinates
+            """
+
+            def _determine_utm_zone(longitude):
+                """Determine the UTM zone for a given longitude."""
+                return int((longitude + 180) / 6) + 1
+
+            # Define the UTM zone and conversion
+            proj_latlon = pyproj.Proj(proj="latlong", datum="WGS84")
+            utm_zone = _determine_utm_zone(home.geo.longitude)
+            proj_utm = pyproj.Proj(proj="utm", zone=utm_zone, datum="WGS84")
+
+            # Convert origin to UTM
+            origin_x, origin_y = pyproj.transform(
+                proj_latlon, proj_utm, home.geo.longitude, home.geo.latitude
             )
+
+            # Add ENU offsets to the UTM origin
+            utm_x = origin_x + bbox_coords[:, 0]
+            utm_y = origin_y + bbox_coords[:, 1]
+
+            # Convert back to lat/lon
+            lon, lat = pyproj.transform(proj_utm, proj_latlon, utm_x, utm_y)
+
+            latlon_coords = np.column_stack((lon, lat))
+            assert latlon_coords.shape == bbox_coords.shape
+
+            return latlon_coords
+
+        @narrow_types(self)
+        def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
+            """
+            Adjust the given bounding box to ensure it's square in the ENU local tangent plane (meters).
+
+            Adds padding in X (easting) and Y (northing) directions to ensure camera FOV is fully enclosed
+            by the bounding box, and to reduce need to update the reference image so often.
+
+            :param enu_coords: A numpy array of shape (N, 2) representing ENU coordinates.
+            :return: A numpy array of shape (N, 2) representing the adjusted square bounding box.
+            """
+            min_e, min_n = np.min(enu_coords, axis=0)
+            max_e, max_n = np.max(enu_coords, axis=0)
+
+            delta_e = max_e - min_e
+            delta_n = max_n - min_n
+
+            if delta_e > delta_n:
+                # Expand in the north direction
+                difference = (delta_e - delta_n) / 2
+                min_n -= difference
+                max_n += difference
+            elif delta_n > delta_e:
+                # Expand in the east direction
+                difference = (delta_n - delta_e) / 2
+                min_e -= difference
+                max_e += difference
+
+            # Construct the squared bounding box coordinates
+            # Add padding to bounding box by expanding field of view bounding box width in each direction
+            padding = max_n - min_n
+            square_box = np.array([
+                [min_e - padding, min_n - padding],
+                [max_e + padding, min_n - padding],
+                [max_e + padding, max_n + padding],
+                [min_e - padding, max_n + padding]
+            ])
+
+            assert square_box.shape == enu_coords.shape
+
+            return square_box
+
+        @narrow_types(self)
+        def _bounding_box(
+            fov_local_enu: np.ndarray,
+        ) -> BoundingBox:
+            """Create a BoundingBox :term:`message` that envelops the provided
+            :term:`FOV` coordinates.
+
+            fov_local_enu: A 4x2 numpy array where N is the number of points,
+                        and each row represents [longitude, latitude].
+
+            Returns: geographic_msgs.msg.BoundingBox
+            """
+            assert fov_local_enu.shape == (4, 2)
+
+            # Find the min and max values for longitude and latitude
+            min_lon, min_lat = np.min(fov_local_enu, axis=0)
+            max_lon, max_lat = np.max(fov_local_enu, axis=0)
+
+            # Create and populate the BoundingBox message
+            bbox = BoundingBox()
+            bbox.min_pt.latitude = min_lat
+            bbox.min_pt.longitude = min_lon
+            bbox.max_pt.latitude = max_lat
+            bbox.max_pt.longitude = max_lon
+
+            return bbox
+
+        fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
+            self._camera_quaternion, self.vehicle_pose, self.camera_info
+        )
+        if fov_and_c_on_ground_local_enu is not None:
+            fov_on_ground_local_enu = fov_and_c_on_ground_local_enu[:4]
+            bbox_local_enu_padded_square = _square_bounding_box(fov_on_ground_local_enu)
+            bounding_box = _enu_to_latlon(
+                bbox_local_enu_padded_square, self.home_position
+            )
+            # Convert from numpy array to BoundingBox
+            bounding_box = _bounding_box(bounding_box)
+        else:
+            bounding_box = None
+
+        # TODO: here there used to be a fallback that would get bbox u
+        #  nder
+        #  vehicle if FOV could not be projected. But that should not be needed
+        #  if everything works so it was removed from here.
 
         return bounding_box
 
@@ -1187,7 +1310,19 @@ class GISNode(Node):
             )
         except ServiceException as se:
             self.get_logger().error(
-                f"GetMap request for image ran into an unexpected exception: {se}"
+                f"GetMap request failed likely because of a connection error: {se}"
+            )
+            return None
+        except requests.exceptions.ConnectionError as ce:  # noqa: F841
+            # Expected error if no connection
+            self.get_logger().error(
+                f"GetMap request failed because of a connection error: {ce}"
+            )
+            return None
+        except Exception as e:
+            # TODO: handle other exception types
+            self.get_logger().error(
+                f"GetMap request for image ran into an unexpected exception: {e}"
             )
             return None
         finally:
@@ -1269,7 +1404,21 @@ class GISNode(Node):
 
         except ServiceException as se:
             self.get_logger().error(
-                f"GetFeatureInfo request ran into an unexpected exception: {se}"
+                f"GetFeatureInfo request failed likely because of a connection "
+                f"error: {se}"
+            )
+            return None
+        except requests.exceptions.ConnectionError as ce:  # noqa: F841
+            # Expected error if no connection
+            self.get_logger().error(
+                f"GetFeatureInfo request failed because of a connection error: {ce}"
+            )
+            return None
+        except Exception as e:
+            # TODO: handle other exception types
+            self.get_logger().error(
+                f"GetFeatureInfo request for image ran into an unexpected "
+                f"exception: {e}"
             )
             return None
         finally:
@@ -1401,49 +1550,6 @@ class GISNode(Node):
         return np.degrees(yaw)
 
     @property
-    def _principal_point_on_ground_plane(self) -> LatLon:
-        """Projects :term:`camera` principal point on ground plane
-
-        .. note::
-            Assumes ground is a flat plane, does not take :term:`DEM` into account
-        """
-
-        @narrow_types(self)
-        def _principal_point_on_ground_plane(
-            geopose: GeoPoseStamped,
-            vehicle_altitude: Altitude,
-            camera_quaternion: Quaternion,
-        ) -> LatLon:
-            # Your off-nadir angle and camera yaw
-            off_nadir_angle_deg = messaging.off_nadir_angle(camera_quaternion)
-
-            camera_yaw = self._quaternion_to_yaw_degrees(camera_quaternion)
-
-            # Convert the off-nadir angle to a distance on the ground.
-            # This step assumes a simple spherical Earth model, not taking
-            # into account ellipsoid shape or ground track elevation.
-            ground_distance = vehicle_altitude.terrain / np.cos(
-                np.radians(off_nadir_angle_deg)
-            )  # in meters
-
-            # Use pygeodesy to calculate new position
-            current_pos = LatLon(
-                geopose.pose.position.latitude, geopose.pose.position.longitude
-            )
-
-            # Get the latitude and longitude of the principal point projected
-            # on the ground
-            principal_point_ground = current_pos.destination(
-                ground_distance, camera_yaw
-            )
-
-            return principal_point_ground
-
-        return _principal_point_on_ground_plane(
-            self.vehicle_geopose, self.vehicle_altitude, self.camera_quaternion
-        )
-
-    @property
     @ROS.max_delay_ms(messaging.DELAY_SLOW_MS)
     @ROS.subscribe(
         "/mavros/home_position/home",
@@ -1463,7 +1569,7 @@ class GISNode(Node):
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
         """
-        self.camera_quaternion
+        self.camera_geopose
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
@@ -1477,82 +1583,95 @@ class GISNode(Node):
         or too old
         """
 
-    @staticmethod
-    def _quaternion_multiply(q1: Quaternion, q2: Quaternion) -> Quaternion:
-        w1, x1, y1, z1 = q1.w, q1.x, q1.y, q1.z
-        w2, x2, y2, z2 = q2.w, q2.x, q2.y, q2.z
-
-        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-
-        return Quaternion(w=w, x=x, y=y, z=z)
-
     @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_CAMERA_QUATERNION, QoSPresetProfiles.SENSOR_DATA.value
-    )
-    def camera_quaternion(self) -> Optional[Quaternion]:
-        """:term:`Camera` :term:`orientation` or None if not available
+    def _camera_quaternion(self) -> Optional[Quaternion]:
+        """:term:`Camera` :term:`ENU` :term:`orientation` or None if not available
 
         .. note::
-            Current implementation assumes camera is :term:`nadir` facing
-            if GimbalDeviceAttitudeStatus :term:`message` (:term:`MAVLink` gimbal
-            protocol v2) is not available. Should therefore not be used for
-            estimating :term:`vehicle` :term:`orientation`.
+            * Current implementation assumes camera faces directly down from
+              :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
+              (:term:`MAVLink` gimbal protocol v2) is not available. Should
+              probably not be used for estimating :term:`vehicle` :term:`orientation`.
+            * If GimbalDeviceAttitudeStatus :term:`message`
+              (:term:`MAVLink` gimbal protocol v2) is available, only the flags
+              value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
+              floating yaw) is supported.
         """
 
-        def _apply_vehicle_yaw(vehicle_q, camera_q):
-            yaw_deg = self._quaternion_to_yaw_degrees(vehicle_q)
-            yaw_rad = np.radians(yaw_deg)
+        def _normalize_quaternion(q: Quaternion) -> Quaternion:
+            norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
+            q.w = q.w / norm
+            q.x = q.x / norm
+            q.y = q.y / norm
+            q.z = q.z / norm
+            return q
 
-            # Create a new quaternion with only yaw rotation
-            yaw_q = Quaternion(
-                w=np.cos(yaw_rad / 2), x=0.0, y=0.0, z=np.sin(yaw_rad / 2)
-            )
-
-            # Apply the vehicle yaw rotation to the camera (gimbal) quaternion
-            gimbal_yaw_q = self._quaternion_multiply(yaw_q, camera_q)
-
-            return gimbal_yaw_q
-
-        # TODO check frame (e.g. base_link_frd/vehicle body in PX4 SITL simulation)
         @narrow_types(self)
         def _camera_quaternion(
             geopose: GeoPoseStamped,
+            gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
         ):
-            """:term:`Camera` :term:`orientation` quaternion in :term:`NED` frame
-
-            Origin is defined as camera (gimbal) pointing directly down :term:`nadir`
-            with top of image facing north. This definition should avoid gimbal
-            lock for realistic use cases where the camera is used mainly to look
-            down at the ground under the :term:`vehicle` instead of e.g. at the horizon.
-            """
-            if self.gimbal_device_attitude_status is None:
-                # Identity quaternion: assume nadir-facing camera if no
+            """:term:`Camera` :term:`orientation` quaternion in :term:`ENU` frame"""
+            if gimbal_device_attitude_status is None:
+                # Identity quaternion: assume down facing camera if no
                 # information received from autopilot bridge
-                q = Quaternion(
+                camera_enu_q = Quaternion(
                     x=0.0,
                     y=0.0,
                     z=0.0,
                     w=1.0,
                 )
             else:
-                # PX4 over MAVROS gives GimbalDeviceAttitudeStatus in vehicle
-                # body FRD frame with origin pointing forward along vehicle nose.
-                # To re-center origin to nadir need to adjust pitch by -90 degrees.
-                q_pitch_minus_90_deg = messaging.as_ros_quaternion(
-                    np.array([np.cos(-np.pi / 4), 0, np.sin(-np.pi / 4), 0])
+                assert gimbal_device_attitude_status.flags == 12, (
+                    "Currently GISNav only supports a two-axis gimbal that has "
+                    "horizon-locked roll and pitch (MAVLink Gimbal Protocol v2 "
+                    "GimbalDeviceAttitudeStatus message flags has value 12 i.e. "
+                    "1100 for bit mask)."
                 )
-                q = self._quaternion_multiply(
-                    self.gimbal_device_attitude_status.q, q_pitch_minus_90_deg
+                # TODO: handle failure flags (e.g. gimbal at physical limit)
+                # TODO: handle gimbal lock flags (especially yaw lock, flags == 16)
+
+                # Extract yaw-only quaternion from vehicle's quaternion
+                # because the gimbal quaternion has floating yaw
+                vehicle_q = geopose.pose.orientation
+                vehicle_yaw_only_q = Quaternion(
+                    w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z
+                )
+                vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
+
+                # Need to mirror gimbal orientation along vehicle Y and Z-axis in
+                # FRD frame to get the camera ENU quaternion to display
+                # correctly in rviz - TODO figure out why
+                gimbal_enu_mirrored_q = (
+                    gimbal_device_attitude_status.q.x,
+                    -gimbal_device_attitude_status.q.y,
+                    -gimbal_device_attitude_status.q.z,
+                    gimbal_device_attitude_status.q.w,
                 )
 
-            assert q is not None
+                camera_enu_q = tf_transformations.quaternion_multiply(
+                    tuple(messaging.as_np_quaternion(vehicle_yaw_only_q)),
+                    gimbal_enu_mirrored_q,
+                )
 
-            compound_q = _apply_vehicle_yaw(geopose.pose.orientation, q)
+            assert camera_enu_q is not None
+            return messaging.as_ros_quaternion(np.array(camera_enu_q))
 
-            return compound_q
+        return _camera_quaternion(
+            self.vehicle_geopose, self.gimbal_device_attitude_status
+        )
 
-        return _camera_quaternion(self.vehicle_geopose)
+    @property
+    @ROS.publish(ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value)
+    def camera_geopose(self) -> Optional[GeoPoseStamped]:
+        """:term:`Camera` :term:`geopose` or None if not available"""
+
+        @narrow_types(self)
+        def _camera_geopose(
+            vehicle_geopose: GeoPoseStamped, camera_quaternion: Quaternion
+        ) -> GeoPoseStamped:
+            camera_geopose = vehicle_geopose
+            camera_geopose.pose.orientation = camera_quaternion
+            return camera_geopose
+
+        return _camera_geopose(self.vehicle_geopose, self._camera_quaternion)

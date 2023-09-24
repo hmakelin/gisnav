@@ -32,7 +32,7 @@ class LoFTRHandler(BaseHandler):
         """Converts incoming images to torch tensors"""
         data = data[0]
         query_img, reference_img, k_matrix, elevation = self._deserialize_data(data)
-        # self._display_images("Query", query_img, "Reference", reference_img)
+        #self._display_images("Query", query_img, "Reference", reference_img)
 
         qry_tensor, ref_tensor = self._convert_images_to_tensors(
             query_img, reference_img
@@ -53,8 +53,8 @@ class LoFTRHandler(BaseHandler):
             pickle.loads(data[key]) for key in ["query", "reference", "k", "elevation"]
         )
 
-    # @staticmethod
-    # def _display_images(*args):
+    #@staticmethod
+    #def _display_images(*args):
     #    """Displays images using OpenCV"""
     #    for i in range(0, len(args), 2):
     #        cv2.imshow(args[i], args[i + 1])

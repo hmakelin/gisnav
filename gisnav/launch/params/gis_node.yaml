@@ -5,4 +5,3 @@ gis_node:
     wms_dem_layers: ['osm-buildings']
     wms_format: 'image/jpeg'
     min_map_overlap_update_threshold: 0.85
-    max_map_radius: 1000

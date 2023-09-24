@@ -29,10 +29,12 @@ SHELL ["/bin/bash", "-c"]
 
 # Custom MAVROS patches to make this work
 # The clock type one is needed for ArduPilot SITL
+# TODO: fix edit_mavros.sh so that mavros/local_position/pose topic
+# orientation works (does not work with current script -> commented out)
 RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
     sed -i 's/rclcpp::Time last_pos_time;/rclcpp::Time last_pos_time{0, 0, get_clock()->get_clock_type()};/' \
       src/mavros/mavros_extras/src/plugins/gps_input.cpp && \
-    /edit_mavros.sh && \
+    #/edit_mavros.sh && \
     colcon build
 
 RUN rm -rf /var/lib/apt/lists/* && \

@@ -537,7 +537,6 @@ class CVNode(Node):
 
     @property
     @cache_if(_should_estimate_geopose)
-    @ROS.retain_oldest_header
     def _geopose_stamped_estimate(self) -> Optional[GeoPoseStamped]:
         """
         Vehicle estimated pose as :class:`geographic_msgs.msg.GeoPoseStamped`
@@ -586,6 +585,7 @@ class CVNode(Node):
                 # TODO: use timestamp from input context instead of creating new one
                 # TODO: should have vehicle not camera quaternion
                 GeoPoseStamped(
+                    header=messaging.create_header("base_link"),
                     pose=GeoPose(
                         position=geopoint,
                         orientation=camera_quaternion,

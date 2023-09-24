@@ -1061,15 +1061,15 @@ class GISNode(Node):
 
         @narrow_types(self)
         def _enu_to_latlon(
-            enu_coords: np.ndarray, home: HomePosition
+            bbox_coords: np.ndarray, home: HomePosition
         ) -> Optional[np.ndarray]:
             """Convert :term:`ENU` local tangent plane coordinates to
             latitude and longitude.
 
-            :param enu_coords: A numpy array of ENU coordinates.
+            :param bbox_coords: A bounding box in local ENU frame (units in meters)
             :param home: :term:`Home` :term:`global position`
 
-            Returns: A numpy array of [longitude, latitude].
+            :return: Same bounding box in WGS 84 coordinates
             """
 
             def _determine_utm_zone(longitude):
@@ -1087,21 +1087,24 @@ class GISNode(Node):
             )
 
             # Add ENU offsets to the UTM origin
-            utm_x = origin_x + enu_coords[:, 0]
-            utm_y = origin_y + enu_coords[:, 1]
+            utm_x = origin_x + bbox_coords[:, 0]
+            utm_y = origin_y + bbox_coords[:, 1]
 
             # Convert back to lat/lon
             lon, lat = pyproj.transform(proj_utm, proj_latlon, utm_x, utm_y)
 
             latlon_coords = np.column_stack((lon, lat))
-            assert latlon_coords.shape == enu_coords.shape
+            assert latlon_coords.shape == bbox_coords.shape
 
             return latlon_coords
 
         @narrow_types(self)
         def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
             """
-            Adjust the given bounding box to ensure it's square in the ENU frame.
+            Adjust the given bounding box to ensure it's square in the ENU local tangent plane (meters).
+
+            Adds padding in X (easting) and Y (northing) directions to ensure camera FOV is fully enclosed
+            by the bounding box, and to reduce need to update the reference image so often.
 
             :param enu_coords: A numpy array of shape (N, 2) representing ENU coordinates.
             :return: A numpy array of shape (N, 2) representing the adjusted square bounding box.
@@ -1124,11 +1127,13 @@ class GISNode(Node):
                 max_e += difference
 
             # Construct the squared bounding box coordinates
+            # Add padding to bounding box by expanding field of view bounding box width in each direction
+            padding = max_n - min_n
             square_box = np.array([
-                [min_e, min_n],
-                [max_e, min_n],
-                [max_e, max_n],
-                [min_e, max_n]
+                [min_e - padding, min_n - padding],
+                [max_e + padding, min_n - padding],
+                [max_e + padding, max_n + padding],
+                [min_e - padding, max_n + padding]
             ])
 
             assert square_box.shape == enu_coords.shape
@@ -1165,16 +1170,17 @@ class GISNode(Node):
         fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
             self._camera_quaternion, self.vehicle_pose, self.camera_info
         )
-
-        fov_and_c_on_ground_global_enu = _enu_to_latlon(
-            fov_and_c_on_ground_local_enu, self.home_position
-        )
-        if fov_and_c_on_ground_global_enu is not None:
-            fov_on_ground_global_enu = fov_and_c_on_ground_global_enu[:4]
-            fov_on_ground_global_enu_square = _square_bounding_box(fov_on_ground_global_enu)
-            bounding_box = _bounding_box(fov_on_ground_global_enu_square)
+        if fov_and_c_on_ground_local_enu is not None:
+            fov_on_ground_local_enu = fov_and_c_on_ground_local_enu[:4]
+            bbox_local_enu_padded_square = _square_bounding_box(fov_on_ground_local_enu)
+            bounding_box = _enu_to_latlon(
+                bbox_local_enu_padded_square, self.home_position
+            )
+            # Convert from numpy array to BoundingBox
+            bounding_box = _bounding_box(bounding_box)
         else:
             bounding_box = None
+
         # TODO: here there used to be a fallback that would get bbox u
         #  nder
         #  vehicle if FOV could not be projected. But that should not be needed

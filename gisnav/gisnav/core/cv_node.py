@@ -892,7 +892,6 @@ class CVNode(Node):
         """
         pitch_angle = np.arcsin(2 * (q.w * q.y - q.x * q.z))
         off_nadir_angle = np.pi / 2 - pitch_angle  # in radians
-        self.get_logger().error(f"pitch {np.degrees(off_nadir_angle)}")
         return np.degrees(off_nadir_angle)
 
     def _camera_roll_or_pitch_too_high(self, max_pitch: Union[int, float]) -> bool:

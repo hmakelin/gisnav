@@ -191,7 +191,6 @@ class CVNode(Node):
         self.ground_track_geopose
         self.altitude
         self.camera_geopose
-        self.geopose
         self.camera_info
         self.image
 
@@ -277,16 +276,6 @@ class CVNode(Node):
     )
     def camera_geopose(self) -> Optional[GeoPoseStamped]:
         """:term:`Camera` :term:`geopose`, or None if not available"""
-
-    @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: re-enable
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def geopose(self) -> Optional[GeoPoseStamped]:
-        """Vehicle GeoPoseStamped, or None if not available or too old"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?

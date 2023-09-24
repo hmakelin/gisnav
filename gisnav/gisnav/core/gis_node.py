@@ -1166,7 +1166,6 @@ class GISNode(Node):
             self._camera_quaternion, self.vehicle_pose, self.camera_info
         )
 
-        # TODO: take shorter dimension and expand it so that the bbox is a square
         fov_and_c_on_ground_global_enu = _enu_to_latlon(
             fov_and_c_on_ground_local_enu, self.home_position
         )

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 import rclpy
 from geographic_msgs.msg import GeoPoseStamped
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped
 from launch import LaunchDescription  # type: ignore
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -28,7 +28,7 @@ from gisnav.static_configuration import (
     CV_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -81,8 +81,8 @@ class TestComputationalGraphCase(unittest.TestCase):
         ),
         (
             f"/{ROS_NAMESPACE}"
-            f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
-            Quaternion,
+            f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+            GeoPoseStamped,
         ),
         (
             f"/{ROS_NAMESPACE}"

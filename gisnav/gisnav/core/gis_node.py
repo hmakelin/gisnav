@@ -1021,7 +1021,8 @@ class GISNode(Node):
 
             intrinsics = camera_info.k.reshape((3, 3))
 
-            # List of image points: top-left, top-right, bottom-right, bottom-left, principal point
+            # List of image points: top-left, top-right, bottom-right, bottom-left,
+            # principal point
             img_points = [
                 [0, 0],
                 [camera_info.width - 1, 0],
@@ -1100,13 +1101,17 @@ class GISNode(Node):
         @narrow_types(self)
         def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
             """
-            Adjust the given bounding box to ensure it's square in the ENU local tangent plane (meters).
+            Adjust the given bounding box to ensure it's square in the ENU local
+            tangent plane (meters).
 
-            Adds padding in X (easting) and Y (northing) directions to ensure camera FOV is fully enclosed
-            by the bounding box, and to reduce need to update the reference image so often.
+            Adds padding in X (easting) and Y (northing) directions to ensure
+            camera FOV is fully enclosed by the bounding box, and to reduce need
+            to update the reference image so often.
 
-            :param enu_coords: A numpy array of shape (N, 2) representing ENU coordinates.
-            :return: A numpy array of shape (N, 2) representing the adjusted square bounding box.
+            :param enu_coords: A numpy array of shape (N, 2) representing ENU
+                coordinates.
+            :return: A numpy array of shape (N, 2) representing the adjusted
+                square bounding box.
             """
             min_e, min_n = np.min(enu_coords, axis=0)
             max_e, max_n = np.max(enu_coords, axis=0)
@@ -1126,14 +1131,17 @@ class GISNode(Node):
                 max_e += difference
 
             # Construct the squared bounding box coordinates
-            # Add padding to bounding box by expanding field of view bounding box width in each direction
+            # Add padding to bounding box by expanding field of view bounding
+            # box width in each direction
             padding = max_n - min_n
-            square_box = np.array([
-                [min_e - padding, min_n - padding],
-                [max_e + padding, min_n - padding],
-                [max_e + padding, max_n + padding],
-                [min_e - padding, max_n + padding]
-            ])
+            square_box = np.array(
+                [
+                    [min_e - padding, min_n - padding],
+                    [max_e + padding, min_n - padding],
+                    [max_e + padding, max_n + padding],
+                    [min_e - padding, max_n + padding],
+                ]
+            )
 
             assert square_box.shape == enu_coords.shape
 

@@ -13,7 +13,7 @@ from gisnav._decorators import ROS
 from gisnav.static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_QUATERNION,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -41,7 +41,7 @@ class StateListenerNode(Node):
         self.orthoimage
         self.ground_track_geopose
         self.ground_track_elevation
-        self.camera_quaternion
+        self.camera_geopose
 
     @property
     @ROS.subscribe(
@@ -92,16 +92,11 @@ class StateListenerNode(Node):
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_QUATERNION.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def camera_quaternion(self) -> Optional[Quaternion]:
-        """:term:`Camera` :term:`orientation` as :class:`geometry_msgs.msg.Quaternion`
-        message, or None if not available
-
-        Quaternion origin is defined as facing down :term:`nadir` in :term:`NED`
-        frame, with top side of image facing north.
-        """
+    def camera_geopose(self) -> Optional[GeoPoseStamped]:
+        """:term:`Camera` :term:`geopose`"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: re-enable
@@ -275,7 +270,7 @@ class StateListenerNode(Node):
         """
         if quaternion is not None:
             _, pitch, __ = self._get_yaw_pitch_roll_degrees_from_quaternion(
-                self.camera_quaternion
+                self.camera_geopose.pose.quaternion
             )
             assert (
                 pitch == pitch_degrees
@@ -299,7 +294,7 @@ class StateListenerNode(Node):
         """
         if quaternion is not None:
             _, __, roll = self._get_yaw_pitch_roll_degrees_from_quaternion(
-                self.camera_quaternion
+                self.camera_geopose.pose.quaternion
             )
             assert (
                 roll == roll_degrees
@@ -323,7 +318,7 @@ class StateListenerNode(Node):
         """
         if quaternion is not None:
             yaw, _, __ = self._get_yaw_pitch_roll_degrees_from_quaternion(
-                self.camera_quaternion
+                self.camera_geopose.pose.quaternion
             )
             assert (
                 yaw == yaw_degrees
@@ -423,13 +418,15 @@ class StateListenerNode(Node):
             )
 
         if camera_pitch_ned_deg is not None:
-            self._assert_pitch(self.camera_quaternion, camera_pitch_ned_deg)
+            self._assert_pitch(
+                self.camera_geopose.pose.quaternion, camera_pitch_ned_deg
+            )
 
         if camera_yaw_ned_deg is not None:
-            self._assert_yaw(self.camera_quaternion, camera_yaw_ned_deg)
+            self._assert_yaw(self.camera_geopose.pose.quaternion, camera_yaw_ned_deg)
 
         if camera_roll_ned_deg is not None:
-            self._assert_roll(self.camera_quaternion, camera_roll_ned_deg)
+            self._assert_roll(self.camera_geopose.pose.quaternion, camera_roll_ned_deg)
 
         if bbox is not None:
             raise NotImplementedError

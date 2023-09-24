@@ -45,7 +45,6 @@ Its primary inputs are:
 
 """
 import json
-import math
 import pickle
 from dataclasses import dataclass
 from typing import Final, List, Optional, Tuple, TypedDict, Union, get_args
@@ -53,7 +52,6 @@ from typing import Final, List, Optional, Tuple, TypedDict, Union, get_args
 import cv2
 import numpy as np
 import requests
-import tf_transformations
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
@@ -382,7 +380,7 @@ class CVNode(Node):
         :param q: A list containing the quaternion [qx, qy, qz, qw].
         :return: The yaw angle in degrees.
         """
-        enu_yaw = np.arctan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y ** 2 + q.z ** 2))
+        enu_yaw = np.arctan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y**2 + q.z**2))
         enu_yaw_deg = np.degrees(enu_yaw)
 
         # Convert ENU yaw to heading with North as origin
@@ -414,9 +412,7 @@ class CVNode(Node):
         )
 
         # Rotate and crop orthoimage stack
-        camera_yaw_degrees = self._extract_yaw(
-            context.camera_geopose.pose.orientation
-        )
+        camera_yaw_degrees = self._extract_yaw(context.camera_geopose.pose.orientation)
         crop_shape: Tuple[int, int] = query_array.shape[0:2]
         orthoimage_stack = np.dstack((orthophoto, dem))
         orthoimage_stack, affine = self._rotate_and_crop_image(
@@ -907,12 +903,14 @@ class CVNode(Node):
         """
         assert_type(max_pitch, get_args(Union[int, float]))
         if self.camera_geopose is not None:
-            off_nadir_pitch_deg = self._off_nadir_pitch(self.camera_geopose.pose.orientation)
+            off_nadir_pitch_deg = self._off_nadir_pitch(
+                self.camera_geopose.pose.orientation
+            )
 
             if off_nadir_pitch_deg > max_pitch:
                 self.get_logger().warn(
-                    f"Camera pitch is {off_nadir_pitch_deg} degrees off nadir and above "
-                    f"limit {max_pitch}."
+                    f"Camera pitch is {off_nadir_pitch_deg} degrees off nadir and "
+                    f"above limit {max_pitch}."
                 )
                 return True
             else:

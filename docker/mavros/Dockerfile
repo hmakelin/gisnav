@@ -7,7 +7,7 @@ ENV ROS_VERSION=${ROS_VERSION}
 LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 
 COPY * /
-RUN chmod 755 disable_shared_memory.xml entrypoint.sh edit_mavros.sh
+RUN chmod 755 entrypoint.sh edit_mavros.sh
 
 # Combine apt update, dist-upgrade and cleaning up in one layer
 RUN apt update --fix-missing && \

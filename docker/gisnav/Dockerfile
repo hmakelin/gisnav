@@ -71,10 +71,7 @@ RUN export PYTHON_SITE_PACKAGES=$(cat /tmp/python_site_packages.env | cut -d'=' 
 COPY --from=builder /opt/colcon_ws/install /opt/colcon_ws/install
 COPY --from=builder /usr/share/GeographicLib /usr/share/GeographicLib
 COPY --from=builder /opt/colcon_ws/src/gisnav/docker/gisnav/entrypoint.sh /entrypoint.sh
-COPY --from=builder /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml /disable_shared_memory.xml
 COPY --from=builder ${PYTHON_SITE_PACKAGES} ${PYTHON_SITE_PACKAGES}
-
-ENV FASTRTPS_DEFAULT_PROFILES_FILE /disable_shared_memory.xml
 
 HEALTHCHECK --interval=10s --timeout=3s \
   CMD /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && \

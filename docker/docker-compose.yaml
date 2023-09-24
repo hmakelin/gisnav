@@ -33,7 +33,8 @@ x-x11: &x11
 x-ros: &ros
   environment:
     ROS_DOMAIN_ID: 0
-    FASTRTPS_DEFAULT_PROFILES_FILE: /disable_shared_memory.xml
+  volumes:
+    - /dev/shm:/dev/shm
 
 x-tty: &tty
   stdin_open: true
@@ -104,8 +105,6 @@ services:
       #  - "linux/amd64"
       #  - "linux/arm64"
     image: gisnav  # used by GitHub upload_gisnav_image CI workflow
-    environment:
-      FASTRTPS_DEFAULT_PROFILES_FILE: /opt/colcon_ws/src/gisnav/docker/gisnav/disable_shared_memory.xml
     command: ros2 launch gisnav px4.dev.launch.py
 
   px4:

@@ -52,17 +52,6 @@ services:
       #  - "linux/arm64"
     command: /usr/local/bin/start-server
 
-  mapproxy:
-    <<: *base
-    build:
-      context: mapproxy
-      args:
-        MAPPROXY_TILE_URL: "https://<your-map-server-url>/tiles/%(z)s/%(y)s/%(x)s"
-        CONFIG_FILE: yaml/mapproxy.yaml
-        HOST: localhost
-        PORT: 80
-    command: mapproxy-util serve-develop -b $HOST:$PORT $HOME/$(basename $CONFIG_FILE)
-
   micro-ros-agent:
     <<: [*base, *ros]
     build:

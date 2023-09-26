@@ -53,9 +53,6 @@ a brief description of their intended use.
 | ``mapserver``       | :term:`GIS` server with self-hosted :term:`NAIP` and :term:`OSM` Buildings data covering      |
 |                     | KSQL airport.                                                                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``mapproxy``        | :term:`WMS` proxy for existing remote tile-based imagery endpoint. Alternative for            |
-|                     | ``mapserver`` when an imagery layer needs to cover multiple flight regions.                   |
-+---------------------+-----------------------------------------------------------------------------------------------+
 | ``autoheal``        | Monitors Docker container health and restarts containers marked as unhealthy. Used in the     |
 |                     | :term:`onboard` :term:`HIL` deployment configuration.                                         |
 +---------------------+-----------------------------------------------------------------------------------------------+

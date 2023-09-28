@@ -85,15 +85,12 @@ services:
   # Note: build context is repository root
   gisnav:
     <<: [*base, *ros, *tty, *nvidia-gpu]
+    image: ghcr.io/hmakelin/gisnav:latest
     build:
       context: ..
       dockerfile: docker/gisnav/Dockerfile
       args:
         ROS_VERSION: humble
-      #platforms:
-      #  - "linux/amd64"
-      #  - "linux/arm64"
-    image: gisnav  # used by GitHub upload_gisnav_image CI workflow
     command: ros2 launch gisnav px4.dev.launch.py
 
   px4:

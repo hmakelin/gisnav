@@ -32,9 +32,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push gisnav image
+      - name: Build and push gisnav images
         run: |
           cd colcon_ws/src/gisnav/docker
-          docker compose build gisnav
-          docker tag $(docker images -q gisnav) ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker buildx create --use
+          docker compose -f docker-compose.yaml -f docker-compose.arm64.yaml build gisnav
+          docker push

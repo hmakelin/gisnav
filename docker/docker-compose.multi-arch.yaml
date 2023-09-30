@@ -1,0 +1,10 @@
+x-multi-arch: &multi-arch
+  build:
+    platforms:
+      - linux/arm64
+      - linux/amd64
+
+services:
+  # For building a buildx multi-arch image of gisnav for upload
+  gisnav:
+    <<: *multi-arch

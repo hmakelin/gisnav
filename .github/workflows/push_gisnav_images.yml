@@ -51,4 +51,4 @@ jobs:
       - name: Build and push GISNav multi-arch Docker images
         run: |
           cd colcon_ws/src/gisnav/docker
-          docker buildx bake --push -f docker-compose.yaml -f docker-compose.multi-arch.yaml gisnav
+          docker buildx bake --provenance=false --push -f docker-compose.yaml -f docker-compose.multi-arch.yaml gisnav

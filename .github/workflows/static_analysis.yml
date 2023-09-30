@@ -2,7 +2,7 @@ name: Static analysis
 
 on:
   workflow_run:
-    workflows: [ "Build and upload gisnav Docker image to GHCR" ]
+    workflows: [ "Push latest GISNav multi-arch Docker images to GHCR" ]
     types:
       - completed
 

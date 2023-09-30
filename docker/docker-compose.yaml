@@ -85,7 +85,8 @@ services:
   # Note: build context is repository root
   gisnav:
     <<: [*base, *ros, *tty, *nvidia-gpu]
-    image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
+    #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
+    image: ghcr.io/hmakelin/gisnav:latest
     build:
       context: ..
       dockerfile: docker/gisnav/Dockerfile

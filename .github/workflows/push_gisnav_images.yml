@@ -33,6 +33,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The Docker Compose gisnav service configuration is assumed
+      # to use this tag for the Docker images if available, i.e.:
+      # ```yaml
+      # services:
+      #   gisnav:
+      #     image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
+      # ```
+      - name: Extract git tag from GITHUB_REF
+        run: echo "TAG=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/')
+
       - name: Setup Docker Buildx
         run: |
           docker buildx create --use
@@ -42,17 +53,7 @@ jobs:
           cd colcon_ws/src/gisnav/docker
           docker compose -f docker-compose.yaml -f docker-compose.multi-arch.yaml build gisnav
 
-      - name: Tag GISNav multi-arch Docker images
-        run: |
-          cd colcon_ws/src/gisnav/docker
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          else
-            TAG_NAME=latest
-          fi
-          docker tag ghcr.io/hmakelin/gisnav:latest ghcr.io/hmakelin/gisnav:$TAG_NAME
-
       - name: Push GISNav multi-arch Docker images
         run: |
           cd colcon_ws/src/gisnav/docker
-          docker push ghcr.io/hmakelin/gisnav:$TAG_NAME
+          docker compose push

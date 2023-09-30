@@ -56,4 +56,4 @@ jobs:
       - name: Push GISNav multi-arch Docker images
         run: |
           cd colcon_ws/src/gisnav/docker
-          docker compose push
+          docker compose push gisnav

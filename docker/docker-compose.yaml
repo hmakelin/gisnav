@@ -83,6 +83,8 @@ services:
     privileged: true
 
   # Note: build context is repository root
+  # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
+  #  duplicates these build arguments. They should be changed together.
   gisnav:
     <<: [*base, *ros, *tty, *nvidia-gpu]
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"

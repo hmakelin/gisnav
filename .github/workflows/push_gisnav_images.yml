@@ -1,0 +1,49 @@
+name: Push latest GISNav multi-arch Docker images to GHCR
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+  # Allows running manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  upload:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout GISNav
+        uses: actions/checkout@v3
+        with:
+          path: colcon_ws/src/gisnav
+
+      - name: Login to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract git tag from GITHUB_REF
+        run: echo "TAG=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_ENV
+        if: startsWith(github.ref, 'refs/tags/')
+
+      - name: Setup Docker Buildx
+        run: |
+          docker buildx create --use
+
+      # TODO: try to use docker-compose.yaml file to avoid having to specify redundant build args here
+      - name: Build and push GISNav multi-arch Docker images
+        run: |
+          cd colcon_ws/src/gisnav
+          docker buildx build --build-arg ROS_VERSION=humble --push --platform linux/amd64,linux/arm64 -f docker/gisnav/Dockerfile -t ghcr.io/hmakelin/gisnav:${TAG:-latest} .
+

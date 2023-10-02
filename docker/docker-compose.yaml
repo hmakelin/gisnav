@@ -138,6 +138,23 @@ services:
         ROS_VERSION: humble
     command: rviz2 -d gisnav_config.rviz
 
+  gscam:
+    <<: [*base, *ros]
+    build:
+      context: gscam
+      args:
+        ROS_VERSION: humble
+    command:
+      - "ros2"
+      - "run"
+      - "gscam"
+      - "gscam_node"
+      - "--ros-args"
+      - "--params-file"
+      - "gscam_params.yaml"
+      - "-p"
+      - "camera_info_url:=file:///camera_calibration.yaml"
+
   autoheal:
     <<: [*base]
     image: willfarrell/autoheal

@@ -1,0 +1,8 @@
+gscam_publisher:
+  ros__parameters:
+    gscam_config: >
+      udpsrc uri=udp://127.0.0.1:5600 caps='application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264' ! rtph264depay ! avdec_h264 ! videoconvert
+    preroll: False
+    use_gst_timestamps: True
+    frame_id: 'mono'
+    image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream

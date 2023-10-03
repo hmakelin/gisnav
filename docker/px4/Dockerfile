@@ -25,12 +25,10 @@ RUN git clone --branch v1.14.0-beta2 --single-branch \
 # Explicitly add required \
 WORKDIR PX4-Autopilot
 
-COPY merge_xml.py merge_yaml.py dds_topics.yaml typhoon_h480_camera.xml iris_hitl_camera.xml iris_hitl_ksql_airport.world .
+COPY merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world .
 
-# Add ROS camera plugin for SITL and HIL simulation, setup ksql_airport.world for HIL
+# Setup ksql_airport.world for HIL
 RUN pip install --no-cache-dir lxml && \
-    python3 merge_xml.py typhoon_h480_camera.xml Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/typhoon_h480/typhoon_h480.sdf.jinja && \
-    python3 merge_xml.py iris_hitl_camera.xml Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris_hitl/iris_hitl.sdf && \
     python3 merge_xml.py iris_hitl_ksql_airport.world Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world
 
 # Configure XRCE-DDS bridge

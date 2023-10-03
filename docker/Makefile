@@ -153,22 +153,22 @@ $(eval $(call middleware_template,onboard-hil-middleware,-f docker-compose.yaml 
 $(eval $(call middleware_template,onboard-sitl-middleware,))
 $(eval $(call middleware_template,offboard-sitl-middleware,))  # same as onboard
 
-# onboard HIL services: GIS server, ROS middleware, autoheal, and GISNav
-$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve autoheal gisnav))
+# onboard HIL services: GIS server, ROS middleware, autoheal, gscam and GISNav
+$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver torch-serve autoheal gscam gisnav))
 
 # onboard SITL services: Same as with HIL but middleware is same as offboard (UDP, not serial)
-$(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gisnav))
+$(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver torch-serve gscam gisnav))
 
 # offboard SITL services: Gazebo simulation, QGC
 $(eval $(call compose_template,offboard-sitl,dummy-dependency,,$$* qgc))
 
-# SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, but excluding GISNav and QGC
-$(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve mapserver))
+# SITL testing services: Gazebo simulation, ROS middleware, mapserver, torch-serve, gscam, but excluding GISNav and QGC
+$(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* torch-serve gscam mapserver))
 
-# SITL development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, rviz, but excluding GISNav
-$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc torch-serve mapserver rviz))
+# SITL development services: Gazebo simulation, ROS middleware, mapserver, torch-serve, QGC, gscam rviz, but excluding GISNav
+$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc torch-serve gscam mapserver rviz))
 
-# All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gisnav
+# All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gscam, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
 # List of Docker Compose service names that need GUI access

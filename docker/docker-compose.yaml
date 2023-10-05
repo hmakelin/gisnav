@@ -163,3 +163,9 @@ services:
       AUTOHEAL_CONTAINER_LABEL: all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  qgis:
+    <<: [*base, *x11]
+    build:
+      context: qgis
+    command: qgis

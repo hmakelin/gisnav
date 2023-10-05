@@ -56,7 +56,9 @@ a brief description of their intended use.
 | ``autoheal``        | Monitors Docker container health and restarts containers marked as unhealthy. Used in the     |
 |                     | :term:`onboard` :term:`HIL` deployment configuration.                                         |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``gscam``           | Bridge for integrating video stream from camera into ROS via GStreamer                        |
+| ``gscam``           | Bridge for integrating video stream from camera into ROS via GStreamer.                       |
++---------------------+-----------------------------------------------------------------------------------------------+
+| ``qgis``            | QGIS client GUI preconfigured with ``mapserver`` WMS connection for inspecting onboard maps.  |
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``gisnav``          | GISNav :term:`ROS 2` package for demonstration use only. Launches GISNav with the PX4         |
 |                     | configuration by default. Can also be launched for ArduPilot.                                 |

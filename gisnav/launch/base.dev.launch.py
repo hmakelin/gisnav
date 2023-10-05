@@ -47,4 +47,12 @@ def generate_launch_description():
             ],
         )
     )
+    ld.add_action(
+        Node(
+            package="gisnav",
+            name="bbox_node",
+            executable="bbox_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/bbox_node.yaml")],
+        )
+    )
     return ld

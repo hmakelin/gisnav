@@ -7,5 +7,6 @@ and made available to each node contained in therein.
 
 from .cv_node import CVNode
 from .gis_node import GISNode
+from .bbox_node import BBoxNode
 
-__all__ = ["CVNode", "GISNode"]
+__all__ = ["BBoxNode", "CVNode", "GISNode"]

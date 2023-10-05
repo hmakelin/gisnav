@@ -21,10 +21,11 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 
-from .core import CVNode, GISNode
+from .core import BBoxNode, CVNode, GISNode
 from .extensions.mock_gps_node import MockGPSNode
 from .extensions.rviz_node import RVizNode
 from .static_configuration import (
+    BBOX_NODE_NAME,
     CV_NODE_NAME,
     GIS_NODE_NAME,
     MOCK_GPS_NODE_NAME,
@@ -74,6 +75,11 @@ _rclpy_node_kwargs = {
     "allow_undeclared_parameters": True,
     "automatically_declare_parameters_from_overrides": True,
 }
+
+
+def run_bbox_node():
+    """Spins up a :class:`.BBoxNode`"""
+    _run(BBoxNode, BBOX_NODE_NAME, **_rclpy_node_kwargs)
 
 
 def run_gis_node():

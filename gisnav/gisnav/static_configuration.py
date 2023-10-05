@@ -11,6 +11,9 @@ ROS_NAMESPACE: Final = "gisnav"
 GIS_NODE_NAME: Final = "gis_node"
 """Name of :class:`.GISNode` spun up by :func:`.run_gis_node`"""
 
+BBOX_NODE_NAME: Final = "bbox_node"
+"""Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
+
 CV_NODE_NAME: Final = "cv_node"
 """Name of :class:`.CVNode` spun up by :func:`.run_cv_node`"""
 
@@ -57,4 +60,9 @@ ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE: Final = "~/vehicle/estimated/geopo
 ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE: Final = "~/vehicle/estimated/altitude"
 """Relative :term:`topic` into which :class:`.CVNode` publishes
 :attr:`.CVNode.vehicle_estimated_altitude`.
+"""
+
+ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
+"""Relative :term:`topic` into which :class:`.BBoxNode` publishes
+:attr:`.BBoxNode.fov_bounding_box`.
 """

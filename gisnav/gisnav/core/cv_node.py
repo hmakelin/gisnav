@@ -71,6 +71,7 @@ from .._data import Attitude, create_src_corners
 from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     GIS_NODE_NAME,
+    BBOX_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_ELEVATION,
@@ -270,7 +271,7 @@ class CVNode(Node):
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_geopose(self) -> Optional[GeoPoseStamped]:

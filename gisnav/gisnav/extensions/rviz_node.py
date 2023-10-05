@@ -51,6 +51,7 @@ from .._decorators import ROS, narrow_types
 from ..static_configuration import (
     CV_NODE_NAME,
     GIS_NODE_NAME,
+    BBOX_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_GROUND_TRACK_GEOPOSE,
@@ -275,7 +276,7 @@ class RVizNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_vehicle_geopose_to_queue,
     )
@@ -288,7 +289,7 @@ class RVizNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_camera_geopose_to_queue,
     )

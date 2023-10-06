@@ -106,6 +106,7 @@ setup(
     description=pdata.description,
     license=pdata.license_name,
     install_requires=[
+        "kornia",
         "numpy>=1.24.2",
         "opencv-python",
         "pygeodesy",
@@ -114,6 +115,7 @@ setup(
         "scipy>=1.4.0",
         "setuptools",
         "shapely>=1.8.2",
+        "torch",
         "OWSLib>=0.25.0",
     ],
     tests_require=["pytest"],

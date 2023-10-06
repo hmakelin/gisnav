@@ -14,6 +14,9 @@ GIS_NODE_NAME: Final = "gis_node"
 BBOX_NODE_NAME: Final = "bbox_node"
 """Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
 
+TORCH_NODE_NAME: Final = "torch_node"
+"""Name of :class:`gisnav_gpu.TorchNode` spun up by :func:`gisnav_gpu.run_bbox_node`"""
+
 CV_NODE_NAME: Final = "cv_node"
 """Name of :class:`.CVNode` spun up by :func:`.run_cv_node`"""
 
@@ -65,4 +68,14 @@ ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE: Final = "~/vehicle/estimated/alti
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 """Relative :term:`topic` into which :class:`.BBoxNode` publishes
 :attr:`.BBoxNode.fov_bounding_box`.
+"""
+
+ROS_TOPIC_RELATIVE_IMAGE_TRIPLET: Final = "~/camera/image_triplet"
+"""Relative :term:`topic` into which :class:`.CVNode` publishes
+:attr:`.CVNode.image_triplet`.
+"""
+
+ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera/estimated/pose"
+"""Relative :term:`topic` into which :class:`.TorchNode` publishes
+:attr:`.TorchNode.camera_estimated_pose`.
 """

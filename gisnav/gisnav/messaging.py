@@ -1,8 +1,8 @@
 """Helper functions for ROS messaging"""
+import re
 import time
 
 import numpy as np
-import re
 from geographic_msgs.msg import BoundingBox, GeoPoint
 from geometry_msgs.msg import Quaternion
 from scipy.spatial.transform import Rotation
@@ -240,6 +240,7 @@ def off_nadir_angle(q):
 
     return angle_deg
 
+
 @staticmethod
 def to_proj_string(r, t, utm_zone):
     """Converts rotation matrix and translation vector into proj string
@@ -263,6 +264,7 @@ def to_proj_string(r, t, utm_zone):
     proj_string = f"+proj=utm +zone={utm_zone} +x_0={translation_x} +y_0={translation_y} +alpha={rotation_angle_deg} +units=m +ellps=WGS84"
 
     return proj_string
+
 
 @staticmethod
 def from_proj_string(proj_string):
@@ -288,9 +290,13 @@ def from_proj_string(proj_string):
     rotation_angle_rad = np.radians(rotation_angle_deg)
 
     # Construct rotation matrix
-    r = np.array([[np.cos(rotation_angle_rad), -np.sin(rotation_angle_rad), 0],
-                  [np.sin(rotation_angle_rad), np.cos(rotation_angle_rad), 0],
-                  [0, 0, 1]])
+    r = np.array(
+        [
+            [np.cos(rotation_angle_rad), -np.sin(rotation_angle_rad), 0],
+            [np.sin(rotation_angle_rad), np.cos(rotation_angle_rad), 0],
+            [0, 0, 1],
+        ]
+    )
 
     # Construct translation vector
     t = np.array([translation_x, translation_y, 0])

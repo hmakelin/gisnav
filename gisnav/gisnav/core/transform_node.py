@@ -4,13 +4,13 @@ image based on :term:`vehicle` heading, and then cropping it based on the
 :term:`camera` information.
 """
 from dataclasses import dataclass
-from typing import Final, Optional, Tuple, TypedDict, Union, get_args
+from typing import Final, Optional, Tuple, Union, get_args
 
 import cv2
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
-from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
+from geographic_msgs.msg import GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
 from mavros_msgs.msg import Altitude
 from rcl_interfaces.msg import ParameterDescriptor
@@ -18,14 +18,12 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 
-from gisnav_msgs.msg import OrthoImage3D  # type: ignore
-
 from .. import messaging
 from .._assertions import assert_type
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    GIS_NODE_NAME,
     BBOX_NODE_NAME,
+    GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
@@ -33,14 +31,10 @@ from ..static_configuration import (
 
 
 class TransformNode(Node):
-    """Publishes the :term:`query` and :term:`reference` image pair
+    """Publishes :term:`query` and :term:`reference` image pair
 
-    Rotates the reference image based on :term:`vehicle` heading, and
-    then cropping it based on the :term:`camera` information.
-
-    Compares images from :class:`sensor_msgs.msg.Image` message to maps from
-    :class:`gisnav_msgs.msg.OrthoImage3D` message to estimate
-    :class:`geographic_msgs.msg.GeoPoseStamped`.
+    Rotates the reference image based on :term:`vehicle` heading, and then
+    crops it based on :term:`camera` image resolution.
     """
 
     @dataclass(frozen=True)
@@ -74,7 +68,7 @@ class TransformNode(Node):
             original coordinate frame.
         """
 
-        orthoimage: OrthoImage3D
+        orthoimage: Image
         camera_geopose: GeoPoseStamped
 
     ROS_D_POSE_ESTIMATOR_ENDPOINT = "http://localhost:8090/predictions/loftr"
@@ -140,7 +134,7 @@ class TransformNode(Node):
         f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def orthoimage(self) -> Optional[OrthoImage3D]:
+    def orthoimage(self) -> Optional[Image]:
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
     # TODO need some way of not sending stuff to pnp if looks like camera is looking in the wrong direction
@@ -250,35 +244,33 @@ class TransformNode(Node):
             compact way in an existing message type so to avoid having to also
             publish custom :term:`ROS` message definitions.
         """
+
         @narrow_types(self)
         def _pnp_image(
-            self,
             image: Image,
-            orthoimage: OrthoImage3D,
+            orthoimage: Image,
             context: _PoseEstimationContext,
         ) -> Optional[Image]:
             """Rotate and crop and orthoimage stack to align with query image"""
 
-            query_img = self._cv_bridge.imgmsg_to_cv2(
-                image, desired_encoding="mono8"
-            )
-            #reference_img = self._cv_bridge.imgmsg_to_cv2(
-            #    orthoimage.img, desired_encoding="mono8"
-            #)
-            #elevation_reference = self._cv_bridge.imgmsg_to_cv2(
-            #    orthoimage.dem, desired_encoding="mono16"
-            #)
+            query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
 
             orthoimage_stack = self._cv_bridge.imgmsg_to_cv2(
                 self.orthoimage, desired_encoding="passthrough"
             )
 
-            assert orthoimage_stack.shape[]
+            assert orthoimage_stack.shape[2] == 3, (
+                f"Orthoimage stack channel count was {orthoimage_stack.shape[2]} "
+                f"when 3 was expected (one channel for 8-bit grayscale reference "
+                f"image and two 8-bit channels for 16-bit elevation reference)"
+            )
 
             # Rotate and crop orthoimage stack
-            camera_yaw_degrees = self._extract_yaw(context.camera_geopose.pose.orientation)
+            camera_yaw_degrees = self._extract_yaw(
+                context.camera_geopose.pose.orientation
+            )
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
-            #orthoimage_stack = np.dstack((reference_img, elevation_reference))
+            # orthoimage_stack = np.dstack((reference_img, elevation_reference))
             orthoimage_stack, affine_transform = self._rotate_and_crop_image(
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
@@ -286,24 +278,20 @@ class TransformNode(Node):
             # Add query image on top to complete full image stack
             pnp_image_stack = np.dstack((query_array, orthoimage_stack))
 
-            pnp_image_msg = self._cv_bridge.cv2_to_imgmsg(pnp_image_stack, encoding="passthrough")
+            pnp_image_msg = self._cv_bridge.cv2_to_imgmsg(
+                pnp_image_stack, encoding="passthrough"
+            )
             pnp_image_msg.header.stamp = image.header.stamp
-
-
-
-
-
 
             # Figure out local frame - compute proj string
             # UPDATE: geotransform is now GISNode.orthoimage frame_id proj string
-            #geotransform = self._get_geotransformation_matrix(context.orthoimage)
+            # geotransform = self._get_geotransformation_matrix(context.orthoimage)
             r, t = pose
             t_world = np.matmul(r.T, -t)
             t_world_homogenous = np.vstack((t_world, [1]))
             try:
                 t_unrotated_uncropped = (
-                        np.linalg.inv(affine_transform)
-                        @ t_world_homogenous  # t
+                    np.linalg.inv(affine_transform) @ t_world_homogenous  # t
                 )
             except np.linalg.LinAlgError as _:  # noqa: F841
                 self.get_logger().warn(
@@ -324,7 +312,7 @@ class TransformNode(Node):
             )
             t_wgs84 = geotransform @ t_unrotated_uncropped
             lat, lon = t_wgs84.squeeze()[1::-1]
-            alt = float(t_wgs84[2])
+            float(t_wgs84[2])
 
             if geopoint is not None and altitude is not None:
                 r, t = pose
@@ -335,9 +323,9 @@ class TransformNode(Node):
                 # reverting rotation and cropping
                 try:
                     r = (
-                            self._seu_to_ned_matrix
-                            @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])
-                            @ r.T  # @ -t
+                        self._seu_to_ned_matrix
+                        @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])
+                        @ r.T  # @ -t
                     )
                 except np.linalg.LinAlgError as _:  # noqa: F841
                     self.get_logger().warn(
@@ -346,15 +334,11 @@ class TransformNode(Node):
                     )
                     return None
 
-                quaternion = messaging.rotation_matrix_to_quaternion(r)
+                messaging.rotation_matrix_to_quaternion(r)
 
-
-
-
-
-
-
-            utm_zone = self._determine_utm_zone(context.camera_geopose.pose.position.longitude)
+            utm_zone = self._determine_utm_zone(
+                context.camera_geopose.pose.position.longitude
+            )
             proj_string = self._to_proj_string(r, t, utm_zone)
             pnp_image_msg.header.frame_id = proj_string
 
@@ -381,7 +365,6 @@ class TransformNode(Node):
         Estimates camera GeoPoint (WGS84 coordinates + altitude in meters
         above mean sea level (AMSL) and ground level (AGL).
         """
-
 
         altitude = Altitude(
             header=context.ground_track_elevation.header,
@@ -448,25 +431,14 @@ class TransformNode(Node):
 
         @narrow_types(self)
         def _pose_estimation_context(
-            orthoimage: OrthoImage3D,
+            orthoimage: Image,
             camera_geopose: GeoPoseStamped,
-            ground_track_elevation: Altitude,
-            ground_track_geopose: GeoPoseStamped,
         ):
             return self._PoseEstimationContext(
-                orthoimage=orthoimage,
-                camera_geopose=camera_geopose,
-                ground_track_elevation=ground_track_elevation,
-                ground_track_geopose=ground_track_geopose,
+                orthoimage=orthoimage, camera_geopose=camera_geopose
             )
 
-        return _pose_estimation_context(
-            self.orthoimage,
-            self.camera_geopose,
-            self.ground_track_elevation,
-            self.ground_track_geopose,
-        )
-
+        return _pose_estimation_context(self.orthoimage, self.camera_geopose)
 
     @staticmethod
     def _get_rotation_matrix(image: np.ndarray, degrees: float) -> np.ndarray:

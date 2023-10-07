@@ -1,44 +1,43 @@
 """This module contains :class:`.GISNode`, a :term:`ROS` node for retrieving and
 publishing geographic information and images.
 """
-import xml.etree.ElementTree as ET
+from copy import deepcopy
 from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import requests
-from copy import deepcopy
 from cv_bridge import CvBridge
-from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
+from geographic_msgs.msg import BoundingBox, GeoPoint
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, NavSatFix, Image
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from shapely.geometry import box
 
 from .. import messaging
 from .._assertions import assert_len, assert_type
-from .._decorators import ROS, cache_if, narrow_types
 from .._data import create_src_corners
+from .._decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
-    ROS_NAMESPACE,
     BBOX_NODE_NAME,
-    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
 )
 
 
 class GISNode(Node):
     """Publishes :class:`.Image` of approximate location to a topic
-    
+
     :class:`.GISNode` manages geographic information for the system, including
     downloading, storing and publishing the :term:`orthophoto` and optional :term:`DEM`
     :term:`raster`. These rasters are retrieved from an :term:`onboard` :term:`WMS`
     based on the projected location of the :term:`camera` field of view.
-    
+
     :class:`.GISNode` publishes the :term:`orthophoto` and optional :term:`DEM` as
     as a single :term:`stacked <stack>` :class:`.Image` message.
 
@@ -513,13 +512,10 @@ class GISNode(Node):
 
             return True
 
-        return (
-            self.old_bounding_box is None
-            or _orthoimage_overlap_is_too_low(
-                self.bounding_box,
-                self.old_bounding_box,
-                self.min_map_overlap_update_threshold,
-            )
+        return self.old_bounding_box is None or _orthoimage_overlap_is_too_low(
+            self.bounding_box,
+            self.old_bounding_box,
+            self.min_map_overlap_update_threshold,
         )
 
     @property
@@ -560,12 +556,16 @@ class GISNode(Node):
             assert dem.dtype == np.uint8  # todo get 16 bit dems?
             # add 8-bit zero array of padding for future support of 16 bit dems
             orthoimage_stack = np.dstack((img, np.zeros_like(dem), dem))
-            image_msg = self._cv_bridge.cv2_to_imgmsg(orthoimage_stack, encoding="passthrough")
+            image_msg = self._cv_bridge.cv2_to_imgmsg(
+                orthoimage_stack, encoding="passthrough"
+            )
 
             # Get proj string for message header (information to project
             # reference image coordinates to WGS 84
             height, width = img.shape[0:2]
-            r, t, utm_zone = self._get_geotransformation_matrix(height, width, bounding_box)
+            r, t, utm_zone = self._get_geotransformation_matrix(
+                height, width, bounding_box
+            )
             image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
 
             # new orthoimage stack, set old bounding box
@@ -629,12 +629,8 @@ class GISNode(Node):
         M = np.insert(M, 2, 0, axis=1)
         M = np.insert(M, 2, 0, axis=0)
         # Scaling of z-axis from orthoimage raster native units to meters
-        bounding_box_perimeter_native = (
-            2 * height + 2 * width
-        )
-        bounding_box_perimeter_meters = cls._bounding_box_perimeter_meters(
-            bbox
-        )
+        bounding_box_perimeter_native = 2 * height + 2 * width
+        bounding_box_perimeter_meters = cls._bounding_box_perimeter_meters(bbox)
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Decompose M into rotation and translation components

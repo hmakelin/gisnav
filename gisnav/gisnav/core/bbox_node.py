@@ -9,17 +9,18 @@ import pyproj
 import tf_transformations
 from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import PoseStamped, Quaternion
-from mavros_msgs.msg import Altitude, GimbalDeviceAttitudeStatus
+from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
 
-from gisnav_msgs.msg import OrthoImage3D  # type: ignore
-
 from .. import messaging
 from .._decorators import ROS, narrow_types
-from ..static_configuration import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX, ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE
+from ..static_configuration import (
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
+    ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
+)
 
 
 class BBoxNode(Node):
@@ -51,7 +52,7 @@ class BBoxNode(Node):
         """
         self.fov_bounding_box
         self.camera_geopose
-        #self.vehicle_geopose  # triggered by camera geopose
+        # self.vehicle_geopose  # triggered by camera geopose
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
@@ -301,7 +302,7 @@ class BBoxNode(Node):
         """
         self.fov_bounding_box
         self.camera_geopose
-        #self.vehicle_geopose  # triggered by camera geopose
+        # self.vehicle_geopose  # triggered by camera geopose
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
@@ -392,7 +393,6 @@ class BBoxNode(Node):
         return _camera_quaternion(
             self.vehicle_geopose, self.gimbal_device_attitude_status
         )
-
 
     @property
     @ROS.publish(ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value)

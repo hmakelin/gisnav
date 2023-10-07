@@ -32,7 +32,9 @@ def generate_launch_description():
             package="gisnav",
             name="transform_node",
             executable="transform_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/transform_node.yaml")],
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/transform_node.yaml")
+            ],
         )
     )
     ld.add_action(
@@ -40,7 +42,9 @@ def generate_launch_description():
             package="gisnav",
             name="bbox_node",
             executable="bbox_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/bbox_node.yaml")],
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/bbox_node.yaml")
+            ],
         )
     )
     ld.add_action(

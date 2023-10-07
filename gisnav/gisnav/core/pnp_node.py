@@ -3,21 +3,25 @@
 """
 from typing import Optional
 
-import numpy as np
-import torch
 import cv2
+import numpy as np
 import tf_transformations
-
+import torch
+from cv_bridge import CvBridge
+from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion
+from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from kornia.feature import LoFTR
-from geometry_msgs.msg import Pose, PoseStamped, Point, Quaternion
 from sensor_msgs.msg import CameraInfo, Image
-from cv_bridge import CvBridge
 
-import ..messaging
+from .. import messaging
 from ..decorators import ROS, narrow_types
-from ..static_configuration import ROS_NAMESPACE, TRANSFORM_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_PNP_IMAGE
+from ..static_configuration import (
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
+    ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    TRANSFORM_NODE_NAME,
+)
 
 
 class PnPNode(Node):
@@ -35,6 +39,10 @@ class PnPNode(Node):
     @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
+
+    def _image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.image` message"""
+        self.camera_estimated_pose
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
@@ -74,21 +82,15 @@ class PnPNode(Node):
         The header frame_id is a PROJ string that contains the information to
         project the relative pose into a global pose.
         """
+
         @narrow_types(self)
         def _camera_estimated_pose(image: Image) -> Optional[PoseStamped]:
             preprocessed = self.preprocess(image)
             inferred = self.inference(preprocessed)
             pose = self.postprocess(inferred)
-            return PoseStamped(
-                header=self.image.header,
-                pose=pose
-            )
+            return PoseStamped(header=self.image.header, pose=pose)
 
         return _camera_estimated_pose(self.image)
-
-    def _image_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image` message"""
-        self.camera_estimated_pose
 
     @narrow_types
     def _preprocess(self, image_quad: Image) -> dict:
@@ -99,7 +101,9 @@ class PnPNode(Node):
             combined represent the 16-bit :term:`elevation reference`.
         """
         # Convert the ROS Image message to an OpenCV image
-        full_image_cv = self.bridge.imgmsg_to_cv2(image_quad, desired_encoding="passthrough")
+        full_image_cv = self.bridge.imgmsg_to_cv2(
+            image_quad, desired_encoding="passthrough"
+        )
 
         # Check that the image has 4 channels
         channels = full_image_cv.shape[2]
@@ -112,7 +116,9 @@ class PnPNode(Node):
         elevation_16bit_low = full_image_cv[:, :, 3]
 
         # Reconstruct 16-bit elevation from the last two channels
-        reference_elevation = (elevation_16bit_high.astype(np.uint16) << 8) | elevation_16bit_low.astype(np.uint16)
+        reference_elevation = (
+            elevation_16bit_high.astype(np.uint16) << 8
+        ) | elevation_16bit_low.astype(np.uint16)
 
         # Optionally, display the images
         self._display_images("Query", query_img, "Reference", reference_img)
@@ -129,16 +135,22 @@ class PnPNode(Node):
 
     @staticmethod
     def _display_images(*args):
-       """Displays images using OpenCV"""
-       for i in range(0, len(args), 2):
-           cv2.imshow(args[i], args[i + 1])
-       cv2.waitKey(1)
+        """Displays images using OpenCV"""
+        for i in range(0, len(args), 2):
+            cv2.imshow(args[i], args[i + 1])
+        cv2.waitKey(1)
 
     @staticmethod
     def _convert_images_to_tensors(qry, ref):
         """Converts grayscale images to torch tensors"""
-        qry_tensor = torch.Tensor(cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)[None, None]).cuda() / 255.0
-        ref_tensor = torch.Tensor(cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)[None, None]).cuda() / 255.0
+        qry_tensor = (
+            torch.Tensor(cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)[None, None]).cuda()
+            / 255.0
+        )
+        ref_tensor = (
+            torch.Tensor(cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)[None, None]).cuda()
+            / 255.0
+        )
         return qry_tensor, ref_tensor
 
     def inference(self, preprocessed_data):

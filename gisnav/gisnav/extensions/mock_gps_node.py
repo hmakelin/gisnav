@@ -35,10 +35,10 @@ from .. import messaging
 from .._data import Attitude
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    TRANSFORM_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
+    TRANSFORM_NODE_NAME,
 )
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)

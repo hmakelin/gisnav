@@ -1,4 +1,4 @@
-"""This module contains :class:`.TorchNode`, a :term:`ROS` node for estimating
+"""This module contains :class:`.PnPNode`, a :term:`ROS` node for estimating
 :term:`camera` relative pose between a :term:`query` and :term:`reference` image
 """
 from typing import Optional
@@ -20,7 +20,7 @@ from ..decorators import ROS, narrow_types
 from ..static_configuration import ROS_NAMESPACE, CV_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_IMAGE_PAIR
 
 
-class TorchNode(Node):
+class PnPNode(Node):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._model = LoFTR(pretrained="outdoor")

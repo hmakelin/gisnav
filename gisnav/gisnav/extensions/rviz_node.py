@@ -7,32 +7,6 @@ The below graph depicts how :class:`.RVizNode` publishes the :term:`vehicle` and
 :term:`ground track` :term:`path` that can be susbcribed to and visualized by
 :term:`RViz`, making it easier to see where GISNav thinks the vehicle is compared
 to where the vehicle :term:`navigation filter` thinks it is:
-
-.. mermaid::
-    :caption: RVizNode computational graph
-
-    graph LR
-        subgraph GISNode
-            vehicle_geopose[gisnav/gis_node/vehicle/geopose]
-            ground_track_geopose[gisnav/gis_node/ground_track/geopose]
-        end
-
-        subgraph CVNode
-            vehicle_estimated_geopose[gisnav/cv_node/vehicle/estimated/geopose]
-        end
-
-        subgraph RVizNode
-            vehicle_path[gisnav/rviz_node/vehicle/path]
-            vehicle_estimated_path[gisnav/rviz_node/vehicle/estimated/path]
-            ground_track_path[gisnav/rviz_node/ground_track/path]
-        end
-
-        vehicle_geopose -->|geographic_msgs/GeoPose| RVizNode
-        vehicle_estimated_geopose -->|geographic_msgs/GeoPose| RVizNode
-        ground_track_geopose -->|geographic_msgs/GeoPose| RVizNode
-        vehicle_path -->|nav_msgs/Path| rviz2
-        vehicle_estimated_path -->|nav_msgs/Path| rviz2
-        ground_track_path -->|nav_msgs/Path| rviz2
 """
 from collections import deque
 from typing import Final, Optional
@@ -49,7 +23,7 @@ from rclpy.qos import QoSPresetProfiles
 from .. import messaging
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    CV_NODE_NAME,
+    TRANSFORM_NODE_NAME,
     GIS_NODE_NAME,
     BBOX_NODE_NAME,
     ROS_NAMESPACE,
@@ -302,7 +276,7 @@ class RVizNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", TRANSFORM_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_vehicle_estimated_geopose_to_queue,
     )

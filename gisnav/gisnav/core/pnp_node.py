@@ -17,7 +17,7 @@ from cv_bridge import CvBridge
 
 import ..messaging
 from ..decorators import ROS, narrow_types
-from ..static_configuration import ROS_NAMESPACE, CV_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_PNP_IMAGE
+from ..static_configuration import ROS_NAMESPACE, TRANSFORM_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_PNP_IMAGE
 
 
 class PnPNode(Node):
@@ -40,7 +40,7 @@ class PnPNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", CV_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", TRANSFORM_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_image_cb,
     )
@@ -115,7 +115,7 @@ class PnPNode(Node):
         reference_elevation = (elevation_16bit_high.astype(np.uint16) << 8) | elevation_16bit_low.astype(np.uint16)
 
         # Optionally, display the images
-        # self._display_images("Query", query_img, "Reference", reference_img)
+        self._display_images("Query", query_img, "Reference", reference_img)
 
         # Convert the query image to tensor
         qry_tensor = self._convert_images_to_tensors(query_img)
@@ -127,12 +127,12 @@ class PnPNode(Node):
             reference_elevation,
         )
 
-    # @staticmethod
-    # def _display_images(*args):
-    #    """Displays images using OpenCV"""
-    #    for i in range(0, len(args), 2):
-    #        cv2.imshow(args[i], args[i + 1])
-    #    cv2.waitKey(1)
+    @staticmethod
+    def _display_images(*args):
+       """Displays images using OpenCV"""
+       for i in range(0, len(args), 2):
+           cv2.imshow(args[i], args[i + 1])
+       cv2.waitKey(1)
 
     @staticmethod
     def _convert_images_to_tensors(qry, ref):

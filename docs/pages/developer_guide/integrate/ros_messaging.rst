@@ -9,49 +9,8 @@ all available topics, see :ref:`Remapping ROS 2 topics`.
 
 Core data flow graph
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.. mermaid::
-    :caption: WIP: Target core data flow graph
 
-    graph LR
-        subgraph Camera
-            image_raw[camera/image_raw]
-            camera_info[camera/camera_info]
-        end
-
-        subgraph MAVROS
-            pose[mavros/local_position/pose]
-            global[mavros/global_position/global]
-            home[mavros/home_position/home]
-            attitude[mavros/gimbal_control/device/attitude_status]
-        end
-
-        subgraph GISNode
-            geopose[gisnav/gis_node/vehicle/geopose]
-            altitude[gisnav/gis_node/vehicle/altitude]
-            geopose_track[gisnav/gis_node/ground_track/geopose]
-            altitude_track[gisnav/gis_node/ground_track/altitude]
-            orthoimage[gisnav/gis_node/orthoimage]
-        end
-
-        subgraph CVNode
-            geopose_estimate[gisnav/cv_node/vehicle/estimated/geopose]
-            altitude_estimate[gisnav/cv_node/vehicle/estimated/altitude]
-        end
-
-        pose -->|geometry_msgs/Pose| GISNode
-        global -->|sensor_msgs/NavSatFix| GISNode
-        home -->|mavros_msgs/HomePosition| GISNode
-        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| CVNode
-        attitude -->|mavros_msgs/GimbalDeviceAttitudeStatus| GISNode
-        geopose -->|geographic_msgs/GeoPose| CVNode
-        altitude -->|mavros_msgs/Altitude| CVNode
-        camera_info -->|sensor_msgs/CameraInfo| GISNode
-        camera_info -->|sensor_msgs/CameraInfo| CVNode
-        orthoimage -->|gisnav_msgs/OrthoImage3D| CVNode
-        altitude_track -->|mavros_msgs/Altitude| CVNode
-        geopose_track -->|geographic_msgs/GeoPoint| CVNode
-        image_raw -->|sensor_msgs/Image| CVNode
-
+TODO
 
 Motivation for the data flow graph design:
 

@@ -2,6 +2,7 @@
 import time
 
 import numpy as np
+import re
 from geographic_msgs.msg import BoundingBox, GeoPoint
 from geometry_msgs.msg import Quaternion
 from scipy.spatial.transform import Rotation
@@ -238,3 +239,60 @@ def off_nadir_angle(q):
     angle_deg = np.degrees(angle_rad)
 
     return angle_deg
+
+@staticmethod
+def to_proj_string(r, t, utm_zone):
+    """Converts rotation matrix and translation vector into proj string
+
+    :param r: Rotation matrix (3, 3) in local frame
+    :param t: Translation vector (3, 1) in local frame
+    :param utm_zone: Universal Transverse Mercator (UTM) zone
+    :return: Proj string describing the local coordinate system
+    """
+
+    # Extract rotation angle from the rotation matrix (in radians)
+    rotation_angle_rad = np.arctan2(r[1, 0], r[0, 0])
+
+    # Convert to degrees
+    rotation_angle_deg = np.degrees(rotation_angle_rad)
+
+    # Extract translations
+    translation_x, translation_y = t
+
+    # Create PROJ string
+    proj_string = f"+proj=utm +zone={utm_zone} +x_0={translation_x} +y_0={translation_y} +alpha={rotation_angle_deg} +units=m +ellps=WGS84"
+
+    return proj_string
+
+@staticmethod
+def from_proj_string(proj_string):
+    """Converts proj string into rotation matrix and translation vector
+
+    :param proj_string: Proj string describing the local coordinate system
+    :return: Rotation matrix (3, 3) and translation vector (3, 1)
+    """
+
+    # Regular expressions to match proj parameters
+    re_zone = r"\+zone=(\d+)"
+    re_x0 = r"\+x_0=([-\d.]+)"
+    re_y0 = r"\+y_0=([-\d.]+)"
+    re_alpha = r"\+alpha=([-\d.]+)"
+
+    # Extract parameters from proj string
+    utm_zone = int(re.search(re_zone, proj_string).group(1))
+    translation_x = float(re.search(re_x0, proj_string).group(1))
+    translation_y = float(re.search(re_y0, proj_string).group(1))
+    rotation_angle_deg = float(re.search(re_alpha, proj_string).group(1))
+
+    # Convert rotation angle to radians
+    rotation_angle_rad = np.radians(rotation_angle_deg)
+
+    # Construct rotation matrix
+    r = np.array([[np.cos(rotation_angle_rad), -np.sin(rotation_angle_rad), 0],
+                  [np.sin(rotation_angle_rad), np.cos(rotation_angle_rad), 0],
+                  [0, 0, 1]])
+
+    # Construct translation vector
+    t = np.array([translation_x, translation_y, 0])
+
+    return r, t, utm_zone

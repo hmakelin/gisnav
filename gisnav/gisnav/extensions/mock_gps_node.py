@@ -4,9 +4,8 @@
     :caption: Mock GPS node data flow graph
 
     graph LR
-        subgraph CVNode
-            geopose_estimate[gisnav/vehicle/estimated/geopose]
-            altitude_estimate[gisnav/vehicle/estimated/altitude]
+        subgraph PnPNode
+            pose[gisnav/vehicle/estimated/pose]
         end
 
         subgraph MockGPSNode
@@ -14,8 +13,7 @@
             gps_input
         end
 
-        geopose_estimate -->|geographic_msgs/GeoPoseStamped| MockGPSNode
-        altitude_estimate -->|mavros_msgs/Altitude| MockGPSNode
+        pose -->|geographic_msgs/PoseStamped| MockGPSNode
         sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
         gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
 """
@@ -37,7 +35,7 @@ from .. import messaging
 from .._data import Attitude
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    CV_NODE_NAME,
+    TRANSFORM_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
     ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
@@ -133,7 +131,7 @@ class MockGPSNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", CV_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", TRANSFORM_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_vehicle_estimated_geopose_cb,
     )
@@ -146,7 +144,7 @@ class MockGPSNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", CV_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", TRANSFORM_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def vehicle_estimated_altitude(self) -> Optional[Altitude]:

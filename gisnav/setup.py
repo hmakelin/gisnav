@@ -150,8 +150,9 @@ setup(
         "console_scripts": [
             "mock_gps_node = gisnav:run_mock_gps_node",
             "gis_node = gisnav:run_gis_node",
-            "cv_node = gisnav:run_cv_node",
+            "transform_node = gisnav:run_transform_node",
             "bbox_node = gisnav:run_bbox_node",
+            "pnp_node = gisnav:run_pnp_node",
             "rviz_node = gisnav:run_rviz_node",
         ],
     },

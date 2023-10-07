@@ -35,8 +35,8 @@ You can provide your custom ROS parameter values at launch in a :term:`YAML`
 file using the ``--params-file`` argument:
 
 .. code-block:: bash
-    :caption: Run :class:`.CVNode` with ROS parameter file
+    :caption: Run :class:`.GISNode` with ROS parameter file
 
     cd ~/colcon_ws
-    ros2 run gisnav cv_node --ros-args \
-        --params-file src/gisnav/gisnav/launch/params/cv_node.yaml
+    ros2 run gisnav gis_node --ros-args \
+        --params-file src/gisnav/gisnav/launch/params/gis_node.yaml

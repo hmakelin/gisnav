@@ -65,7 +65,6 @@ correct alternative should be easily inferred from the context they are used in.
         core functionality needed by an :term:`extension`. GISNav is intended
         to be extended by adding more application or integration specific
         :term:`nodes` instead of adding new features to :term:`core` nodes.
-        Consists of :class:`.GISNode` and :class:`.CVNode`.
 
         .. seealso::
             :ref:`Core data flow graph`

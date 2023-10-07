@@ -1,7 +1,7 @@
 """This module contains :class:`.PnPNode`, a :term:`ROS` node for estimating
 :term:`camera` relative pose between a :term:`query` and :term:`reference` image
 """
-from typing import Optional
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -13,6 +13,7 @@ from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
 from ..decorators import ROS, narrow_types
@@ -33,6 +34,9 @@ class PnPNode(Node):
         # initialize subscription
         self.camera_info
         self.image
+
+        # Initialize the static transform broadcaster
+        self.broadcaster = StaticTransformBroadcaster(self)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -87,58 +91,31 @@ class PnPNode(Node):
         def _camera_estimated_pose(image: Image) -> Optional[PoseStamped]:
             preprocessed = self.preprocess(image)
             inferred = self.inference(preprocessed)
-            pose = self.postprocess(inferred)
-            return PoseStamped(header=self.image.header, pose=pose)
+            pose_stamped = self.postprocess(inferred)
 
-        pose = _camera_estimated_pose(self.image)
-
-        # UPDATE: geotransform is now GISNode.orthoimage frame_id proj string
-        # geotransform = self._get_geotransformation_matrix(context.orthoimage)
-
-        r_ortho_rotated, r_ortho_cropped, utm_zone = messaging.from_proj_string(image.header.frame_id)
-
-        r, t = pose
-        t_world = np.matmul(r.T, -t)
-        t_world_homogenous = np.vstack((t_world, [1]))
-        try:
-            t_unrotated_uncropped = (
-                    np.linalg.inv(affine_transform) @ t_world_homogenous  # t
-            )
-        except np.linalg.LinAlgError as _:  # noqa: F841
-            self.get_logger().warn(
-                "Rotation and cropping was non-invertible, cannot compute "
-                "GeoPoint and Altitude"
-            )
-            return None
-
-        t_wgs84 = geotransform @ t_unrotated_uncropped
-        lat, lon = t_wgs84.squeeze()[1::-1]
-        float(t_wgs84[2])
-
-        if geopoint is not None and altitude is not None:
-            r, t = pose
-            # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
-
-            # Rotation matrix is assumed to be in cv2.solvePnPRansac world
-            # coordinate system (SEU axes), need to convert to NED axes after
-            # reverting rotation and cropping
-            try:
-                r = (
-                        self._seu_to_ned_matrix
-                        @ np.linalg.inv(affine_transform[:3, :3])
-                        @ r.T  # @ -t
-                )
-            except np.linalg.LinAlgError as _:  # noqa: F841
-                self.get_logger().warn(
-                    "Cropping and rotation was non-invertible, canot estimate "
-                    "GeoPoint and Altitude."
-                )
+            if pose_stamped is None:
                 return None
 
-            messaging.rotation_matrix_to_quaternion(r)
+            r, t = pose_stamped
+            transform_camera = messaging.create_transform_msg(
+                image.header.stamp, "pnp", "camera", r, t)
+            self.broadcaster.sendTransform([transform_camera])
+
+            pose_msg = Pose()
+
+            # Convert the rotation matrix to a quaternion
+            quaternion = tf_transformations.quaternion_from_matrix(t)
+            pose_msg.orientation = Quaternion(*quaternion)
+
+            # Populate the translation (position) fields
+            pose_msg.position = Point(*t.flatten())
+
+            return PoseStamped(header=image.header, pose=pose_msg)
+
+        return _camera_estimated_pose(self.image)
 
     @narrow_types
-    def _preprocess(self, image_quad: Image) -> dict:
+    def _preprocess(self, image_quad: Image) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
         """Converts incoming 4-channel image to torch tensors
 
         :param image_quad: A 4-channel image where the first channel is the :term:`Query`,
@@ -165,11 +142,10 @@ class PnPNode(Node):
             elevation_16bit_high.astype(np.uint16) << 8
         ) | elevation_16bit_low.astype(np.uint16)
 
-        # Optionally, display the images
+        # Optionally display images
         self._display_images("Query", query_img, "Reference", reference_img)
 
-        # Convert the query image to tensor
-        qry_tensor = self._convert_images_to_tensors(query_img)
+        qry_tensor, ref_tensor = self._convert_images_to_tensors(query_img, reference_img)
 
         return (
             {"image0": qry_tensor, "image1": ref_tensor},
@@ -188,14 +164,8 @@ class PnPNode(Node):
     @staticmethod
     def _convert_images_to_tensors(qry, ref):
         """Converts grayscale images to torch tensors"""
-        qry_tensor = (
-            torch.Tensor(cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)[None, None]).cuda()
-            / 255.0
-        )
-        ref_tensor = (
-            torch.Tensor(cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)[None, None]).cuda()
-            / 255.0
-        )
+        qry_tensor = torch.Tensor(qry[None, None]).cuda() / 255.0
+        ref_tensor = torch.Tensor(ref[None, None]).cuda() / 255.0
         return qry_tensor, ref_tensor
 
     def inference(self, preprocessed_data):
@@ -204,9 +174,10 @@ class PnPNode(Node):
             results = self._model(preprocessed_data[0])
         return results, *preprocessed_data[1:]
 
-    def postprocess(self, inferred_data) -> Optional[Pose]:
+    def postprocess(self, inferred_data) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Filters matches based on confidence threshold and calculates :term:`pose`"""
 
+        @narrow_types(self)
         def _postprocess(camera_info: CameraInfo) -> Optional[Pose]:
             results, query_img, reference_img, elevation = inferred_data
             mkp_qry, mkp_ref = self._filter_matches_based_on_confidence(results)
@@ -217,19 +188,12 @@ class PnPNode(Node):
             k_matrix = camera_info.k.reshape((3, 3))
 
             mkp2_3d = self._compute_3d_points(mkp_ref, elevation)
-            pose = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
+            r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
             self._visualize_matches_and_pose(
-                query_img, reference_img, mkp_qry, mkp_ref, k_matrix, *pose
+                query_img, reference_img, mkp_qry, mkp_ref, k_matrix, r, t
             )
 
-            pose_msg = Pose()
-
-            # Convert the rotation matrix to a quaternion
-            quaternion = tf_transformations.quaternion_from_matrix(pose[0])
-            pose_msg.orientation = Quaternion(*quaternion)
-
-            # Populate the translation (position) fields
-            pose_msg.position = Point(*pose[1].flatten())
+            return r, t
 
         return _postprocess(self.camera_info)
 

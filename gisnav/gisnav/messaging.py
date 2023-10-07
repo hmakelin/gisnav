@@ -304,7 +304,14 @@ def from_proj_string(proj_string):
 
     return r, t, utm_zone
 
-FrameID = Literal["wgs_84", "reference", "query", "pnp", "ltp"]
+FrameID = Literal["wgs_84", "reference", "query", "pnp", "camera", "ltp"]
+"""Allowed ROS header frame_ids (used by tf2)
+
+.. note::
+    The pnp frame is essentially the same as the vehicle local tangent plane (LTP) 
+    if the GimbalDeviceAttitudeStatus message is not available (i.e. the principal
+    point of the projected camera FOV is also the ground track of the vehicle)
+"""
 
 @staticmethod
 def create_transform_msg(stamp, parent_frame: FrameID, child_frame: FrameID, rotation_matrix: np.ndarray, translation_vector: np.ndarray):

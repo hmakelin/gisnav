@@ -11,7 +11,6 @@ import numpy as np
 from cv_bridge import CvBridge
 from geographic_msgs.msg import GeoPoint, GeoPose, GeoPoseStamped
 from geometry_msgs.msg import Quaternion
-from mavros_msgs.msg import Altitude
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -174,7 +173,7 @@ class TransformNode(Node):
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
 
-            # TODO: is this block of code needed?
+            # TODO: is this cv2/numpy stuff correct?
             # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
             # be flipped because cv2)
             t_cropped = np.array(
@@ -193,18 +192,10 @@ class TransformNode(Node):
                 pnp_image_stack, encoding="passthrough"
             )
             pnp_image_msg.header.stamp = image.header.stamp
-            r_ortho, t_ortho, utm_zone_ortho = messaging.from_proj_string(orthoimage.header.frame_id)
 
-            r = r_ortho @ r_rotated
-            t = t_ortho + t_cropped
-
-            utm_zone = self._determine_utm_zone(
-                camera_geopose.pose.position.longitude
-            )
-            #proj_string = self._to_proj_string(r, t, utm_zone)
             pnp_image_msg.header.frame_id = "pnp"
 
-            transform_ortho = self.create_transform_msg(pnp_image_msg.header.stamp, "reference", "pnp", r_rotated, t_cropped)
+            transform_ortho = messaging.create_transform_msg(pnp_image_msg.header.stamp, "reference", "pnp", r_rotated, t_cropped)
             self.broadcaster.sendTransform([transform_ortho])
 
             return pnp_image_msg
@@ -214,96 +205,6 @@ class TransformNode(Node):
             self.orthoimage,
             self.camera_geopose,
         )
-
-    @narrow_types
-    def _post_process_pose(
-        self,
-        inputs,
-        pose: Tuple[np.ndarray, np.ndarray],
-        intermediate_outputs: _PoseEstimationIntermediateOutputs,
-        context: _PoseEstimationContext,
-    ) -> Optional[Tuple[GeoPoint, Altitude, Quaternion]]:
-        """
-        Post process estimated pose to vehicle GeoPoint, Altitude and gimbal
-        Quaternion estimates
-
-        Estimates camera GeoPoint (WGS84 coordinates + altitude in meters
-        above mean sea level (AMSL) and ground level (AGL).
-        """
-
-        altitude = Altitude(
-            header=context.ground_track_elevation.header,
-            monotonic=0.0,  # TODO
-            amsl=alt + context.ground_track_elevation.amsl,
-            local=0.0,  # TODO
-            relative=0.0,  # TODO
-            terrain=alt,
-            bottom_clearance=alt,
-        )
-        geopoint = GeoPoint(
-            altitude=alt + context.ground_track_geopose.pose.position.altitude,
-            latitude=lat,
-            longitude=lon,
-        )
-
-        if geopoint is not None and altitude is not None:
-            r, t = pose
-            # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
-
-            # Rotation matrix is assumed to be in cv2.solvePnPRansac world
-            # coordinate system (SEU axes), need to convert to NED axes after
-            # reverting rotation and cropping
-            try:
-                r = (
-                    self._seu_to_ned_matrix
-                    @ np.linalg.inv(intermediate_outputs.affine_transform[:3, :3])
-                    @ r.T  # @ -t
-                )
-            except np.linalg.LinAlgError as _:  # noqa: F841
-                self.get_logger().warn(
-                    "Cropping and rotation was non-invertible, canot estimate "
-                    "GeoPoint and Altitude."
-                )
-                return None
-
-            quaternion = messaging.rotation_matrix_to_quaternion(r)
-            return geopoint, altitude, quaternion
-        else:
-            return None
-
-    # @property
-    # def _esu_to_ned_matrix(self):
-    #    """Transforms from ESU to NED axes"""
-    #    transformation_matrix = np.array(
-    #        [[0, 1, 0], [1, 0, 0], [0, 0, -1]]  # E->N  # S->E  # U->D
-    #    )
-    #    return transformation_matrix
-
-    @property
-    def _seu_to_ned_matrix(self):
-        """Transforms from ESU to NED axes"""
-        transformation_matrix = np.array(
-            [[-1, 0, 0], [0, 1, 0], [0, 0, -1]]  # S->N  # E->E  # U->D
-        )
-        return transformation_matrix
-
-    @property
-    def _pose_estimation_context(self) -> Optional[_PoseEstimationContext]:
-        """Gather all required inputs for pose estimation into one context
-        in order to avoid using the same message with multiple different
-        timestamps when computing the pose estimate
-        """
-
-        @narrow_types(self)
-        def _pose_estimation_context(
-            orthoimage: Image,
-            camera_geopose: GeoPoseStamped,
-        ):
-            return self._PoseEstimationContext(
-                orthoimage=orthoimage, camera_geopose=camera_geopose
-            )
-
-        return _pose_estimation_context(self.orthoimage, self.camera_geopose)
 
     @staticmethod
     def _get_rotation_matrix(image: np.ndarray, degrees: float) -> np.ndarray:
@@ -375,20 +276,20 @@ class TransformNode(Node):
     @classmethod
     def _rotate_and_crop_image(
         cls, image: np.ndarray, degrees: float, shape: Tuple[int, int]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Rotates around center and then center-crops image
 
         Cached because the same rotated image is expected to be used for multiple
         matches.
 
-        :return: Tuple of rotated and cropped image, and used affine
-            transformation matrix
+        :return: Tuple of rotated and cropped image, and used rotation matrix
+            and translation vector
         """
         # Image can have any number of channels
         affine = cls._get_affine_matrix(image, degrees, *shape)
-        #affine_2d = np.delete(affine, 2, 1)
-        #affine_2d = affine_2d[:2, :]
+        affine_2d = np.delete(affine, 2, 1)
+        affine_2d = affine_2d[:2, :]
 
         r = affine[:2, :2]
         t = affine[:2, 2]

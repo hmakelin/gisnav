@@ -572,7 +572,7 @@ class GISNode(Node):
             )
 
             # Publish the transformation
-            transform_ortho = self.create_transform_msg(image_msg.header.stamp, "wgs_84", "reference", r, t)
+            transform_ortho = messaging.create_transform_msg(image_msg.header.stamp, "wgs_84", "reference", r, t)
             self.broadcaster.sendTransform([transform_ortho])
 
             #image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)

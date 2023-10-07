@@ -18,10 +18,6 @@ Welcome to GISNav's developer documentation!
 
     GISNav public API reference for developers
 
-.. card:: Contribute
-    :link: pages/contribute.html
-
-    Contributions to GISNav are welcome! Please see this page for guidance
 
 Generate documentation
 _________________________________________

@@ -17,7 +17,7 @@ from cv_bridge import CvBridge
 
 import ..messaging
 from ..decorators import ROS, narrow_types
-from ..static_configuration import ROS_NAMESPACE, CV_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_IMAGE_PAIR
+from ..static_configuration import ROS_NAMESPACE, CV_NODE_NAME, ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE, ROS_TOPIC_RELATIVE_PNP_IMAGE
 
 
 class PnPNode(Node):
@@ -28,7 +28,7 @@ class PnPNode(Node):
 
         # initialize subscription
         self.camera_info
-        self.image_triplet
+        self.image
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -40,14 +40,15 @@ class PnPNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_IMAGE_TRIPLET.replace("~", CV_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", CV_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_triplet_cb,
+        callback=_image_cb,
     )
-    def image_triplet(self) -> Optional[Image]:
-        """term:`Query`, :term:`reference`, and :term:`elevation` image triplet,
-        represented as a single image. The query image is on the left, the
-        reference image is in the middle, and the elevation image is on the right.
+    def image(self) -> Optional[Image]:
+        """term:`Query`, :term:`reference`, and :term:`elevation` image
+        in a single 4-channel :term:`stack`. The query image is in the first
+        channel, the reference image is in the second, and the elevation reference
+        is in the last two (sum them together to get a 16-bit elevation reference).
 
         The header frame_id is a PROJ string that contains the information to
         project the relative pose into a global pose.
@@ -74,48 +75,50 @@ class PnPNode(Node):
         project the relative pose into a global pose.
         """
         @narrow_types(self)
-        def _camera_estimated_pose(image_triplet: Image) -> Optional[PoseStamped]:
-            preprocessed = self.preprocess(image_triplet)
+        def _camera_estimated_pose(image: Image) -> Optional[PoseStamped]:
+            preprocessed = self.preprocess(image)
             inferred = self.inference(preprocessed)
             pose = self.postprocess(inferred)
             return PoseStamped(
-                header=self.image_triplet.header,
+                header=self.image.header,
                 pose=pose
             )
 
-        return _camera_estimated_pose(self.image_triplet)
+        return _camera_estimated_pose(self.image)
 
-    def _image_triplet_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image_triplet` message"""
+    def _image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.image` message"""
         self.camera_estimated_pose
 
     @narrow_types
-    def _preprocess(self, image_triplet: Image) -> dict:
-        """Converts incoming images to torch tensors
+    def _preprocess(self, image_quad: Image) -> dict:
+        """Converts incoming 4-channel image to torch tensors
 
-        :param image_triplet: :term:`Query`, :term:`reference`, and :term:`elevation`
-            image triplet, represented as a single image. The query image is
-            on the left, the reference image is in the middle, and the
-            elevation image is on the right.
+        :param image_quad: A 4-channel image where the first channel is the :term:`Query`,
+            the second channel is the 8-bit :term:`elevation reference`, and the last two channels
+            combined represent the 16-bit :term:`elevation reference`.
         """
         # Convert the ROS Image message to an OpenCV image
-        full_image_cv = self.bridge.imgmsg_to_cv2(image_triplet, desired_encoding="passthrough")
+        full_image_cv = self.bridge.imgmsg_to_cv2(image_quad, desired_encoding="passthrough")
 
-        # Check that the width is divisible by 3
-        width = full_image_cv.shape[1]
-        assert width % 3 == 0, "The width of the image_triplet must be divisible by 3"
+        # Check that the image has 4 channels
+        channels = full_image_cv.shape[2]
+        assert channels == 4, "The image must have 4 channels"
 
-        # Split the full image into query, reference, and elevation images
-        third_width = width // 3
-        query_img = full_image_cv[:, :third_width]
-        reference_img = full_image_cv[:, third_width:2 * third_width]
-        reference_elevation = full_image_cv[:, 2 * third_width:]
+        # Extract individual channels
+        query_img = full_image_cv[:, :, 0]
+        reference_img = full_image_cv[:, :, 1]
+        elevation_16bit_high = full_image_cv[:, :, 2]
+        elevation_16bit_low = full_image_cv[:, :, 3]
 
+        # Reconstruct 16-bit elevation from the last two channels
+        reference_elevation = (elevation_16bit_high.astype(np.uint16) << 8) | elevation_16bit_low.astype(np.uint16)
+
+        # Optionally, display the images
         # self._display_images("Query", query_img, "Reference", reference_img)
 
-        qry_tensor, ref_tensor = self._convert_images_to_tensors(
-            query_img, reference_img
-        )
+        # Convert the query image to tensor
+        qry_tensor = self._convert_images_to_tensors(query_img)
 
         return (
             {"image0": qry_tensor, "image1": ref_tensor},

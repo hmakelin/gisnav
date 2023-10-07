@@ -367,14 +367,11 @@ correct alternative should be easily inferred from the context they are used in.
     Stacked
     Stacked image
     Stacked raster
-        The :term:`orthophoto` stacked together with its aligned :term:`DEM`
-        :term:`raster`, representing a "3D orthoimage".
-
-        .. todo::
-            Consider dropping this terminology completely and fixing the orthoimage
-            and orthophoto terms instead. Alternatively, could be extended by
-            stacking all kinds of layers from GIS server besides just orthoimagery
-            and DEMs.
+        * The :term:`orthophoto` stacked together with its aligned :term:`DEM`
+          :term:`raster`, representing a "3D orthoimage".
+        * The rotated 8-bit grayscale :term:`query` image, 8-bit grayscale :term:`reference` image,
+          and the 16-bit reference DEM stacked together in a single 4-channel (alpha channel) image.
+          Most likely in one of ``CvBridge`` supported (``rgb8`` or ``bgra8``) formats.
 
     Subscribe
     Subscriber

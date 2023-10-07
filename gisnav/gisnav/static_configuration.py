@@ -70,9 +70,9 @@ ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 :attr:`.BBoxNode.fov_bounding_box`.
 """
 
-ROS_TOPIC_RELATIVE_IMAGE_TRIPLET: Final = "~/camera/image_triplet"
+ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image"
 """Relative :term:`topic` into which :class:`.CVNode` publishes
-:attr:`.CVNode.image_triplet`.
+:attr:`.CVNode.pnp_image`.
 """
 
 ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera/estimated/pose"

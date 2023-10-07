@@ -1,10 +1,11 @@
 """Helper functions for ROS messaging"""
 import re
 import time
+from typing import Literal, Final
 
 import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPoint
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Quaternion, TransformStamped
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
@@ -12,41 +13,41 @@ from ._assertions import assert_shape, assert_type
 from ._data import BBox
 
 # region ROS topic names
-ROS_TOPIC_GPS_INPUT = "/mavros/gps_input/gps_input"
+ROS_TOPIC_GPS_INPUT: Final = "/mavros/gps_input/gps_input"
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages
 over MAVROS"""
 
-ROS_TOPIC_HIL_GPS = "/mavros/hil/gps"
+ROS_TOPIC_HIL_GPS: Final = "/mavros/hil/gps"
 """Name of ROS topic for outgoing :class:`mavros_msgs.msg.HilGPS` messages
 over MAVROS"""
 
-ROS_TOPIC_SENSOR_GPS = "/fmu/in/sensor_gps"
+ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
 over PX4 DDS bridge"""
 
-ROS_TOPIC_CAMERA_INFO = "/camera/camera_info"
+ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
 """Name of ROS topic for :class:`sensor_msgs.msg.CameraInfo` messages"""
 
-ROS_TOPIC_IMAGE = "/camera/image_raw"
+ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
 """Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
 
-ROS_TOPIC_HOME_POSITION = "/mavros/home_position/home"
+ROS_TOPIC_HOME_POSITION: Final = "/mavros/home_position/home"
 """Name of ROS topic for :class:`mavros_msgs.msg.HomePosition` messages"""
 
 # endregion ROS topic names
 
 
-DELAY_SLOW_MS = 10000
+DELAY_SLOW_MS: Final = 10000
 """Max delay for messages where updates are not needed nor expected often,
 e.g. home position
 """
 
 
-DELAY_DEFAULT_MS = 2000
+DELAY_DEFAULT_MS: Final = 2000
 """Max delay for things like global position"""
 
 
-DELAY_FAST_MS = 500
+DELAY_FAST_MS: Final = 500
 """Max delay for messages with fast dynamics that go "stale" quickly, e.g.
 local position and attitude. The delay can be a bit higher than is
 intuitive because the vehicle EKF should be able to fuse things with
@@ -302,3 +303,29 @@ def from_proj_string(proj_string):
     t = np.array([translation_x, translation_y, 0])
 
     return r, t, utm_zone
+
+FrameID = Literal["wgs_84", "reference", "query", "pnp", "ltp"]
+
+@staticmethod
+def create_transform_msg(stamp, parent_frame: FrameID, child_frame: FrameID, rotation_matrix: np.ndarray, translation_vector: np.ndarray):
+    transform = TransformStamped()
+
+    #transform.header.stamp = self.get_clock().now().to_msg()
+    transform.header.stamp = stamp
+    transform.header.frame_id = parent_frame
+    transform.child_frame_id = child_frame
+
+    # Convert rotation matrix to quaternion
+    rotation = Rotation.from_matrix(rotation_matrix)
+    q = rotation.as_quat()
+
+    transform.transform.rotation.x = q[0]
+    transform.transform.rotation.y = q[1]
+    transform.transform.rotation.z = q[2]
+    transform.transform.rotation.w = q[3]
+
+    transform.transform.translation.x = translation_vector[0]
+    transform.transform.translation.y = translation_vector[1]
+    transform.transform.translation.z = translation_vector[2]
+
+    return transform

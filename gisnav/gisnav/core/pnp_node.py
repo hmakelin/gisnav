@@ -90,7 +90,52 @@ class PnPNode(Node):
             pose = self.postprocess(inferred)
             return PoseStamped(header=self.image.header, pose=pose)
 
-        return _camera_estimated_pose(self.image)
+        pose = _camera_estimated_pose(self.image)
+
+        # UPDATE: geotransform is now GISNode.orthoimage frame_id proj string
+        # geotransform = self._get_geotransformation_matrix(context.orthoimage)
+
+        r_ortho_rotated, r_ortho_cropped, utm_zone = messaging.from_proj_string(image.header.frame_id)
+
+        r, t = pose
+        t_world = np.matmul(r.T, -t)
+        t_world_homogenous = np.vstack((t_world, [1]))
+        try:
+            t_unrotated_uncropped = (
+                    np.linalg.inv(affine_transform) @ t_world_homogenous  # t
+            )
+        except np.linalg.LinAlgError as _:  # noqa: F841
+            self.get_logger().warn(
+                "Rotation and cropping was non-invertible, cannot compute "
+                "GeoPoint and Altitude"
+            )
+            return None
+
+        t_wgs84 = geotransform @ t_unrotated_uncropped
+        lat, lon = t_wgs84.squeeze()[1::-1]
+        float(t_wgs84[2])
+
+        if geopoint is not None and altitude is not None:
+            r, t = pose
+            # r = messaging.quaternion_to_rotation_matrix(pose.orientation)
+
+            # Rotation matrix is assumed to be in cv2.solvePnPRansac world
+            # coordinate system (SEU axes), need to convert to NED axes after
+            # reverting rotation and cropping
+            try:
+                r = (
+                        self._seu_to_ned_matrix
+                        @ np.linalg.inv(affine_transform[:3, :3])
+                        @ r.T  # @ -t
+                )
+            except np.linalg.LinAlgError as _:  # noqa: F841
+                self.get_logger().warn(
+                    "Cropping and rotation was non-invertible, canot estimate "
+                    "GeoPoint and Altitude."
+                )
+                return None
+
+            messaging.rotation_matrix_to_quaternion(r)
 
     @narrow_types
     def _preprocess(self, image_quad: Image) -> dict:

@@ -407,18 +407,14 @@ class BBoxNode(Node):
             camera_geopose.pose.orientation = camera_quaternion
             return camera_geopose
 
-        return _camera_geopose(self.vehicle_geopose, self._camera_quaternion)
+        return _camera_geopose(self._vehicle_geopose, self._camera_quaternion)
 
-    @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_VEHICLE_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value
-    )
-    def vehicle_geopose(self) -> Optional[GeoPoseStamped]:
+    def _vehicle_geopose(self) -> Optional[GeoPoseStamped]:
         """Published :term:`vehicle` :term:`geopose`, or None if not available"""
 
         @narrow_types(self)
         @ROS.retain_oldest_header
-        def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped):
+        def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped) -> GeoPoseStamped:
             # Position
             latitude, longitude = (
                 nav_sat_fix.latitude,

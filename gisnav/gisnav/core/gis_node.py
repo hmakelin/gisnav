@@ -17,6 +17,7 @@ from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from shapely.geometry import box
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
 from .._assertions import assert_len, assert_type
@@ -175,6 +176,9 @@ class GISNode(Node):
         )
 
         self.old_bounding_box: Optional[BoundingBox] = None
+
+        # Initialize the static transform broadcaster
+        self.broadcaster = StaticTransformBroadcaster(self)
 
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -566,7 +570,13 @@ class GISNode(Node):
             r, t, utm_zone = self._get_geotransformation_matrix(
                 height, width, bounding_box
             )
-            image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
+
+            # Publish the transformation
+            transform_ortho = self.create_transform_msg(image_msg.header.stamp, "wgs_84", "reference", r, t)
+            self.broadcaster.sendTransform([transform_ortho])
+
+            #image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
+            image_msg.header.frame_id = "reference"
 
             # new orthoimage stack, set old bounding box
             # TODO: this is brittle (old bounding box needs to always be set

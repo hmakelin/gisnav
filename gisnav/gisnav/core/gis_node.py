@@ -35,24 +35,38 @@ class GISNode(Node):
     """Publishes :class:`.Image` of approximate location to a topic
 
     :class:`.GISNode` manages geographic information for the system, including
-    downloading, storing and publishing the :term:`orthophoto` and optional :term:`DEM`
-    :term:`raster`. These rasters are retrieved from an :term:`onboard` :term:`WMS`
-    based on the projected location of the :term:`camera` field of view.
+    downloading, storing, and publishing the :term:`orthophoto` and optional
+    :term:`DEM` :term:`raster`. These rasters are retrieved from an :term:`onboard`
+    :term:`WMS` based on the projected location of the :term:`camera` field of view.
 
-    :class:`.GISNode` publishes the :term:`orthophoto` and optional :term:`DEM` as
+    .. mermaid::
+        graph LR
+            subgraph GISNode
+                image[~/image]
+            end
+
+            subgraph BBoxNode
+                bounding_box[~/fov/bounding_box]
+            end
+
+            camera_info -->|sensor_msgs/CameraInfo| GISNode
+            bounding_box -->|geographic_msgs/BoundingBox| GISNode
+            image -->|sensor_msgs/Image| TransformNode
+
+    :class:`.GISNode` publishes the :term:`orthophoto` and optional :term:`DEM`
     as a single :term:`stacked <stack>` :class:`.Image` message.
 
     .. warning::
-        ``OWSLib`` *as of version 0.25.0* uses the Python ``requests`` library
-        under the hood but does not seem to document the various exceptions it
-        raises that are passed through by ``OWSLib`` as part of its public API.
-        The :meth:`.get_map` method is therefore expected to raise `errors and exceptions
+        ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests`` library
+        under the hood but does not document the various exceptions it raises that
+        are passed through by ``OWSLib`` as part of its public API. The
+        :meth:`.get_map` method is therefore expected to raise `errors and exceptions
         <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_
-        that are specific to the ``requests`` library.
+        specific to the ``requests`` library.
 
         These errors and exceptions are not handled by the :class:`.GISNode`
-        to avoid a direct dependency to ``requests``. They are therefore
-        handled as unexpected errors.
+        to avoid a direct dependency on ``requests``. They are therefore handled
+        as unexpected errors.
     """  # noqa: E501
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
@@ -572,10 +586,12 @@ class GISNode(Node):
             )
 
             # Publish the transformation
-            transform_ortho = messaging.create_transform_msg(image_msg.header.stamp, "wgs_84", "reference", r, t)
+            transform_ortho = messaging.create_transform_msg(
+                image_msg.header.stamp, "wgs_84", "reference", r, t
+            )
             self.broadcaster.sendTransform([transform_ortho])
 
-            #image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
+            # image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
             image_msg.header.frame_id = "reference"
 
             # new orthoimage stack, set old bounding box

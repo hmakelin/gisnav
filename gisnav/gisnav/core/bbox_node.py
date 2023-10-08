@@ -414,7 +414,9 @@ class BBoxNode(Node):
 
         @narrow_types(self)
         @ROS.retain_oldest_header
-        def _vehicle_geopose(nav_sat_fix: NavSatFix, pose_stamped: PoseStamped) -> GeoPoseStamped:
+        def _vehicle_geopose(
+            nav_sat_fix: NavSatFix, pose_stamped: PoseStamped
+        ) -> GeoPoseStamped:
             # Position
             latitude, longitude = (
                 nav_sat_fix.latitude,

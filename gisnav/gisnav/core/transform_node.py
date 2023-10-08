@@ -3,13 +3,12 @@
 image based on :term:`vehicle` heading, and then cropping it based on the
 :term:`camera` information.
 """
-from dataclasses import dataclass
 from typing import Final, Optional, Tuple
 
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
-from geographic_msgs.msg import GeoPoint, GeoPose, GeoPoseStamped
+from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import Quaternion
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -23,9 +22,9 @@ from ..static_configuration import (
     BBOX_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE
 )
 
 
@@ -77,10 +76,11 @@ class TransformNode(Node):
     def orthoimage(self) -> Optional[Image]:
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
-    # TODO need some way of not sending stuff to pnp if looks like camera is looking in the wrong direction
-    @ property
+    # TODO need some way of not sending stuff to pnp if looks like camera is
+    #  looking in the wrong direction
+    @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ ROS.subscribe(
+    @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -165,11 +165,13 @@ class TransformNode(Node):
             )
 
             # Rotate and crop orthoimage stack
-            camera_yaw_degrees = self._extract_yaw(
-                camera_geopose.pose.orientation
-            )
+            camera_yaw_degrees = self._extract_yaw(camera_geopose.pose.orientation)
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
-            orthoimage_rotated_stack, r_rotated, t_cropped = self._rotate_and_crop_image(
+            (
+                orthoimage_rotated_stack,
+                r_rotated,
+                t_cropped,
+            ) = self._rotate_and_crop_image(
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
 
@@ -195,7 +197,9 @@ class TransformNode(Node):
 
             pnp_image_msg.header.frame_id = "pnp"
 
-            transform_ortho = messaging.create_transform_msg(pnp_image_msg.header.stamp, "reference", "pnp", r_rotated, t_cropped)
+            transform_ortho = messaging.create_transform_msg(
+                pnp_image_msg.header.stamp, "reference", "pnp", r_rotated, t_cropped
+            )
             self.broadcaster.sendTransform([transform_ortho])
 
             return pnp_image_msg

@@ -16,7 +16,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
-from ..decorators import ROS, narrow_types
+from .._decorators import ROS, narrow_types
 from ..static_configuration import (
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
@@ -98,7 +98,8 @@ class PnPNode(Node):
 
             r, t = pose_stamped
             transform_camera = messaging.create_transform_msg(
-                image.header.stamp, "pnp", "camera", r, t)
+                image.header.stamp, "pnp", "camera", r, t
+            )
             self.broadcaster.sendTransform([transform_camera])
 
             pose_msg = Pose()
@@ -115,12 +116,15 @@ class PnPNode(Node):
         return _camera_estimated_pose(self.image)
 
     @narrow_types
-    def _preprocess(self, image_quad: Image) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
+    def _preprocess(
+        self, image_quad: Image
+    ) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
         """Converts incoming 4-channel image to torch tensors
 
-        :param image_quad: A 4-channel image where the first channel is the :term:`Query`,
-            the second channel is the 8-bit :term:`elevation reference`, and the last two channels
-            combined represent the 16-bit :term:`elevation reference`.
+        :param image_quad: A 4-channel image where the first channel is the
+            :term:`Query`, the second channel is the 8-bit
+            :term:`elevation reference`, and the last two channels combined
+            represent the 16-bit :term:`elevation reference`.
         """
         # Convert the ROS Image message to an OpenCV image
         full_image_cv = self.bridge.imgmsg_to_cv2(
@@ -145,7 +149,9 @@ class PnPNode(Node):
         # Optionally display images
         self._display_images("Query", query_img, "Reference", reference_img)
 
-        qry_tensor, ref_tensor = self._convert_images_to_tensors(query_img, reference_img)
+        qry_tensor, ref_tensor = self._convert_images_to_tensors(
+            query_img, reference_img
+        )
 
         return (
             {"image0": qry_tensor, "image1": ref_tensor},

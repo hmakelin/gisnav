@@ -1,7 +1,7 @@
 """Helper functions for ROS messaging"""
 import re
 import time
-from typing import Literal, Final
+from typing import Final, Literal
 
 import numpy as np
 from geographic_msgs.msg import BoundingBox, GeoPoint
@@ -242,7 +242,6 @@ def off_nadir_angle(q):
     return angle_deg
 
 
-@staticmethod
 def to_proj_string(r, t, utm_zone):
     """Converts rotation matrix and translation vector into proj string
 
@@ -262,12 +261,19 @@ def to_proj_string(r, t, utm_zone):
     translation_x, translation_y = t
 
     # Create PROJ string
-    proj_string = f"+proj=utm +zone={utm_zone} +x_0={translation_x} +y_0={translation_y} +alpha={rotation_angle_deg} +units=m +ellps=WGS84"
+    proj_string = (
+        f"+proj=utm "
+        f"+zone={utm_zone} "
+        f"+x_0={translation_x} "
+        f"+y_0={translation_y} "
+        f"+alpha={rotation_angle_deg} "
+        f"+units=m "
+        f"+ellps=WGS84"
+    )
 
     return proj_string
 
 
-@staticmethod
 def from_proj_string(proj_string):
     """Converts proj string into rotation matrix and translation vector
 
@@ -304,20 +310,27 @@ def from_proj_string(proj_string):
 
     return r, t, utm_zone
 
+
 FrameID = Literal["wgs_84", "reference", "query", "pnp", "camera", "ltp"]
 """Allowed ROS header frame_ids (used by tf2)
 
 .. note::
-    The pnp frame is essentially the same as the vehicle local tangent plane (LTP) 
+    The pnp frame is essentially the same as the vehicle local tangent plane (LTP)
     if the GimbalDeviceAttitudeStatus message is not available (i.e. the principal
     point of the projected camera FOV is also the ground track of the vehicle)
 """
 
-@staticmethod
-def create_transform_msg(stamp, parent_frame: FrameID, child_frame: FrameID, rotation_matrix: np.ndarray, translation_vector: np.ndarray):
+
+def create_transform_msg(
+    stamp,
+    parent_frame: FrameID,
+    child_frame: FrameID,
+    rotation_matrix: np.ndarray,
+    translation_vector: np.ndarray,
+):
     transform = TransformStamped()
 
-    #transform.header.stamp = self.get_clock().now().to_msg()
+    # transform.header.stamp = self.get_clock().now().to_msg()
     transform.header.stamp = stamp
     transform.header.frame_id = parent_frame
     transform.child_frame_id = child_frame

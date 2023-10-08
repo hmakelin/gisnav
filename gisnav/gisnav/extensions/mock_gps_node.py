@@ -23,9 +23,8 @@ from datetime import datetime
 from typing import Final, Optional
 
 import numpy as np
-from geographic_msgs.msg import GeoPoseStamped
+from geometry_msgs.msg import PoseStamped
 from gps_time import GPSTime
-from mavros_msgs.msg import Altitude
 from px4_msgs.msg import SensorGps
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -35,10 +34,9 @@ from .. import messaging
 from .._data import Attitude
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
+    PNP_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE,
-    ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE,
-    TRANSFORM_NODE_NAME,
+    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
 )
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
@@ -113,42 +111,24 @@ class MockGPSNode(Node):
     def udp_port(self) -> Optional[int]:
         """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
-    def _vehicle_estimated_geopose_cb(self, msg: GeoPoseStamped) -> None:
+    def _camera_estimated_pose_cb(self, msg: PoseStamped) -> None:
         """
-        Handles latest geopose estimate
+        Handles latest :term:`camera` pose estimate
 
-        :param msg: Latest :class:`geographic_msgs.msg.GeoPose` message
+        :param msg: Latest :class:`geographic_msgs.msg.PoseStamped` message
         """
-        if self.vehicle_estimated_altitude is not None:
-            self.sensor_gps if self.use_sensor_gps else self.gps_input
-        else:
-            self.get_logger().warn(
-                "Altitude estimate not yet received, skipping publishing mock "
-                "GPS message."
-            )
+        self.sensor_gps if self.use_sensor_gps else self.gps_input
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_GEOPOSE.replace("~", TRANSFORM_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", PNP_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_vehicle_estimated_geopose_cb,
+        callback=_camera_estimated_pose_cb,
     )
-    def vehicle_estimated_geopose(self) -> Optional[GeoPoseStamped]:
-        """Subscribed :term:`vehicle` estimated :term:`geopose`, or None if not
-        available
-        """
-
-    @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_VEHICLE_ESTIMATED_ALTITUDE.replace("~", TRANSFORM_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def vehicle_estimated_altitude(self) -> Optional[Altitude]:
-        """Subscribed :term:`vehicle` estimated :term:`altitude`, or None if not
+    def camera_estimated_pose(self) -> Optional[PoseStamped]:
+        """Subscribed :term:`camera` estimated :term:`pose`, or None if not
         available
         """
 
@@ -164,18 +144,17 @@ class MockGPSNode(Node):
 
         @narrow_types(self)
         def _sensor_gps(
-            vehicle_estimated_geopose: GeoPoseStamped,
-            vehicle_estimated_altitude: Altitude,
+            vehicle_estimated_pose: PoseStamped,
             device_id: int,
         ) -> Optional[SensorGps]:
             # TODO: check yaw sign (NED or ENU?)
-            q = messaging.as_np_quaternion(vehicle_estimated_geopose.pose.orientation)
+            q = messaging.as_np_quaternion(vehicle_estimated_pose.orientation)
             yaw = Attitude(q=q).yaw
             yaw = int(np.degrees(yaw % (2 * np.pi)))
             yaw = 360 if yaw == 0 else yaw  # MAVLink definition 0 := not available
 
             satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(vehicle_estimated_geopose.header)
+            timestamp = messaging.usec_from_header(vehicle_estimated_pose.header)
 
             eph = 10.0
             epv = 1.0
@@ -190,12 +169,17 @@ class MockGPSNode(Node):
             msg.fix_type = 3
             msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
             msg.c_variance_rad = np.nan
-            msg.lat = int(vehicle_estimated_geopose.pose.position.latitude * 1e7)
-            msg.lon = int(vehicle_estimated_geopose.pose.position.longitude * 1e7)
-            msg.alt = int(vehicle_estimated_altitude.amsl * 1e3)
-            msg.alt_ellipsoid = int(
-                vehicle_estimated_geopose.pose.position.altitude * 1e3
-            )
+
+            # TODO lat lon
+            # msg.lat = int(vehicle_estimated_pose.position.latitude * 1e7)
+            # msg.lon = int(vehicle_estimated_pose.position.longitude * 1e7)
+
+            # TODO altitude
+            # msg.alt = int(vehicle_estimated_altitude.amsl * 1e3)
+            # msg.alt_ellipsoid = int(
+            #    vehicle_estimated_geopose.pose.position.altitude * 1e3
+            # )
+
             msg.eph = eph
             msg.epv = epv
             msg.hdop = 0.0
@@ -219,9 +203,11 @@ class MockGPSNode(Node):
 
             return msg
 
+        # TODO vheicle pose
+        vehicle_estimated_pose = self.camera_estimated_pose
+
         return _sensor_gps(
-            self.vehicle_estimated_geopose,
-            self.vehicle_estimated_altitude,
+            vehicle_estimated_pose,
             self._device_id,
         )
 
@@ -241,23 +227,23 @@ class MockGPSNode(Node):
 
         @narrow_types
         def _gps_input(
-            vehicle_estimated_geopose: GeoPoseStamped,
-            vehicle_estimated_altitude: Altitude,
+            vehicle_estimated_pose: PoseStamped,
         ) -> Optional[dict]:
             # TODO: check yaw sign (NED or ENU?)
-            q = messaging.as_np_quaternion(vehicle_estimated_geopose.pose.orientation)
+            q = messaging.as_np_quaternion(vehicle_estimated_pose.orientation)
             yaw = Attitude(q=q).yaw
             yaw = int(np.degrees(yaw % (2 * np.pi)))
             yaw = 360 if yaw == 0 else yaw  # MAVLink definition 0 := not available
 
             satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(vehicle_estimated_geopose.header)
+            timestamp = messaging.usec_from_header(vehicle_estimated_pose.header)
 
             eph = 10.0
             epv = 1.0
 
             gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
 
+            # TODO: lat, lon, alt
             msg = dict(
                 usec=timestamp,
                 gps_id=0,
@@ -265,9 +251,9 @@ class MockGPSNode(Node):
                 time_week=gps_time.week_number,
                 time_week_ms=int(gps_time.time_of_week * 1e3),
                 fix_type=3,
-                lat=int(vehicle_estimated_geopose.pose.position.latitude * 1e7),
-                lon=int(vehicle_estimated_geopose.pose.position.longitude * 1e7),
-                alt=vehicle_estimated_altitude.amsl,
+                # lat=int(vehicle_estimated_geopose.pose.position.latitude * 1e7),
+                # lon=int(vehicle_estimated_geopose.pose.position.longitude * 1e7),
+                # alt=vehicle_estimated_altitude.amsl,
                 horiz_accuracy=eph,
                 vert_accuracy=epv,
                 speed_accuracy=5.0,
@@ -287,9 +273,11 @@ class MockGPSNode(Node):
 
             return msg
 
-        return _gps_input(
-            self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
-        )
+        # TODO
+        return None
+        # return _gps_input(
+        #    self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
+        # )
 
     @property
     def _device_id(self) -> int:

@@ -35,7 +35,7 @@ from typing import Final, Optional
 import numpy as np
 import pyproj
 import tf_transformations
-from geographic_msgs.msg import BoundingBox, GeoPoint, GeoPose, GeoPoseStamped
+from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
@@ -46,10 +46,7 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
 from .._decorators import ROS, narrow_types
-from ..static_configuration import (
-    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
-    ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-)
+from ..static_configuration import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX
 
 
 class BBoxNode(Node):
@@ -103,15 +100,14 @@ class BBoxNode(Node):
         of the vehicle. The 'map' or LTP frame is assumed to follow the :term:`ENU`
         axes convention.
         """
-        assert msg.header.frame_id == "map", \
-            (f"Unexpected frame_id for vehicle local tangent plane (LTP)"
-             f"received via vehicle local position pose topic: {msg.header.frame_id} "
-             f"(expected 'map')")
+        assert msg.header.frame_id == "map", (
+            f"Unexpected frame_id for vehicle local tangent plane (LTP)"
+            f"received via vehicle local position pose topic: {msg.header.frame_id} "
+            f"(expected 'map')"
+        )
 
         # Publish local tangent plane (ENU) to vehicle FRD frame transformation
-        transform_base_link = messaging.pose_to_transform(
-            msg, "map", "base_link"
-        )
+        transform_base_link = messaging.pose_to_transform(msg, "map", "base_link")
         self.broadcaster.sendTransform([transform_base_link])
 
     @property
@@ -161,17 +157,25 @@ class BBoxNode(Node):
                 tuple(messaging.as_np_quaternion(camera_quaternion))
             )[:3, :3]
 
-
             # vehicle local tangent plane to camera transformation
+            parent_frame_id: messaging.FrameID = "map"
+            child_frame_id: messaging.FrameID = "camera_frd"
             transform_camera = messaging.create_transform_msg(
-                vehicle_pose.header.stamp, "ltp", "camera", R, np.ndarray((0, 0, 0))
+                vehicle_pose.header.stamp,
+                parent_frame_id,
+                child_frame_id,
+                R,
+                np.ndarray((0, 0, 0)),
             )
             # vehicle local tangent plane (ENU) to base_link (vehicle body centered)
             transform_vehicle = messaging.create_transform_msg(
-                vehicle_pose.header.stamp, "ltp", "camera", R, np.ndarray((0, 0, 0))
+                vehicle_pose.header.stamp,
+                parent_frame_id,
+                child_frame_id,
+                R,
+                np.ndarray((0, 0, 0)),
             )
             self.broadcaster.sendTransform([transform_vehicle, transform_camera])
-
 
             # Camera position in LTP centered in current location (not EKF local
             # frame origin - only shares the z-coordinate!) - assume local
@@ -401,7 +405,7 @@ class BBoxNode(Node):
 
         @narrow_types(self)
         def _camera_quaternion(
-            geopose: GeoPoseStamped,
+            vehicle_pose: PoseStamped,
             gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
         ):
             """:term:`Camera` :term:`orientation` quaternion in :term:`ENU` frame"""
@@ -426,7 +430,7 @@ class BBoxNode(Node):
 
                 # Extract yaw-only quaternion from vehicle's quaternion
                 # because the gimbal quaternion has floating yaw
-                vehicle_q = geopose.pose.orientation
+                vehicle_q = vehicle_pose.orientation
                 vehicle_yaw_only_q = Quaternion(
                     w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z
                 )
@@ -450,6 +454,4 @@ class BBoxNode(Node):
             assert camera_enu_q is not None
             return messaging.as_ros_quaternion(np.array(camera_enu_q))
 
-        return _camera_quaternion(
-            self.vehicle_geopose, self.gimbal_device_attitude_status
-        )
+        return _camera_quaternion(self.vehicle_pose, self.gimbal_device_attitude_status)

@@ -52,6 +52,7 @@ class PnPNode(Node):
     """Solves the keypoint matching and :term:`PnP` problems and publishes the
     solution as via :attr:`.camera_estimated_pose`
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._model = LoFTR(pretrained="outdoor")
@@ -124,9 +125,10 @@ class PnPNode(Node):
 
             r, t = pose_stamped
             transform_camera = messaging.create_transform_msg(
-                image.header.stamp, "pnp", "camera", r, t
+                image.header.stamp, "reference_image", "camera", r, t
             )
             self.broadcaster.sendTransform([transform_camera])
+            # todo: broadcast camera to camera_frd transformation
 
             pose_msg = Pose()
 

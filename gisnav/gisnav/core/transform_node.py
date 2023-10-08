@@ -34,9 +34,10 @@ from typing import Final, Optional, Tuple
 
 import cv2
 import numpy as np
+import rclpy
+import tf2_ros
 from cv_bridge import CvBridge
-from geographic_msgs.msg import GeoPoseStamped
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Quaternion, Transform
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -46,10 +47,8 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from .. import messaging
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    BBOX_NODE_NAME,
     GIS_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
 )
@@ -89,10 +88,32 @@ class TransformNode(Node):
         self.orthoimage
         self.camera_info
         self.image
-        self.camera_geopose
 
-        # Initialize the static transform broadcaster
+        # Initialize the transform broadcaster and listener
         self.broadcaster = StaticTransformBroadcaster(self)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
+    def get_transform(
+        self, target_frame: messaging.FrameID, source_frame: messaging.FrameID
+    ) -> Transform:
+        try:
+            # Look up the transformation
+            trans = self.tf_buffer.lookup_transform(
+                target_frame, source_frame, rclpy.time.Time()
+            )
+            return trans
+        except (
+            tf2_ros.LookupException,
+            tf2_ros.ConnectivityException,
+            tf2_ros.ExtrapolationException,
+        ):
+            # Todo: implement more granular exception handling
+            self.get_logger().warn(
+                f"Could not retrieve transformation from {source_frame} to "
+                f"{target_frame}."
+            )
+            return None
 
     @property
     @ROS.subscribe(
@@ -102,18 +123,6 @@ class TransformNode(Node):
     )
     def orthoimage(self) -> Optional[Image]:
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
-
-    # TODO need some way of not sending stuff to pnp if looks like camera is
-    #  looking in the wrong direction
-    @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE.replace("~", BBOX_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def camera_geopose(self) -> Optional[GeoPoseStamped]:
-        """:term:`Camera` :term:`geopose`, or None if not available"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -175,9 +184,12 @@ class TransformNode(Node):
         def _pnp_image(
             image: Image,
             orthoimage: Image,
-            camera_geopose: GeoPoseStamped,
+            transform: Transform,
         ) -> Optional[Image]:
             """Rotate and crop and orthoimage stack to align with query image"""
+
+            parent_frame_id: messaging.FrameID = orthoimage.header.frame_id
+            assert parent_frame_id == "orthoimage"
 
             query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
 
@@ -192,7 +204,7 @@ class TransformNode(Node):
             )
 
             # Rotate and crop orthoimage stack
-            camera_yaw_degrees = self._extract_yaw(camera_geopose.pose.orientation)
+            camera_yaw_degrees = self._extract_yaw(transform.rotation)
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
             (
                 orthoimage_rotated_stack,
@@ -205,6 +217,7 @@ class TransformNode(Node):
             # TODO: is this cv2/numpy stuff correct?
             # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
             # be flipped because cv2)
+            # todo: is this the same as the camera to camera_frd frame transformation?
             t_cropped = np.array(
                 (
                     t_cropped[1],
@@ -220,12 +233,17 @@ class TransformNode(Node):
             pnp_image_msg = self._cv_bridge.cv2_to_imgmsg(
                 pnp_image_stack, encoding="passthrough"
             )
-            pnp_image_msg.header.stamp = image.header.stamp
 
-            pnp_image_msg.header.frame_id = "pnp"
+            child_frame_id: messaging.FrameID = "reference_image"
+            pnp_image_msg.header.stamp = image.header.stamp
+            pnp_image_msg.header.frame_id = child_frame_id
 
             transform_ortho = messaging.create_transform_msg(
-                pnp_image_msg.header.stamp, "reference", "pnp", r_rotated, t_cropped
+                pnp_image_msg.header.stamp,
+                parent_frame_id,
+                child_frame_id,
+                r_rotated,
+                t_cropped,
             )
             self.broadcaster.sendTransform([transform_ortho])
 
@@ -234,7 +252,7 @@ class TransformNode(Node):
         return _pnp_image(
             self.image,
             self.orthoimage,
-            self.camera_geopose,
+            self.get_transform("map", "camera_frd"),
         )
 
     @staticmethod

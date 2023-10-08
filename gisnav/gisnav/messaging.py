@@ -311,13 +311,22 @@ def from_proj_string(proj_string):
     return r, t, utm_zone
 
 
-FrameID = Literal["wgs_84", "orthoimage", "query_image", "reference_image", "base_link", "camera", "camera_frd", "map"]
+FrameID = Literal[
+    "wgs_84",
+    "orthoimage",
+    "query_image",
+    "reference_image",
+    "base_link",
+    "camera",
+    "camera_frd",
+    "map",
+]
 """Allowed ROS header frame_ids (used by tf2)
 
-    The 'orthoimage', 'query_image', and 'reference_image' frames are all image 
-    planes in the pinhole camera model. The first and second (x and y) axes are 
+    The 'orthoimage', 'query_image', and 'reference_image' frames are all image
+    planes in the pinhole camera model. The first and second (x and y) axes are
     parallel to the `camera` frame x and y axes.
-    
+
     The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
 
     The 'camera' frame follows the pinhole camera model convention of axes where
@@ -325,14 +334,14 @@ FrameID = Literal["wgs_84", "orthoimage", "query_image", "reference_image", "bas
     aperture, and the third axis points into the viewing direction. This should
     not be described as a camera "FRD" frame as forward implies in the direction
     of the viewing axis, which is the third and not first axis in this convention.
-    
+
     The 'camera_frd' frame is a more intuitive definition of the camera axes
     where the forward direction is in the direction of the optical viewing axis.
 
 .. note::
     The pnp frame is essentially the same as the vehicle local tangent plane (LTP)
-    or frame_id == 'map' if the GimbalDeviceAttitudeStatus message is not 
-    available (i.e. the principal point of the projected camera FOV is also 
+    or frame_id == 'map' if the GimbalDeviceAttitudeStatus message is not
+    available (i.e. the principal point of the projected camera FOV is also
     the ground track of the vehicle)
 """
 
@@ -366,7 +375,10 @@ def create_transform_msg(
 
     return transform
 
-def pose_to_transform(pose_stamped_msg, parent_frame_id: FrameID, child_frame_id: FrameID):
+
+def pose_to_transform(
+    pose_stamped_msg, parent_frame_id: FrameID, child_frame_id: FrameID
+):
     # Create a new TransformStamped message
     transform_stamped = TransformStamped()
 

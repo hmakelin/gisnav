@@ -57,7 +57,7 @@ from ..static_configuration import (
 
 
 class GISNode(Node):
-    """Publishes the :term:`orthophoto` and optional :term:`DEM` as a single 
+    """Publishes the :term:`orthophoto` and optional :term:`DEM` as a single
     :term:`stacked <stack>` :class:`.Image` message.
 
     .. warning::
@@ -589,14 +589,15 @@ class GISNode(Node):
                 height, width, bounding_box
             )
 
+            child_frame_id: messaging.FrameID = "reference_image"
             # Publish the transformation
+            parent_frame_id: messaging.FrameID = "wgs_84"
             transform_ortho = messaging.create_transform_msg(
-                image_msg.header.stamp, "wgs_84", "reference", r, t
+                image_msg.header.stamp, parent_frame_id, child_frame_id, r, t
             )
             self.broadcaster.sendTransform([transform_ortho])
 
-            # image_msg.header.frame_id = messaging.to_proj_string(r, t, utm_zone)
-            image_msg.header.frame_id = "reference"
+            image_msg.header.frame_id = child_frame_id
 
             # new orthoimage stack, set old bounding box
             # TODO: this is brittle (old bounding box needs to always be set

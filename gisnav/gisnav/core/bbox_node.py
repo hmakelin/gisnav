@@ -1,6 +1,34 @@
 """This module contains :class:`.BBoxNode`, a :term:`ROS` node for computing
 and publishing a :term:`bounding box` of the :term:`camera's <camera>`
-ground-projected :term:`field of view <FOV>`.
+ground-projected :term:`field of view <FOV>`. This bounding box is used by
+:class:`.GISNode` to retrieve orthoimagery for the :term:`vehicle's <vehicle>`
+approximate :term:`global position`.
+
+The below graph shows :class:`.BBoxNode` in the computational graph.
+
+.. mermaid::
+    :caption: :class:`.BBoxNode` computational graph
+
+    graph LR
+
+        subgraph MAVROS
+            navsatfix[mavros/global_position/global]
+            vehicle_pose[mavros/local_position/pose]
+            gimbal_device_attitude_status[mavros/global_position/global]
+        end
+
+        subgraph gscam
+            camera_info[camera/camera_info]
+        end
+
+        subgraph BBoxNode
+            bounding_box[gisnav/bbox_node/fov/bounding_box]
+        end
+
+        navsatfix -->|sensor_msgs/NavSatFix| BBoxNode
+        vehicle_pose -->|geometry_msgs/PoseStamped| BBoxNode
+        camera_info -->|sensor_msgs/CameraInfo| BBoxNode
+        bounding_box -->|geographic_msgs/BoundingBox| GISNode:::hidden.
 """
 from typing import Final, Optional
 
@@ -25,8 +53,7 @@ from ..static_configuration import (
 
 class BBoxNode(Node):
     """Publishes :class:`.BoundingBox` of the :term:`camera's <camera>`
-    ground-projected :term:`field of view <FOV>`.
-    """
+    ground-projected :term:`field of view <FOV>`"""
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""

@@ -2,6 +2,33 @@
 :term:`query` and :term:`reference` image pair by rotating the reference
 image based on :term:`vehicle` heading, and then cropping it based on the
 :term:`camera` information.
+
+.. mermaid::
+    :caption: :class:`.PnPNode` computational graph
+
+    graph LR
+        subgraph TransformNode
+            pnp_image[gisnav/transform_node/image]
+        end
+
+        subgraph gscam
+            camera_info[camera/camera_info]
+            image[camera/image_raw]
+        end
+
+        subgraph BBoxNode
+            camera_pose[gisnav/bbox_node/camera/geopose]
+        end
+
+        subgraph GISNode
+            orthoimage[gisnav/gis_node/image]
+        end
+
+        image -->|sensor_msgs/Image| TransformNode
+        camera_info -->|sensor_msgs/CameraInfo| TransformNode
+        orthoimage -->|sensor_msgs/Image| TransformNode
+        camera_pose -->|geometry_msgs/PoseStamped| TransformNode
+        pnp_image -->|sensor_msgs/Image| PnPNode:::hidden
 """
 from typing import Final, Optional, Tuple
 

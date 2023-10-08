@@ -1,22 +1,4 @@
-"""GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages
-
-.. mermaid::
-    :caption: Mock GPS node data flow graph
-
-    graph LR
-        subgraph PnPNode
-            pose[gisnav/vehicle/estimated/pose]
-        end
-
-        subgraph MockGPSNode
-            sensor_gps[fmu/in/sensor_gps]
-            gps_input
-        end
-
-        pose -->|geographic_msgs/PoseStamped| MockGPSNode
-        sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
-        gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
-"""
+"""GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages"""
 import json
 import socket
 from datetime import datetime
@@ -44,7 +26,24 @@ _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 
 
 class MockGPSNode(Node):
-    """A node that publishes a mock GPS message over the microRTPS bridge"""
+    """A node that publishes a mock GPS message over the microRTPS bridge
+
+    .. mermaid::
+
+    graph LR
+        subgraph PnPNode
+            pose[gisnav/vehicle/estimated/pose]
+        end
+
+        subgraph MockGPSNode
+            sensor_gps[fmu/in/sensor_gps]
+            gps_input
+        end
+
+        pose -->|geographic_msgs/PoseStamped| MockGPSNode
+        sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
+        gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
+    """
 
     ROS_D_USE_SENSOR_GPS: Final = True
     """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for

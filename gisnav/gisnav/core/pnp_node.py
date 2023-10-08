@@ -1,5 +1,28 @@
 """This module contains :class:`.PnPNode`, a :term:`ROS` node for estimating
 :term:`camera` relative pose between a :term:`query` and :term:`reference` image
+
+The pose is estimated by finding matching keypoints between the query and reference
+images and then solving the resulting :term:`PnP` problem.
+
+.. mermaid::
+    :caption: :class:`.PnPNode` computational graph
+
+    graph LR
+        subgraph PnPNode
+            pose[gisnav/pnp_node/pose]
+        end
+
+        subgraph TransformNode
+            image[gisnav/transform_node/image]
+        end
+
+        subgraph gscam
+            camera_info[camera/camera_info]
+        end
+
+        camera_info -->|sensor_msgs/CameraInfo| PnPNode
+        image -->|sensor_msgs/Image| PnPNode
+        pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
 from typing import Optional, Tuple
 
@@ -26,6 +49,9 @@ from ..static_configuration import (
 
 
 class PnPNode(Node):
+    """Solves the keypoint matching and :term:`PnP` problems and publishes the
+    solution as via :attr:`.camera_estimated_pose`
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._model = LoFTR(pretrained="outdoor")

@@ -1,5 +1,30 @@
 """This module contains :class:`.GISNode`, a :term:`ROS` node for retrieving and
 publishing geographic information and images.
+
+:class:`.GISNode` manages geographic information for the system, including
+downloading, storing, and publishing the :term:`orthophoto` and optional
+:term:`DEM` :term:`raster`. These rasters are retrieved from an :term:`onboard`
+:term:`WMS` based on the projected location of the :term:`camera` field of view.
+
+.. mermaid::
+    :caption: :class:`.GISNode` computational graph
+
+    graph LR
+        subgraph GISNode
+            image[gisnav/gis_node/image]
+        end
+
+        subgraph BBoxNode
+            bounding_box[gisnav/bbox_node/fov/bounding_box]
+        end
+
+        subgraph gscam
+            camera_info[camera/camera_info]
+        end
+
+        camera_info -->|sensor_msgs/CameraInfo| GISNode
+        bounding_box -->|geographic_msgs/BoundingBox| GISNode
+        image -->|sensor_msgs/Image| TransformNode:::hidden
 """
 from copy import deepcopy
 from typing import IO, Final, List, Optional, Tuple
@@ -32,29 +57,8 @@ from ..static_configuration import (
 
 
 class GISNode(Node):
-    """Publishes :class:`.Image` of approximate location to a topic
-
-    :class:`.GISNode` manages geographic information for the system, including
-    downloading, storing, and publishing the :term:`orthophoto` and optional
-    :term:`DEM` :term:`raster`. These rasters are retrieved from an :term:`onboard`
-    :term:`WMS` based on the projected location of the :term:`camera` field of view.
-
-    .. mermaid::
-        graph LR
-            subgraph GISNode
-                image[~/image]
-            end
-
-            subgraph BBoxNode
-                bounding_box[~/fov/bounding_box]
-            end
-
-            camera_info -->|sensor_msgs/CameraInfo| GISNode
-            bounding_box -->|geographic_msgs/BoundingBox| GISNode
-            image -->|sensor_msgs/Image| TransformNode
-
-    :class:`.GISNode` publishes the :term:`orthophoto` and optional :term:`DEM`
-    as a single :term:`stacked <stack>` :class:`.Image` message.
+    """Publishes the :term:`orthophoto` and optional :term:`DEM` as a single 
+    :term:`stacked <stack>` :class:`.Image` message.
 
     .. warning::
         ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests`` library

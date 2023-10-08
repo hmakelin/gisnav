@@ -1,6 +1,6 @@
-CVNode
+PnPNode
 ____________________________________________________
-.. automodule:: gisnav.core.cv_node
+.. automodule:: gisnav.core.pnp_node
    :autosummary:
    :members:
    :undoc-members:

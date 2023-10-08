@@ -14,8 +14,10 @@ what you are looking for.
 .. toctree::
     :caption: Core
 
+    public/bbox_node
     public/gis_node
-    public/pose_estimation_node
+    public/transform_node
+    public/pnp_node
 
 .. toctree::
     :caption: Extensions

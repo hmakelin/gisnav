@@ -78,8 +78,7 @@ class MockGPSNode(Node):
         super().__init__(*args, **kwargs)
 
         # Call the decorated properties to setup subscriptions
-        self.vehicle_estimated_geopose
-        self.vehicle_estimated_altitude
+        self.camera_estimated_pose
 
         if self.use_sensor_gps:
             self._mock_gps_pub = self.create_publisher(

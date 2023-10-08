@@ -42,6 +42,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
 from .._decorators import ROS, narrow_types
@@ -73,13 +74,15 @@ class BBoxNode(Node):
         self.vehicle_pose
         self.gimbal_device_attitude_status
 
+        # Needed for updating tf2 with camera to vehicle relative pose
+        # and vehicle to wgs84 relative
+        self.broadcaster = StaticTransformBroadcaster(self)
+
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the :term:`global position` message from the
         :term:`navigation filter`
         """
         self.fov_bounding_box
-        self.camera_geopose
-        # self.vehicle_geopose  # triggered by camera geopose
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
@@ -91,14 +94,35 @@ class BBoxNode(Node):
     def nav_sat_fix(self) -> Optional[NavSatFix]:
         """Vehicle GPS fix, or None if unknown or too old"""
 
+    def _vehicle_pose_cb(self, msg: PoseStamped) -> None:
+        """Callback for the :term:`vehicle` :term:`local position` message from
+        the :term:`navigation filter`
+
+        The local position is expected to have a ROS header frame_id called 'map',
+        and this 'map' frame is assumed to be the :term:`local tangent plane` (LTP)
+        of the vehicle. The 'map' or LTP frame is assumed to follow the :term:`ENU`
+        axes convention.
+        """
+        assert msg.header.frame_id == "map", \
+            (f"Unexpected frame_id for vehicle local tangent plane (LTP)"
+             f"received via vehicle local position pose topic: {msg.header.frame_id} "
+             f"(expected 'map')")
+
+        # Publish local tangent plane (ENU) to vehicle FRD frame transformation
+        transform_base_link = messaging.pose_to_transform(
+            msg, "map", "base_link"
+        )
+        self.broadcaster.sendTransform([transform_base_link])
+
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO:
     @ROS.subscribe(
         "/mavros/local_position/pose",
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_vehicle_pose_cb,
     )
     def vehicle_pose(self) -> Optional[PoseStamped]:
-        """Vehicle local position, or None if not available or too old"""
+        """Vehicle local :term:`pose`, or None if not available or too old"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
@@ -136,6 +160,18 @@ class BBoxNode(Node):
             R = tf_transformations.quaternion_matrix(
                 tuple(messaging.as_np_quaternion(camera_quaternion))
             )[:3, :3]
+
+
+            # vehicle local tangent plane to camera transformation
+            transform_camera = messaging.create_transform_msg(
+                vehicle_pose.header.stamp, "ltp", "camera", R, np.ndarray((0, 0, 0))
+            )
+            # vehicle local tangent plane (ENU) to base_link (vehicle body centered)
+            transform_vehicle = messaging.create_transform_msg(
+                vehicle_pose.header.stamp, "ltp", "camera", R, np.ndarray((0, 0, 0))
+            )
+            self.broadcaster.sendTransform([transform_vehicle, transform_camera])
+
 
             # Camera position in LTP centered in current location (not EKF local
             # frame origin - only shares the z-coordinate!) - assume local
@@ -312,8 +348,7 @@ class BBoxNode(Node):
         else:
             bounding_box = None
 
-        # TODO: here there used to be a fallback that would get bbox u
-        #  nder
+        # TODO: here there used to be a fallback that would get bbox under
         #  vehicle if FOV could not be projected. But that should not be needed
         #  if everything works so it was removed from here.
 
@@ -328,8 +363,6 @@ class BBoxNode(Node):
             from MAVROS
         """
         self.fov_bounding_box
-        self.camera_geopose
-        # self.vehicle_geopose  # triggered by camera geopose
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
@@ -420,44 +453,3 @@ class BBoxNode(Node):
         return _camera_quaternion(
             self.vehicle_geopose, self.gimbal_device_attitude_status
         )
-
-    @property
-    @ROS.publish(ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE, QoSPresetProfiles.SENSOR_DATA.value)
-    def camera_geopose(self) -> Optional[GeoPoseStamped]:
-        """:term:`Camera` :term:`geopose` or None if not available"""
-
-        @narrow_types(self)
-        def _camera_geopose(
-            vehicle_geopose: GeoPoseStamped, camera_quaternion: Quaternion
-        ) -> GeoPoseStamped:
-            camera_geopose = vehicle_geopose
-            camera_geopose.pose.orientation = camera_quaternion
-            return camera_geopose
-
-        return _camera_geopose(self._vehicle_geopose, self._camera_quaternion)
-
-    def _vehicle_geopose(self) -> Optional[GeoPoseStamped]:
-        """Published :term:`vehicle` :term:`geopose`, or None if not available"""
-
-        @narrow_types(self)
-        @ROS.retain_oldest_header
-        def _vehicle_geopose(
-            nav_sat_fix: NavSatFix, pose_stamped: PoseStamped
-        ) -> GeoPoseStamped:
-            # Position
-            latitude, longitude = (
-                nav_sat_fix.latitude,
-                nav_sat_fix.longitude,
-            )
-            altitude = nav_sat_fix.altitude
-
-            return GeoPoseStamped(
-                pose=GeoPose(
-                    position=GeoPoint(
-                        latitude=latitude, longitude=longitude, altitude=altitude
-                    ),
-                    orientation=pose_stamped.pose.orientation,
-                ),
-            )
-
-        return _vehicle_geopose(self.nav_sat_fix, self.vehicle_pose)

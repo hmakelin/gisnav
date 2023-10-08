@@ -311,13 +311,29 @@ def from_proj_string(proj_string):
     return r, t, utm_zone
 
 
-FrameID = Literal["wgs_84", "reference", "query", "pnp", "camera", "ltp"]
+FrameID = Literal["wgs_84", "orthoimage", "query_image", "reference_image", "base_link", "camera", "camera_frd", "map"]
 """Allowed ROS header frame_ids (used by tf2)
+
+    The 'orthoimage', 'query_image', and 'reference_image' frames are all image 
+    planes in the pinhole camera model. The first and second (x and y) axes are 
+    parallel to the `camera` frame x and y axes.
+    
+    The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
+
+    The 'camera' frame follows the pinhole camera model convention of axes where
+    first axis points to right of camera aperture, second axis points down from
+    aperture, and the third axis points into the viewing direction. This should
+    not be described as a camera "FRD" frame as forward implies in the direction
+    of the viewing axis, which is the third and not first axis in this convention.
+    
+    The 'camera_frd' frame is a more intuitive definition of the camera axes
+    where the forward direction is in the direction of the optical viewing axis.
 
 .. note::
     The pnp frame is essentially the same as the vehicle local tangent plane (LTP)
-    if the GimbalDeviceAttitudeStatus message is not available (i.e. the principal
-    point of the projected camera FOV is also the ground track of the vehicle)
+    or frame_id == 'map' if the GimbalDeviceAttitudeStatus message is not 
+    available (i.e. the principal point of the projected camera FOV is also 
+    the ground track of the vehicle)
 """
 
 
@@ -349,3 +365,22 @@ def create_transform_msg(
     transform.transform.translation.z = translation_vector[2]
 
     return transform
+
+def pose_to_transform(pose_stamped_msg, parent_frame_id: FrameID, child_frame_id: FrameID):
+    # Create a new TransformStamped message
+    transform_stamped = TransformStamped()
+
+    # Copy the header
+    transform_stamped.header = pose_stamped_msg.header
+
+    # Copy the pose information to the transform
+    transform_stamped.transform.translation.x = pose_stamped_msg.pose.position.x
+    transform_stamped.transform.translation.y = pose_stamped_msg.pose.position.y
+    transform_stamped.transform.translation.z = pose_stamped_msg.pose.position.z
+    transform_stamped.transform.rotation = pose_stamped_msg.pose.orientation
+
+    # Set the child and parent frame IDs
+    transform_stamped.child_frame_id = child_frame_id  # The target frame (FRD)
+    transform_stamped.header.frame_id = parent_frame_id  # The source frame (ENU)
+
+    return transform_stamped

@@ -31,11 +31,6 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 :attr:`.GISNode.orthoimage`.
 """
 
-ROS_TOPIC_RELATIVE_CAMERA_GEOPOSE: Final = "~/camera/geopose"
-"""Relative :term:`topic` into which :class:`.GISNode` publishes
-:attr:`.GISNode.camera_geopose`.
-"""
-
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 """Relative :term:`topic` into which :class:`.BBoxNode` publishes
 :attr:`.BBoxNode.fov_bounding_box`.

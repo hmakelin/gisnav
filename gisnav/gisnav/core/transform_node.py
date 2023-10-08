@@ -34,7 +34,6 @@ from typing import Final, Optional, Tuple
 
 import cv2
 import numpy as np
-import rclpy
 import tf2_ros
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Quaternion, Transform
@@ -95,13 +94,11 @@ class TransformNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
     def get_transform(
-        self, target_frame: messaging.FrameID, source_frame: messaging.FrameID
+        self, target_frame: messaging.FrameID, source_frame: messaging.FrameID, stamp
     ) -> Transform:
         try:
             # Look up the transformation
-            trans = self.tf_buffer.lookup_transform(
-                target_frame, source_frame, rclpy.time.Time()
-            )
+            trans = self.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
             return trans
         except (
             tf2_ros.LookupException,
@@ -249,10 +246,15 @@ class TransformNode(Node):
 
             return pnp_image_msg
 
+        transform = (
+            self.get_transform("map", "camera_frd", self.image.header.stamp)
+            if self.image is not None
+            else None
+        )
         return _pnp_image(
             self.image,
             self.orthoimage,
-            self.get_transform("map", "camera_frd"),
+            transform,
         )
 
     @staticmethod

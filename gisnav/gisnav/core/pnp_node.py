@@ -62,7 +62,7 @@ class PnPNode(Node):
         self.camera_info
         self.image
 
-        # Initialize the static transform broadcaster
+        # Initialize the transform broadcaster
         self.broadcaster = StaticTransformBroadcaster(self)
 
     @property

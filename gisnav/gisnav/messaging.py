@@ -4,8 +4,10 @@ import time
 from typing import Final, Literal
 
 import numpy as np
+import tf2_ros
 from geographic_msgs.msg import BoundingBox, GeoPoint
-from geometry_msgs.msg import Quaternion, TransformStamped
+from geometry_msgs.msg import Quaternion, Transform, TransformStamped
+from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
@@ -393,7 +395,27 @@ def pose_to_transform(
     transform_stamped.transform.rotation = pose_stamped_msg.pose.orientation
 
     # Set the child and parent frame IDs
-    transform_stamped.child_frame_id = child_frame_id  # The target frame (FRD)
-    transform_stamped.header.frame_id = parent_frame_id  # The source frame (ENU)
+    transform_stamped.child_frame_id = child_frame_id
+    transform_stamped.header.frame_id = parent_frame_id
 
     return transform_stamped
+
+
+def get_transform(
+    node: Node, target_frame: FrameID, source_frame: FrameID, stamp
+) -> Transform:
+    try:
+        # Look up the transformation
+        trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
+        return trans
+    except (
+        tf2_ros.LookupException,
+        tf2_ros.ConnectivityException,
+        tf2_ros.ExtrapolationException,
+    ):
+        # Todo: implement more granular exception handling
+        node.get_logger().warn(
+            f"Could not retrieve transformation from {source_frame} to "
+            f"{target_frame}."
+        )
+        return None

@@ -34,9 +34,10 @@ from typing import Final, Optional
 
 import numpy as np
 import pyproj
+import tf2_ros
 import tf_transformations
 from geographic_msgs.msg import BoundingBox
-from geometry_msgs.msg import PoseStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, Quaternion, Transform, TransformStamped
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -74,6 +75,8 @@ class BBoxNode(Node):
         # Needed for updating tf2 with camera to vehicle relative pose
         # and vehicle to wgs84 relative
         self.broadcaster = StaticTransformBroadcaster(self)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the :term:`global position` message from the
@@ -137,7 +140,7 @@ class BBoxNode(Node):
 
         @narrow_types(self)
         def _fov_and_principal_point_on_ground_plane(
-            camera_quaternion: Quaternion,
+            transform: Transform,
             vehicle_pose: PoseStamped,
             camera_info: CameraInfo,
         ) -> Optional[np.ndarray]:
@@ -154,7 +157,7 @@ class BBoxNode(Node):
                 :term:`ENU`.
             """
             R = tf_transformations.quaternion_matrix(
-                tuple(messaging.as_np_quaternion(camera_quaternion))
+                tuple(messaging.as_np_quaternion(transform.rotation))
             )[:3, :3]
 
             # Camera position in LTP centered in current location (not EKF local
@@ -318,8 +321,16 @@ class BBoxNode(Node):
 
             return bbox
 
+        transform = (
+            messaging.get_transform(
+                self, "camera", "map", self.vehicle_pose.header.stamp
+            )
+            if self.vehicle_pose is not None
+            else None
+        )
+
         fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
-            self._camera_quaternion, self.vehicle_pose, self.camera_info
+            transform, self.vehicle_pose, self.camera_info
         )
         if fov_and_c_on_ground_local_enu is not None:
             fov_on_ground_local_enu = fov_and_c_on_ground_local_enu[:4]
@@ -346,6 +357,7 @@ class BBoxNode(Node):
         :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
             from MAVROS
         """
+
         def _normalize_quaternion(q: Quaternion) -> Quaternion:
             norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
             q.w = q.w / norm
@@ -354,10 +366,30 @@ class BBoxNode(Node):
             q.z = q.z / norm
             return q
 
-        def _publish_camera_transform(vehicle_pose: PoseStamped, gimbal_device_attitude_status: GimbalDeviceAttitudeStatus) -> None:
+        @narrow_types(self)
+        def _publish_camera_transform(
+            vehicle_pose: PoseStamped,
+            gimbal_device_attitude_status: GimbalDeviceAttitudeStatus,
+        ) -> None:
+            """PUlish camera ENU pose to transformations
+
+            .. note::
+                * Current implementation assumes camera faces directly down from
+                  :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
+                  (:term:`MAVLink` gimbal protocol v2) is not available. Should
+                  probably not be used for estimating :term:`vehicle`
+                  :term:`orientation`.
+                * If GimbalDeviceAttitudeStatus :term:`message`
+                  (:term:`MAVLink` gimbal protocol v2) is available, only the flags
+                  value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
+                  floating yaw) is supported.
+
+            :param vehicle_pose:
+            :param gimbal_device_attitude_status:
+            """
             # vehicle_frd frame to camera_ned frame transformation
-            parent_frame_id: messaging.FrameID = "base_link"
-            child_frame_id: messaging.FrameID = "camera_ned"
+            parent_frame_id: messaging.FrameID = "map"
+            child_frame_id: messaging.FrameID = "camera"
 
             assert gimbal_device_attitude_status.flags == 12, (
                 "Currently GISNav only supports a two-axis gimbal that has "
@@ -371,9 +403,7 @@ class BBoxNode(Node):
             # Extract yaw-only quaternion from vehicle's quaternion
             # because the gimbal quaternion has floating yaw
             vehicle_q = vehicle_pose.pose.orientation
-            vehicle_yaw_only_q = Quaternion(
-                w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z
-            )
+            vehicle_yaw_only_q = Quaternion(w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z)
             vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
 
             # Need to mirror gimbal orientation along vehicle Y and Z-axis in
@@ -392,13 +422,22 @@ class BBoxNode(Node):
                 gimbal_enu_mirrored_q,
             )
 
-            transform = messaging.pose_to_transform(
-                msg,
-                parent_frame_id,
-                child_frame_id,
-                msg.header.stamp
+            transform_stamped = TransformStamped()
+
+            # Copy the header and edit frame_ids
+            transform_stamped.header = vehicle_pose.header
+            transform_stamped.child_frame_id = child_frame_id
+            transform_stamped.header.frame_id = parent_frame_id
+
+            # Copy the pose information to the transform
+            transform_stamped.transform.translation.x = vehicle_pose.pose.position.x
+            transform_stamped.transform.translation.y = vehicle_pose.pose.position.y
+            transform_stamped.transform.translation.z = vehicle_pose.pose.position.z
+            transform_stamped.transform.rotation = messaging.as_ros_quaternion(
+                np.array(camera_enu_q)
             )
-            self.broadcaster.sendTransform([transform])
+
+            self.broadcaster.sendTransform([transform_stamped])
 
         _publish_camera_transform(self.vehicle_pose, msg)
 
@@ -415,81 +454,3 @@ class BBoxNode(Node):
         """:term:`Camera` :term:`FRD` :term:`orientation`, or None if not available
         or too old
         """
-
-    @property
-    def _camera_quaternion(self) -> Optional[Quaternion]:
-        """:term:`Camera` :term:`ENU` :term:`orientation` or None if not available
-
-        .. note::
-            * Current implementation assumes camera faces directly down from
-              :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
-              (:term:`MAVLink` gimbal protocol v2) is not available. Should
-              probably not be used for estimating :term:`vehicle` :term:`orientation`.
-            * If GimbalDeviceAttitudeStatus :term:`message`
-              (:term:`MAVLink` gimbal protocol v2) is available, only the flags
-              value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
-              floating yaw) is supported.
-        """
-
-        def _normalize_quaternion(q: Quaternion) -> Quaternion:
-            norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
-            q.w = q.w / norm
-            q.x = q.x / norm
-            q.y = q.y / norm
-            q.z = q.z / norm
-            return q
-
-        @narrow_types(self)
-        def _camera_quaternion(
-            vehicle_pose: PoseStamped,
-            gimbal_device_attitude_status: Optional[GimbalDeviceAttitudeStatus],
-        ):
-            """:term:`Camera` :term:`orientation` quaternion in :term:`ENU` frame"""
-            if gimbal_device_attitude_status is None:
-                # Identity quaternion: assume down facing camera if no
-                # information received from autopilot bridge
-                camera_enu_q = Quaternion(
-                    x=0.0,
-                    y=0.0,
-                    z=0.0,
-                    w=1.0,
-                )
-            else:
-                assert gimbal_device_attitude_status.flags == 12, (
-                    "Currently GISNav only supports a two-axis gimbal that has "
-                    "horizon-locked roll and pitch (MAVLink Gimbal Protocol v2 "
-                    "GimbalDeviceAttitudeStatus message flags has value 12 i.e. "
-                    "1100 for bit mask)."
-                )
-                # TODO: handle failure flags (e.g. gimbal at physical limit)
-                # TODO: handle gimbal lock flags (especially yaw lock, flags == 16)
-
-                # Extract yaw-only quaternion from vehicle's quaternion
-                # because the gimbal quaternion has floating yaw
-                vehicle_q = vehicle_pose.pose.orientation
-                self.get_logger().error(str(vehicle_q))
-                vehicle_yaw_only_q = Quaternion(
-                    w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z
-                )
-                vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
-
-                # Need to mirror gimbal orientation along vehicle Y and Z-axis in
-                # FRD frame to get the camera ENU quaternion to display
-                # correctly in rviz - TODO figure out why (combination of
-                #  NED-to-ENU and camera_pinhole-to-camera_frd?)
-                gimbal_enu_mirrored_q = (
-                    gimbal_device_attitude_status.q.x,
-                    -gimbal_device_attitude_status.q.y,
-                    -gimbal_device_attitude_status.q.z,
-                    gimbal_device_attitude_status.q.w,
-                )
-
-                camera_enu_q = tf_transformations.quaternion_multiply(
-                    tuple(messaging.as_np_quaternion(vehicle_yaw_only_q)),
-                    gimbal_enu_mirrored_q,
-                )
-
-            assert camera_enu_q is not None
-            return messaging.as_ros_quaternion(np.array(camera_enu_q))
-
-        return _camera_quaternion(self.vehicle_pose, self.gimbal_device_attitude_status)

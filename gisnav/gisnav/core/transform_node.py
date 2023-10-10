@@ -93,25 +93,6 @@ class TransformNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-    def get_transform(
-        self, target_frame: messaging.FrameID, source_frame: messaging.FrameID, stamp
-    ) -> Transform:
-        try:
-            # Look up the transformation
-            trans = self.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
-            return trans
-        except (
-            tf2_ros.LookupException,
-            tf2_ros.ConnectivityException,
-            tf2_ros.ExtrapolationException,
-        ):
-            # Todo: implement more granular exception handling
-            self.get_logger().warn(
-                f"Could not retrieve transformation from {source_frame} to "
-                f"{target_frame}."
-            )
-            return None
-
     @property
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
@@ -247,7 +228,7 @@ class TransformNode(Node):
             return pnp_image_msg
 
         transform = (
-            self.get_transform("map", "camera_frd", self.image.header.stamp)
+            messaging.get_transform(self, "camera", "map", self.image.header.stamp)
             if self.image is not None
             else None
         )

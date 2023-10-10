@@ -319,6 +319,7 @@ FrameID = Literal[
     "base_link",
     "camera",
     "camera_frd",
+    "camera_ned",
     "map",
 ]
 """Allowed ROS header frame_ids (used by tf2)

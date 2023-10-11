@@ -403,7 +403,7 @@ def pose_to_transform(
 
 def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp
-) -> Transform:
+) -> TransformStamped:
     try:
         # Look up the transformation
         trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)

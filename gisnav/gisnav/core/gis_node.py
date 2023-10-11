@@ -570,12 +570,15 @@ class GISNode(Node):
         if map is not None:
             img, dem = map
 
+            assert dem.shape[2] == 1, \
+                f"DEM shape was {dem.shape}, expected 1 channel only."
+            assert img.shape[2] == 3, \
+                f"Image shape was {img.shape}, expected 3 channels."
+            assert dem.dtype == np.uint8  # todo get 16 bit dems?
+
             # Convert image to grayscale (color not needed)
             # TODO: check BGR or RGB
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            assert dem.shape[2] == 1
-            assert img.shape[3] == 1
-            assert dem.dtype == np.uint8  # todo get 16 bit dems?
             # add 8-bit zero array of padding for future support of 16 bit dems
             orthoimage_stack = np.dstack((img, np.zeros_like(dem), dem))
             image_msg = self._cv_bridge.cv2_to_imgmsg(
@@ -610,49 +613,79 @@ class GISNode(Node):
         else:
             return None
 
-    @staticmethod
-    def _boundingbox_to_geo_coords(
-        bounding_box: BoundingBox,
-    ) -> List[Tuple[float, float]]:
-        """Extracts the geo coordinates from a ROS
-        geographic_msgs/BoundingBox and returns them as a list of tuples.
-
-        Returns corners in order: top-left, bottom-left, bottom-right,
-        top-right.
-
-        Cached because it is assumed the same OrthoImage3D BoundingBox will
-        be used for multiple matches.
-
-        :param bbox: (geographic_msgs/BoundingBox): The bounding box.
-        :return: The geo coordinates as a list of (longitude, latitude) tuples.
-        """
-        min_lon = bounding_box.min_pt.longitude
-        min_lat = bounding_box.min_pt.latitude
-        max_lon = bounding_box.max_pt.longitude
-        max_lat = bounding_box.max_pt.latitude
-
-        return [
-            (min_lon, max_lat),
-            (min_lon, min_lat),
-            (max_lon, min_lat),
-            (max_lon, max_lat),
-        ]
-
     @classmethod
     def _get_geotransformation_matrix(cls, width: int, height: int, bbox: BoundingBox):
         """Transforms orthoimage frame pixel coordinates to WGS84 lon,
         lat coordinates
         """
+        def _boundingbox_to_geo_coords(
+                bounding_box: BoundingBox,
+        ) -> List[Tuple[float, float]]:
+            """Extracts the geo coordinates from a ROS
+            geographic_msgs/BoundingBox and returns them as a list of tuples.
+
+            Returns corners in order: top-left, bottom-left, bottom-right,
+            top-right.
+
+            Cached because it is assumed the same OrthoImage3D BoundingBox will
+            be used for multiple matches.
+
+            :param bbox: (geographic_msgs/BoundingBox): The bounding box.
+            :return: The geo coordinates as a list of (longitude, latitude) tuples.
+            """
+            min_lon = bounding_box.min_pt.longitude
+            min_lat = bounding_box.min_pt.latitude
+            max_lon = bounding_box.max_pt.longitude
+            max_lat = bounding_box.max_pt.latitude
+
+            return [
+                (min_lon, max_lat),
+                (min_lon, min_lat),
+                (max_lon, min_lat),
+                (max_lon, max_lat),
+            ]
+
+        def _haversine_distance(lat1, lon1, lat2, lon2) -> float:
+            R = 6371000  # Radius of the Earth in meters
+            lat1_rad, lon1_rad = np.radians(lat1), np.radians(lon1)
+            lat2_rad, lon2_rad = np.radians(lat2), np.radians(lon2)
+
+            delta_lat = lat2_rad - lat1_rad
+            delta_lon = lon2_rad - lon1_rad
+
+            a = (
+                    np.sin(delta_lat / 2) ** 2
+                    + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(delta_lon / 2) ** 2
+            )
+            c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+
+            return R * c
+
+        def _bounding_box_perimeter_meters(bounding_box: BoundingBox) -> float:
+            """Returns the length of the bounding box perimeter in meters"""
+            width_meters = _haversine_distance(
+                bounding_box.min_pt.latitude,
+                bounding_box.min_pt.longitude,
+                bounding_box.min_pt.latitude,
+                bounding_box.max_pt.longitude,
+            )
+            height_meters = _haversine_distance(
+                bounding_box.min_pt.latitude,
+                bounding_box.min_pt.longitude,
+                bounding_box.max_pt.latitude,
+                bounding_box.min_pt.longitude,
+            )
+            return 2 * width_meters + 2 * height_meters
+
         pixel_coords = create_src_corners(height, width)
-        geo_coords = cls._boundingbox_to_geo_coords(bbox)
+        geo_coords = _boundingbox_to_geo_coords(bbox)
 
         pixel_coords = np.float32(pixel_coords).squeeze()
         geo_coords = np.float32(geo_coords).squeeze()
 
         # Calculate UTM zone based on the center of the bounding box
         center_lon = (bbox.min_pt.longitude + bbox.max_pt.longitude) / 2
-        center_lat = (bbox.min_pt.latitude + bbox.max_pt.latitude) / 2
-        utm_zone = cls._calculate_utm_zone(center_lon, center_lat)
+        utm_zone = cls._determine_utm_zone(center_lon)
 
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
@@ -661,7 +694,7 @@ class GISNode(Node):
         M = np.insert(M, 2, 0, axis=0)
         # Scaling of z-axis from orthoimage raster native units to meters
         bounding_box_perimeter_native = 2 * height + 2 * width
-        bounding_box_perimeter_meters = cls._bounding_box_perimeter_meters(bbox)
+        bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Decompose M into rotation and translation components
@@ -742,3 +775,8 @@ class GISNode(Node):
             return img
 
         return _read_img(img, grayscale)
+
+    @staticmethod
+    def _determine_utm_zone(longitude):
+        """Determine the UTM zone for a given longitude."""
+        return int((longitude + 180) / 6) + 1

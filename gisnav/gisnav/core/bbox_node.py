@@ -140,7 +140,7 @@ class BBoxNode(Node):
 
         @narrow_types(self)
         def _fov_and_principal_point_on_ground_plane(
-            transform: Transform,
+            transform: TransformStamped,
             vehicle_pose: PoseStamped,
             camera_info: CameraInfo,
         ) -> Optional[np.ndarray]:
@@ -157,7 +157,7 @@ class BBoxNode(Node):
                 :term:`ENU`.
             """
             R = tf_transformations.quaternion_matrix(
-                tuple(messaging.as_np_quaternion(transform.rotation))
+                tuple(messaging.as_np_quaternion(transform.transform.rotation))
             )[:3, :3]
 
             # Camera position in LTP centered in current location (not EKF local

@@ -144,7 +144,7 @@ class PnPNode(Node):
         return _camera_estimated_pose(self.image)
 
     @narrow_types
-    def _preprocess(
+    def preprocess(
         self, image_quad: Image
     ) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
         """Converts incoming 4-channel image to torch tensors
@@ -155,7 +155,7 @@ class PnPNode(Node):
             represent the 16-bit :term:`elevation reference`.
         """
         # Convert the ROS Image message to an OpenCV image
-        full_image_cv = self.bridge.imgmsg_to_cv2(
+        full_image_cv = self._cv_bridge.imgmsg_to_cv2(
             image_quad, desired_encoding="passthrough"
         )
 

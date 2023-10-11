@@ -36,7 +36,7 @@ import cv2
 import numpy as np
 import tf2_ros
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Quaternion, Transform
+from geometry_msgs.msg import Quaternion, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -108,11 +108,16 @@ class TransformNode(Node):
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
+    def _image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.image` message"""
+        self.pnp_image
+
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_image_cb
     )
     def image(self) -> Optional[Image]:
         """Raw image data from vehicle camera for pose estimation"""
@@ -162,12 +167,13 @@ class TransformNode(Node):
         def _pnp_image(
             image: Image,
             orthoimage: Image,
-            transform: Transform,
+            transform: TransformStamped,
         ) -> Optional[Image]:
             """Rotate and crop and orthoimage stack to align with query image"""
+            transform = transform.transform
 
             parent_frame_id: messaging.FrameID = orthoimage.header.frame_id
-            assert parent_frame_id == "orthoimage"
+            assert parent_frame_id == "reference_image"
 
             query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
 
@@ -196,12 +202,19 @@ class TransformNode(Node):
             # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
             # be flipped because cv2)
             # todo: is this the same as the camera to camera_frd frame transformation?
+            #t_cropped = np.array(
+            #    (
+            #        t_cropped[1],
+            #        t_cropped[0],
+            #        -t_cropped[2],
+            #        t_cropped[3],
+            #    )
+            #)
             t_cropped = np.array(
                 (
                     t_cropped[1],
                     t_cropped[0],
-                    -t_cropped[2],
-                    t_cropped[3],
+                    -t_cropped[2]
                 )
             )
 
@@ -212,7 +225,7 @@ class TransformNode(Node):
                 pnp_image_stack, encoding="passthrough"
             )
 
-            child_frame_id: messaging.FrameID = "reference_image"
+            child_frame_id: messaging.FrameID = "query_image"
             pnp_image_msg.header.stamp = image.header.stamp
             pnp_image_msg.header.frame_id = child_frame_id
 

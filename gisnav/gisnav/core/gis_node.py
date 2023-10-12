@@ -392,7 +392,7 @@ class GISNode(Node):
         """Vehicle GPS fix, or None if unknown or too old"""
 
     @property
-    #@ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
@@ -570,10 +570,12 @@ class GISNode(Node):
         if map is not None:
             img, dem = map
 
-            assert dem.shape[2] == 1, \
-                f"DEM shape was {dem.shape}, expected 1 channel only."
-            assert img.shape[2] == 3, \
-                f"Image shape was {img.shape}, expected 3 channels."
+            assert (
+                dem.shape[2] == 1
+            ), f"DEM shape was {dem.shape}, expected 1 channel only."
+            assert (
+                img.shape[2] == 3
+            ), f"Image shape was {img.shape}, expected 3 channels."
             assert dem.dtype == np.uint8  # todo get 16 bit dems?
 
             # Convert image to grayscale (color not needed)
@@ -618,8 +620,9 @@ class GISNode(Node):
         """Transforms orthoimage frame pixel coordinates to WGS84 lon,
         lat coordinates
         """
+
         def _boundingbox_to_geo_coords(
-                bounding_box: BoundingBox,
+            bounding_box: BoundingBox,
         ) -> List[Tuple[float, float]]:
             """Extracts the geo coordinates from a ROS
             geographic_msgs/BoundingBox and returns them as a list of tuples.
@@ -654,8 +657,8 @@ class GISNode(Node):
             delta_lon = lon2_rad - lon1_rad
 
             a = (
-                    np.sin(delta_lat / 2) ** 2
-                    + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(delta_lon / 2) ** 2
+                np.sin(delta_lat / 2) ** 2
+                + np.cos(lat1_rad) * np.cos(lat2_rad) * np.sin(delta_lon / 2) ** 2
             )
             c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
 

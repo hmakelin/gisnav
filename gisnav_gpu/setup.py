@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from glob import glob
 from typing import Optional, Union
 from xml.etree import ElementTree
 
@@ -68,35 +67,21 @@ pdata = PackageData.parse_package_data(os.path.abspath("package.xml"))
 # Setup packages depending on what submodules have been downloaded
 packages_ = [
     pdata.package_name,
-    pdata.package_name + ".core",
-    pdata.package_name + ".extensions",
-    "test",
-    "test.unit",
-    "test.launch",
-    "test.sitl",
 ]
 
 setup(
     name=pdata.package_name,
     version=pdata.version,
     packages=packages_,
-    package_dir={},
-    package_data={},
     data_files=[
-        (
-            "share/ament_index/resource_index/packages",
-            ["resource/" + pdata.package_name],
-        ),
-        ("share/" + pdata.package_name, ["package.xml"]),
-        (
-            os.path.join("share", pdata.package_name, "launch/params"),
-            glob("launch/params/*.yaml"),
-        ),
-        (os.path.join("share", pdata.package_name, "launch"), glob("launch/*.launch*")),
-        (
-            os.path.join("share", pdata.package_name, "launch/examples"),
-            glob("launch/examples/*.launch*"),
-        ),
+        ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
+        ("share/" + package_name, ["package.xml"]),
+    ],
+    install_requires=[
+        "setuptools",
+        "kornia",
+        "numpy>=1.24.2",
+        "opencv-python",
     ],
     zip_safe=True,
     author=pdata.author,
@@ -105,52 +90,10 @@ setup(
     maintainer_email=pdata.maintainer_email,
     description=pdata.description,
     license=pdata.license_name,
-    install_requires=[
-        "numpy>=1.24.2",
-        "opencv-python",
-        "pygeodesy",
-        "pyproj>=3.2.1",
-        "requests",
-        "scipy>=1.4.0",
-        "setuptools",
-        "shapely>=1.8.2",
-        "OWSLib>=0.25.0",
-    ],
     tests_require=["pytest"],
-    extras_require={
-        "mock_gps_node": ["gps-time"],
-        "dev": [
-            "aiohttp",
-            "autodocsumm",
-            "coverage",
-            "docutils>=0.17",
-            "jupyter",
-            "lxml",
-            "mavsdk",
-            "myst_parser",
-            "pre-commit",
-            "pydata-sphinx-theme",
-            "pygments",
-            "pytest",
-            "python-dateutil>=2.8.2",
-            "pyyaml",
-            "px4tools",
-            # "git+https://github.com/dronecrew/px4tools.git",
-            "sphinx-copybutton",
-            "sphinx-design",
-            "sphinxcontrib-mermaid",
-            "sphinxcontrib-video",
-            "Sphinx<7",
-            "types-PyYAML",
-        ],
-    },
     entry_points={
         "console_scripts": [
-            "mock_gps_node = gisnav:run_mock_gps_node",
-            "gis_node = gisnav:run_gis_node",
-            "transform_node = gisnav:run_transform_node",
-            "bbox_node = gisnav:run_bbox_node",
-            "rviz_node = gisnav:run_rviz_node",
+            "pose_node = gisnav_gpu:run_pose_node",
         ],
     },
 )

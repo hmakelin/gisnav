@@ -14,8 +14,8 @@ GIS_NODE_NAME: Final = "gis_node"
 BBOX_NODE_NAME: Final = "bbox_node"
 """Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
 
-PNP_NODE_NAME: Final = "pnp_node"
-"""Name of :class:`.PnPNode` spun up by :func:`.run_pnp_node`"""
+POSE_NODE_NAME: Final = "pose_node"
+"""Name of :class:`.PoseNode` from gisnav_gpu package."""
 
 TRANSFORM_NODE_NAME: Final = "transform_node"
 """Name of :class:`.TransformNode` spun up by :func:`.run_transform_node`"""

@@ -96,6 +96,19 @@ services:
         ROS_VERSION: humble
     command: ros2 launch gisnav px4.dev.launch.py
 
+  # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
+  #  duplicates these build arguments. They should be changed together.
+  gisnav-gpu:
+    <<: [*base, *ros, *tty, *nvidia-gpu]
+    #image: "ghcr.io/hmakelin/gisnav-gpu:${TAG:-latest}"
+    image: ghcr.io/hmakelin/gisnav-gpu:latest
+    build:
+      context: ..
+      dockerfile: docker/gisnav-gpu/Dockerfile
+      args:
+        ROS_VERSION: humble
+    command: ros2 run gisnav-gpu pose_node
+
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu]
     build:

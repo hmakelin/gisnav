@@ -16,7 +16,7 @@ from .. import messaging
 from .._data import Attitude
 from .._decorators import ROS, narrow_types
 from ..static_configuration import (
-    PNP_NODE_NAME,
+    POSE_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
 )
@@ -121,7 +121,7 @@ class MockGPSNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", PNP_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_camera_estimated_pose_cb,
     )

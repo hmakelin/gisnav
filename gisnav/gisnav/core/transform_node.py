@@ -117,7 +117,7 @@ class TransformNode(Node):
     @ROS.subscribe(
         messaging.ROS_TOPIC_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_cb
+        callback=_image_cb,
     )
     def image(self) -> Optional[Image]:
         """Raw image data from vehicle camera for pose estimation"""
@@ -202,21 +202,15 @@ class TransformNode(Node):
             # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
             # be flipped because cv2)
             # todo: is this the same as the camera to camera_frd frame transformation?
-            #t_cropped = np.array(
+            # t_cropped = np.array(
             #    (
             #        t_cropped[1],
             #        t_cropped[0],
             #        -t_cropped[2],
             #        t_cropped[3],
             #    )
-            #)
-            t_cropped = np.array(
-                (
-                    t_cropped[1],
-                    t_cropped[0],
-                    -t_cropped[2]
-                )
-            )
+            # )
+            t_cropped = np.array((t_cropped[1], t_cropped[0], -t_cropped[2]))
 
             # Add query image on top to complete full image stack
             pnp_image_stack = np.dstack((query_img, orthoimage_rotated_stack))

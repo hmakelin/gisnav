@@ -11,7 +11,6 @@ to where the vehicle :term:`navigation filter` thinks it is:
 from collections import deque
 from typing import Final, Optional
 
-from geographic_msgs.msg import GeoPoseStamped
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from pyproj import Transformer
@@ -21,7 +20,7 @@ from rclpy.qos import QoSPresetProfiles
 from .. import messaging
 from .._decorators import ROS
 from ..static_configuration import (
-    PNP_NODE_NAME,
+    POSE_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
 )
@@ -107,7 +106,7 @@ class RVizNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", PNP_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_camera_estimated_pose_to_queue,
     )

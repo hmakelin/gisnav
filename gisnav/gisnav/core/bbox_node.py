@@ -37,7 +37,7 @@ import pyproj
 import tf2_ros
 import tf_transformations
 from geographic_msgs.msg import BoundingBox
-from geometry_msgs.msg import PoseStamped, Quaternion, Transform, TransformStamped
+from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node

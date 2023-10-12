@@ -1,15 +1,15 @@
-"""This module contains :class:`.PnPNode`, a :term:`ROS` node for estimating
+"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating
 :term:`camera` relative pose between a :term:`query` and :term:`reference` image
 
 The pose is estimated by finding matching keypoints between the query and reference
 images and then solving the resulting :term:`PnP` problem.
 
 .. mermaid::
-    :caption: :class:`.PnPNode` computational graph
+    :caption: :class:`.PoseNode` computational graph
 
     graph LR
         subgraph PnPNode
-            pose[gisnav/pnp_node/pose]
+            pose[gisnav/pose_node/pose]
         end
 
         subgraph TransformNode
@@ -20,8 +20,8 @@ images and then solving the resulting :term:`PnP` problem.
             camera_info[camera/camera_info]
         end
 
-        camera_info -->|sensor_msgs/CameraInfo| PnPNode
-        image -->|sensor_msgs/Image| PnPNode
+        camera_info -->|sensor_msgs/CameraInfo| PoseNode
+        image -->|sensor_msgs/Image| PoseNode
         pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
 from typing import Optional, Tuple
@@ -38,17 +38,17 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
-from .. import messaging
-from .._decorators import ROS, narrow_types
-from ..static_configuration import (
-    ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
-    ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    TRANSFORM_NODE_NAME,
-)
+# from .. import messaging
+# from .._decorators import ROS, narrow_types
+# from ..static_configuration import (
+#    ROS_NAMESPACE,
+#    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
+#    ROS_TOPIC_RELATIVE_PNP_IMAGE,
+#    TRANSFORM_NODE_NAME,
+# )
 
 
-class PnPNode(Node):
+class PoseNode(Node):
     """Solves the keypoint matching and :term:`PnP` problems and publishes the
     solution as via :attr:`.camera_estimated_pose`
     """

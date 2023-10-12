@@ -392,7 +392,7 @@ class GISNode(Node):
         """Vehicle GPS fix, or None if unknown or too old"""
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    #@ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',

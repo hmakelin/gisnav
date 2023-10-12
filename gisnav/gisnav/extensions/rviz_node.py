@@ -111,7 +111,7 @@ class RVizNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_camera_estimated_pose_to_queue,
     )
-    def camera_estimated_pose(self) -> Optional[GeoPoseStamped]:
+    def camera_estimated_pose(self) -> Optional[PoseStamped]:
         """Subscribed :term:`camera` :term:`geopose`, or None if not available
         or too old
         """

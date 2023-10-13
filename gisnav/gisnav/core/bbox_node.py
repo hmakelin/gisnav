@@ -46,7 +46,7 @@ from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
-from .._decorators import ROS, narrow_types
+from ros_decorators.ros_decorators.decorators import ROS, narrow_types
 from ..static_configuration import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX
 
 

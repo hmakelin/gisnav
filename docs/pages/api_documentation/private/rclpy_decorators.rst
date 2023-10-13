@@ -1,6 +1,6 @@
 Decorators
 ____________________________________________________
-.. automodule:: gisnav._decorators
+.. automodule:: rclpy_decorators
    :autosummary:
    :members:
    :undoc-members:

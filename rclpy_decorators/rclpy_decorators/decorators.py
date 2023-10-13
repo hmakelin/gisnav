@@ -24,7 +24,7 @@ from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
 
-from ._assertions import assert_type
+from gisnav.gisnav._assertions import assert_type
 
 #: Original return type of the wrapped method
 T = TypeVar("T")

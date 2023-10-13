@@ -44,7 +44,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
-from .._decorators import ROS, narrow_types
+from rclpy_decorators import ROS, narrow_types
 from ..static_configuration import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,

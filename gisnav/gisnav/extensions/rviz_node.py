@@ -18,7 +18,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
 from .. import messaging
-from .._decorators import ROS
+from rclpy_decorators import ROS
 from ..static_configuration import (
     POSE_NODE_NAME,
     ROS_NAMESPACE,

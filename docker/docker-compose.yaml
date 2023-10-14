@@ -107,7 +107,8 @@ services:
       dockerfile: docker/gisnav-gpu/Dockerfile
       args:
         ROS_VERSION: humble
-    command: ros2 run gisnav-gpu pose_node
+        BASE_IMAGE: nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
+    command: ros2 run gisnav_gpu pose_node
 
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu]

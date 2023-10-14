@@ -27,3 +27,8 @@ gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 .benchmarks/
 
 *.egg-info
+
+# Debian package builds
+debian
+.pybuild
+*.deb

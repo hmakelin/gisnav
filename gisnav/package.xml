@@ -30,7 +30,6 @@
   <depend>geographic_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>px4_msgs</depend>
-  <depend>gisnav_msgs</depend>
   <depend>ros2launch</depend>
   <depend>tf_transformations</depend>
   <depend>tf2_ros</depend>

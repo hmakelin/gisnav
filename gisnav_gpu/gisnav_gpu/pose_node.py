@@ -28,18 +28,15 @@ from typing import Optional, Tuple
 
 import cv2
 import numpy as np
-import tf_transformations
 import torch
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Point, Pose, PoseStamped, Quaternion
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
-
+from rclpy_decorators import ROS, narrow_types
 # from .. import messaging
-# from .._decorators import ROS, narrow_types
 # from ..static_configuration import (
 #    ROS_NAMESPACE,
 #    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
@@ -50,7 +47,7 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 class PoseNode(Node):
     """Solves the keypoint matching and :term:`PnP` problems and publishes the
-    solution as via :attr:`.camera_estimated_pose`
+    solution via ROS transformations library
     """
 
     def __init__(self, *args, **kwargs):
@@ -102,10 +99,6 @@ class PoseNode(Node):
         """
 
     @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
     def camera_estimated_pose(self) -> Optional[PoseStamped]:
         """Published :term:`camera` relative :term:`pose` estimate, or None if
         not available or too old
@@ -129,17 +122,6 @@ class PoseNode(Node):
             )
             self.broadcaster.sendTransform([transform_camera])
             # todo: broadcast camera to camera_frd transformation
-
-            pose_msg = Pose()
-
-            # Convert the rotation matrix to a quaternion
-            quaternion = tf_transformations.quaternion_from_matrix(t)
-            pose_msg.orientation = Quaternion(*quaternion)
-
-            # Populate the translation (position) fields
-            pose_msg.position = Point(*t.flatten())
-
-            return PoseStamped(header=image.header, pose=pose_msg)
 
         return _camera_estimated_pose(self.image)
 
@@ -177,9 +159,8 @@ class PoseNode(Node):
         # Optionally display images
         self._display_images("Query", query_img, "Reference", reference_img)
 
-        qry_tensor, ref_tensor = self._convert_images_to_tensors(
-            query_img, reference_img
-        )
+        qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
+        ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
 
         return (
             {"image0": qry_tensor, "image1": ref_tensor},
@@ -195,13 +176,6 @@ class PoseNode(Node):
             cv2.imshow(args[i], args[i + 1])
         cv2.waitKey(1)
 
-    @staticmethod
-    def _convert_images_to_tensors(qry, ref):
-        """Converts grayscale images to torch tensors"""
-        qry_tensor = torch.Tensor(qry[None, None]).cuda() / 255.0
-        ref_tensor = torch.Tensor(ref[None, None]).cuda() / 255.0
-        return qry_tensor, ref_tensor
-
     def inference(self, preprocessed_data):
         """Do keypoint matching."""
         with torch.no_grad():
@@ -212,9 +186,13 @@ class PoseNode(Node):
         """Filters matches based on confidence threshold and calculates :term:`pose`"""
 
         @narrow_types(self)
-        def _postprocess(camera_info: CameraInfo) -> Optional[Pose]:
+        def _postprocess(camera_info: CameraInfo) -> Optional[Tuple[np.ndarray, np.ndarray]]:
             results, query_img, reference_img, elevation = inferred_data
-            mkp_qry, mkp_ref = self._filter_matches_based_on_confidence(results)
+
+            conf = results["confidence"].cpu().numpy()
+            valid = conf > self.CONFIDENCE_THRESHOLD
+            mkp_qry = results["keypoints0"].cpu().numpy()[valid, :],
+            mkp_ref = results["keypoints1"].cpu().numpy()[valid, :],
 
             if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
                 return None
@@ -230,15 +208,6 @@ class PoseNode(Node):
             return r, t
 
         return _postprocess(self.camera_info)
-
-    def _filter_matches_based_on_confidence(self, results):
-        """Filters matches based on confidence threshold"""
-        conf = results["confidence"].cpu().numpy()
-        valid = conf > self.CONFIDENCE_THRESHOLD
-        return (
-            results["keypoints0"].cpu().numpy()[valid, :],
-            results["keypoints1"].cpu().numpy()[valid, :],
-        )
 
     @staticmethod
     def _compute_3d_points(mkp_ref, elevation):

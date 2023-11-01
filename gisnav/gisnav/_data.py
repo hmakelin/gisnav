@@ -27,8 +27,6 @@ from xml.etree import ElementTree
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from ._assertions import assert_len, assert_type
-
 warnings.filterwarnings(
     action="ignore", category=UserWarning, message="Gimbal lock detected."
 )
@@ -52,7 +50,7 @@ class Attitude:
 
     def __post_init__(self):
         """Post-initialization validity checks"""
-        assert_len(self.q, 4)
+        assert len(self.q) == 4
         rotation = Rotation.from_quat(self.q)
         roll, pitch, yaw = tuple(rotation.as_euler("xyz" if self.extrinsic else "XYZ"))
         object.__setattr__(self, "roll", roll)
@@ -143,8 +141,6 @@ def create_src_corners(h: int, w: int) -> np.ndarray:
     :param w: Source image width
     :return: Source image corner pixel coordinates
     """
-    assert_type(h, int)
-    assert_type(w, int)
     assert (
         h > 0 and w > 0
     ), f"Height {h} and width {w} are both expected to be positive."

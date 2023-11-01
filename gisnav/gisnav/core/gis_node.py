@@ -47,7 +47,6 @@ from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from rclpy_decorators import ROS, cache_if, narrow_types
 
 from .. import messaging
-from .._assertions import assert_len, assert_type
 from .._data import create_src_corners
 from ..static_configuration import (
     BBOX_NODE_NAME,
@@ -463,8 +462,8 @@ class GISNode(Node):
         :param size: Orthoimage resolution (height, width)
         :return: Orthophoto and dem tuple for bounding box
         """
-        assert_len(styles, len(layers))
-        assert_len(dem_styles, len(dem_layers))
+        assert len(styles) == len(layers)
+        assert len(dem_styles) == len(dem_layers)
 
         bbox = messaging.bounding_box_to_bbox(bounding_box)
 
@@ -775,7 +774,6 @@ class GISNode(Node):
                 if not grayscale
                 else cv2.imdecode(img, cv2.IMREAD_GRAYSCALE)
             )
-            assert_type(img, np.ndarray)
             return img
 
         return _read_img(img, grayscale)

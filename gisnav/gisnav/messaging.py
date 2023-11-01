@@ -10,7 +10,6 @@ from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
-from ._assertions import assert_shape, assert_type
 from ._data import BBox
 
 # region ROS topic names
@@ -88,9 +87,8 @@ def as_ros_quaternion(q: np.ndarray) -> Quaternion:
     :param q: NumPy array quaternion of shape in (x, y, z, w) format
     :return: ROS quaternion message
     """
-    assert_type(q, np.ndarray)
     q = q.squeeze()
-    assert_shape(q, (4,))
+    assert q.shape == (4,)
     return Quaternion(x=q[0].item(), y=q[1].item(), z=q[2].item(), w=q[3].item())
 
 

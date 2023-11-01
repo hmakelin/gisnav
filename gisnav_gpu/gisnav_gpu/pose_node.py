@@ -70,7 +70,18 @@ class PoseNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        self.camera_estimated_pose
+        preprocessed = self.preprocess(msg)
+        inferred = self.inference(preprocessed)
+        pose_stamped = self.postprocess(inferred)
+
+        if pose_stamped is None:
+            return None
+
+        r, t = pose_stamped
+        transform_camera = messaging.create_transform_msg(
+            msg.header.stamp, "reference_image", "camera", r, t
+        )
+        self.broadcaster.sendTransform([transform_camera])
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
@@ -97,33 +108,6 @@ class PoseNode(Node):
             package this later as a rosdebian if everything is already in the
             rosdep index.
         """
-
-    @property
-    def camera_estimated_pose(self) -> Optional[PoseStamped]:
-        """Published :term:`camera` relative :term:`pose` estimate, or None if
-        not available or too old
-
-        The header frame_id is a PROJ string that contains the information to
-        project the relative pose into a global pose.
-        """
-
-        @narrow_types(self)
-        def _camera_estimated_pose(image: Image) -> Optional[PoseStamped]:
-            preprocessed = self.preprocess(image)
-            inferred = self.inference(preprocessed)
-            pose_stamped = self.postprocess(inferred)
-
-            if pose_stamped is None:
-                return None
-
-            r, t = pose_stamped
-            transform_camera = messaging.create_transform_msg(
-                image.header.stamp, "reference_image", "camera", r, t
-            )
-            self.broadcaster.sendTransform([transform_camera])
-            # todo: broadcast camera to camera_frd transformation
-
-        return _camera_estimated_pose(self.image)
 
     @narrow_types
     def preprocess(

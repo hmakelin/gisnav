@@ -13,14 +13,6 @@ from std_msgs.msg import Header
 from ._data import BBox
 
 # region ROS topic names
-ROS_TOPIC_GPS_INPUT: Final = "/mavros/gps_input/gps_input"
-"""Name of ROS topic for outgoing :class:`mavros_msgs.msg.GPSINPUT` messages
-over MAVROS"""
-
-ROS_TOPIC_HIL_GPS: Final = "/mavros/hil/gps"
-"""Name of ROS topic for outgoing :class:`mavros_msgs.msg.HilGPS` messages
-over MAVROS"""
-
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
 """Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
 over PX4 DDS bridge"""
@@ -30,9 +22,6 @@ ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
 
 ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
 """Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
-
-ROS_TOPIC_HOME_POSITION: Final = "/mavros/home_position/home"
-"""Name of ROS topic for :class:`mavros_msgs.msg.HomePosition` messages"""
 
 # endregion ROS topic names
 

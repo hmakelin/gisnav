@@ -14,17 +14,6 @@ def assert_type(value: object, type_: Any) -> None:
     ), f"Type {type(value)} provided when {type_} was expected."
 
 
-def assert_ndim(value: np.ndarray, ndim: int) -> None:
-    """Asserts a specific number of dimensions for a numpy array.
-
-    :param value: Numpy array to check
-    :param ndim: Required number of dimensions
-    """
-    assert (
-        value.ndim == ndim
-    ), f"Unexpected number of dimensions: {value.ndim} ({ndim} expected)."
-
-
 def assert_len(value: Union[Sequence, Collection], len_: int) -> None:
     """Asserts a specific length for a sequence or a collection (e.g. a list).
 

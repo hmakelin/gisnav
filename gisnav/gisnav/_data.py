@@ -79,61 +79,6 @@ class Attitude:
         return Rotation.from_quat(self.q)
 
 
-# noinspection PyClassHasNoInit
-@dataclass(frozen=True)
-class PackageData:
-    """Stores data parsed from package.xml (not comprehensive)"""
-
-    package_name: str
-    version: str
-    description: Optional[str]
-    author: Optional[str]
-    author_email: Optional[str]
-    maintainer: Optional[str]
-    maintainer_email: Optional[str]
-    license_name: Optional[str]
-
-    @staticmethod
-    def require_not_none(text: Optional[Union[str, ElementTree.Element]]):
-        """Raises ValueError if input is not a string but None"""
-        if text is None:
-            raise ValueError("Expected not None")
-        return text
-
-    @staticmethod
-    def parse_package_data(package_file: str) -> PackageData:
-        """Parses package.xml in current folder
-
-        :param package_file: Absolute path to package.xml file
-        :return: Parsed package data
-        :raise FileNotFoundError: If package.xml file is not found
-        """
-        if os.path.isfile(package_file):
-            tree = ElementTree.parse(package_file)
-            root = tree.getroot()
-
-            author = root.find("author")
-            maintainer = root.find("maintainer")
-            kwargs = {
-                "package_name": PackageData.require_not_none(root.findtext("name")),
-                "version": PackageData.require_not_none(root.findtext("version")),
-                "description": root.findtext("description"),
-                "author": root.findtext("author"),
-                "author_email": author.attrib.get("email")
-                if author is not None
-                else None,
-                "maintainer": root.findtext("maintainer"),
-                "maintainer_email": maintainer.attrib.get("email")
-                if maintainer is not None
-                else None,
-                "license_name": root.findtext("license"),
-            }
-            package_data = PackageData(**kwargs)
-            return package_data
-        else:
-            raise FileNotFoundError(f"Could not find package file at {package_file}.")
-
-
 def create_src_corners(h: int, w: int) -> np.ndarray:
     """Helper function that returns image corner pixel coordinates in a numpy array.
 

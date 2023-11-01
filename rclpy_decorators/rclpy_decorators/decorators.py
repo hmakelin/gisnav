@@ -24,8 +24,6 @@ from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
 
-from gisnav.gisnav._assertions import assert_type
-
 #: Original return type of the wrapped method
 T = TypeVar("T")
 
@@ -114,7 +112,7 @@ def narrow_types(
         @wraps(method)
         def wrapper(*args, **kwargs):
             node_instance: Node = args[0] if instance is None else instance
-            assert_type(node_instance, Node)
+            assert isinstance(node_instance, Node)
 
             type_hints = get_type_hints(method)
             signature = inspect.signature(method)

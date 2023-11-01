@@ -17,12 +17,9 @@ handles the exception:
 """
 from __future__ import annotations  # Python version 3.7+
 
-import os
 import warnings
 from collections import namedtuple
 from dataclasses import dataclass, field
-from typing import Optional, Union
-from xml.etree import ElementTree
 
 import numpy as np
 from scipy.spatial.transform import Rotation

@@ -44,10 +44,11 @@ from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from shapely.geometry import box
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
+from rclpy_decorators import ROS, cache_if, narrow_types
+
 from .. import messaging
 from .._assertions import assert_len, assert_type
 from .._data import create_src_corners
-from rclpy_decorators import ROS, cache_if, narrow_types
 from ..static_configuration import (
     BBOX_NODE_NAME,
     ROS_NAMESPACE,

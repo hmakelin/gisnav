@@ -12,9 +12,10 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
+from rclpy_decorators import ROS, narrow_types
+
 from .. import messaging
 from .._data import Attitude
-from rclpy_decorators import ROS, narrow_types
 from ..static_configuration import (
     POSE_NODE_NAME,
     ROS_NAMESPACE,

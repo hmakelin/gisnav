@@ -42,11 +42,11 @@ from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from ros_decorators.ros_decorators.decorators import ROS, narrow_types
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import messaging
-from ros_decorators.ros_decorators.decorators import ROS, narrow_types
 from ..static_configuration import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX
 
 

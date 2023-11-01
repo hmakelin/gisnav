@@ -35,7 +35,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+
 from rclpy_decorators import ROS, narrow_types
+
 # from .. import messaging
 # from ..static_configuration import (
 #    ROS_NAMESPACE,
@@ -170,13 +172,15 @@ class PoseNode(Node):
         """Filters matches based on confidence threshold and calculates :term:`pose`"""
 
         @narrow_types(self)
-        def _postprocess(camera_info: CameraInfo) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        def _postprocess(
+            camera_info: CameraInfo,
+        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
             results, query_img, reference_img, elevation = inferred_data
 
             conf = results["confidence"].cpu().numpy()
             valid = conf > self.CONFIDENCE_THRESHOLD
-            mkp_qry = results["keypoints0"].cpu().numpy()[valid, :],
-            mkp_ref = results["keypoints1"].cpu().numpy()[valid, :],
+            mkp_qry = (results["keypoints0"].cpu().numpy()[valid, :],)
+            mkp_ref = (results["keypoints1"].cpu().numpy()[valid, :],)
 
             if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
                 return None

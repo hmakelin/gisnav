@@ -1,11 +1,10 @@
 """Helper functions for ROS messaging"""
-import re
 import time
 from typing import Final, Literal
 
 import numpy as np
 import tf2_ros
-from geographic_msgs.msg import BoundingBox, GeoPoint
+from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation

@@ -1,8 +1,11 @@
 import cProfile
+import io
+import pstats
 from typing import Optional
 
 import rclpy
 from pose_node import PoseNode
+from rclpy.node import Node
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -50,4 +53,4 @@ _rclpy_node_kwargs = {
 
 def run_pose_node():
     """Spins up a :class:`.BBoxNode`"""
-    _run(PoseNode, "pose_node", clpy_node_kwargs)
+    _run(PoseNode, "pose_node", _rclpy_node_kwargs)

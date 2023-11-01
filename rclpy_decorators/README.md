@@ -1,15 +1,15 @@
 # rclpy_decorators
 
 This package offers decorator functions that enhance the functionality of the ROS 2 Python client library, `rclpy`.
-By shifting ROS boilerplate code into decorators, this package aims to make ROS application source code more readable 
+By shifting ROS boilerplate code into decorators, this package aims to make ROS application source code more readable
 and maintainable.
 
 
 ## Example: ROS publisher and subscriber
 
 The code block for the `image` property below includes all the ROS boilerplate code needed to setup the publisher
-and subscriber. Moving either of these properties into another Node only involves cut-and-pasting a single* code block. 
-This eliminates the need for extensive back-and-forth scrolling to look for related code that is typical during 
+and subscriber. Moving either of these properties into another Node only involves cut-and-pasting a single* code block.
+This eliminates the need for extensive back-and-forth scrolling to look for related code that is typical during
 refactoring, especially in a large Python module.
 
 > *Currently subscriptions still require an additional setup line in e.g. the `__init__` method of a Node
@@ -24,16 +24,16 @@ from sensor_msgs.msg import Image
 from rclpy_decorators import ROS
 
 def ExampleNode(Node):
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         # Call once to setup subscription
         self.image
-        
+
     def _image_callback(self, msg: Image):
         """Callback for :attr:`.image` message
-        
+
         Re-publishes the image via :attr:`.pub_image`
         """
         self.pub_image
@@ -47,7 +47,7 @@ def ExampleNode(Node):
     )
     def image(self) -> Optional[Image]:
         """Raw image data from camera
-        
+
         :return: Image message, or None if not available or timestamp is too old
         """
 
@@ -58,7 +58,7 @@ def ExampleNode(Node):
     )
     def pub_image(self) -> Optional[Image]:
         """Raw image data from camera, republished via this node
-        
+
         :return: Image message, or None if not available
         """
         return self.image
@@ -71,12 +71,12 @@ each other, using earlier computed properties as inputs to later properties. The
 properties often builds on properties that map to ROS subscriptions and are therefore declared as `Optional` types, to
 account for the possibility of the message not e.g. being received yet and having to return a `None` value.
 
-The `narrow_types` decorator is used therefore used to de-clutter the method bodies from extensive `if ... else ...` 
-statements that would otherwise be needed to check whether some computed property that derives from received ROS messages 
+The `narrow_types` decorator is used therefore used to de-clutter the method bodies from extensive `if ... else ...`
+statements that would otherwise be needed to check whether some computed property that derives from received ROS messages
 is available, or is `None` because not all input ROS messages have been received yet.
 
 For example, here the decorator is used to avoid having to check whether each of the `image`, `orthoimage`, and `transform`
-inputs are not None (Python type guards will not work for multiple inputs), and to log the result of the type check 
+inputs are not None (Python type guards will not work for multiple inputs), and to log the result of the type check
 using the ROS logger, leaving the inner function body free of clutter:
 
 ```python

@@ -74,7 +74,10 @@ setup(
     version=pdata.version,
     packages=packages_,
     data_files=[
-        ("share/ament_index/resource_index/packages", ["resource/" + pdata.package_name]),
+        (
+            "share/ament_index/resource_index/packages",
+            ["resource/" + pdata.package_name],
+        ),
         ("share/" + pdata.package_name, ["package.xml"]),
     ],
     install_requires=[

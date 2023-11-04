@@ -154,7 +154,7 @@ class PoseNode(Node):
         # Optionally display images
         self._display_images("Query", query_img, "Reference", reference_img)
 
-        if self._device == "gpu":
+        if torch.cuda.is_available():
             qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
             ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
         else:
@@ -186,14 +186,14 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _postprocess(
-            camera_info: CameraInfo,
+            camera_info: CameraInfo, inferred_data
         ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
             results, query_img, reference_img, elevation = inferred_data
 
             conf = results["confidence"].cpu().numpy()
             valid = conf > self.CONFIDENCE_THRESHOLD
-            mkp_qry = (results["keypoints0"].cpu().numpy()[valid, :],)
-            mkp_ref = (results["keypoints1"].cpu().numpy()[valid, :],)
+            mkp_qry = (results["keypoints0"].cpu().numpy().squeeze()[valid, :],)
+            mkp_ref = (results["keypoints1"].cpu().numpy().squeeze()[valid, :],)
 
             if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
                 return None
@@ -208,7 +208,7 @@ class PoseNode(Node):
 
             return r, t
 
-        return _postprocess(self.camera_info)
+        return _postprocess(self.camera_info, inferred_data)
 
     @staticmethod
     def _compute_3d_points(mkp_ref, elevation):

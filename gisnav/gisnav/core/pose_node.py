@@ -54,7 +54,7 @@ class PoseNode(Node):
     CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad keypoint matches"""
 
-    MIN_MATCHES = 10
+    MIN_MATCHES = 7
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):
@@ -90,7 +90,7 @@ class PoseNode(Node):
 
         r, t = pose_stamped
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "reference_image", "camera", r, t
+            msg.header.stamp, "reference_image", "camera", r, t.squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 
@@ -192,8 +192,8 @@ class PoseNode(Node):
 
             conf = results["confidence"].cpu().numpy()
             valid = conf > self.CONFIDENCE_THRESHOLD
-            mkp_qry = (results["keypoints0"].cpu().numpy().squeeze()[valid, :],)
-            mkp_ref = (results["keypoints1"].cpu().numpy().squeeze()[valid, :],)
+            mkp_qry = results["keypoints0"].cpu().numpy()[valid, :]
+            mkp_ref = results["keypoints1"].cpu().numpy()[valid, :]
 
             if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
                 return None
@@ -203,7 +203,7 @@ class PoseNode(Node):
             mkp2_3d = self._compute_3d_points(mkp_ref, elevation)
             r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
             self._visualize_matches_and_pose(
-                query_img, reference_img, mkp_qry, mkp_ref, k_matrix, r, t
+                query_img.copy(), reference_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t
             )
 
             return r, t

@@ -236,7 +236,7 @@ class TransformNode(Node):
             return pnp_image_msg
 
         transform = (
-            messaging.get_transform(self, "camera", "map", self.image.header.stamp)
+            messaging.get_transform(self, "map", "camera", self.image.header.stamp)
             if self.image is not None
             else None
         )

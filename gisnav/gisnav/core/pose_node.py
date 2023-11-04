@@ -51,9 +51,19 @@ class PoseNode(Node):
     solution via ROS transformations library
     """
 
+    CONFIDENCE_THRESHOLD = 0.7
+    """Confidence threshold for filtering out bad keypoint matches"""
+
+    MIN_MATCHES = 10
+    """Minimum number of keypoint matches before attempting pose estimation"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self._model = LoFTR(pretrained="outdoor")
+        self._model.to(self._device)
+
         self._cv_bridge = CvBridge()
 
         # initialize subscription
@@ -144,8 +154,12 @@ class PoseNode(Node):
         # Optionally display images
         self._display_images("Query", query_img, "Reference", reference_img)
 
-        qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
-        ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
+        if self._device == "gpu":
+            qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
+            ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
+        else:
+            qry_tensor = torch.Tensor(query_img[None, None]) / 255.0
+            ref_tensor = torch.Tensor(reference_img[None, None]) / 255.0
 
         return (
             {"image0": qry_tensor, "image1": ref_tensor},

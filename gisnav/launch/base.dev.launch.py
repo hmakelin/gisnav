@@ -62,9 +62,11 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="pnp_node",
-            executable="pnp_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/pnp_node.yaml")],
+            name="pose_node",
+            executable="pose_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/pose_node.yaml")
+            ],
         )
     )
     return ld

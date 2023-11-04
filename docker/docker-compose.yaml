@@ -98,6 +98,7 @@ services:
 
   # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
   #  duplicates these build arguments. They should be changed together.
+  # TODO: combine with gisnav service, gisnav_gpu currently not implemented as separate ROS package
   gisnav-gpu:
     <<: [*base, *ros, *tty, *nvidia-gpu]
     #image: "ghcr.io/hmakelin/gisnav-gpu:${TAG:-latest}"

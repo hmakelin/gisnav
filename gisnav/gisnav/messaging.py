@@ -24,14 +24,6 @@ ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
 """Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
 
 # endregion ROS topic names
-
-
-DELAY_SLOW_MS: Final = 10000
-"""Max delay for messages where updates are not needed nor expected often,
-e.g. home position
-"""
-
-
 DELAY_DEFAULT_MS: Final = 2000
 """Max delay for things like global position"""
 

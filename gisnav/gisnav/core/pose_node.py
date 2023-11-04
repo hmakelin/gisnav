@@ -36,15 +36,14 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
-from rclpy_decorators import ROS, narrow_types
 
-# from .. import messaging
-# from ..static_configuration import (
-#    ROS_NAMESPACE,
-#    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
-#    ROS_TOPIC_RELATIVE_PNP_IMAGE,
-#    TRANSFORM_NODE_NAME,
-# )
+from .. import messaging
+from ..constants import (
+   ROS_NAMESPACE,
+   ROS_TOPIC_RELATIVE_PNP_IMAGE,
+   TRANSFORM_NODE_NAME,
+)
+from ..decorators import ROS, narrow_types
 
 
 class PoseNode(Node):

@@ -43,15 +43,15 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
-from rclpy_decorators import ROS, narrow_types
 
 from .. import messaging
-from ..static_configuration import (
+from ..constants import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
 )
+from ..decorators import ROS, narrow_types
 
 
 class TransformNode(Node):

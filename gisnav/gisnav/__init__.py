@@ -21,16 +21,17 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 
-from .core import BBoxNode, GISNode, TransformNode
+from .core import BBoxNode, GISNode, TransformNode, PoseNode
 from .extensions.mock_gps_node import MockGPSNode
 from .extensions.rviz_node import RVizNode
-from .static_configuration import (
+from .constants import (
     BBOX_NODE_NAME,
     GIS_NODE_NAME,
     MOCK_GPS_NODE_NAME,
     ROS_NAMESPACE,
     RVIZ_NODE_NAME,
     TRANSFORM_NODE_NAME,
+    POSE_NODE_NAME,
 )
 
 
@@ -90,6 +91,11 @@ def run_gis_node():
 def run_transform_node():
     """Spins up a :class:`.TransformNode`"""
     _run(TransformNode, TRANSFORM_NODE_NAME, **_rclpy_node_kwargs)
+
+
+def run_pose_node():
+    """Spins up a :class:`.PoseNode`"""
+    _run(PoseNode, POSE_NODE_NAME, **_rclpy_node_kwargs)
 
 
 def run_mock_gps_node():

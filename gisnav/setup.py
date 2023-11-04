@@ -149,6 +149,7 @@ setup(
             "mock_gps_node = gisnav:run_mock_gps_node",
             "gis_node = gisnav:run_gis_node",
             "transform_node = gisnav:run_transform_node",
+            "pose_node = gisnav:run_pose_node",
             "bbox_node = gisnav:run_bbox_node",
             "rviz_node = gisnav:run_rviz_node",
         ],

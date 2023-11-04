@@ -44,16 +44,15 @@ from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from shapely.geometry import box
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
-from rclpy_decorators import ROS, cache_if, narrow_types
-
 from .. import messaging
 from .._data import create_src_corners
-from ..static_configuration import (
+from ..constants import (
     BBOX_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
 )
+from ..decorators import ROS, cache_if, narrow_types
 
 
 class GISNode(Node):

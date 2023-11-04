@@ -154,10 +154,10 @@ $(eval $(call middleware_template,onboard-sitl-middleware,))
 $(eval $(call middleware_template,offboard-sitl-middleware,))  # same as onboard
 
 # onboard HIL services: GIS server, ROS middleware, autoheal, gscam and GISNav
-$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver autoheal gscam gisnav gisnav-gpu))
+$(eval $(call compose_template,onboard-hil,onboard-hil-middleware,docker-compose.arm64.yaml,mapserver autoheal gscam gisnav))
 
 # onboard SITL services: Same as with HIL but middleware is same as offboard (UDP, not serial)
-$(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver gscam gisnav gisnav-gpu))
+$(eval $(call compose_template,onboard-sitl,offboard-sitl-middleware,docker-compose.arm64.yaml,mapserver gscam gisnav))
 
 # offboard SITL services: Gazebo simulation, QGC
 $(eval $(call compose_template,offboard-sitl,dummy-dependency,,$$* qgc))
@@ -169,10 +169,10 @@ $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docke
 $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc gscam mapserver rviz))
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gscam, gisnav
-$(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav gisnav-gpu))
+$(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
 # List of Docker Compose service names that need GUI access
-GUI_SERVICES = px4 ardupilot qgc rviz gisnav-gpu
+GUI_SERVICES = px4 ardupilot qgc rviz
 
 # Expose xhost to containers that need GUI (see x11 extension in docker-compose.yaml)
 expose-xhost:
@@ -186,7 +186,7 @@ expose-xhost:
 # shortcut for demo
 .PHONY: demo
 demo: up-offboard-sitl-dev-px4
-	@docker compose -p $(PROJECT_NAME) up gisnav gisnav-gpu
+	@docker compose -p $(PROJECT_NAME) up gisnav
 
 # shutdown any and all services (stop and remove containers)
 .PHONY: down

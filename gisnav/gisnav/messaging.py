@@ -103,8 +103,7 @@ FrameID = Literal[
     "reference_image",
     "base_link",
     "camera",
-    "camera_frd",
-    "camera_ned",
+    "gimbal",
     "map",
 ]
 """Allowed ROS header frame_ids (used by tf2)
@@ -123,12 +122,6 @@ FrameID = Literal[
 
     The 'camera_frd' frame is a more intuitive definition of the camera axes
     where the forward direction is in the direction of the optical viewing axis.
-
-.. note::
-    The pnp frame is essentially the same as the vehicle local tangent plane (LTP)
-    or frame_id == 'map' if the GimbalDeviceAttitudeStatus message is not
-    available (i.e. the principal point of the projected camera FOV is also
-    the ground track of the vehicle)
 """
 
 

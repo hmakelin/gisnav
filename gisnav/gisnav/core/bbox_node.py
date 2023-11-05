@@ -99,14 +99,12 @@ class BBoxNode(Node):
         the :term:`navigation filter`
 
         The local position is expected to have a ROS header frame_id called 'map',
-        and this 'map' frame is assumed to be the :term:`local tangent plane` (LTP)
-        of the vehicle. The 'map' or LTP frame is assumed to follow the :term:`ENU`
-        axes convention.
+        and this 'map' frame is assumed to be the :term:`EKF` local frame.
+        The 'map' frame is assumed to follow the :term:`ENU` axes convention.
         """
         assert msg.header.frame_id == "map", (
-            f"Unexpected frame_id for vehicle local tangent plane (LTP)"
-            f"received via vehicle local position pose topic: {msg.header.frame_id} "
-            f"(expected 'map')"
+            f"Unexpected frame_id for vehicle local frame received via vehicle "
+            f"local position pose topic: {msg.header.frame_id} (expected 'map')"
         )
 
         # Publish local tangent plane (ENU) to vehicle FRD frame transformation
@@ -323,7 +321,7 @@ class BBoxNode(Node):
 
         transform = (
             messaging.get_transform(
-                self, "camera", "map", self.vehicle_pose.header.stamp
+                self, "gimbal", "map", self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
             else None
@@ -371,7 +369,7 @@ class BBoxNode(Node):
             vehicle_pose: PoseStamped,
             gimbal_device_attitude_status: GimbalDeviceAttitudeStatus,
         ) -> None:
-            """PUlish camera ENU pose to transformations
+            """Publish camera ENU pose to transformations
 
             .. note::
                 * Current implementation assumes camera faces directly down from
@@ -387,9 +385,8 @@ class BBoxNode(Node):
             :param vehicle_pose:
             :param gimbal_device_attitude_status:
             """
-            # vehicle_frd frame to camera_ned frame transformation
             parent_frame_id: messaging.FrameID = "map"
-            child_frame_id: messaging.FrameID = "camera"
+            child_frame_id: messaging.FrameID = "gimbal"
 
             assert gimbal_device_attitude_status.flags == 12, (
                 "Currently GISNav only supports a two-axis gimbal that has "

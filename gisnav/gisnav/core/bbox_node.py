@@ -139,7 +139,6 @@ class BBoxNode(Node):
         @narrow_types(self)
         def _fov_and_principal_point_on_ground_plane(
             transform: TransformStamped,
-            vehicle_pose: PoseStamped,
             camera_info: CameraInfo,
         ) -> Optional[np.ndarray]:
             """Projects :term:`camera` principal point and :term:`FOV` corners
@@ -151,8 +150,8 @@ class BBoxNode(Node):
             :return: Numpy array of FOV corners and principal point projected onto
                 ground (vehicle :term:`local position` z==0) plane in following
                 order: top-left, top-right, bottom-right, bottom-left, principal point.
-                Shape is (5, 2). Coordinates are meters in local tangent plane
-                :term:`ENU`.
+                Shape is (5, 2). Coordinates are meters in
+                :term:`local tangent plane <LTP>` :term:`ENU`.
             """
             R = tf_transformations.quaternion_matrix(
                 tuple(messaging.as_np_quaternion(transform.transform.rotation))
@@ -161,8 +160,7 @@ class BBoxNode(Node):
             # Camera position in LTP centered in current location (not EKF local
             # frame origin - only shares the z-coordinate!) - assume local
             # frame z is altitude AGL
-            position = vehicle_pose.pose.position
-            C = np.array((0, 0, position.z))
+            C = np.array((0, 0, transform.transform.translation.z))
 
             intrinsics = camera_info.k.reshape((3, 3))
 
@@ -321,14 +319,14 @@ class BBoxNode(Node):
 
         transform = (
             messaging.get_transform(
-                self, "gimbal", "map", self.vehicle_pose.header.stamp
+                self, "map", "gimbal", self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
             else None
         )
 
         fov_and_c_on_ground_local_enu = _fov_and_principal_point_on_ground_plane(
-            transform, self.vehicle_pose, self.camera_info
+            transform, self.camera_info
         )
         if fov_and_c_on_ground_local_enu is not None:
             fov_on_ground_local_enu = fov_and_c_on_ground_local_enu[:4]

@@ -98,13 +98,13 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
 
 FrameID = Literal[
     "wgs_84",
-    "orthoimage",
-    "query_image",
-    "reference_image",
+    "query",
+    "reference",
     "base_link",
     "camera",
     "gimbal",
     "map",
+    "world",
 ]
 """Allowed ROS header frame_ids (used by tf2)
 

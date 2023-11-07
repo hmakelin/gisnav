@@ -89,8 +89,11 @@ class PoseNode(Node):
             return None
 
         r, t = pose_stamped
+
+        # The child frame is the 'camera' frame of the PnP problem as
+        # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "reference_image", "camera", r, t.squeeze()
+            msg.header.stamp, "world", "camera", r, t.squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 

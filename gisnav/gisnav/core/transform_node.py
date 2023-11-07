@@ -174,7 +174,7 @@ class TransformNode(Node):
             transform = transform.transform
 
             parent_frame_id: messaging.FrameID = orthoimage.header.frame_id
-            assert parent_frame_id == "reference_image"
+            assert parent_frame_id == "reference"
 
             query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
 
@@ -220,7 +220,9 @@ class TransformNode(Node):
                 pnp_image_stack, encoding="passthrough"
             )
 
-            child_frame_id: messaging.FrameID = "query_image"
+            # The child frame is the 'world' frame of the PnP problem as
+            # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+            child_frame_id: messaging.FrameID = "world"
             pnp_image_msg.header.stamp = image.header.stamp
             pnp_image_msg.header.frame_id = child_frame_id
 

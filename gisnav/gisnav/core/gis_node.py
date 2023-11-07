@@ -593,7 +593,10 @@ class GISNode(Node):
                 height, width, bounding_box
             )
 
-            child_frame_id: messaging.FrameID = "reference_image"
+            # TODO: remove scaling or use other message type?
+            #  or compute this transform in either PoseNode or MockGPSNode
+            #  so that we do not need to publish it via tf?
+            child_frame_id: messaging.FrameID = "reference"
             # Publish the transformation
             parent_frame_id: messaging.FrameID = "wgs_84"
             transform_ortho = messaging.create_transform_msg(

@@ -34,6 +34,7 @@ import numpy as np
 import requests
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
+from geometry_msgs.msg import Vector3, Vector3Stamped
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from rcl_interfaces.msg import ParameterDescriptor
@@ -51,6 +52,7 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    ROS_TOPIC_RELATIVE_SCALING,
 )
 from ..decorators import ROS, cache_if, narrow_types
 
@@ -541,6 +543,15 @@ class GISNode(Node):
 
     @property
     @ROS.publish(
+        ROS_TOPIC_RELATIVE_SCALING,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def scaling(self) -> Optional[Vector3Stamped]:
+        """Scaling factor from 'wgs_84_unscaled' frame to 'wgs_84' frame"""
+        raise NotImplementedError
+
+    @property
+    @ROS.publish(
         ROS_TOPIC_RELATIVE_ORTHOIMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
@@ -589,22 +600,38 @@ class GISNode(Node):
             # Get proj string for message header (information to project
             # reference image coordinates to WGS 84
             height, width = img.shape[0:2]
-            r, t, utm_zone = self._get_geotransformation_matrix(
+            r, s, t, utm_zone = self._get_geotransformation_matrix(
                 height, width, bounding_box
             )
 
-            # TODO: remove scaling or use other message type?
-            #  or compute this transform in either PoseNode or MockGPSNode
-            #  so that we do not need to publish it via tf?
-            child_frame_id: messaging.FrameID = "reference"
-            # Publish the transformation
-            parent_frame_id: messaging.FrameID = "wgs_84"
+            # Publish rigid transformation into a "wgs_84_unscaled" frame -
+            # we cannot publish the scaling (and possible shear) over tf2 so
+            # the child frame is not quite WGS 84 yet
+            child_frame_id: messaging.FrameID = "wgs_84_unscaled"
+            parent_frame_id: messaging.FrameID = "reference"
             transform_ortho = messaging.create_transform_msg(
                 image_msg.header.stamp, parent_frame_id, child_frame_id, r, t
             )
             self.broadcaster.sendTransform([transform_ortho])
 
-            image_msg.header.frame_id = child_frame_id
+            # We are dealing with a conventional geotransformation from a
+            # orthorectified pixel coordinates into WGS84 frame so we should
+            # only have a rotation, translation and scaling component. There is
+            # no shear, so our scale and shear matrix reduces into a 3-vector,
+            # which makes it easy to publish over ROS using the Vector3Stamped
+            # message
+            # the tf2 transform
+            scaling_msg = Vector3Stamped(
+                header=image_msg.header,    # important that header matches
+                vector=Vector3(
+                    x=s[0],
+                    y=s[1],
+                    z=s[3],
+                )
+            )
+            # TODO: publish scaling vector with exact same timestamp as the
+
+            image_msg.header.frame_id = parent_frame_id
 
             # new orthoimage stack, set old bounding box
             # TODO: this is brittle (old bounding box needs to always be set
@@ -697,25 +724,35 @@ class GISNode(Node):
         # Insert z dimensions
         M = np.insert(M, 2, 0, axis=1)
         M = np.insert(M, 2, 0, axis=0)
+
         # Scaling of z-axis from orthoimage raster native units to meters
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
-        # Decompose M into rotation and translation components
+        # Decompose M into rotation, scaling, and translation components
         # Assuming M is of the form [ [a, b, tx], [c, d, ty] ]
-        r = M[:2, :2]
+        a = M[:2, :2]
         t = M[:2, 2]
-
-        # Add the z-axis scaling to the rotation matrix
-        r = np.insert(r, 2, 0, axis=1)
-        r = np.insert(r, 2, 0, axis=0)
-        r[2, 2] = M[2, 2]
 
         # Add the z-axis translation (which is zero)
         t = np.append(t, 0)
 
-        return r, t, utm_zone
+        # The norms of the columns give you the scale factors
+        scale_x = np.linalg.norm(a[:, 0])
+        scale_y = np.linalg.norm(a[:, 1])
+
+        # Normalize the columns to get the pure rotation part
+        rotation_2d = a / [scale_x, scale_y]
+
+        # Rotation in 3D (assuming no rotation around the z-axis)
+        r = np.eye(3)
+        r[:2, :2] = rotation_2d
+
+        # The scale factors for the 3x3 matrix, including the z scale
+        s = np.array([scale_x, scale_y, M[2, 2]])
+
+        return r, s, t, utm_zone
 
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False

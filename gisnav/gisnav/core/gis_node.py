@@ -541,14 +541,35 @@ class GISNode(Node):
             self.min_map_overlap_update_threshold,
         )
 
-    @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_SCALING,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def scaling(self) -> Optional[Vector3Stamped]:
-        """Scaling factor from 'wgs_84_unscaled' frame to 'wgs_84' frame"""
-        raise NotImplementedError
+    @narrow_types
+    def _publish_scaling(self, s, header) -> Optional[Vector3Stamped]:
+        """Scaling factor from 'wgs_84_unscaled' frame to 'wgs_84' frame
+
+        The scaling message header must have the exact same timestamp as the
+        'reference' to 'wgs_84_unscaled' transform. The reference frame
+        is discontinuous (based on the bounding box) so it is essential
+        that the scaling is linked to the exact same bounding box
+        that was used for the tf-published rigid part of the transform.
+
+        :param s: Scaling 3-vector to publish - the scaling part of the
+            'reference' to 'wgs_84' transformation that cannot be published over
+            tf
+        :param header: Header with exact same timestamp as the 'reference' to
+            'wgs_84_unscaled' transform
+        """
+        scaling_msg = Vector3Stamped(
+            header=header,  # important that header matches
+            vector=Vector3(
+                x=s[0],
+                y=s[1],
+                z=s[2],
+            )
+        )
+        return scaling_msg
 
     @property
     @ROS.publish(
@@ -620,16 +641,7 @@ class GISNode(Node):
             # no shear, so our scale and shear matrix reduces into a 3-vector,
             # which makes it easy to publish over ROS using the Vector3Stamped
             # message
-            # the tf2 transform
-            scaling_msg = Vector3Stamped(
-                header=image_msg.header,    # important that header matches
-                vector=Vector3(
-                    x=s[0],
-                    y=s[1],
-                    z=s[3],
-                )
-            )
-            # TODO: publish scaling vector with exact same timestamp as the
+            self._publish_scaling(s, transform_ortho.header)
 
             image_msg.header.frame_id = parent_frame_id
 

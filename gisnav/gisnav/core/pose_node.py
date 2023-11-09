@@ -25,6 +25,7 @@ images and then solving the resulting :term:`PnP` problem.
         pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
 from typing import Optional, Tuple
+from copy import deepcopy
 
 import cv2
 import numpy as np
@@ -92,8 +93,26 @@ class PoseNode(Node):
 
         # The child frame is the 'camera' frame of the PnP problem as
         # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+        if msg is not None:
+            debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
+                deepcopy(msg), desired_encoding="passthrough"
+            )
+            debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
+            # current image timestamp does not yet have the transform but this should get the previous one
+            camera_position_in_world_frame = -r.T @ t
+            x, y = int(camera_position_in_world_frame[0]), int(camera_position_in_world_frame[1])
+            self.get_logger().error(f"camera position in world {str(camera_position_in_world_frame)}")
+            debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0,255,0), -1)
+            cv2.imshow("Camera position in world frame", debug_ref_image)
+            cv2.waitKey(1)
+
+        # TODO: looks like r, t is actually parent=camera, child=world! above
+        #  visualization works (better) when the transform is inverted (-r.T @ t)
+        #transform_camera = messaging.create_transform_msg(
+        #    msg.header.stamp, "world", "camera", r, t.squeeze()
+        #)
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", r, t.squeeze()
+            msg.header.stamp, "camera", "world", r, t.squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 

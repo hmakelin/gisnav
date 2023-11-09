@@ -31,6 +31,7 @@ image based on :term:`vehicle` heading, and then cropping it based on the
         pnp_image -->|sensor_msgs/Image| PnPNode:::hidden
 """
 from typing import Final, Optional, Tuple
+from copy import deepcopy
 
 import cv2
 import numpy as np
@@ -237,14 +238,34 @@ class TransformNode(Node):
 
             return pnp_image_msg
 
+        query_image, orthoimage = self.image, self.orthoimage
+
         transform = (
-            messaging.get_transform(self, "map", "gimbal", self.image.header.stamp)
+            messaging.get_transform(self, "map", "gimbal", query_image.header.stamp)
             if self.image is not None
             else None
         )
+
+        # TODO: publish camera positio overlaid on orthoimage (reference frame)
+        #  here - move this code block to a more appropriate place in the future
+        if orthoimage is not None:
+            debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
+                deepcopy(orthoimage), desired_encoding="passthrough"
+            )
+            debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
+            # current image timestamp does not yet have the transform but this should get the previous one
+            camera_pose_transform = messaging.get_transform(self, "camera", "reference", query_image.header.stamp)
+            #camera_pose_transform = messaging.get_transform(self, "reference", "camera", query_image.header.stamp)
+            if camera_pose_transform is not None:
+                x, y = int(camera_pose_transform.transform.translation.x), int(camera_pose_transform.transform.translation.y)
+                self.get_logger().error(f"translation in reference {camera_pose_transform.transform.translation}")
+                debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0,255,0), -1)
+                cv2.imshow("Camera position in reference frame", debug_ref_image)
+                cv2.waitKey(1)
+
         return _pnp_image(
-            self.image,
-            self.orthoimage,
+            query_image,
+            orthoimage,
             transform,
         )
 

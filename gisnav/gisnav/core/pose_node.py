@@ -35,7 +35,7 @@ from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 
 
 from .. import messaging
@@ -72,7 +72,7 @@ class PoseNode(Node):
         self.image
 
         # Initialize the transform broadcaster
-        self.broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = TransformBroadcaster(self)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?

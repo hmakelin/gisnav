@@ -4,6 +4,7 @@ from typing import Final, Literal
 
 import numpy as np
 import tf2_ros
+from rclpy.duration import Duration
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rclpy.node import Node
@@ -182,16 +183,17 @@ def get_transform(
 ) -> TransformStamped:
     try:
         # Look up the transformation
+        #node.tf_buffer.can_transform(target_frame, source_frame, stamp, timeout=Duration(seconds=5.0))
         trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
         return trans
     except (
         tf2_ros.LookupException,
         tf2_ros.ConnectivityException,
         tf2_ros.ExtrapolationException,
-    ):
+    ) as e:
         # Todo: implement more granular exception handling
         node.get_logger().warn(
             f"Could not retrieve transformation from {source_frame} to "
-            f"{target_frame}."
+            f"{target_frame} {e}."
         )
         return None

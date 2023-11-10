@@ -43,7 +43,7 @@ from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
 from shapely.geometry import box
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 
 from .. import messaging
 from .._data import create_src_corners
@@ -197,7 +197,7 @@ class GISNode(Node):
         self.old_bounding_box: Optional[BoundingBox] = None
 
         # Initialize the static transform broadcaster
-        self.broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = TransformBroadcaster(self)
 
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)

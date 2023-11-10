@@ -42,7 +42,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 
 
 from .. import messaging
@@ -91,7 +91,7 @@ class TransformNode(Node):
         self.image
 
         # Initialize the transform broadcaster and listener
-        self.broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = TransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 

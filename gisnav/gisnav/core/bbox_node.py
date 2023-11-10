@@ -43,7 +43,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 
 from .. import messaging
 from ..constants import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX
@@ -74,7 +74,7 @@ class BBoxNode(Node):
 
         # Needed for updating tf2 with camera to vehicle relative pose
         # and vehicle to wgs84 relative
-        self.broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = TransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -383,6 +383,8 @@ class BBoxNode(Node):
             :param vehicle_pose:
             :param gimbal_device_attitude_status:
             """
+            # TODO publish relative transform with gimbaldeviceattitudestatus
+            #  timestamp (this one now has vehicle pose timestamp)
             parent_frame_id: messaging.FrameID = "map"
             child_frame_id: messaging.FrameID = "gimbal"
 

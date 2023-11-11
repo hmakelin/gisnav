@@ -36,6 +36,7 @@ import numpy as np
 import pyproj
 import tf2_ros
 import tf_transformations
+import rclpy
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
@@ -319,7 +320,7 @@ class BBoxNode(Node):
 
         transform = (
             messaging.get_transform(
-                self, "map", "gimbal", self.vehicle_pose.header.stamp
+                self, "map", "gimbal", rclpy.time.Time()  #self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
             else None

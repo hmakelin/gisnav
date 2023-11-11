@@ -112,7 +112,7 @@ class PoseNode(Node):
         #    msg.header.stamp, "world", "camera", r, t.squeeze()
         #)
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "camera", "world", r, t.squeeze()
+            msg.header.stamp, "world", "camera", r.T, (-t).squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 

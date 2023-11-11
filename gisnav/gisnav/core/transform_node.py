@@ -36,6 +36,7 @@ from copy import deepcopy
 import cv2
 import numpy as np
 import tf2_ros
+import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -241,7 +242,7 @@ class TransformNode(Node):
         query_image, orthoimage = self.image, self.orthoimage
 
         transform = (
-            messaging.get_transform(self, "map", "gimbal", query_image.header.stamp)
+            messaging.get_transform(self, "map", "gimbal", rclpy.time.Time())  #query_image.header.stamp)
             if self.image is not None
             else None
         )
@@ -254,7 +255,7 @@ class TransformNode(Node):
             )
             debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
             # current image timestamp does not yet have the transform but this should get the previous one
-            camera_pose_transform = messaging.get_transform(self, "camera", "reference", query_image.header.stamp)
+            camera_pose_transform = messaging.get_transform(self, "camera", "reference", rclpy.time.Time()) # query_image.header.stamp)
             #camera_pose_transform = messaging.get_transform(self, "reference", "camera", query_image.header.stamp)
             if camera_pose_transform is not None:
                 x, y = int(camera_pose_transform.transform.translation.x), int(camera_pose_transform.transform.translation.y)

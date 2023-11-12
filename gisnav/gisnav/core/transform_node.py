@@ -37,6 +37,8 @@ import cv2
 import numpy as np
 import tf2_ros
 import rclpy
+import tf_transformations
+
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -192,28 +194,11 @@ class TransformNode(Node):
 
             # Rotate and crop orthoimage stack
             camera_yaw_degrees = self._extract_yaw(transform.rotation)
+            self.get_logger().error(f"camera yaw {camera_yaw_degrees}")
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
-            (
-                orthoimage_rotated_stack,
-                r_rotated,
-                t_cropped,
-            ) = self._rotate_and_crop_image(
+            orthoimage_rotated_stack = self._rotate_and_crop_center(
                 orthoimage_stack, camera_yaw_degrees, crop_shape
             )
-
-            # TODO: is this cv2/numpy stuff correct?
-            # ESD (cv2 x is width) to SEU (numpy array y is south) (x y might
-            # be flipped because cv2)
-            # todo: is this the same as the camera to camera_frd frame transformation?
-            # t_cropped = np.array(
-            #    (
-            #        t_cropped[1],
-            #        t_cropped[0],
-            #        -t_cropped[2],
-            #        t_cropped[3],
-            #    )
-            # )
-            t_cropped = np.array((t_cropped[1], t_cropped[0], -t_cropped[2]))
 
             # Add query image on top to complete full image stack
             pnp_image_stack = np.dstack((query_img, orthoimage_rotated_stack))
@@ -228,14 +213,9 @@ class TransformNode(Node):
             pnp_image_msg.header.stamp = image.header.stamp
             pnp_image_msg.header.frame_id = child_frame_id
 
-            transform_ortho = messaging.create_transform_msg(
-                pnp_image_msg.header.stamp,
-                parent_frame_id,
-                child_frame_id,
-                r_rotated,
-                t_cropped,
-            )
-            self.broadcaster.sendTransform([transform_ortho])
+            center = (orthoimage_stack.shape[0] // 2, orthoimage_stack.shape[1] // 2)
+            stamp = rclpy.time.Time()
+            self._publish_transform(center, camera_yaw_degrees, crop_shape, parent_frame_id, child_frame_id, pnp_image_msg.header.stamp)
 
             return pnp_image_msg
 
@@ -256,11 +236,10 @@ class TransformNode(Node):
             debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
             # current image timestamp does not yet have the transform but this should get the previous one
             camera_pose_transform = messaging.get_transform(self, "camera", "reference", rclpy.time.Time()) # query_image.header.stamp)
-            #camera_pose_transform = messaging.get_transform(self, "reference", "camera", query_image.header.stamp)
             if camera_pose_transform is not None:
                 x, y = int(camera_pose_transform.transform.translation.x), int(camera_pose_transform.transform.translation.y)
                 self.get_logger().error(f"translation in reference {camera_pose_transform.transform.translation}")
-                debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0,255,0), -1)
+                debug_ref_image = cv2.circle(np.array(debug_ref_image), (-x, -y), 5, (0,255,0), -1)
                 cv2.imshow("Camera position in reference frame", debug_ref_image)
                 cv2.waitKey(1)
 
@@ -271,99 +250,88 @@ class TransformNode(Node):
         )
 
     @staticmethod
-    def _get_rotation_matrix(image: np.ndarray, degrees: float) -> np.ndarray:
-        height, width = image.shape[:2]
-        cx, cy = height // 2, width // 2
-        r = cv2.getRotationMatrix2D((cx, cy), degrees, 1.0)
-        return r
+    def _rotate_and_crop_center(image: np.ndarray, angle_degrees: float, shape: Tuple[int, int]):
+        """
+        Rotates an image around its center axis and then crops it to the specified shape.
+
+        :param image: Numpy array representing the image.
+        :param angle: Rotation angle in degrees.
+        :param shape: Tuple (height, width) representing the desired shape after cropping.
+        :return: Cropped and rotated image.
+        """
+        # Image dimensions
+        h, w = image.shape[:2]
+
+        # Center of rotation
+        center = (w // 2, h // 2)
+
+        # Calculate the rotation matrix
+        rotation_matrix = cv2.getRotationMatrix2D(center, angle_degrees, 1.0)
+
+        # Perform the rotation
+        rotated_image = cv2.warpAffine(image, rotation_matrix, (w, h))
+
+        # Calculate the cropping coordinates
+        x = center[0] - shape[1] // 2
+        y = center[1] - shape[0] // 2
+
+        # Perform the cropping
+        cropped_image = rotated_image[y:y+shape[0], x:x+shape[1]]
+
+        return cropped_image
 
     @staticmethod
-    def _get_translation_matrix(dx, dy):
-        t = np.float32([[1, 0, dx], [0, 1, dy]])
-        return t
-
-    @classmethod
-    def _get_affine_matrix(
-        cls, image: np.ndarray, degrees: float, crop_height: int, crop_width: int
-    ) -> np.ndarray:
-        """Creates affine transformation that rotates around center and then
-        center-crops an image.
-
-        .. note::
-            Returns matrix in 3D since this matrix will not only be used for rotating
-            and cropping the orthoimage rasters but also for converting 3D pose
-            estimates in the rotated and cropped orthoimage frame back to the original
-            unrotated and uncropped frame (from where it will then be converted to
-            geocoordinates).
-
-        Returns affine matrix padded to 3D (4x4 matrix) in the following format:
-            [ R11  R12  0   Tx ]
-            [ R21  R22  0   Ty ]
-            [ 0    0    1   0  ]
-            [ 0    0    0   1  ]
-        where R11, R12, R21, R22 represents the rotation matrix, and Tx, Ty represent
-        the translation along the x and y axis.
-
-        :return: The affine transformation matrix in homogenous format as masked
-            numpy array. Masking for use in 2D operations (e.g. cv2.warpAffine).
+    def get_reverse_transformation(center, angle_degrees, original_shape, crop_shape):
         """
-        r = cls._get_rotation_matrix(image, degrees)
-        assert r.shape == (2, 3)
-        dx = (image.shape[0] - crop_height) // 2
-        dy = (image.shape[1] - crop_width) // 2
-        t = cls._get_translation_matrix(dx, dy)
-        assert t.shape == (2, 3)
+        Computes the transformation matrix to reverse a rotation and cropping operation.
 
-        # Combine rotation and translation to get the final affine transformation
-        affine_2d = np.dot(t, np.vstack([r, [0, 0, 1]]))
-
-        # Convert 2D affine matrix to 3D affine matrix
-        # Create a 4x4 identity matrix
-        affine_3d = np.eye(4)
-
-        # Insert the 2D affine transformation into the 3D matrix
-        affine_3d[:2, :2] = affine_2d[:, :2]
-        affine_3d[:2, 3] = affine_2d[:, 2]
-
-        assert affine_3d.shape == (4, 4)
-
-        # Translation hack to make cv2.warpAffine warp the image into the top left
-        # corner so that the output size argument of cv2.warpAffine acts as a
-        # center-crop
-        t[:2, 2] = -t[:2, 2][::-1]
-        affine_hack = np.dot(t, np.vstack([r, [0, 0, 1]]))
-
-        affine_3d[:2, :2] = affine_hack[:2, :2]
-        affine_3d[:2, 3] = affine_hack[:2, 2]
-        return affine_3d
-
-    @classmethod
-    def _rotate_and_crop_image(
-        cls, image: np.ndarray, degrees: float, shape: Tuple[int, int]
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        :param center: Tuple (x, y) representing the center of rotation.
+        :param angle_degrees: Rotation angle in degrees (same as used in the forward transformation).
+        :param original_shape: Tuple (height, width) of the original image.
+        :param crop_shape: Tuple (height, width) of the cropped image.
+        :return: The transformation matrix to reverse the rotation and cropping.
         """
-        Rotates around center and then center-crops image
+        # Calculate the inverse rotation matrix
+        inverse_rotation_matrix = cv2.getRotationMatrix2D(center, -angle_degrees, 1.0)
 
-        Cached because the same rotated image is expected to be used for multiple
-        matches.
+        # Calculate the translation to adjust for the cropping
+        crop_x = center[0] - crop_shape[1] // 2
+        crop_y = center[1] - crop_shape[0] // 2
+        translation_matrix = np.float32([[1, 0, crop_x], [0, 1, crop_y]])
 
-        :return: Tuple of rotated and cropped image, and used rotation matrix
-            and translation vector
+        # Combine the inverse rotation and translation
+        reverse_transformation_matrix = np.dot(translation_matrix, inverse_rotation_matrix)
+
+        return reverse_transformation_matrix
+
+    def _publish_transform(self, center: Tuple[int, int], angle_degrees: float, crop_shape: Tuple[int, int], frame_id: str, child_frame_id: str, stamp):
         """
-        # Image can have any number of channels
-        affine = cls._get_affine_matrix(image, degrees, *shape)
-        affine_2d = np.delete(affine, 2, 1)
-        affine_2d = affine_2d[:2, :]
+        Publishes a transform that represents the rotation and cropping operation.
 
-        r = affine[:2, :2]
-        t = affine[:2, 2]
+        :param broadcaster: tf2_ros TransformBroadcaster object.
+        :param center: Tuple (x, y) representing the center of rotation.
+        :param angle: Rotation angle in degrees.
+        :param crop_shape: Tuple (height, width) representing the cropping dimensions.
+        :param frame_id: The frame ID to which this transform is related.
+        :param child_frame_id: The child frame ID for this transform.
+        """
+        angle_rad = np.deg2rad(angle_degrees)
+        quaternion = tf_transformations.quaternion_from_euler(0, 0, angle_rad)
 
-        # Add the z-axis scaling to the rotation matrix
-        r = np.insert(r, 2, 0, axis=1)
-        r = np.insert(r, 2, 0, axis=0)
-        r[2, 2] = affine[2, 2]
+        # Create a TransformStamped message
+        t = TransformStamped()
 
-        # Add the z-axis translation (which is zero)
-        t = np.append(t, 0)
+        # Fill the message
+        t.header.stamp = stamp
+        t.header.frame_id = frame_id
+        t.child_frame_id = child_frame_id
+        t.transform.translation.x = center[0] - crop_shape[1] / 2
+        t.transform.translation.y = center[1] - crop_shape[0] / 2
+        t.transform.translation.z = 0.
+        t.transform.rotation.x = quaternion[0]
+        t.transform.rotation.y = quaternion[1]
+        t.transform.rotation.z = quaternion[2]
+        t.transform.rotation.w = quaternion[3]
 
-        return cv2.warpAffine(image, affine_2d, shape[::-1]), r, t
+        # Broadcast the transform
+        self.broadcaster.sendTransform(t)

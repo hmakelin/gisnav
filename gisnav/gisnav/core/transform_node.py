@@ -247,16 +247,11 @@ class TransformNode(Node):
             r = affine_matrix[:2, :2]
             t = affine_matrix[:2, 2]
 
-            self._publish_transform(center, camera_yaw_degrees, crop_shape, parent_frame_id, child_frame_id, pnp_image_msg.header.stamp)
+            self._publish_transform(r, t, parent_frame_id, child_frame_id, pnp_image_msg.header.stamp)
 
             # TODO: publish camera positio overlaid on orthoimage (reference frame)
             #  here - move this code block to a more appropriate place in the future
             if orthoimage is not None:
-                debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
-                    deepcopy(orthoimage), desired_encoding="passthrough"
-                )
-                debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
-                # current image timestamp does not yet have the transform but this should get the previous one
                 camera_pose_transform = messaging.get_transform(self, "world", "reference",
                                                                 rclpy.time.Time())  # query_image.header.stamp)
                 if camera_pose_transform is not None:
@@ -272,6 +267,21 @@ class TransformNode(Node):
                     self.get_logger().error(f"Ref center position in ref frame {center}")
                     cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
                     cv2.waitKey(1)
+
+                camera_pose_transform = messaging.get_transform(self, "reference", "camera",
+                                                                rclpy.time.Time())  # query_image.header.stamp)
+                if camera_pose_transform is not None:
+                    q = camera_pose_transform.transform.rotation
+                    q = [q.x, q.y, q.z, q.w]
+                    r = tf_transformations.quaternion_matrix(q)[:3, :3]
+                    t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
+                    position_in_ref_frame = r @ np.array((0, 0, 0)) + t
+                    ref = deepcopy(orthoimage_stack[:, :, 0])
+                    camera_position_in_ref_frame = cv2.circle(ref, tuple(map(int, position_in_ref_frame[:2])), 5, (0, 255, 0), -1)
+                    self.get_logger().error(f"Camera position in ref frame {position_in_ref_frame}")
+                    cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
+                    cv2.waitKey(1)
+
 
             return pnp_image_msg
 
@@ -320,34 +330,34 @@ class TransformNode(Node):
 
         return cropped_image
 
-    def _publish_transform(self, center: Tuple[int, int], angle_degrees: float, crop_shape: Tuple[int, int], frame_id: str, child_frame_id: str, stamp):
+    def _publish_transform(self, r: np.ndarray, t: np.ndarray, frame_id: str, child_frame_id: str, stamp):
         """
         Publishes a transform that represents the rotation and cropping operation.
 
         :param broadcaster: tf2_ros TransformBroadcaster object.
-        :param center: Tuple (x, y) representing the center of rotation.
-        :param angle: Rotation angle in degrees.
-        :param crop_shape: Tuple (height, width) representing the cropping dimensions.
+        :param r: 2D Rotation matrix (2, 2)
+        :param t: 2D translation vector (2,)
         :param frame_id: The frame ID to which this transform is related.
         :param child_frame_id: The child frame ID for this transform.
         """
-        angle_rad = np.deg2rad(angle_degrees)
-        quaternion = tf_transformations.quaternion_from_euler(0, 0, angle_rad)
+        rotation_4x4 = np.eye(4)
+        rotation_4x4[:2, :2] = r
+        quaternion = tf_transformations.quaternion_from_matrix(rotation_4x4)
 
         # Create a TransformStamped message
-        t = TransformStamped()
+        transform_msg = TransformStamped()
 
         # Fill the message
-        t.header.stamp = stamp
-        t.header.frame_id = frame_id
-        t.child_frame_id = child_frame_id
-        t.transform.translation.x = center[0] - crop_shape[1] / 2
-        t.transform.translation.y = center[1] - crop_shape[0] / 2
-        t.transform.translation.z = 0.
-        t.transform.rotation.x = quaternion[0]
-        t.transform.rotation.y = quaternion[1]
-        t.transform.rotation.z = quaternion[2]
-        t.transform.rotation.w = quaternion[3]
+        transform_msg.header.stamp = stamp
+        transform_msg.header.frame_id = frame_id
+        transform_msg.child_frame_id = child_frame_id
+        transform_msg.transform.translation.x = t[0]
+        transform_msg.transform.translation.y = t[1]
+        transform_msg.transform.translation.z = 0.
+        transform_msg.transform.rotation.x = quaternion[0]
+        transform_msg.transform.rotation.y = quaternion[1]
+        transform_msg.transform.rotation.z = quaternion[2]
+        transform_msg.transform.rotation.w = quaternion[3]
 
         # Broadcast the transform
-        self.broadcaster.sendTransform(t)
+        self.broadcaster.sendTransform(transform_msg)

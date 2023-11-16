@@ -214,8 +214,64 @@ class TransformNode(Node):
             pnp_image_msg.header.frame_id = child_frame_id
 
             center = (orthoimage_stack.shape[0] // 2, orthoimage_stack.shape[1] // 2)
-            stamp = rclpy.time.Time()
+            dx = center[0] - crop_shape[1] / 2
+            dy = center[1] - crop_shape[0] / 2
+            self.get_logger().error(f"translation from ref to world t: {dx} {dx} {camera_yaw_degrees}")
+
+            # Compute transformation (rotation around center + crop)
+            theta = np.radians(camera_yaw_degrees)
+            cx, cy = center[0], center[1]
+
+            # Translation to origin
+            T1 = np.array([[1, 0, -cx],
+                           [0, 1, -cy],
+                           [0, 0, 1]])
+
+            # Rotation
+            R = np.array([[np.cos(theta), -np.sin(theta), 0],
+                          [np.sin(theta), np.cos(theta), 0],
+                          [0, 0, 1]])
+
+            # Translation back from origin
+            T2 = np.array([[1, 0, cx],
+                           [0, 1, cy],
+                           [0, 0, 1]])
+
+            # Center-crop translation
+            T3 = np.array([[1, 0, -dx],
+                           [0, 1, -dy],
+                           [0, 0, 1]])
+
+            # Combined affine matrix
+            affine_matrix = T3 @ T2 @ R @ T1
+            r = affine_matrix[:2, :2]
+            t = affine_matrix[:2, 2]
+
             self._publish_transform(center, camera_yaw_degrees, crop_shape, parent_frame_id, child_frame_id, pnp_image_msg.header.stamp)
+
+            # TODO: publish camera positio overlaid on orthoimage (reference frame)
+            #  here - move this code block to a more appropriate place in the future
+            if orthoimage is not None:
+                debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
+                    deepcopy(orthoimage), desired_encoding="passthrough"
+                )
+                debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
+                # current image timestamp does not yet have the transform but this should get the previous one
+                camera_pose_transform = messaging.get_transform(self, "world", "reference",
+                                                                rclpy.time.Time())  # query_image.header.stamp)
+                if camera_pose_transform is not None:
+
+                    position_in_world_frame = r @ np.array(center) + t
+                    world = deepcopy(orthoimage_rotated_stack[:, :, 0])
+                    ref = deepcopy(orthoimage_stack[:, :, 0])
+                    self.get_logger().error(f"Ref center position in world frame {position_in_world_frame}")
+                    ref_center_position_in_world_frame = cv2.circle(world, tuple(map(int, position_in_world_frame)), 5, (0, 255, 0), -1)
+                    cv2.imshow("Ref center position in world frame", ref_center_position_in_world_frame)
+
+                    ref_center_position_in_ref_frame = cv2.circle(ref, tuple(map(int, center)), 5, (0, 255, 0), -1)
+                    self.get_logger().error(f"Ref center position in ref frame {center}")
+                    cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
+                    cv2.waitKey(1)
 
             return pnp_image_msg
 
@@ -226,22 +282,6 @@ class TransformNode(Node):
             if self.image is not None
             else None
         )
-
-        # TODO: publish camera positio overlaid on orthoimage (reference frame)
-        #  here - move this code block to a more appropriate place in the future
-        if orthoimage is not None:
-            debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
-                deepcopy(orthoimage), desired_encoding="passthrough"
-            )
-            debug_ref_image = debug_ref_image[:, :, 0]  # first channel is grayscale image
-            # current image timestamp does not yet have the transform but this should get the previous one
-            camera_pose_transform = messaging.get_transform(self, "camera", "reference", rclpy.time.Time()) # query_image.header.stamp)
-            if camera_pose_transform is not None:
-                x, y = int(camera_pose_transform.transform.translation.x), int(camera_pose_transform.transform.translation.y)
-                self.get_logger().error(f"translation in reference {camera_pose_transform.transform.translation}")
-                debug_ref_image = cv2.circle(np.array(debug_ref_image), (-x, -y), 5, (0,255,0), -1)
-                cv2.imshow("Camera position in reference frame", debug_ref_image)
-                cv2.waitKey(1)
 
         return _pnp_image(
             query_image,
@@ -279,30 +319,6 @@ class TransformNode(Node):
         cropped_image = rotated_image[y:y+shape[0], x:x+shape[1]]
 
         return cropped_image
-
-    @staticmethod
-    def get_reverse_transformation(center, angle_degrees, original_shape, crop_shape):
-        """
-        Computes the transformation matrix to reverse a rotation and cropping operation.
-
-        :param center: Tuple (x, y) representing the center of rotation.
-        :param angle_degrees: Rotation angle in degrees (same as used in the forward transformation).
-        :param original_shape: Tuple (height, width) of the original image.
-        :param crop_shape: Tuple (height, width) of the cropped image.
-        :return: The transformation matrix to reverse the rotation and cropping.
-        """
-        # Calculate the inverse rotation matrix
-        inverse_rotation_matrix = cv2.getRotationMatrix2D(center, -angle_degrees, 1.0)
-
-        # Calculate the translation to adjust for the cropping
-        crop_x = center[0] - crop_shape[1] // 2
-        crop_y = center[1] - crop_shape[0] // 2
-        translation_matrix = np.float32([[1, 0, crop_x], [0, 1, crop_y]])
-
-        # Combine the inverse rotation and translation
-        reverse_transformation_matrix = np.dot(translation_matrix, inverse_rotation_matrix)
-
-        return reverse_transformation_matrix
 
     def _publish_transform(self, center: Tuple[int, int], angle_degrees: float, crop_shape: Tuple[int, int], frame_id: str, child_frame_id: str, stamp):
         """

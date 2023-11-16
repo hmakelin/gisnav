@@ -108,12 +108,12 @@ class PoseNode(Node):
 
         # TODO: looks like r, t is actually parent=camera, child=world! above
         #  visualization works (better) when the transform is inverted (-r.T @ t)
-        #transform_camera = messaging.create_transform_msg(
-        #    msg.header.stamp, "world", "camera", r, t.squeeze()
-        #)
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", r.T, (-t).squeeze()
+            msg.header.stamp, "world", "camera", r, t.squeeze()
         )
+        #transform_camera = messaging.create_transform_msg(
+        #    msg.header.stamp, "world", "camera", r.T, (-t).squeeze()
+        #)
         self.broadcaster.sendTransform([transform_camera])
 
     @property

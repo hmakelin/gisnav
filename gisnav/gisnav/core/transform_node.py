@@ -244,10 +244,16 @@ class TransformNode(Node):
 
             # Combined affine matrix
             affine_matrix = T3 @ T2 @ R @ T1
-            r = affine_matrix[:2, :2]
-            t = affine_matrix[:2, 2]
+            r = np.eye(3)
+            r[:2, :2] = affine_matrix[:2, :2]
+            t = affine_matrix[:3, 2]
+            t[2] = 0.
 
-            self._publish_transform(r, t, parent_frame_id, child_frame_id, pnp_image_msg.header.stamp)
+            transform_msg = messaging.create_transform_msg(
+                pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r, t.squeeze()
+            )
+            self.broadcaster.sendTransform([transform_msg])
+
 
             # TODO: publish camera positio overlaid on orthoimage (reference frame)
             #  here - move this code block to a more appropriate place in the future
@@ -260,7 +266,7 @@ class TransformNode(Node):
                 if camera_pose_transform is not None:
                     # TODO parse r and t from the camera_pose_transform message
                     #  to ensure it is correct, do not use them directly here
-                    position_in_world_frame = r @ np.array(center) + t
+                    position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
                     self.get_logger().error(f"Ref center position in world frame {position_in_world_frame}")
@@ -338,35 +344,3 @@ class TransformNode(Node):
         cropped_image = rotated_image[y:y+shape[0], x:x+shape[1]]
 
         return cropped_image
-
-    def _publish_transform(self, r: np.ndarray, t: np.ndarray, frame_id: str, child_frame_id: str, stamp):
-        """
-        Publishes a transform that represents the rotation and cropping operation.
-
-        :param broadcaster: tf2_ros TransformBroadcaster object.
-        :param r: 2D Rotation matrix (2, 2)
-        :param t: 2D translation vector (2,)
-        :param frame_id: The frame ID to which this transform is related.
-        :param child_frame_id: The child frame ID for this transform.
-        """
-        rotation_4x4 = np.eye(4)
-        rotation_4x4[:2, :2] = r
-        quaternion = tf_transformations.quaternion_from_matrix(rotation_4x4)
-
-        # Create a TransformStamped message
-        transform_msg = TransformStamped()
-
-        # Fill the message
-        transform_msg.header.stamp = stamp
-        transform_msg.header.frame_id = frame_id
-        transform_msg.child_frame_id = child_frame_id
-        transform_msg.transform.translation.x = t[0]
-        transform_msg.transform.translation.y = t[1]
-        transform_msg.transform.translation.z = t[0]  #0.
-        transform_msg.transform.rotation.x = quaternion[0]
-        transform_msg.transform.rotation.y = quaternion[1]
-        transform_msg.transform.rotation.z = quaternion[2]
-        transform_msg.transform.rotation.w = quaternion[3]
-
-        # Broadcast the transform
-        self.broadcaster.sendTransform(transform_msg)

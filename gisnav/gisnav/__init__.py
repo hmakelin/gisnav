@@ -62,7 +62,7 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             profile.disable()
             s = io.StringIO()
             stats = pstats.Stats(profile, stream=s).sort_stats(pstats.SortKey.TIME)
-            stats.print_stats(20)
+            #stats.print_stats(20)
             if node is not None:
                 node.get_logger().info(s.getvalue())
     finally:

@@ -252,10 +252,14 @@ class TransformNode(Node):
             # TODO: publish camera positio overlaid on orthoimage (reference frame)
             #  here - move this code block to a more appropriate place in the future
             if orthoimage is not None:
+
+                # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
+                # TODO: use exact timestamp, reference frame is not continuous and cannot be interpolated
                 camera_pose_transform = messaging.get_transform(self, "world", "reference",
                                                                 rclpy.time.Time())  # query_image.header.stamp)
                 if camera_pose_transform is not None:
-
+                    # TODO parse r and t from the camera_pose_transform message
+                    #  to ensure it is correct, do not use them directly here
                     position_in_world_frame = r @ np.array(center) + t
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
@@ -268,17 +272,22 @@ class TransformNode(Node):
                     cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
                     cv2.waitKey(1)
 
+                # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
-                                                                rclpy.time.Time())  # query_image.header.stamp)
+                                                                rclpy.time.Time())  #pnp_image_msg.header.stamp)  # query_image.header.stamp)
                 if camera_pose_transform is not None:
                     q = camera_pose_transform.transform.rotation
                     q = [q.x, q.y, q.z, q.w]
                     r = tf_transformations.quaternion_matrix(q)[:3, :3]
                     t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
-                    position_in_ref_frame = r @ np.array((0, 0, 0)) + t
+                    affine = np.eye(4)
+                    affine[:3, :3] = r
+                    affine[:3, 3] = t
+                    #pos = -affine.T @ np.array((0, 0, 0, 1))
                     ref = deepcopy(orthoimage_stack[:, :, 0])
-                    camera_position_in_ref_frame = cv2.circle(ref, tuple(map(int, position_in_ref_frame[:2])), 5, (0, 255, 0), -1)
-                    self.get_logger().error(f"Camera position in ref frame {position_in_ref_frame}")
+                    pos = -r.T @ t
+                    camera_position_in_ref_frame = cv2.circle(ref, tuple(map(int, pos[:2])), 5, (0, 255, 0), -1)
+                    self.get_logger().error(f"Camera position in ref frame {pos}")
                     cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
                     cv2.waitKey(1)
 
@@ -353,7 +362,7 @@ class TransformNode(Node):
         transform_msg.child_frame_id = child_frame_id
         transform_msg.transform.translation.x = t[0]
         transform_msg.transform.translation.y = t[1]
-        transform_msg.transform.translation.z = 0.
+        transform_msg.transform.translation.z = t[0]  #0.
         transform_msg.transform.rotation.x = quaternion[0]
         transform_msg.transform.rotation.y = quaternion[1]
         transform_msg.transform.rotation.z = quaternion[2]

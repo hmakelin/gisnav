@@ -4,11 +4,11 @@ from typing import Final, Literal
 
 import numpy as np
 import tf2_ros
+import tf_transformations
 from rclpy.duration import Duration
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rclpy.node import Node
-from scipy.spatial.transform import Rotation
 from std_msgs.msg import Header
 
 from ._data import BBox
@@ -141,8 +141,11 @@ def create_transform_msg(
     transform.child_frame_id = child_frame
 
     # Convert rotation matrix to quaternion
-    rotation = Rotation.from_matrix(rotation_matrix)
-    q = rotation.as_quat()
+    #rotation = Rotation.from_matrix(rotation_matrix)
+    #q = rotation.as_quat()
+    rotation_4x4 = np.eye(4)
+    rotation_4x4[:3, :3] = rotation_matrix
+    q = tf_transformations.quaternion_from_matrix(rotation_4x4)
 
     transform.transform.rotation.x = q[0]
     transform.transform.rotation.y = q[1]

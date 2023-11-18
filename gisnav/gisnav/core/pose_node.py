@@ -27,9 +27,13 @@ images and then solving the resulting :term:`PnP` problem.
 from typing import Optional, Tuple
 from copy import deepcopy
 
+import rclpy
 import cv2
 import numpy as np
 import torch
+import tf_transformations
+import tf2_ros
+
 from cv_bridge import CvBridge
 from kornia.feature import LoFTR
 from rclpy.node import Node
@@ -73,6 +77,8 @@ class PoseNode(Node):
 
         # Initialize the transform broadcaster
         self.broadcaster = TransformBroadcaster(self)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -91,29 +97,38 @@ class PoseNode(Node):
 
         r, t = pose_stamped
 
+        transform_camera = messaging.create_transform_msg(
+            msg.header.stamp, "world", "camera", r, t.squeeze()
+        )
+        self.get_logger().error(f"outgoing {str(transform_camera)}")
+
+        # TODO: fix get_transform (currently gets inverse?)
+        debug_msg = messaging.get_transform(self, "world", "camera",
+                                            rclpy.time.Time())
+        self.get_logger().error(f"incoming {str(debug_msg)}")
+
         # The child frame is the 'camera' frame of the PnP problem as
         # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
-        if msg is not None:
+        if debug_msg is not None:
             debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
                 deepcopy(msg), desired_encoding="passthrough"
             )
+            q = debug_msg.transform.rotation
+            q = [q.x, q.y, q.z, q.w]
+
+            r = tf_transformations.quaternion_matrix(q)[:3, :3]
+            t = np.array((debug_msg.transform.translation.x, debug_msg.transform.translation.y,
+                          debug_msg.transform.translation.z))
+
             debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
             # current image timestamp does not yet have the transform but this should get the previous one
-            camera_position_in_world_frame = -r.T @ t
+            camera_position_in_world_frame = -r[:3, :3].T @ t
             x, y = int(camera_position_in_world_frame[0]), int(camera_position_in_world_frame[1])
             self.get_logger().error(f"camera position in world {str(camera_position_in_world_frame)}")
             debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0,255,0), -1)
             cv2.imshow("Camera position in world frame", debug_ref_image)
             cv2.waitKey(1)
 
-        # TODO: looks like r, t is actually parent=camera, child=world! above
-        #  visualization works (better) when the transform is inverted (-r.T @ t)
-        transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", r, t.squeeze()
-        )
-        #transform_camera = messaging.create_transform_msg(
-        #    msg.header.stamp, "world", "camera", r.T, (-t).squeeze()
-        #)
         self.broadcaster.sendTransform([transform_camera])
 
     @property
@@ -174,7 +189,7 @@ class PoseNode(Node):
         ) | elevation_16bit_low.astype(np.uint16)
 
         # Optionally display images
-        self._display_images("Query", query_img, "Reference", reference_img)
+        #self._display_images("Query", query_img, "Reference", reference_img)
 
         if torch.cuda.is_available():
             qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0

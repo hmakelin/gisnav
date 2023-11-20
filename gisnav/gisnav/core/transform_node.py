@@ -214,13 +214,13 @@ class TransformNode(Node):
             pnp_image_msg.header.frame_id = child_frame_id
 
             center = (orthoimage_stack.shape[0] // 2, orthoimage_stack.shape[1] // 2)
-            dx = center[0] - crop_shape[1] / 2
-            dy = center[1] - crop_shape[0] / 2
-            self.get_logger().error(f"translation from ref to world t: {dx} {dx} {camera_yaw_degrees}")
+
+            cx, cy = center[0], center[1]
+            dx = cx - crop_shape[1] / 2
+            dy = cy - crop_shape[0] / 2
 
             # Compute transformation (rotation around center + crop)
             theta = np.radians(camera_yaw_degrees)
-            cx, cy = center[0], center[1]
 
             # Translation to origin
             T1 = np.array([[1, 0, -cx],
@@ -242,15 +242,16 @@ class TransformNode(Node):
                            [0, 1, -dy],
                            [0, 0, 1]])
 
-            # Combined affine matrix
+            # Combined affine matrix: reference coordinate to world coordinate
             affine_matrix = T3 @ T2 @ R @ T1
             r = np.eye(3)
             r[:2, :2] = affine_matrix[:2, :2]
             t = affine_matrix[:3, 2]
             t[2] = 0.
 
+            # TODO: clean this up - possibly invert sign of camera yaw above
             transform_msg = messaging.create_transform_msg(
-                pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r, t.squeeze()
+                pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r.T, (-r.T @ t).squeeze()
             )
             self.broadcaster.sendTransform([transform_msg])
 

@@ -6,7 +6,7 @@ LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 RUN cd /uros_ws && \
     mkdir src && \
     cd src && \
-    git clone https://github.com/px4/px4_msgs.git && \
+    git clone -b release/1.14 https://github.com/px4/px4_msgs.git && \
     sed -i 's/\*\.msg/SensorGps.msg/g' px4_msgs/CMakeLists.txt && \
     cd .. && \
     . /opt/ros/foxy/setup.sh && \

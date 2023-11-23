@@ -31,8 +31,8 @@ import rclpy
 import cv2
 import numpy as np
 import torch
-import tf_transformations
 import tf2_ros
+import tf_transformations
 
 from cv_bridge import CvBridge
 from kornia.feature import LoFTR
@@ -98,14 +98,12 @@ class PoseNode(Node):
         r, t = pose_stamped
 
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", r, t.squeeze()
+            msg.header.stamp, "world", "camera", r.T, (-r.T @ t).squeeze()
         )
-        self.get_logger().error(f"outgoing {str(transform_camera)}")
+        self.broadcaster.sendTransform([transform_camera])
 
-        # TODO: fix get_transform (currently gets inverse?)
         debug_msg = messaging.get_transform(self, "world", "camera",
-                                            rclpy.time.Time())
-        self.get_logger().error(f"incoming {str(debug_msg)}")
+                                           rclpy.time.Time())
 
         # The child frame is the 'camera' frame of the PnP problem as
         # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
@@ -113,23 +111,21 @@ class PoseNode(Node):
             debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
                 deepcopy(msg), desired_encoding="passthrough"
             )
-            q = debug_msg.transform.rotation
-            q = [q.x, q.y, q.z, q.w]
+            #q = debug_msg.transform.rotation
+            #q = [q.x, q.y, q.z, q.w]
 
-            r = tf_transformations.quaternion_matrix(q)[:3, :3]
             t = np.array((debug_msg.transform.translation.x, debug_msg.transform.translation.y,
                           debug_msg.transform.translation.z))
 
             debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
             # current image timestamp does not yet have the transform but this should get the previous one
-            camera_position_in_world_frame = -r[:3, :3].T @ t
+            camera_position_in_world_frame = t
             x, y = int(camera_position_in_world_frame[0]), int(camera_position_in_world_frame[1])
-            self.get_logger().error(f"camera position in world {str(camera_position_in_world_frame)}")
-            debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0,255,0), -1)
+            debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0, 255, 0), -1)
             cv2.imshow("Camera position in world frame", debug_ref_image)
             cv2.waitKey(1)
-
-        self.broadcaster.sendTransform([transform_camera])
+        else:
+            self.get_logger().error(f"debug msg is  None")
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)

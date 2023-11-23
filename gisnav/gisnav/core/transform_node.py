@@ -194,7 +194,6 @@ class TransformNode(Node):
 
             # Rotate and crop orthoimage stack
             camera_yaw_degrees = self._extract_yaw(transform.rotation)
-            self.get_logger().error(f"camera yaw {camera_yaw_degrees}")
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
             orthoimage_rotated_stack = self._rotate_and_crop_center(
                 orthoimage_stack, camera_yaw_degrees, crop_shape
@@ -262,22 +261,22 @@ class TransformNode(Node):
 
                 # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
                 # TODO: use exact timestamp, reference frame is not continuous and cannot be interpolated
-                camera_pose_transform = messaging.get_transform(self, "world", "reference",
-                                                                rclpy.time.Time())  # query_image.header.stamp)
+                camera_pose_transform = messaging.get_transform(self, "world", "reference", rclpy.time.Time())  # query_image.header.stamp)
+
                 if camera_pose_transform is not None:
                     # TODO parse r and t from the camera_pose_transform message
-                    #  to ensure it is correct, do not use them directly here
+                    # to ensure it is correct, do not use them directly here
+                    #position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
                     position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
-                    self.get_logger().error(f"Ref center position in world frame {position_in_world_frame}")
-                    ref_center_position_in_world_frame = cv2.circle(world, tuple(map(int, position_in_world_frame)), 5, (0, 255, 0), -1)
+                    ref_center_position_in_world_frame = cv2.circle(world, tuple(
+                        map(int, position_in_world_frame)), 5, (0, 255, 0), -1)
                     cv2.imshow("Ref center position in world frame", ref_center_position_in_world_frame)
-
-                    ref_center_position_in_ref_frame = cv2.circle(ref, tuple(map(int, center)), 5, (0, 255, 0), -1)
-                    self.get_logger().error(f"Ref center position in ref frame {center}")
+                    ref_center_position_in_ref_frame = cv2.circle(ref, tuple(map(int, center)), 5,
+                                                                                   (0, 255, 0), -1)
                     cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
-                    cv2.waitKey(1)
+                    #cv2.waitKey(1)
 
                 # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
@@ -287,17 +286,11 @@ class TransformNode(Node):
                     q = [q.x, q.y, q.z, q.w]
                     r = tf_transformations.quaternion_matrix(q)[:3, :3]
                     t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
-                    affine = np.eye(4)
-                    affine[:3, :3] = r
-                    affine[:3, 3] = t
-                    #pos = -affine.T @ np.array((0, 0, 0, 1))
                     ref = deepcopy(orthoimage_stack[:, :, 0])
                     pos = -r.T @ t
                     camera_position_in_ref_frame = cv2.circle(ref, tuple(map(int, pos[:2])), 5, (0, 255, 0), -1)
-                    self.get_logger().error(f"Camera position in ref frame {pos}")
                     cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
                     cv2.waitKey(1)
-
 
             return pnp_image_msg
 

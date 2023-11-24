@@ -111,16 +111,13 @@ class PoseNode(Node):
             debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
                 deepcopy(msg), desired_encoding="passthrough"
             )
-            #q = debug_msg.transform.rotation
-            #q = [q.x, q.y, q.z, q.w]
 
             t = np.array((debug_msg.transform.translation.x, debug_msg.transform.translation.y,
                           debug_msg.transform.translation.z))
 
             debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
             # current image timestamp does not yet have the transform but this should get the previous one
-            camera_position_in_world_frame = t
-            x, y = int(camera_position_in_world_frame[0]), int(camera_position_in_world_frame[1])
+            x, y = int(t[0]), int(t[1])
             debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0, 255, 0), -1)
             cv2.imshow("Camera position in world frame", debug_ref_image)
             cv2.waitKey(1)

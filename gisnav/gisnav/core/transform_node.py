@@ -278,17 +278,19 @@ class TransformNode(Node):
                     cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
                     #cv2.waitKey(1)
 
-                # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
                                                                 rclpy.time.Time())  #pnp_image_msg.header.stamp)  # query_image.header.stamp)
+
                 if camera_pose_transform is not None:
-                    q = camera_pose_transform.transform.rotation
-                    q = [q.x, q.y, q.z, q.w]
-                    r = tf_transformations.quaternion_matrix(q)[:3, :3]
+                    #q = camera_pose_transform.transform.rotation
+                    #q = [q.x, q.y, q.z, q.w]
+                    #r = tf_transformations.quaternion_matrix(q)[:3, :3]
                     t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
                     ref = deepcopy(orthoimage_stack[:, :, 0])
-                    pos = -r.T @ t
-                    camera_position_in_ref_frame = cv2.circle(ref, tuple(map(int, pos[:2])), 5, (0, 255, 0), -1)
+                    #pos = -r.T @ t
+                    #pos = r.T @ t
+                    x, y = int(t[0]), int(t[1])
+                    camera_position_in_ref_frame = cv2.circle(ref, (x, y), 5, (0, 255, 0), -1)
                     cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
                     cv2.waitKey(1)
 

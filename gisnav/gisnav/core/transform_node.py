@@ -219,7 +219,7 @@ class TransformNode(Node):
             dy = cy - crop_shape[0] / 2
 
             # Compute transformation (rotation around center + crop)
-            theta = np.radians(camera_yaw_degrees)
+            theta = -np.radians(camera_yaw_degrees)
 
             # Translation to origin
             T1 = np.array([[1, 0, -cx],
@@ -242,19 +242,52 @@ class TransformNode(Node):
                            [0, 0, 1]])
 
             # Combined affine matrix: reference coordinate to world coordinate
-            affine_matrix = T3 @ T2 @ R @ T1
-            r = np.eye(3)
-            r[:2, :2] = affine_matrix[:2, :2]
-            t = affine_matrix[:3, 2]
-            t[2] = 0.
+            affine_2d = T3 @ T2 @ R @ T1
+
+            # Convert to 4x4 matrix
+            affine_3d = np.eye(4)
+            affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
+            affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
+
+            #r = np.eye(3)
+            #r[:2, :2] = affine_2d[:2, :2]
+            #t = affine_matrix[:3, 2]
+            #t[2] = 0.
+
+            # Extract translation
+            translation = affine_3d[:3, 3]
+
+            # Assuming rotation is only around Z-axis
+            #theta = np.arctan2(affine_3d[1, 0], affine_3d[0, 0])
+            #quaternion = tf_transformations.quaternion_from_euler(0, 0, theta)
 
             # TODO: clean this up - possibly invert sign of camera yaw above
-            transform_msg = messaging.create_transform_msg(
-                pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r.T, (-r.T @ t).squeeze()
-            )
-            self.broadcaster.sendTransform([transform_msg])
+            #transform_msg = messaging.create_transform_msg(
+            #    pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r.T, (-r.T @ t).squeeze()
+            #)
+            # Extract translation and rotation
+            #translation = affine_matrix[0:3, 3]
+            #rotation_matrix = affine_matrix[0:3, 0:3]
 
+            # Convert rotation matrix to quaternion
+            rotation_matrix = affine_3d[:4, :4]
+            quaternion = tf_transformations.quaternion_from_matrix(rotation_matrix)
 
+            # Create a TransformStamped message
+            transform_stamped = TransformStamped()
+            transform_stamped.header.stamp = pnp_image_msg.header.stamp
+            transform_stamped.header.frame_id = child_frame_id  # Set your reference frame ID
+            transform_stamped.child_frame_id = parent_frame_id  # Set your world frame ID
+            transform_stamped.transform.translation.x = translation[0]
+            transform_stamped.transform.translation.y = translation[1]
+            transform_stamped.transform.translation.z = translation[2]
+            transform_stamped.transform.rotation.x = quaternion[0]
+            transform_stamped.transform.rotation.y = quaternion[1]
+            transform_stamped.transform.rotation.z = quaternion[2]
+            transform_stamped.transform.rotation.w = quaternion[3]
+            self.broadcaster.sendTransform([transform_stamped])
+
+            r = rotation_matrix
             # TODO: publish camera positio overlaid on orthoimage (reference frame)
             #  here - move this code block to a more appropriate place in the future
             if orthoimage is not None:
@@ -267,7 +300,7 @@ class TransformNode(Node):
                     # TODO parse r and t from the camera_pose_transform message
                     # to ensure it is correct, do not use them directly here
                     #position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
-                    position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
+                    position_in_world_frame = r[:2, :2] @ np.array(center) + translation[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
                     ref_center_position_in_world_frame = cv2.circle(world, tuple(

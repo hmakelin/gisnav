@@ -121,8 +121,6 @@ class PoseNode(Node):
             debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0, 255, 0), -1)
             cv2.imshow("Camera position in world frame", debug_ref_image)
             cv2.waitKey(1)
-        else:
-            self.get_logger().error(f"debug msg is  None")
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)

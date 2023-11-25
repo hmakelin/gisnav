@@ -249,25 +249,8 @@ class TransformNode(Node):
             affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
             affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
 
-            #r = np.eye(3)
-            #r[:2, :2] = affine_2d[:2, :2]
-            #t = affine_matrix[:3, 2]
-            #t[2] = 0.
-
             # Extract translation
             translation = affine_3d[:3, 3]
-
-            # Assuming rotation is only around Z-axis
-            #theta = np.arctan2(affine_3d[1, 0], affine_3d[0, 0])
-            #quaternion = tf_transformations.quaternion_from_euler(0, 0, theta)
-
-            # TODO: clean this up - possibly invert sign of camera yaw above
-            #transform_msg = messaging.create_transform_msg(
-            #    pnp_image_msg.header.stamp, parent_frame_id, child_frame_id, r.T, (-r.T @ t).squeeze()
-            #)
-            # Extract translation and rotation
-            #translation = affine_matrix[0:3, 3]
-            #rotation_matrix = affine_matrix[0:3, 0:3]
 
             # Convert rotation matrix to quaternion
             rotation_matrix = affine_3d[:4, :4]
@@ -288,18 +271,14 @@ class TransformNode(Node):
             self.broadcaster.sendTransform([transform_stamped])
 
             r = rotation_matrix
-            # TODO: publish camera positio overlaid on orthoimage (reference frame)
-            #  here - move this code block to a more appropriate place in the future
             if orthoimage is not None:
 
-                # TODO: fix get_transform - currently returns the inverse (i.e. frame_ids in wrong order?)
                 # TODO: use exact timestamp, reference frame is not continuous and cannot be interpolated
                 camera_pose_transform = messaging.get_transform(self, "world", "reference", rclpy.time.Time())  # query_image.header.stamp)
 
                 if camera_pose_transform is not None:
                     # TODO parse r and t from the camera_pose_transform message
                     # to ensure it is correct, do not use them directly here
-                    #position_in_world_frame = r[:2, :2] @ np.array(center) + t[:2]
                     position_in_world_frame = r[:2, :2] @ np.array(center) + translation[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
@@ -309,19 +288,13 @@ class TransformNode(Node):
                     ref_center_position_in_ref_frame = cv2.circle(ref, tuple(map(int, center)), 5,
                                                                                    (0, 255, 0), -1)
                     cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
-                    #cv2.waitKey(1)
 
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
                                                                 rclpy.time.Time())  #pnp_image_msg.header.stamp)  # query_image.header.stamp)
 
                 if camera_pose_transform is not None:
-                    #q = camera_pose_transform.transform.rotation
-                    #q = [q.x, q.y, q.z, q.w]
-                    #r = tf_transformations.quaternion_matrix(q)[:3, :3]
                     t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
                     ref = deepcopy(orthoimage_stack[:, :, 0])
-                    #pos = -r.T @ t
-                    #pos = r.T @ t
                     x, y = int(t[0]), int(t[1])
                     camera_position_in_ref_frame = cv2.circle(ref, (x, y), 5, (0, 255, 0), -1)
                     cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)

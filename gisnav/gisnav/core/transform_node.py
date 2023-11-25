@@ -249,28 +249,14 @@ class TransformNode(Node):
             affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
             affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
 
-            # Extract translation
             translation = affine_3d[:3, 3]
+            rotation_matrix = affine_3d[:3, :3]
 
-            # Convert rotation matrix to quaternion
-            rotation_matrix = affine_3d[:4, :4]
-            quaternion = tf_transformations.quaternion_from_matrix(rotation_matrix)
+            transform_camera = messaging.create_transform_msg(
+                pnp_image_msg.header.stamp, child_frame_id, parent_frame_id, rotation_matrix, translation
+            )
+            self.broadcaster.sendTransform([transform_camera])
 
-            # Create a TransformStamped message
-            transform_stamped = TransformStamped()
-            transform_stamped.header.stamp = pnp_image_msg.header.stamp
-            transform_stamped.header.frame_id = child_frame_id  # Set your reference frame ID
-            transform_stamped.child_frame_id = parent_frame_id  # Set your world frame ID
-            transform_stamped.transform.translation.x = translation[0]
-            transform_stamped.transform.translation.y = translation[1]
-            transform_stamped.transform.translation.z = translation[2]
-            transform_stamped.transform.rotation.x = quaternion[0]
-            transform_stamped.transform.rotation.y = quaternion[1]
-            transform_stamped.transform.rotation.z = quaternion[2]
-            transform_stamped.transform.rotation.w = quaternion[3]
-            self.broadcaster.sendTransform([transform_stamped])
-
-            r = rotation_matrix
             if orthoimage is not None:
 
                 # TODO: use exact timestamp, reference frame is not continuous and cannot be interpolated
@@ -279,7 +265,7 @@ class TransformNode(Node):
                 if camera_pose_transform is not None:
                     # TODO parse r and t from the camera_pose_transform message
                     # to ensure it is correct, do not use them directly here
-                    position_in_world_frame = r[:2, :2] @ np.array(center) + translation[:2]
+                    position_in_world_frame = rotation_matrix[:2, :2] @ np.array(center) + translation[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
                     ref_center_position_in_world_frame = cv2.circle(world, tuple(

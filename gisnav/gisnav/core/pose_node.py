@@ -273,18 +273,21 @@ class PoseNode(Node):
     def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t):
         """Visualizes matches and projected :term:`FOV`"""
 
+        # We modify these from ROS to cv2 axes convention so we create copies
+        mkp_qry = mkp_qry.copy()
+        mkp_ref = mkp_ref.copy()
+
+        h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
+        projected_fov = self._project_fov(qry, h_matrix)
+
         # Invert the y-coordinate, considering the image height (input r and t
         # are in ROS convention where origin is at bottom left of image, we
         # want origin to be at top left for cv2
-        #h = self.camera_info.height
-        #r[:, 1] = -r[:, 1]
-        #t[1] = h - t[1]
+        h = self.camera_info.height
+        mkp_ref[:, 1] = mkp_ref[:, 1]
+        mkp_qry[:, 1] = h - mkp_qry[:, 1]
 
-        #mkp_ref[:, 1] = h - mkp_ref[:, 1]
-        #mkp_qry[:, 1] = h - mkp_qry[:, 1]
-
-        h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
-        projected_fov = self._project_fov(qry, h_matrix)[0]
+        projected_fov[:, :, 1] = h - projected_fov[:, :, 1]
         img_with_fov = cv2.polylines(
             ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
         )

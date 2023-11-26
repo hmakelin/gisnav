@@ -219,7 +219,7 @@ class TransformNode(Node):
             dy = cy - crop_shape[0] / 2
 
             # Compute transformation (rotation around center + crop)
-            theta = -np.radians(camera_yaw_degrees)
+            theta = np.radians(camera_yaw_degrees)
 
             # Translation to origin
             T1 = np.array([[1, 0, -cx],
@@ -268,6 +268,8 @@ class TransformNode(Node):
                     position_in_world_frame = rotation_matrix[:2, :2] @ np.array(center) + translation[:2]
                     world = deepcopy(orthoimage_rotated_stack[:, :, 0])
                     ref = deepcopy(orthoimage_stack[:, :, 0])
+                    # No need to move move height origin from bottom to top left for cv2 since this is the center
+                    # of a square
                     ref_center_position_in_world_frame = cv2.circle(world, tuple(
                         map(int, position_in_world_frame)), 5, (0, 255, 0), -1)
                     cv2.imshow("Ref center position in world frame", ref_center_position_in_world_frame)
@@ -281,7 +283,8 @@ class TransformNode(Node):
                 if camera_pose_transform is not None:
                     t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
                     ref = deepcopy(orthoimage_stack[:, :, 0])
-                    x, y = int(t[0]), int(t[1])
+                    h = orthoimage_stack.shape[0]
+                    x, y = int(t[0]), int(h - t[1])  # move height origin from bottom to top left for cv2
                     camera_position_in_ref_frame = cv2.circle(ref, (x, y), 5, (0, 255, 0), -1)
                     cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
                     cv2.waitKey(1)

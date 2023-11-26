@@ -97,8 +97,10 @@ class PoseNode(Node):
 
         r, t = pose_stamped
 
+        t[2] = -t[2]
+
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", r.T, (-r.T @ t).squeeze()
+            msg.header.stamp, "world", "camera", -r, (-r @ t).squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 
@@ -117,7 +119,7 @@ class PoseNode(Node):
 
             debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
             # current image timestamp does not yet have the transform but this should get the previous one
-            x, y = int(t[0]), int(t[1])
+            x, y = int(t[0]), int(self.camera_info.height - t[1])  # move height origin from bottom to top left for cv2
             debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0, 255, 0), -1)
             cv2.imshow("Camera position in world frame", debug_ref_image)
             cv2.waitKey(1)
@@ -229,7 +231,12 @@ class PoseNode(Node):
             k_matrix = camera_info.k.reshape((3, 3))
 
             mkp2_3d = self._compute_3d_points(mkp_ref, elevation)
+            # Adjust y-axis for ROS convention (origin is bottom left, not top left),
+            # elevation (z) coordinate remains unchanged
+            mkp2_3d[:, 1] = camera_info.height - mkp2_3d[:, 1]
+            mkp_qry[:, 1] = camera_info.height - mkp_qry[:, 1]
             r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
+
             self._visualize_matches_and_pose(
                 query_img.copy(), reference_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t
             )
@@ -265,14 +272,26 @@ class PoseNode(Node):
 
     def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t):
         """Visualizes matches and projected :term:`FOV`"""
+
+        # Invert the y-coordinate, considering the image height (input r and t
+        # are in ROS convention where origin is at bottom left of image, we
+        # want origin to be at top left for cv2
+        #h = self.camera_info.height
+        #r[:, 1] = -r[:, 1]
+        #t[1] = h - t[1]
+
+        #mkp_ref[:, 1] = h - mkp_ref[:, 1]
+        #mkp_qry[:, 1] = h - mkp_qry[:, 1]
+
         h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
-        projected_fov = self._project_fov(qry, h_matrix)
+        projected_fov = self._project_fov(qry, h_matrix)[0]
         img_with_fov = cv2.polylines(
             ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
         )
 
         mkp_qry = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_qry]
         mkp_ref = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_ref]
+
         matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
 
         match_img = cv2.drawMatches(

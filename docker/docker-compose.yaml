@@ -96,21 +96,6 @@ services:
         ROS_VERSION: humble
     command: ros2 launch gisnav px4.dev.launch.py
 
-  # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
-  #  duplicates these build arguments. They should be changed together.
-  # TODO: combine with gisnav service, gisnav_gpu currently not implemented as separate ROS package
-  gisnav-gpu:
-    <<: [*base, *ros, *tty, *nvidia-gpu]
-    #image: "ghcr.io/hmakelin/gisnav-gpu:${TAG:-latest}"
-    image: ghcr.io/hmakelin/gisnav-gpu:latest
-    build:
-      context: ..
-      dockerfile: docker/gisnav-gpu/Dockerfile
-      args:
-        ROS_VERSION: humble
-        BASE_IMAGE: nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
-    command: ros2 run gisnav_gpu pose_node
-
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu]
     build:
@@ -133,16 +118,6 @@ services:
       - /dev/dri:/dev/dri
     privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
-
-  torch-serve:
-    <<: [*base, *x11, *nvidia-gpu ]
-    build:
-      context: torch-serve
-      args:
-        BASE_IMAGE: pytorch/torchserve:latest-gpu
-      #platforms:
-      #  - "linux/amd64"
-      #  - "linux/arm64"
 
   # Note: build context is repository root
   rviz:

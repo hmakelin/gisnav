@@ -47,9 +47,6 @@ a brief description of their intended use.
 +---------------------+-----------------------------------------------------------------------------------------------+
 | ``qgc``             | :term:`QGroundControl` ground control software for controlling the :term:`vehicle`.           |
 +---------------------+-----------------------------------------------------------------------------------------------+
-| ``torch-serve``     | :term:`Torch` based deep learning service that handles image matching as part of :term:`pose` |
-|                     | estimation.                                                                                   |
-+---------------------+-----------------------------------------------------------------------------------------------+
 | ``mapserver``       | :term:`GIS` server with self-hosted :term:`NAIP` and :term:`OSM` Buildings data covering      |
 |                     | KSQL airport.                                                                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+

@@ -19,6 +19,3 @@ services:
 
   gisnav:
     <<: *arm64
-
-  torch-serve:
-    <<: *arm64

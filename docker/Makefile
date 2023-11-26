@@ -34,7 +34,7 @@
 #   - offboard-sitl-test-*: Targets for SITL testing services, which exclude
 #		GISNav and QGC for automated testing scenarios. Gazebo in headless mode.
 #   - offboard-sitl-dev-*: Targets for SITL development services, including
-#		Gazebo simulation, ROS middleware, mapserver, torch-serve, and QGC, but
+#		Gazebo simulation, ROS middleware, mapserver, and QGC, but
 #		excluding GISNav whose development version is assumed to be run locally.
 #   - demo-*: Shortcut targets for demo purposes, setting up all SITL services
 #		offboard, including GIS server, ROS middleware, Gazebo simulation, QGC,

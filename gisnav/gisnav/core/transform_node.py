@@ -259,35 +259,16 @@ class TransformNode(Node):
 
             if orthoimage is not None:
 
-                # TODO: use exact timestamp, reference frame is not continuous and cannot be interpolated
-                camera_pose_transform = messaging.get_transform(self, "world", "reference", rclpy.time.Time())  # query_image.header.stamp)
-
-                if camera_pose_transform is not None:
-                    # TODO parse r and t from the camera_pose_transform message
-                    # to ensure it is correct, do not use them directly here
-                    position_in_world_frame = rotation_matrix[:2, :2] @ np.array(center) + translation[:2]
-                    world = deepcopy(orthoimage_rotated_stack[:, :, 0])
-                    ref = deepcopy(orthoimage_stack[:, :, 0])
-                    # No need to move move height origin from bottom to top left for cv2 since this is the center
-                    # of a square
-                    ref_center_position_in_world_frame = cv2.circle(world, tuple(
-                        map(int, position_in_world_frame)), 5, (0, 255, 0), -1)
-                    cv2.imshow("Ref center position in world frame", ref_center_position_in_world_frame)
-                    ref_center_position_in_ref_frame = cv2.circle(ref, tuple(map(int, center)), 5,
-                                                                                   (0, 255, 0), -1)
-                    cv2.imshow("Ref center position in ref frame", ref_center_position_in_ref_frame)
+                ref = deepcopy(orthoimage_stack[:, :, 0])
 
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
                                                                 rclpy.time.Time())  #pnp_image_msg.header.stamp)  # query_image.header.stamp)
 
                 if camera_pose_transform is not None:
-                    t = np.array((camera_pose_transform.transform.translation.x, camera_pose_transform.transform.translation.y, camera_pose_transform.transform.translation.z))
-                    ref = deepcopy(orthoimage_stack[:, :, 0])
                     h = orthoimage_stack.shape[0]
-                    x, y = int(t[0]), int(h - t[1])  # move height origin from bottom to top left for cv2
-                    camera_position_in_ref_frame = cv2.circle(ref, (x, y), 5, (0, 255, 0), -1)
-                    cv2.imshow("Camera position in ref frame", camera_position_in_ref_frame)
-                    cv2.waitKey(1)
+                    messaging.visualize_transform(camera_pose_transform, ref, h,
+                                                  "Camera position in ref frame")
+
 
             return pnp_image_msg
 

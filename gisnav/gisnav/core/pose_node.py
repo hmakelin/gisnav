@@ -107,22 +107,15 @@ class PoseNode(Node):
         debug_msg = messaging.get_transform(self, "world", "camera",
                                            rclpy.time.Time())
 
+        debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
+            deepcopy(msg), desired_encoding="passthrough"
+        )
+
         # The child frame is the 'camera' frame of the PnP problem as
         # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
-        if debug_msg is not None:
-            debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
-                deepcopy(msg), desired_encoding="passthrough"
-            )
-
-            t = np.array((debug_msg.transform.translation.x, debug_msg.transform.translation.y,
-                          debug_msg.transform.translation.z))
-
-            debug_ref_image = debug_ref_image[:, :, 1]  # seocnd channel is ref (world) image
-            # current image timestamp does not yet have the transform but this should get the previous one
-            x, y = int(t[0]), int(self.camera_info.height - t[1])  # move height origin from bottom to top left for cv2
-            debug_ref_image = cv2.circle(np.array(debug_ref_image), (x, y), 5, (0, 255, 0), -1)
-            cv2.imshow("Camera position in world frame", debug_ref_image)
-            cv2.waitKey(1)
+        if debug_msg is not None and self.camera_info is not None:
+            debug_ref_image = debug_ref_image[:, :, 1]  # second channel is world
+            messaging.visualize_transform(debug_msg, debug_ref_image, self.camera_info.height, "Camera position in world frame")
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)

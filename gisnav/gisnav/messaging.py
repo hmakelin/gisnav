@@ -1,6 +1,7 @@
 """Helper functions for ROS messaging"""
 import time
 from typing import Final, Literal
+import cv2
 
 import numpy as np
 import tf2_ros
@@ -200,3 +201,13 @@ def get_transform(
             f"{target_frame} {e}."
         )
         return None
+
+def visualize_transform(transform, image, height, title):
+    """Shows transform translation x and y position on image"""
+    t = np.array((transform.transform.translation.x, transform.transform.translation.y,
+                  transform.transform.translation.z))
+    # current image timestamp does not yet have the transform but this should get the previous one
+    x, y = int(t[0]), int(height - t[1])  # move height origin from bottom to top left for cv2
+    image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
+    cv2.imshow(title, image)
+    cv2.waitKey(1)

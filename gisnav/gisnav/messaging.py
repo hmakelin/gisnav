@@ -1,6 +1,6 @@
 """Helper functions for ROS messaging"""
 import time
-from typing import Final, Literal
+from typing import Final, Literal, Optional
 import cv2
 
 import numpy as np
@@ -131,22 +131,15 @@ def create_transform_msg(
     stamp,
     parent_frame: FrameID,
     child_frame: FrameID,
-    rotation_matrix: np.ndarray,
+    q: tuple,
     translation_vector: np.ndarray,
-):
+) -> Optional[TransformStamped]:
     transform = TransformStamped()
 
     # transform.header.stamp = self.get_clock().now().to_msg()
     transform.header.stamp = stamp
     transform.header.frame_id = parent_frame
     transform.child_frame_id = child_frame
-
-    # Convert rotation matrix to quaternion
-    #rotation = Rotation.from_matrix(rotation_matrix)
-    #q = rotation.as_quat()
-    rotation_4x4 = np.eye(4)
-    rotation_4x4[:3, :3] = rotation_matrix
-    q = tf_transformations.quaternion_from_matrix(rotation_4x4)
 
     transform.transform.rotation.x = q[0]
     transform.transform.rotation.y = q[1]

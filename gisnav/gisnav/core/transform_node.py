@@ -252,8 +252,14 @@ class TransformNode(Node):
             translation = affine_3d[:3, 3]
             rotation_matrix = affine_3d[:3, :3]
 
+            try:
+                q = tf_transformations.quaternion_from_matrix(affine_3d)
+            except np.linalg.LinAlgError:
+                self.get_logger().warning("_pnp_image: Could not compute quaternion from estimated rotation. Returning None.")
+                return None
+
             transform_camera = messaging.create_transform_msg(
-                pnp_image_msg.header.stamp, child_frame_id, parent_frame_id, rotation_matrix, translation
+                pnp_image_msg.header.stamp, child_frame_id, parent_frame_id, q, translation
             )
             self.broadcaster.sendTransform([transform_camera])
 

@@ -99,8 +99,16 @@ class PoseNode(Node):
 
         t[2] = -t[2]
 
+        rotation_4x4 = np.eye(4)
+        rotation_4x4[:3, :3] = r
+        try:
+            q = tf_transformations.quaternion_from_matrix(rotation_4x4)
+        except np.linalg.LinAlgError:
+            self.get_logger().warning("image_cb: Could not compute quaternion from estimated rotation. Returning None.")
+            return None
+
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", -r, (-r @ t).squeeze()
+            msg.header.stamp, "world", "camera", q, (-r @ t).squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 

@@ -32,6 +32,7 @@ from typing import IO, Final, List, Optional, Tuple
 import cv2
 import numpy as np
 import requests
+import tf_transformations
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
 from geometry_msgs.msg import Vector3, Vector3Stamped
@@ -621,17 +622,30 @@ class GISNode(Node):
             # Get proj string for message header (information to project
             # reference image coordinates to WGS 84
             height, width = img.shape[0:2]
-            r, s, t, utm_zone = self._get_geotransformation_matrix(
+            geotransform = self._get_geotransformation_matrix(
                 height, width, bounding_box
             )
+            if geotransform is None:
+                self.get_logger().warning("Could not compute geotransform matrix - returning None")
+                return None
+            r, s, t, utm_zone = geotransform
 
             # Publish rigid transformation into a "wgs_84_unscaled" frame -
             # we cannot publish the scaling (and possible shear) over tf2 so
             # the child frame is not quite WGS 84 yet
             child_frame_id: messaging.FrameID = "wgs_84_unscaled"
             parent_frame_id: messaging.FrameID = "reference"
+
+            rotation_4x4 = np.eye(4)
+            rotation_4x4[:3, :3] = r
+            try:
+                q = tf_transformations.quaternion_from_matrix(rotation_4x4)
+            except np.linalg.LinAlgError:
+                self.get_logger().warning("orthoimage: Could not compute quaternion from estimated rotation. Returning None.")
+                return None
+
             transform_ortho = messaging.create_transform_msg(
-                image_msg.header.stamp, parent_frame_id, child_frame_id, r, t
+                image_msg.header.stamp, parent_frame_id, child_frame_id, q, t
             )
             self.broadcaster.sendTransform([transform_ortho])
 
@@ -656,8 +670,7 @@ class GISNode(Node):
         else:
             return None
 
-    @classmethod
-    def _get_geotransformation_matrix(cls, width: int, height: int, bbox: BoundingBox):
+    def _get_geotransformation_matrix(cls, width: int, height: int, bbox: BoundingBox) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, str]]:
         """Transforms orthoimage frame pixel coordinates to WGS84 lon,
         lat coordinates
         """
@@ -754,7 +767,12 @@ class GISNode(Node):
         scale_x = np.linalg.norm(a[:, 0])
         scale_y = np.linalg.norm(a[:, 1])
 
+        if scale_x == 0 or scale_y == 0:
+            # TODO raise error or handle better
+            return None
+
         # Normalize the columns to get the pure rotation part
+        cls.get_logger().error(str((scale_x, scale_y)))
         rotation_2d = a / [scale_x, scale_y]
 
         # Rotation in 3D (assuming no rotation around the z-axis)

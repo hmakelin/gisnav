@@ -561,6 +561,10 @@ ____________________________________________________
     VNC
         Virtual Network Computing
 
+    WGS
+    WGS 84
+        A World Geodetic System coordinate system: `en.wikipedia.org/wiki/World_Geodetic_System <https://en.wikipedia.org/wiki/World_Geodetic_System>`
+
     WMS
     WMTS
         Web Map Service / Web Map Tile Service, two separate :term:`OGC`

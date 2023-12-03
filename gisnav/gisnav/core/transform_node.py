@@ -128,26 +128,6 @@ class TransformNode(Node):
         """Raw image data from vehicle camera for pose estimation"""
 
     @staticmethod
-    def _extract_yaw(q: Quaternion) -> float:
-        """Calculate the yaw angle from a quaternion in the ENU frame.
-
-        Returns yaw with origin centered at North (i.e. applies a 90 degree adjustment).
-
-        :param q: A list containing the quaternion [qx, qy, qz, qw].
-        :return: The yaw angle in degrees.
-        """
-        enu_yaw = np.arctan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y**2 + q.z**2))
-        enu_yaw_deg = np.degrees(enu_yaw)
-
-        # Convert ENU yaw to heading with North as origin
-        heading = 90.0 - enu_yaw_deg
-
-        # Normalize to [0, 360) range
-        heading = (heading + 360) % 360
-
-        return heading
-
-    @staticmethod
     def _determine_utm_zone(longitude):
         """Determine the UTM zone for a given longitude."""
         return int((longitude + 180) / 6) + 1
@@ -193,7 +173,7 @@ class TransformNode(Node):
             )
 
             # Rotate and crop orthoimage stack
-            camera_yaw_degrees = self._extract_yaw(transform.rotation)
+            camera_yaw_degrees = messaging.extract_yaw(transform.rotation)
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
             orthoimage_rotated_stack = self._rotate_and_crop_center(
                 orthoimage_stack, camera_yaw_degrees, crop_shape

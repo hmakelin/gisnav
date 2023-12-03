@@ -100,7 +100,7 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
 
 FrameID = Literal[
     "wgs_84",
-    "query",
+    "wgs_84_unscaled",
     "reference",
     "base_link",
     "camera",
@@ -109,21 +109,18 @@ FrameID = Literal[
     "world",
 ]
 """Allowed ROS header frame_ids (used by tf2)
-
-    The 'orthoimage', 'query_image', and 'reference_image' frames are all image
-    planes in the pinhole camera model. The first and second (x and y) axes are
-    parallel to the `camera` frame x and y axes.
-
+    
+    The 'camera' and 'world' frames are coordinate systems in the cv2 pinhole 
+    camera model. The 'camera' frame follows the convention where the x axis
+    points to the right from the body of the camera and z-axis forward along
+    the optical axis, it is not the 'camera_optical' frame where the x axis 
+    points in the direction of the optical axis.
+    
     The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
 
-    The 'camera' frame follows the pinhole camera model convention of axes where
-    first axis points to right of camera aperture, second axis points down from
-    aperture, and the third axis points into the viewing direction. This should
-    not be described as a camera "FRD" frame as forward implies in the direction
-    of the viewing axis, which is the third and not first axis in this convention.
-
-    The 'camera_frd' frame is a more intuitive definition of the camera axes
-    where the forward direction is in the direction of the optical viewing axis.
+    The 'reference' frame is the :term:'reference' arrays coordinate frame
+    where the origin is the bottom left (ROS convention, not numpy/cv2 top left
+    convention). x axis is the width axis, y axis is height.
 """
 
 
@@ -204,3 +201,22 @@ def visualize_transform(transform, image, height, title):
     image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
     cv2.imshow(title, image)
     cv2.waitKey(1)
+
+def extract_yaw(q: Quaternion) -> float:
+    """Calculate the yaw angle from a quaternion in the ENU frame.
+
+    Returns yaw with origin centered at North (i.e. applies a 90 degree adjustment).
+
+    :param q: A list containing the quaternion [qx, qy, qz, qw].
+    :return: The yaw angle in degrees.
+    """
+    enu_yaw = np.arctan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y**2 + q.z**2))
+    enu_yaw_deg = np.degrees(enu_yaw)
+
+    # Convert ENU yaw to heading with North as origin
+    heading = 90.0 - enu_yaw_deg
+
+    # Normalize to [0, 360) range
+    heading = (heading + 360) % 360
+
+    return heading

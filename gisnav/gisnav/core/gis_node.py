@@ -670,6 +670,7 @@ class GISNode(Node):
         else:
             return None
 
+    @classmethod
     def _get_geotransformation_matrix(cls, width: int, height: int, bbox: BoundingBox) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, str]]:
         """Transforms orthoimage frame pixel coordinates to WGS84 lon,
         lat coordinates
@@ -772,7 +773,6 @@ class GISNode(Node):
             return None
 
         # Normalize the columns to get the pure rotation part
-        cls.get_logger().error(str((scale_x, scale_y)))
         rotation_2d = a / [scale_x, scale_y]
 
         # Rotation in 3D (assuming no rotation around the z-axis)

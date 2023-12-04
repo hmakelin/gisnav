@@ -33,6 +33,7 @@ import cv2
 import numpy as np
 import requests
 import tf_transformations
+import rclpy
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
 from geometry_msgs.msg import Vector3, Vector3Stamped
@@ -197,7 +198,6 @@ class GISNode(Node):
 
         self.old_bounding_box: Optional[BoundingBox] = None
 
-        # Initialize the static transform broadcaster
         self.broadcaster = TransformBroadcaster(self)
 
     @property
@@ -645,7 +645,7 @@ class GISNode(Node):
                 return None
 
             transform_ortho = messaging.create_transform_msg(
-                image_msg.header.stamp, parent_frame_id, child_frame_id, q, t
+                self.get_clock().now().to_msg(), parent_frame_id, child_frame_id, q, t
             )
             self.broadcaster.sendTransform([transform_ortho])
 

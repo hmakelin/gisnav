@@ -22,7 +22,7 @@ from ..decorators import ROS, narrow_types
 from .. import messaging
 from .._data import Attitude
 from ..constants import (
-    POSE_NODE_NAME,
+    GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_SCALING,
 )
@@ -127,6 +127,9 @@ class MockGPSNode(Node):
         # Define the 3D Cartesian coordinate system (ECEF)
         self._ecef = Proj(proj='geocent', datum='WGS84')
 
+        # Subscribe to scaling
+        self.scaling
+
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def use_sensor_gps(self) -> Optional[bool]:
@@ -195,7 +198,7 @@ class MockGPSNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_SCALING.replace("~", POSE_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_SCALING.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def scaling(self) -> Optional[Vector3]:

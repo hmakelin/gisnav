@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Final, Optional
 
 import numpy as np
-from geometry_msgs.msg import PoseStamped, Vector3, TransformStamped
+from geometry_msgs.msg import PoseStamped, Vector3, Vector3Stamped, TransformStamped
 from gps_time import GPSTime
 from px4_msgs.msg import SensorGps
 import rclpy
@@ -53,7 +53,7 @@ class MockGPSNode(Node):
             end
 
             tf -->|'geometry_msgs/TransformStamped camera->wgs84_unscaled'| MockGPSNode
-            scaling -->|geometry_msgs/Vector3| MockGPSNode
+            scaling -->|geometry_msgs/Vector3Stamped| MockGPSNode
             sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
             gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
 
@@ -201,7 +201,7 @@ class MockGPSNode(Node):
         f'/{ROS_TOPIC_RELATIVE_SCALING.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def scaling(self) -> Optional[Vector3]:
+    def scaling(self) -> Optional[Vector3Stamped]:
         """Subscribed :term:`camera` to :term:`WGS 84 unscaled <WGS 84>` frame
         scaling vector, or None if not available
 
@@ -216,21 +216,27 @@ class MockGPSNode(Node):
     def publish_sensor_gps(self) -> Optional[SensorGps]:
         """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
         is ``True``
+
+        Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
         """
 
-        def _dot_product(vector1, vector2):
-            return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z
+        def _dot_product(vector1: Vector3, vector2: Vector3) -> Vector3:
+            return Vector3(
+                x=vector1.x * vector2.x,
+                y=vector1.y * vector2.y,
+                z=vector1.z * vector2.z
+            )
 
         @narrow_types(self)
         def _sensor_gps(
             camera_to_wgs84_unscaled: TransformStamped,
-            scaling: Vector3,
+            scaling: Vector3Stamped,
             device_id: int,
         ) -> SensorGps:
 
             # TODO
             camera_to_wgs84_unscaled.transform.translation = _dot_product(
-                camera_to_wgs84_unscaled.transform.translation, scaling)
+                camera_to_wgs84_unscaled.transform.translation, scaling.vector)
 
             translation, rotation = (camera_to_wgs84_unscaled.transform.translation,
                                      camera_to_wgs84_unscaled.transform.rotation)

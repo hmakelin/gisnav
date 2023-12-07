@@ -18,6 +18,7 @@ RUN cd gisnav/gisnav && \
     apt-get -y install python3-pip && \
     pip install . .[mock_gps_node] .[dev]
 
+# TODO: no need to install egm96-5 separately after pygeodesy was refactored out in gisnav-gpu branch?
 # Install GIS related dependencies
 RUN apt-get -y install software-properties-common python3-pip wget && \
     add-apt-repository ppa:ubuntugis/ppa && \

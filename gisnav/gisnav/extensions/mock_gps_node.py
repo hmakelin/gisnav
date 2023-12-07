@@ -2,7 +2,7 @@
 import json
 import socket
 from datetime import datetime
-from typing import Final, Optional
+from typing import Final, Optional, Tuple
 
 import numpy as np
 from geometry_msgs.msg import PoseStamped, Vector3, Vector3Stamped, TransformStamped
@@ -14,9 +14,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from pygeodesy.geoids import GeoidPGM
-from pyproj import Proj, transform
-
+from pyproj import Transformer
 from ..decorators import ROS, narrow_types
 
 from .. import messaging
@@ -81,6 +79,9 @@ class MockGPSNode(Node):
     ROS_D_PUBLISH_RATE = 1.0
     """Default mock GPS message publish rate in Hz"""
 
+    ROS_D_DEM_VERTICAL_DATUM = 5703
+    """Default :term:`DEM` vertical datum"""
+
     ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
     """Absolute :term:`topic` into which this :term:`node` publishes
     :attr:`.sensor_gps`
@@ -114,19 +115,6 @@ class MockGPSNode(Node):
             publish_rate
         )
 
-        # TODO: do not hard code geoid path, maybe host on onboard GIS?
-        self._egm96 = GeoidPGM("/usr/share/GeographicLib/geoids/egm96-5.pgm", kind=-3)
-
-        # TODO: get navd 88 height (USGS DEM vertical datum) to correct elevation
-        #  when using the DEM layer
-        #nvvd88 = Proj(init='epsg:5703')  # NAVD 88
-
-        # Define the geographic coordinate system (WGS84)
-        self._geodetic = Proj(proj='latlong', datum='WGS84')
-
-        # Define the 3D Cartesian coordinate system (ECEF)
-        self._ecef = Proj(proj='geocent', datum='WGS84')
-
         # Subscribe to scaling
         self.scaling
 
@@ -153,6 +141,13 @@ class MockGPSNode(Node):
     def publish_rate(self) -> Optional[float]:
         """Mock :term:`GPS` :term:`message` publish rate in Hz"""
 
+    @property
+    @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def dem_vertical_datum(self) -> Optional[int]:
+        """:term:`DEM` vertical datum (must match DEM that is published in
+        :attr:`.GISNode.orthoimage`)
+        """
+
     @narrow_types
     def _create_publish_timer(self, publish_rate: float) -> Timer:
         """Returns a timer that publishes the output mock :term:`GPS`
@@ -173,26 +168,6 @@ class MockGPSNode(Node):
             self.publish_sensor_gps if self.use_sensor_gps else self.publish_gps_input
         )
         return timer
-
-    def _get_ellipsoid_height(self, lat: float, lon: float) -> float:
-        """Gets :term:`ellipsoid` height for given lat lon coordinates"""
-        # Transform the lat, lon to X, Y, Z coordinates
-        x, y, z = transform(self._geodetic, self._ecef, lon, lat, 0)
-
-        # The ellipsoid height is the distance from the origin to the point
-        return (x ** 2 + y ** 2 + z ** 2) ** 0.5
-
-    def _get_amsl_height(self, lat: float, lon: float, h_ellipsoid: Optional[float]) -> float:
-        """Gets :term:`AMSL` height for given lat lon coordinates
-
-        :param lat: Latitude coordinate in :term:`WGS 84`
-        :param lon: Longitude coordinatge in :term:`WGS 84`
-        :param h_ellipsoid: Optional ellipsoid height at the location if available
-        """
-        if h_ellipsoid is None:
-            h_ellipsoid = self._get_ellipsoid_height(lat, lon)
-        h_geoid = self._egm96.height(lat, lon)
-        return h_ellipsoid - h_geoid
 
     @property
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
@@ -269,10 +244,15 @@ class MockGPSNode(Node):
             msg.lat = int(translation.y * 1e7)
             msg.lon = int(translation.x * 1e7)
 
-            msg.alt_ellipsoid = int(
-                self._get_ellipsoid_height(translation.y, translation.x) * 1e3
-            )
-            msg.alt = int(self._get_amsl_height(translation.y, translation.x, msg.alt_ellipsoid) * 1e3)
+            altitudes = self._convert_to_wgs84(translation.y, translation.x, translation.z, self.dem_vertical_datum)
+            if altitudes is not None:
+                alt_ellipsoid, alt_amsl = altitudes
+            else:
+                # todo Fix this - return type should be SensorGps
+                return None
+
+            msg.alt_ellipsoid = int(alt_ellipsoid * 1e3)
+            msg.alt = int(alt_amsl * 1e3)
 
             msg.eph = eph
             msg.epv = epv
@@ -392,3 +372,38 @@ class MockGPSNode(Node):
         # = 10101111 00000001 00001 000
         # = 11469064
         return 11469064
+
+    @narrow_types
+    def _convert_to_wgs84(self, lat: float, lon: float, elevation: float, epsg_code: int) -> Optional[Tuple[float, float]]:
+        """
+        Convert :term:`elevation` or :term:`altitude` from a specified vertical
+        datum to :term:`WGS 84`.
+
+        :param lat: Latitude in decimal degrees.
+        :param lon: Longitude in decimal degrees.
+        :param elevation: Elevation in the specified datum.
+        :param epsg_code: EPSG code of the vertical datum.
+        :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
+            :term:`AMSL`.
+        """
+        # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
+        epsg_wgs84 = 4326
+        epsg_msl = 5773  # Example: EGM96
+
+        # Create transformers
+        transformer_to_wgs84 = Transformer.from_crs(
+            f"EPSG:{epsg_code}",
+            f"EPSG:{epsg_wgs84}",
+            always_xy=True
+        )
+        transformer_to_msl = Transformer.from_crs(
+            f"EPSG:{epsg_code}",
+            f"EPSG:{epsg_msl}",
+            always_xy=True
+        )
+
+        # Perform the transformations
+        _, _, wgs84_elevation = transformer_to_wgs84.transform(lon, lat, elevation)
+        _, _, msl_elevation = transformer_to_msl.transform(lon, lat, elevation)
+
+        return wgs84_elevation, msl_elevation

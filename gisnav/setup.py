@@ -108,7 +108,6 @@ setup(
     install_requires=[
         "numpy>=1.24.2",
         "opencv-python",
-        "pygeodesy",
         "pyproj>=3.2.1",
         "requests",
         "scipy>=1.4.0",

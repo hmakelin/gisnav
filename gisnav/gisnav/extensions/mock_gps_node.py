@@ -173,7 +173,7 @@ class MockGPSNode(Node):
         return timer
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    #@ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: get timestamp that matches orthoimage/reference frame
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GEOTRANSFORM.replace("~", GIS_NODE_NAME)}',
@@ -208,12 +208,8 @@ class MockGPSNode(Node):
                                      camera_to_reference.transform.rotation)
 
             # Unpack the geotransformation affine matrix
-            byte_array = geotransform.data
-            num_elements = 9  # (9 for a 3x3 matrix)
-            flat_list = struct.unpack(f'{num_elements}d', byte_array)
-            M = np.array(flat_list).reshape(3, 3)
-
-            translation_wgs84 = M @ translation
+            M = np.frombuffer(geotransform.data, dtype=np.float64).reshape(4, 4)
+            translation_wgs84 = M @ np.array([translation.x, translation.y, translation.z, 1])
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw
@@ -240,10 +236,10 @@ class MockGPSNode(Node):
             msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
             msg.c_variance_rad = np.nan
 
-            msg.lat = int(translation_wgs84.y * 1e7)
-            msg.lon = int(translation_wgs84.x * 1e7)
+            msg.lat = int(translation_wgs84[1] * 1e7)
+            msg.lon = int(translation_wgs84[0] * 1e7)
 
-            altitudes = self._convert_to_wgs84(translation_wgs84.y, translation_wgs84.x, translation_wgs84.z, self.dem_vertical_datum)
+            altitudes = self._convert_to_wgs84(translation_wgs84[1], translation_wgs84[0], translation_wgs84[2], self.dem_vertical_datum)
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
@@ -280,13 +276,13 @@ class MockGPSNode(Node):
         #  i.e. they jump around which means tf interpolation should not be
         #  applied. Must specify specific timestamps to connect camera pose
         #  estimation chain to correct reference frame.
-        camera_to_wgs84_unscaled = messaging.get_transform(
+        camera_to_reference = messaging.get_transform(
             self, "reference", "camera",
             rclpy.time.Time()
         )
 
         return _sensor_gps(
-            camera_to_wgs84_unscaled,
+            camera_to_reference,
             self.geotransform,
             self._device_id,
         )

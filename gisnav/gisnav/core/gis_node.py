@@ -597,7 +597,7 @@ class GISNode(Node):
             self.old_bounding_box = bounding_box
 
             # Publish geotransform associated with the image msg, and the image message right after
-            image_msg.header.frame_id = "reference"
+            image_msg.header = messaging.create_header("reference")
             height, width = img.shape[0:2]
             self.geotransform(
                 height, width, bounding_box, image_msg.header
@@ -694,14 +694,14 @@ class GISNode(Node):
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Flatten the matrix and repurpose a PointCloud2 message to transport it
-        flat_list = M.flatten().tolist()
-        byte_array = struct.pack(f'{len(flat_list)}d', *flat_list)
+        array_len = 16
+        byte_array = M.tobytes()
         matrix_msg = PointCloud2()
         matrix_msg.header = header
         matrix_msg.height = 1
-        matrix_msg.width = len(flat_list)
+        matrix_msg.width = array_len
         matrix_msg.is_dense = False
-        matrix_msg.fields = [PointField(name='affine_matrix', offset=0, datatype=PointField.FLOAT64, count=len(flat_list))]
+        matrix_msg.fields = [PointField(name='affine_matrix', offset=0, datatype=PointField.FLOAT64, count=array_len)]
         matrix_msg.data = byte_array
 
         return matrix_msg

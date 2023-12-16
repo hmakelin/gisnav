@@ -12,6 +12,7 @@ downloading, storing, and publishing the :term:`orthophoto` and optional
     graph LR
         subgraph GISNode
             image[gisnav/gis_node/image]
+            geotransform[gisnav/gis_node/geotransform]
         end
 
         subgraph BBoxNode
@@ -24,19 +25,18 @@ downloading, storing, and publishing the :term:`orthophoto` and optional
 
         camera_info -->|sensor_msgs/CameraInfo| GISNode
         bounding_box -->|geographic_msgs/BoundingBox| GISNode
+        geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
         image -->|sensor_msgs/Image| TransformNode:::hidden
 """
+import struct
 from copy import deepcopy
 from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import requests
-import tf_transformations
-import rclpy
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
-from geometry_msgs.msg import Vector3, Vector3Stamped
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from rcl_interfaces.msg import ParameterDescriptor
@@ -44,8 +44,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, Image, NavSatFix
+from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Header
 from shapely.geometry import box
-from tf2_ros.transform_broadcaster import TransformBroadcaster
 
 from .. import messaging
 from .._data import create_src_corners
@@ -54,7 +55,7 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
-    ROS_TOPIC_RELATIVE_SCALING,
+    ROS_TOPIC_RELATIVE_GEOTRANSFORM,
 )
 from ..decorators import ROS, cache_if, narrow_types
 
@@ -197,8 +198,6 @@ class GISNode(Node):
         )
 
         self.old_bounding_box: Optional[BoundingBox] = None
-
-        self.broadcaster = TransformBroadcaster(self)
 
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -542,36 +541,6 @@ class GISNode(Node):
             self.min_map_overlap_update_threshold,
         )
 
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_SCALING,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    @narrow_types
-    def _publish_scaling(self, s, header) -> Optional[Vector3Stamped]:
-        """Scaling factor from 'wgs_84_unscaled' frame to 'wgs_84' frame
-
-        The scaling message header must have the exact same timestamp as the
-        'reference' to 'wgs_84_unscaled' transform. The reference frame
-        is discontinuous (based on the bounding box) so it is essential
-        that the scaling is linked to the exact same bounding box
-        that was used for the tf-published rigid part of the transform.
-
-        :param s: Scaling 3-vector to publish - the scaling part of the
-            'reference' to 'wgs_84' transformation that cannot be published over
-            tf
-        :param header: Header with exact same timestamp as the 'reference' to
-            'wgs_84_unscaled' transform
-        """
-        scaling_msg = Vector3Stamped(
-            header=header,  # important that header matches
-            vector=Vector3(
-                x=s[0],
-                y=s[1],
-                z=s[2],
-            )
-        )
-        return scaling_msg
-
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_ORTHOIMAGE,
@@ -619,46 +588,6 @@ class GISNode(Node):
                 orthoimage_stack, encoding="passthrough"
             )
 
-            # Get proj string for message header (information to project
-            # reference image coordinates to WGS 84
-            height, width = img.shape[0:2]
-            geotransform = self._get_geotransformation_matrix(
-                height, width, bounding_box
-            )
-            if geotransform is None:
-                self.get_logger().warning("Could not compute geotransform matrix - returning None")
-                return None
-            r, s, t, utm_zone = geotransform
-
-            # Publish rigid transformation into a "wgs_84_unscaled" frame -
-            # we cannot publish the scaling (and possible shear) over tf2 so
-            # the child frame is not quite WGS 84 yet
-            child_frame_id: messaging.FrameID = "wgs_84_unscaled"
-            parent_frame_id: messaging.FrameID = "reference"
-
-            rotation_4x4 = np.eye(4)
-            rotation_4x4[:3, :3] = r
-            try:
-                q = tf_transformations.quaternion_from_matrix(rotation_4x4)
-            except np.linalg.LinAlgError:
-                self.get_logger().warning("orthoimage: Could not compute quaternion from estimated rotation. Returning None.")
-                return None
-
-            transform_ortho = messaging.create_transform_msg(
-                self.get_clock().now().to_msg(), parent_frame_id, child_frame_id, q, t
-            )
-            self.broadcaster.sendTransform([transform_ortho])
-
-            # We are dealing with a conventional geotransformation from a
-            # orthorectified pixel coordinates into WGS84 frame so we should
-            # only have a rotation, translation and scaling component. There is
-            # no shear, so our scale and shear matrix reduces into a 3-vector,
-            # which makes it easy to publish over ROS using the Vector3Stamped
-            # message
-            self._publish_scaling(s, transform_ortho.header)
-
-            image_msg.header.frame_id = parent_frame_id
-
             # new orthoimage stack, set old bounding box
             # TODO: this is brittle (old bounding box needs to always be set
             #  before the new image_msg is returned), information should be
@@ -666,14 +595,28 @@ class GISNode(Node):
             #  with _orthoimage cached attirbute to avoid having to manually
             #  manage these two interdependent attributes
             self.old_bounding_box = bounding_box
+
+            # Publish geotransform associated with the image msg, and the image message right after
+            image_msg.header.frame_id = "reference"
+            height, width = img.shape[0:2]
+            self.geotransform(
+                height, width, bounding_box, image_msg.header
+            )
             return image_msg
         else:
             return None
 
-    @classmethod
-    def _get_geotransformation_matrix(cls, width: int, height: int, bbox: BoundingBox) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, str]]:
-        """Transforms orthoimage frame pixel coordinates to WGS84 lon,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_GEOTRANSFORM,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def geotransform(self, height: int, width: int, bbox: BoundingBox, header: Header) -> Optional[PointCloud2]:
+        """3x3 Affine transformation that transforms orthoimage frame pixel coordinates to WGS84 lon,
         lat coordinates
+
+        A :class:`sensor_msgs.msg.PointCloud2` message is repurposed to carry the 3-by-3 affine transformation matrix
+        since it has a header and is flexible enough to carry this kind of data in a byte array. The data is stored
+        in a PointField called `affine_matrix`.
         """
 
         def _boundingbox_to_geo_coords(
@@ -741,48 +684,27 @@ class GISNode(Node):
         pixel_coords = np.float32(pixel_coords).squeeze()
         geo_coords = np.float32(geo_coords).squeeze()
 
-        # Calculate UTM zone based on the center of the bounding box
-        center_lon = (bbox.min_pt.longitude + bbox.max_pt.longitude) / 2
-        utm_zone = cls._determine_utm_zone(center_lon)
-
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
-        # Insert z dimensions
+        # Insert z dimensions and scale
         M = np.insert(M, 2, 0, axis=1)
         M = np.insert(M, 2, 0, axis=0)
-
-        # Scaling of z-axis from orthoimage raster native units to meters
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
-        # Decompose M into rotation, scaling, and translation components
-        # Assuming M is of the form [ [a, b, tx], [c, d, ty] ]
-        a = M[:2, :2]
-        t = M[:2, 2]
+        # Flatten the matrix and repurpose a PointCloud2 message to transport it
+        flat_list = M.flatten().tolist()
+        byte_array = struct.pack(f'{len(flat_list)}d', *flat_list)
+        matrix_msg = PointCloud2()
+        matrix_msg.header = header
+        matrix_msg.height = 1
+        matrix_msg.width = len(flat_list)
+        matrix_msg.is_dense = False
+        matrix_msg.fields = [PointField(name='affine_matrix', offset=0, datatype=PointField.FLOAT64, count=len(flat_list))]
+        matrix_msg.data = byte_array
 
-        # Add the z-axis translation (which is zero)
-        t = np.append(t, 0)
-
-        # The norms of the columns give you the scale factors
-        scale_x = np.linalg.norm(a[:, 0])
-        scale_y = np.linalg.norm(a[:, 1])
-
-        if scale_x == 0 or scale_y == 0:
-            # TODO raise error or handle better
-            return None
-
-        # Normalize the columns to get the pure rotation part
-        rotation_2d = a / [scale_x, scale_y]
-
-        # Rotation in 3D (assuming no rotation around the z-axis)
-        r = np.eye(3)
-        r[:2, :2] = rotation_2d
-
-        # The scale factors for the 3x3 matrix, including the z scale
-        s = np.array([scale_x, scale_y, M[2, 2]])
-
-        return r, s, t, utm_zone
+        return matrix_msg
 
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
@@ -846,8 +768,3 @@ class GISNode(Node):
             return img
 
         return _read_img(img, grayscale)
-
-    @staticmethod
-    def _determine_utm_zone(longitude):
-        """Determine the UTM zone for a given longitude."""
-        return int((longitude + 180) / 6) + 1

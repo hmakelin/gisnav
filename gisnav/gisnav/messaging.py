@@ -99,8 +99,6 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
 
 
 FrameID = Literal[
-    "wgs_84",
-    "wgs_84_unscaled",
     "reference",
     "base_link",
     "camera",
@@ -110,17 +108,17 @@ FrameID = Literal[
 ]
 """Allowed ROS header frame_ids (used by tf2)
     
-    The 'camera' and 'world' frames are coordinate systems in the cv2 pinhole 
-    camera model. The 'camera' frame follows the convention where the x axis
-    points to the right from the body of the camera and z-axis forward along
-    the optical axis, it is not the 'camera_optical' frame where the x axis 
-    points in the direction of the optical axis.
-    
-    The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
+The 'camera' and 'world' frames are coordinate systems in the cv2 pinhole 
+camera model. The 'camera' frame follows the convention where the x axis
+points to the right from the body of the camera and z-axis forward along
+the optical axis, it is not the 'camera_optical' frame where the x axis 
+points in the direction of the optical axis.
 
-    The 'reference' frame is the :term:'reference' arrays coordinate frame
-    where the origin is the bottom left (ROS convention, not numpy/cv2 top left
-    convention). x axis is the width axis, y axis is height.
+The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
+
+The 'reference' frame is the :term:'reference' arrays coordinate frame
+where the origin is the bottom left (ROS convention, not numpy/cv2 top left
+convention). x axis is the width axis, y axis is height.
 """
 
 

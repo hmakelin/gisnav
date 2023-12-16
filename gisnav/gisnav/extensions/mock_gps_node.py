@@ -1,6 +1,7 @@
 """GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages"""
 import json
 import socket
+import struct
 from datetime import datetime
 from typing import Final, Optional, Tuple
 
@@ -14,7 +15,9 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
+from sensor_msgs.msg import PointCloud2
 from pyproj import Transformer
+
 from ..decorators import ROS, narrow_types
 
 from .. import messaging
@@ -22,7 +25,7 @@ from .._data import Attitude
 from ..constants import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_SCALING,
+    ROS_TOPIC_RELATIVE_GEOTRANSFORM,
 )
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
@@ -42,7 +45,7 @@ class MockGPSNode(Node):
             end
 
             subgraph GISNode
-                scaling[gisnav/gis_node/scaling]
+                geotransform[gisnav/gis_node/geotransform]
             end
 
             subgraph MockGPSNode
@@ -51,7 +54,7 @@ class MockGPSNode(Node):
             end
 
             tf -->|'geometry_msgs/TransformStamped camera->wgs84_unscaled'| MockGPSNode
-            scaling -->|geometry_msgs/Vector3Stamped| MockGPSNode
+            geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
             sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
             gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
 
@@ -115,8 +118,8 @@ class MockGPSNode(Node):
             publish_rate
         )
 
-        # Subscribe to scaling
-        self.scaling
+        # Subscribe to geotransform
+        self.geotransform
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -173,15 +176,15 @@ class MockGPSNode(Node):
     @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_SCALING.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_GEOTRANSFORM.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def scaling(self) -> Optional[Vector3Stamped]:
-        """Subscribed :term:`camera` to :term:`WGS 84 unscaled <WGS 84>` frame
-        scaling vector, or None if not available
+    def geotransform(self) -> Optional[PointCloud2]:
+        """Subscribed :term:`reference` frame to :term:`WGS 84` frame
+        affine transformation matrix (3, 3), or None if not available
 
         .. seealso::
-            :attr:`.GISNode.scaling`
+            :attr:`.GISNode.geotransform`
         """
 
     @ROS.publish(
@@ -204,17 +207,20 @@ class MockGPSNode(Node):
 
         @narrow_types(self)
         def _sensor_gps(
-            camera_to_wgs84_unscaled: TransformStamped,
-            scaling: Vector3Stamped,
+            camera_to_reference: TransformStamped,
+            geotransform: PointCloud2,
             device_id: int,
         ) -> SensorGps:
+            translation, rotation = (camera_to_reference.transform.translation,
+                                     camera_to_reference.transform.rotation)
 
-            # TODO
-            camera_to_wgs84_unscaled.transform.translation = _dot_product(
-                camera_to_wgs84_unscaled.transform.translation, scaling.vector)
+            # Unpack the geotransformation affine matrix
+            byte_array = geotransform.data
+            num_elements = 9  # (9 for a 3x3 matrix)
+            flat_list = struct.unpack(f'{num_elements}d', byte_array)
+            M = np.array(flat_list).reshape(3, 3)
 
-            translation, rotation = (camera_to_wgs84_unscaled.transform.translation,
-                                     camera_to_wgs84_unscaled.transform.rotation)
+            translation_wgs84 = M @ translation
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw
@@ -227,7 +233,7 @@ class MockGPSNode(Node):
             yaw_rad = np.radians(camera_yaw_degrees)
 
             satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(camera_to_wgs84_unscaled.header)
+            timestamp = messaging.usec_from_header(camera_to_reference.header)
 
             eph = 10.0
             epv = 1.0
@@ -241,10 +247,10 @@ class MockGPSNode(Node):
             msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
             msg.c_variance_rad = np.nan
 
-            msg.lat = int(translation.y * 1e7)
-            msg.lon = int(translation.x * 1e7)
+            msg.lat = int(translation_wgs84.y * 1e7)
+            msg.lon = int(translation_wgs84.x * 1e7)
 
-            altitudes = self._convert_to_wgs84(translation.y, translation.x, translation.z, self.dem_vertical_datum)
+            altitudes = self._convert_to_wgs84(translation_wgs84.y, translation_wgs84.x, translation_wgs84.z, self.dem_vertical_datum)
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
@@ -282,13 +288,13 @@ class MockGPSNode(Node):
         #  applied. Must specify specific timestamps to connect camera pose
         #  estimation chain to correct reference frame.
         camera_to_wgs84_unscaled = messaging.get_transform(
-            self, "wgs_84_unscaled", "camera",
+            self, "reference", "camera",
             rclpy.time.Time()
         )
 
         return _sensor_gps(
             camera_to_wgs84_unscaled,
-            self.scaling,
+            self.geotransform,
             self._device_id,
         )
 

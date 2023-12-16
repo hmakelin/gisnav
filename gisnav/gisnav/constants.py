@@ -31,9 +31,9 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 :attr:`.GISNode.orthoimage`.
 """
 
-ROS_TOPIC_RELATIVE_SCALING: Final = "~/scaling"
+ROS_TOPIC_RELATIVE_GEOTRANSFORM: Final = "~/geotransform"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
-:attr:`.GISNode.scaling`.
+:attr:`.GISNode.geotransform`.
 """
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"

@@ -218,3 +218,18 @@ def extract_yaw(q: Quaternion) -> float:
     heading = (heading + 360) % 360
 
     return heading
+
+def extract_roll(q: Quaternion) -> float:
+    """
+    Calculate the roll angle from a quaternion.
+
+    :param q: A quaternion represented as a Quaternion object with attributes x, y, z, w.
+    :return: The roll angle in degrees.
+    """
+    roll = np.arctan2(2 * (q.w * q.x + q.y * q.z), 1 - 2 * (q.x**2 + q.y**2))
+    roll_deg = np.degrees(roll)
+
+    # Normalize to [0, 360) range
+    roll_deg = (roll_deg + 360) % 360
+
+    return roll_deg

@@ -173,10 +173,13 @@ class TransformNode(Node):
             )
 
             # Rotate and crop orthoimage stack
+            # TODO: implement this part better
             camera_yaw_degrees = messaging.extract_yaw(transform.rotation)
+            camera_roll_degrees = messaging.extract_roll(transform.rotation)
+            rotation = camera_yaw_degrees + camera_roll_degrees
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
             orthoimage_rotated_stack = self._rotate_and_crop_center(
-                orthoimage_stack, camera_yaw_degrees, crop_shape
+                orthoimage_stack, rotation, crop_shape
             )
 
             # Add query image on top to complete full image stack
@@ -199,7 +202,7 @@ class TransformNode(Node):
             dy = cy - crop_shape[0] / 2
 
             # Compute transformation (rotation around center + crop)
-            theta = np.radians(camera_yaw_degrees)
+            theta = np.radians(rotation)
 
             # Translation to origin
             T1 = np.array([[1, 0, -cx],

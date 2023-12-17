@@ -230,7 +230,6 @@ class TransformNode(Node):
             affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
 
             translation = affine_3d[:3, 3]
-            rotation_matrix = affine_3d[:3, :3]
 
             try:
                 q = tf_transformations.quaternion_from_matrix(affine_3d)

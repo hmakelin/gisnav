@@ -118,6 +118,7 @@ setup(
     tests_require=["pytest"],
     extras_require={
         "mock_gps_node": ["gps-time"],
+        "qgis_node": ["psycopg2"],
         "dev": [
             "aiohttp",
             "autodocsumm",

@@ -24,6 +24,7 @@ from rclpy.node import Node
 from .core import BBoxNode, GISNode, TransformNode, PoseNode
 from .extensions.mock_gps_node import MockGPSNode
 from .extensions.rviz_node import RVizNode
+from .extensions.qgis_node import QGISNode
 from .constants import (
     BBOX_NODE_NAME,
     GIS_NODE_NAME,
@@ -106,3 +107,8 @@ def run_mock_gps_node():
 def run_rviz_node():
     """Spins up a :class:`.RVizNode`"""
     _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
+
+
+def run_qgis_node():
+    """Spins up a :class:`.QGISNode`"""
+    _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)

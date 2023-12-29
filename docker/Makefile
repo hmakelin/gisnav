@@ -166,7 +166,7 @@ $(eval $(call compose_template,offboard-sitl,dummy-dependency,,$$* qgc))
 $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* gscam mapserver))
 
 # SITL development services: Gazebo simulation, ROS middleware, mapserver, QGC, gscam rviz, but excluding GISNav
-$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc gscam mapserver rviz))
+$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc gscam mapserver rviz qgis))
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gscam, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))

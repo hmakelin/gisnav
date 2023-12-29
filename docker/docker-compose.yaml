@@ -8,6 +8,8 @@ x-base: &base
     #platforms:
     #  - "linux/amd64"
   network_mode: host
+  #networks:
+  #  - gisnav-network
 
 # devices is a sequence not a mapping so careful when merging
 # with something that defines its own devices
@@ -159,3 +161,14 @@ services:
     build:
       context: qgis
     command: qgis
+
+  postgres:
+    <<: [ *base ]
+    build:
+      context: postgres
+      args:
+        POSTGIS_VERSION: 16-3.4
+
+#networks:
+#  gisnav-network:
+#    driver: bridge

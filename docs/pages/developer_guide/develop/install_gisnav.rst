@@ -80,6 +80,7 @@ Install the required and optional dependencies with the following commands:
 
             cd ~/colcon_ws/src/gisnav/gisnav
             pip3 install .[mock_gps_node]
+            pip3 install .[qgis_node]
 
     .. tab-item:: Development dependencies (optional)
 

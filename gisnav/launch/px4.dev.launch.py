@@ -37,4 +37,14 @@ def generate_launch_description():
             ],
         )
     )
+    ld.add_action(
+        Node(
+            package="gisnav",
+            name="qgis_node",
+            executable="qgis_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/qgis_node.yaml")
+            ],
+        )
+    )
     return ld

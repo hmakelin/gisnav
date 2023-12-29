@@ -26,6 +26,9 @@ MOCK_GPS_NODE_NAME: Final = "mock_gps_node"
 RVIZ_NODE_NAME: Final = "rviz_node"
 """Name of :class:`.RVizNode` spun up by :func:`.run_rviz_node`"""
 
+QGIS_NODE_NAME: Final = "qgis_node"
+"""Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
+
 ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
 :attr:`.GISNode.orthoimage`.

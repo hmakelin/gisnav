@@ -61,6 +61,59 @@ a brief description of their intended use.
 |                     | configuration by default. Can also be launched for ArduPilot.                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+
 
+Docker Compose profiles
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The below diagram describes the system architecture through Docker Compose profiles:
+
+.. todo::
+    Implement Docker Compose profiles in compose file.
+
+.. mermaid::
+
+    graph BT
+        subgraph ground_control_layer["Ground Control Layer"]
+            qgc[QGC]
+        end
+
+        subgraph autopilot_layer["Autopilot Layer"]
+            px4[PX4]
+            ardupilot[ArduPilot]
+        end
+
+        subgraph middleware_layer["Middleware Layer"]
+            mavros[MAVROS]
+            micro_ros_agent[Micro-ROS-Agent]
+        end
+
+        subgraph application_layer["Application Layer"]
+            gisnav[GISNav]
+            rviz[RViz]
+            autoheal[Autoheal]
+        end
+
+        subgraph gis_layer["GIS Layer"]
+            mapserver[Mapserver]
+            qgis[QGIS]
+        end
+
+        subgraph data_layer["Data Layer"]
+            postgres[Postgres]
+        end
+
+        postgres -->|Database Connection| mapserver
+        postgres -->|Database Connection| qgis
+
+        mapserver -.-> gisnav
+        gisnav -->|WMS| mapserver
+        gisnav -->|ROS Connection| mavros
+        gisnav -->|ROS Connection| micro_ros_agent
+
+        mavros -->|Mavlink| px4
+        mavros -->|Mavlink| ardupilot
+        micro_ros_agent -->|"TCP UORB Bridge"| px4
+        px4 -->|Mavlink| qgc
+
 Deploy demonstration
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

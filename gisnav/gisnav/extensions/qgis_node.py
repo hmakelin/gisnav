@@ -142,16 +142,22 @@ class QGISNode(Node):
         """:term:`SQL` connection attempt poll rate in Hz"""
 
     def _create_tables(self):
-        """Create temporary tables for storing SensorGps and BoundingBox data as PostGIS geometries."""
+        """Create (and recreate if exist) temporary tables for storing SensorGps and BoundingBox data as PostGIS geometries."""
+        drop_gps_table_query = f"""
+            DROP TABLE IF EXISTS {self.DEBUG_GPS_TABLE};
+        """
         create_gps_table_query = f"""
-            CREATE UNLOGGED TABLE IF NOT EXISTS {self.DEBUG_GPS_TABLE} (
+            CREATE UNLOGGED TABLE {self.DEBUG_GPS_TABLE} (
                 id SERIAL PRIMARY KEY,
                 geom GEOMETRY(Point, 4326),
                 altitude DOUBLE PRECISION
             );
         """
+        drop_bbox_table_query = f"""
+            DROP TABLE IF EXISTS {self.DEBUG_BBOX_TABLE};
+        """
         create_bbox_table_query = f"""
-            CREATE UNLOGGED TABLE IF NOT EXISTS {self.DEBUG_BBOX_TABLE} (
+            CREATE UNLOGGED TABLE {self.DEBUG_BBOX_TABLE} (
                 id SERIAL PRIMARY KEY,
                 geom GEOMETRY(Polygon, 4326)  -- SRID 4326 for GPS coordinates
             );
@@ -159,6 +165,11 @@ class QGISNode(Node):
 
         with self._db_connection.cursor() as cursor:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+
+            # Drop the tables if they exist - we do not want to persist old debugging data
+            cursor.execute(drop_gps_table_query)
+            cursor.execute(drop_bbox_table_query)
+
             cursor.execute(create_gps_table_query)
             cursor.execute(create_bbox_table_query)
             self._db_connection.commit()

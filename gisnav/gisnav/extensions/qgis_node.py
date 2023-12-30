@@ -110,6 +110,7 @@ class QGISNode(Node):
                 # We have the SQL client instance - we can now destroy the timer
                 assert self._db_connection is not None
                 self._connect_sql_timer.destroy()
+                self._create_tables()
             except psycopg2.OperationalError as _:  # noqa: F841
                 # Expected error if no connection
                 self.get_logger().error(
@@ -177,7 +178,12 @@ class QGISNode(Node):
                     INSERT INTO {self.DEBUG_GPS_TABLE} (latitude, longitude, altitude)
                     VALUES (%s, %s, %s);
                 """
-                cursor.execute(query, (msg.lat * 1e-7, msg.lon * 1e-7, msg.alt * 1e-3))
+                try:
+                    cursor.execute(query, (msg.lat * 1e-7, msg.lon * 1e-7, msg.alt * 1e-3))
+                except psycopg2.errors.UndefinedTable:
+                    self.get_logger().error(
+                        f"Table f{self.DEBUG_GPS_TABLE} does not exist. Cannot insert SensorGps message."
+                    )
 
             elif isinstance(msg, BoundingBox):
                 query = f"""
@@ -185,8 +191,12 @@ class QGISNode(Node):
                                               max_latitude, max_longitude)
                     VALUES (%s, %s, %s, %s);
                 """
-                cursor.execute(query, (msg.min_latitude, msg.min_longitude,
-                                       msg.max_latitude, msg.max_longitude))
+                try:
+                    cursor.execute(query, (msg.min_latitude, msg.min_longitude, msg.max_latitude, msg.max_longitude))
+                except psycopg2.errors.UndefinedTable:
+                    self.get_logger().error(
+                        f"Table f{self.DEBUG_BBOX_TABLE} does not exist. Cannot insert BoundingBox message."
+                    )
 
             self._db_connection.commit()
 
@@ -209,7 +219,7 @@ class QGISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_update_database,
     )
-    def sensor_gps(self) -> Optional[BoundingBox]:
+    def sensor_gps(self) -> Optional[SensorGps]:
         """Subscribed mock :term:`GNSS` :term:`message` published by
         :class:`.MockGPSNode`
         """

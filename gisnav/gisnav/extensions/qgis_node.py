@@ -51,10 +51,10 @@ class QGISNode(Node):
     }
     """Postgres database config used by this node."""
 
-    DEBUG_GPS_TABLE: Final = 'temp_gps_table'
+    DEBUG_GPS_TABLE: Final = 'gps_table'
     """Table name for mock GPS location"""
 
-    DEBUG_BBOX_TABLE: Final = 'temp_bbox_table'
+    DEBUG_BBOX_TABLE: Final = 'bbox_table'
     """Table name for :term:`FOV` :term:`bounding box`"""
 
     def __init__(self, *args, **kwargs):
@@ -142,25 +142,23 @@ class QGISNode(Node):
         """:term:`SQL` connection attempt poll rate in Hz"""
 
     def _create_tables(self):
-        """Create temporary tables for storing SensorGps and BoundingBox data."""
+        """Create temporary tables for storing SensorGps and BoundingBox data as PostGIS geometries."""
         create_gps_table_query = f"""
-            CREATE TEMPORARY TABLE IF NOT EXISTS {self.get_name()}_{self.DEBUG_GPS_TABLE} (
+            CREATE UNLOGGED TABLE IF NOT EXISTS {self.DEBUG_GPS_TABLE} (
                 id SERIAL PRIMARY KEY,
-                latitude DOUBLE PRECISION,
-                longitude DOUBLE PRECISION,
+                geom GEOMETRY(Point, 4326),
                 altitude DOUBLE PRECISION
-            ) ON COMMIT PRESERVE ROWS;
+            );
         """
         create_bbox_table_query = f"""
-            CREATE TEMPORARY TABLE IF NOT EXISTS {self.get_name()}_{self.DEBUG_BBOX_TABLE} (
+            CREATE UNLOGGED TABLE IF NOT EXISTS {self.DEBUG_BBOX_TABLE} (
                 id SERIAL PRIMARY KEY,
-                min_latitude DOUBLE PRECISION,
-                min_longitude DOUBLE PRECISION,
-                max_latitude DOUBLE PRECISION,
-                max_longitude DOUBLE PRECISION
-            ) ON COMMIT PRESERVE ROWS;
+                geom GEOMETRY(Polygon, 4326)  -- SRID 4326 for GPS coordinates
+            );
         """
+
         with self._db_connection.cursor() as cursor:
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
             cursor.execute(create_gps_table_query)
             cursor.execute(create_bbox_table_query)
             self._db_connection.commit()
@@ -175,11 +173,11 @@ class QGISNode(Node):
         with self._db_connection.cursor() as cursor:
             if isinstance(msg, SensorGps):
                 query = f"""
-                    INSERT INTO {self.DEBUG_GPS_TABLE} (latitude, longitude, altitude)
-                    VALUES (%s, %s, %s);
+                    INSERT INTO {self.DEBUG_GPS_TABLE} (geom, altitude)
+                    VALUES (ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s);
                 """
                 try:
-                    cursor.execute(query, (msg.lat * 1e-7, msg.lon * 1e-7, msg.alt * 1e-3))
+                    cursor.execute(query, (msg.lon * 1e-7, msg.lat * 1e-7, msg.alt * 1e-3))
                 except psycopg2.errors.UndefinedTable:
                     self.get_logger().error(
                         f"Table f{self.DEBUG_GPS_TABLE} does not exist. Cannot insert SensorGps message."
@@ -187,12 +185,20 @@ class QGISNode(Node):
 
             elif isinstance(msg, BoundingBox):
                 query = f"""
-                    INSERT INTO {self.DEBUG_BBOX_TABLE} (min_latitude, min_longitude,
-                                              max_latitude, max_longitude)
-                    VALUES (%s, %s, %s, %s);
+                    INSERT INTO {self.DEBUG_BBOX_TABLE} (geom)
+                    VALUES (ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING(' 
+                        || %s || ' ' || %s || ', '
+                        || %s || ' ' || %s || ', '
+                        || %s || ' ' || %s || ', '
+                        || %s || ' ' || %s || ', '
+                        || %s || ' ' || %s || ')')), 4326));
                 """
                 try:
-                    cursor.execute(query, (msg.min_latitude, msg.min_longitude, msg.max_latitude, msg.max_longitude))
+                    cursor.execute(query, (msg.min_longitude, msg.min_latitude,
+                                           msg.min_longitude, msg.max_latitude,
+                                           msg.max_longitude, msg.max_latitude,
+                                           msg.max_longitude, msg.min_latitude,
+                                           msg.min_longitude, msg.min_latitude))
                 except psycopg2.errors.UndefinedTable:
                     self.get_logger().error(
                         f"Table f{self.DEBUG_BBOX_TABLE} does not exist. Cannot insert BoundingBox message."

@@ -43,7 +43,7 @@ class QGISNode(Node):
     """A read only ROS parameter descriptor"""
 
     DATABASE_CONFIG: Final = {
-        'dbname': 'gisnav_db',
+        'dbname': 'gisnav',
         'user': 'gisnav',
         'password': 'gisnav',
         'host': 'localhost',
@@ -51,11 +51,11 @@ class QGISNode(Node):
     }
     """Postgres database config used by this node."""
 
-    DEBUG_GPS_TABLE: Final = 'debug_gps_table'
-    """Table for mock GPS location"""
+    DEBUG_GPS_TABLE: Final = 'temp_gps_table'
+    """Table name for mock GPS location"""
 
-    DEBUG_BBOX_TABLE: Final = 'debug_bbox_table'
-    """Table for :term:`FOV` :term:`bounding box`"""
+    DEBUG_BBOX_TABLE: Final = 'temp_bbox_table'
+    """Table name for :term:`FOV` :term:`bounding box`"""
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -140,6 +140,30 @@ class QGISNode(Node):
     def sql_poll_rate(self) -> Optional[float]:
         """:term:`SQL` connection attempt poll rate in Hz"""
 
+    def _create_tables(self):
+        """Create temporary tables for storing SensorGps and BoundingBox data."""
+        create_gps_table_query = f"""
+            CREATE TEMPORARY TABLE IF NOT EXISTS {self.get_name()}_{self.DEBUG_GPS_TABLE} (
+                id SERIAL PRIMARY KEY,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
+                altitude DOUBLE PRECISION
+            ) ON COMMIT PRESERVE ROWS;
+        """
+        create_bbox_table_query = f"""
+            CREATE TEMPORARY TABLE IF NOT EXISTS {self.get_name()}_{self.DEBUG_BBOX_TABLE} (
+                id SERIAL PRIMARY KEY,
+                min_latitude DOUBLE PRECISION,
+                min_longitude DOUBLE PRECISION,
+                max_latitude DOUBLE PRECISION,
+                max_longitude DOUBLE PRECISION
+            ) ON COMMIT PRESERVE ROWS;
+        """
+        with self._db_connection.cursor() as cursor:
+            cursor.execute(create_gps_table_query)
+            cursor.execute(create_bbox_table_query)
+            self._db_connection.commit()
+
     def _update_database(self, msg: Union[SensorGps, BoundingBox]) -> None:
         """Updates the PostgreSQL database with the received ROS 2 message data
 
@@ -149,18 +173,18 @@ class QGISNode(Node):
         """
         with self._db_connection.cursor() as cursor:
             if isinstance(msg, SensorGps):
-                query = """
-                    INSERT INTO {gps_table} (latitude, longitude, altitude)
+                query = f"""
+                    INSERT INTO {self.DEBUG_GPS_TABLE} (latitude, longitude, altitude)
                     VALUES (%s, %s, %s);
-                """.format(gps_table=self.DEBUG_GPS_TABLE)
+                """
                 cursor.execute(query, (msg.lat * 1e-7, msg.lon * 1e-7, msg.alt * 1e-3))
 
             elif isinstance(msg, BoundingBox):
-                query = """
-                    INSERT INTO {bbox_table} (min_latitude, min_longitude,
+                query = f"""
+                    INSERT INTO {self.DEBUG_BBOX_TABLE} (min_latitude, min_longitude,
                                               max_latitude, max_longitude)
                     VALUES (%s, %s, %s, %s);
-                """.format(bbox_table=self.DEBUG_BBOX_TABLE)
+                """
                 cursor.execute(query, (msg.min_latitude, msg.min_longitude,
                                        msg.max_latitude, msg.max_longitude))
 

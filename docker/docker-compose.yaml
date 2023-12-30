@@ -166,6 +166,12 @@ services:
     <<: [ *base ]
     build:
       context: postgres
+    ports:
+      - "5432:5432"  # Map PostgreSQL's default port to the host
+    environment:
+      POSTGRES_DB: gisnav
+      POSTGRES_USER: gisnav
+      POSTGRES_PASSWORD: gisnav
 
 #networks:
 #  gisnav-network:

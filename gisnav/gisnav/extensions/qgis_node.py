@@ -10,19 +10,21 @@ file I/O, aiding in development and debugging.
     Currently SensorGps message (PX4) only (implement GPSINPUT to support
     ArduPilot)
 """
-from typing import Final, Union
+from typing import Final, Union, Optional
 
 import psycopg2
 from rclpy.node import Node
 from geographic_msgs.msg import BoundingBox
 from px4_msgs.msg import SensorGps
 from rclpy.qos import QoSPresetProfiles
+from rclpy.timer import Timer
+from rcl_interfaces.msg import ParameterDescriptor
 
-from ..decorators import ROS
+from ..decorators import ROS, narrow_types
 from .. import messaging
 from ..constants import (
     ROS_NAMESPACE,
-    GIS_NODE_NAME,
+    BBOX_NODE_NAME,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
 )
 from .mock_gps_node import MockGPSNode
@@ -34,16 +36,26 @@ class QGISNode(Node):
     QGIS.
     """
 
+    ROS_D_SQL_POLL_RATE = 0.1
+    """Default :term:`SQL` client connection attempt poll rate in Hz"""
+
+    _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
+    """A read only ROS parameter descriptor"""
+
     DATABASE_CONFIG: Final = {
         'dbname': 'gisnav_db',
         'user': 'gisnav',
         'password': 'gisnav',
         'host': 'localhost',
         'port': 5432,  # default PostgreSQL port is 5432
-        'gps_table': 'gps_data_table',  # table for mock GPS data
-        'bounding_box_table': 'bounding_box_table',  # table for bbox data
     }
     """Postgres database config used by this node."""
+
+    DEBUG_GPS_TABLE: Final = 'debug_gps_table'
+    """Table for mock GPS location"""
+
+    DEBUG_BBOX_TABLE: Final = 'debug_bbox_table'
+    """Table for :term:`FOV` :term:`bounding box`"""
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -57,13 +69,76 @@ class QGISNode(Node):
         self.bounding_box
         self.sensor_gps
 
-        # Connect to the PostgreSQL database
-        self._db_connection = psycopg2.connect(self.DATABASE_CONFIG)
+        sql_poll_rate = self.sql_poll_rate
+        assert sql_poll_rate is not None
+        self._db_connection = None  # TODO add type hint if possible
+        self._connect_sql_timer: Optional[Timer] = self._create_connect_sql_timer(
+            sql_poll_rate
+        )
+
+    @narrow_types
+    def _create_connect_sql_timer(self, poll_rate: float) -> Timer:
+        """Returns a timer that reconnects :term:`WMS` client when needed
+
+        :param poll_rate: WMS connection status poll rate for the timer (in Hz)
+        :return: The :class:`.Timer` instance
+        """
+        if poll_rate <= 0:
+            error_msg = (
+                f"WMS connection status poll rate must be positive ("
+                f"{poll_rate} Hz provided)."
+            )
+            self.get_logger().error(error_msg)
+            raise ValueError(error_msg)
+        timer = self.create_timer(1 / poll_rate, self._try_sql_client_instantiation)
+        return timer
+
+    def _try_sql_client_instantiation(self) -> None:
+        """Attempts to instantiate :attr:`._db_connection`
+
+        Destroys :attr:`._connect_sql_timer` if instantiation is successful
+        """
+
+        @narrow_types(self)
+        def _connect_sql(config: dict, poll_rate: float):
+            try:
+                assert self._db_connection is None
+                self.get_logger().info("Connecting to SQL server...")
+                self._db_connection = psycopg2.connect(**config)
+                self.get_logger().info("SQL connection established.")
+
+                # We have the SQL client instance - we can now destroy the timer
+                assert self._db_connection is not None
+                self._connect_sql_timer.destroy()
+            except psycopg2.OperationalError as _:  # noqa: F841
+                # Expected error if no connection
+                self.get_logger().error(
+                    f"Could not instantiate SQL client due to connection error, "
+                    f"trying again in {1 / poll_rate} seconds..."
+                )
+                assert self._db_connection is None
+            except Exception as e:
+                # TODO: handle other exception types
+                self.get_logger().error(
+                    f"Could not instantiate SQL client due to unexpected exception "
+                    f"type ({type(e)}), trying again in {1 / poll_rate} seconds..."
+                )
+                assert self._db_connection is None
+
+        if self._db_connection is None:
+            _connect_sql(
+                self.DATABASE_CONFIG, self.sql_poll_rate
+            )
 
     def __del__(self):
         """Class destructor to close database connection"""
         if self._db_connection:
             self._db_connection.close()
+
+    @property
+    @ROS.parameter(ROS_D_SQL_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def sql_poll_rate(self) -> Optional[float]:
+        """:term:`SQL` connection attempt poll rate in Hz"""
 
     def _update_database(self, msg: Union[SensorGps, BoundingBox]) -> None:
         """Updates the PostgreSQL database with the received ROS 2 message data
@@ -77,7 +152,7 @@ class QGISNode(Node):
                 query = """
                     INSERT INTO {gps_table} (latitude, longitude, altitude)
                     VALUES (%s, %s, %s);
-                """.format(gps_table=self.DATABASE_CONFIG['gps_table'])
+                """.format(gps_table=self.DEBUG_GPS_TABLE)
                 cursor.execute(query, (msg.lat * 1e-7, msg.lon * 1e-7, msg.alt * 1e-3))
 
             elif isinstance(msg, BoundingBox):
@@ -85,21 +160,20 @@ class QGISNode(Node):
                     INSERT INTO {bbox_table} (min_latitude, min_longitude,
                                               max_latitude, max_longitude)
                     VALUES (%s, %s, %s, %s);
-                """.format(bbox_table=self.DATABASE_CONFIG['bounding_box_table'])
+                """.format(bbox_table=self.DEBUG_BBOX_TABLE)
                 cursor.execute(query, (msg.min_latitude, msg.min_longitude,
                                        msg.max_latitude, msg.max_longitude))
 
             self._db_connection.commit()
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_update_database,
     )
-    def bounding_box(self) -> None:
+    def bounding_box(self) -> Optional[BoundingBox]:
         """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`
         :term:`FOV` location published via :attr:`.GisNode.bounding_box`
         """
@@ -111,7 +185,7 @@ class QGISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_update_database,
     )
-    def sensor_gps(self) -> None:
+    def sensor_gps(self) -> Optional[BoundingBox]:
         """Subscribed mock :term:`GNSS` :term:`message` published by
         :class:`.MockGPSNode`
         """

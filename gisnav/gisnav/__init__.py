@@ -33,6 +33,7 @@ from .constants import (
     RVIZ_NODE_NAME,
     TRANSFORM_NODE_NAME,
     POSE_NODE_NAME,
+    QGIS_NODE_NAME,
 )
 
 

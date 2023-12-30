@@ -166,8 +166,6 @@ services:
     <<: [ *base ]
     build:
       context: postgres
-      args:
-        POSTGIS_VERSION: 16-3.4
 
 #networks:
 #  gisnav-network:

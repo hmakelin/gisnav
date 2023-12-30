@@ -1,5 +1,4 @@
-ARG POSTGIS_VERSION
-FROM postgis:postgis-${POSTGIS_VERSION}
+FROM postgis/postgis:latest
 
 LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 

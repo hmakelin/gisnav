@@ -555,6 +555,9 @@ ____________________________________________________
     SITL
         Software In The Loop simulation
 
+    SQL
+        Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`
+
     USGS
         United States Geological Survey
 
@@ -655,6 +658,12 @@ relate to external interfaces.
 
     Pixhawk
         Hardware standard for open source autopilots: `pixhawk.org <https://pixhawk.org/>`_
+
+    PostGIS
+        :term:`GIS` extension for :term:`Postgres`: `postgis.net <https://postgis.net/>`
+
+    Postgres
+        An :term:`SQL` server: `postgresql.org <https://www.postgresql.org/>`
 
     PX4
         PX4 Autopilot: `px4.io <https://px4.io/>`_

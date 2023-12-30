@@ -181,6 +181,12 @@ class QGISNode(Node):
             :class:`geographic_msgs.msg.BoundingBox` message containing
             data to insert into the database
         """
+        if self._db_connection is None:
+            self.get_logger().error(
+                f"SQL client not yet instantiated, could not insert message: {msg}."
+            )
+            return None
+
         with self._db_connection.cursor() as cursor:
             if isinstance(msg, SensorGps):
                 query = f"""
@@ -205,11 +211,11 @@ class QGISNode(Node):
                         || %s || ' ' || %s || ')')), 4326));
                 """
                 try:
-                    cursor.execute(query, (msg.min_longitude, msg.min_latitude,
-                                           msg.min_longitude, msg.max_latitude,
-                                           msg.max_longitude, msg.max_latitude,
-                                           msg.max_longitude, msg.min_latitude,
-                                           msg.min_longitude, msg.min_latitude))
+                    cursor.execute(query, (msg.min_pt.longitude, msg.min_pt.latitude,
+                                           msg.min_pt.longitude, msg.max_pt.latitude,
+                                           msg.max_pt.longitude, msg.max_pt.latitude,
+                                           msg.max_pt.longitude, msg.min_pt.latitude,
+                                           msg.min_pt.longitude, msg.min_pt.latitude))
                 except psycopg2.errors.UndefinedTable:
                     self.get_logger().error(
                         f"Table f{self.DEBUG_BBOX_TABLE} does not exist. Cannot insert BoundingBox message."
@@ -223,6 +229,7 @@ class QGISNode(Node):
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_update_database,
     )
     def bounding_box(self) -> Optional[BoundingBox]:
         """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`

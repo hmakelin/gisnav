@@ -209,7 +209,12 @@ class MockGPSNode(Node):
 
             # Unpack the geotransformation affine matrix
             M = np.frombuffer(geotransform.data, dtype=np.float64).reshape(4, 4)
-            translation_wgs84 = M @ np.array([translation.x, translation.y, translation.z, 1])
+
+            # Geotransform uses numpy convention: origin is top left corner and first axis is height -> need to swap x
+            # and y axis here and invert the first axis
+            # todo: do not hard code 735 - do this coordinate system transformation in GISNode._create_src_corners
+            #  instead
+            translation_wgs84 = M @ np.array([735 - translation.y, translation.x, translation.z, 1])
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw

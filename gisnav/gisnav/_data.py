@@ -130,20 +130,3 @@ class PackageData:
             return package_data
         else:
             raise FileNotFoundError(f"Could not find package file at {package_file}.")
-
-
-def create_src_corners(h: int, w: int) -> np.ndarray:
-    """Helper function that returns image corner pixel coordinates in a numpy array.
-
-    Returns: top-left, bottom-left, bottom-right, top-right
-
-    :param h: Source image height
-    :param w: Source image width
-    :return: Source image corner pixel coordinates
-    """
-    assert (
-        h > 0 and w > 0
-    ), f"Height {h} and width {w} are both expected to be positive."
-    return np.float32([[0, 0], [h - 1, 0], [h - 1, w - 1], [0, w - 1]]).reshape(
-        -1, 1, 2
-    )

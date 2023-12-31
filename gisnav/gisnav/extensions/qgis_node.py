@@ -66,7 +66,7 @@ class QGISNode(Node):
         super().__init__(*args, **kwargs)
 
         # Initialize ROS subscriptions by calling the decorated properties once
-        self.bounding_box
+        #self.bounding_box  # todo: this callback writes to disk very often
         self.sensor_gps
 
         sql_poll_rate = self.sql_poll_rate

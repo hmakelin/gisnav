@@ -49,7 +49,6 @@ from std_msgs.msg import Header
 from shapely.geometry import box
 
 from .. import messaging
-from .._data import create_src_corners
 from ..constants import (
     BBOX_NODE_NAME,
     ROS_NAMESPACE,
@@ -678,7 +677,7 @@ class GISNode(Node):
             )
             return 2 * width_meters + 2 * height_meters
 
-        pixel_coords = create_src_corners(height, width)
+        pixel_coords = self._create_src_corners(height, width)
         geo_coords = _boundingbox_to_geo_coords(bbox)
 
         pixel_coords = np.float32(pixel_coords).squeeze()
@@ -768,3 +767,20 @@ class GISNode(Node):
             return img
 
         return _read_img(img, grayscale)
+
+    @staticmethod
+    def _create_src_corners(h: int, w: int) -> np.ndarray:
+        """Helper function that returns image corner pixel coordinates in a numpy array.
+
+        Returns corners in following order: top-left, bottom-left, bottom-right, top-right
+
+        :param h: Source image height
+        :param w: Source image width
+        :return: Source image corner pixel coordinates
+        """
+        assert (
+            h > 0 and w > 0
+        ), f"Height {h} and width {w} are both expected to be positive."
+        return np.float32([[0, 0], [h - 1, 0], [h - 1, w - 1], [0, w - 1]]).reshape(
+            -1, 1, 2
+        )

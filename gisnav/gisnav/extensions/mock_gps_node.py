@@ -292,10 +292,6 @@ class MockGPSNode(Node):
 
             return msg
 
-        # TODO: fix interpolation - reference/wgs84 frames are not continuous,
-        #  i.e. they jump around which means tf interpolation should not be
-        #  applied. Must specify specific timestamps to connect camera pose
-        #  estimation chain to correct reference frame.
         camera_to_reference = messaging.get_transform(
             self, "reference", "camera",
             rclpy.time.Time()

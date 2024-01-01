@@ -110,7 +110,6 @@ setup(
         "opencv-python",
         "pyproj>=3.2.1",
         "requests",
-        "scipy>=1.4.0",
         "setuptools",
         "shapely>=1.8.2",
         "OWSLib>=0.25.0",

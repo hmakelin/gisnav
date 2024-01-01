@@ -250,7 +250,7 @@ class TransformNode(Node):
                 ref = deepcopy(orthoimage_stack[:, :, 0])
 
                 camera_pose_transform = messaging.get_transform(self, "reference", "camera",
-                                                                rclpy.time.Time())  #pnp_image_msg.header.stamp)  # query_image.header.stamp)
+                                                                image.header.stamp)  # rclpy.time.Time()
 
                 if camera_pose_transform is not None:
                     h = orthoimage_stack.shape[0]

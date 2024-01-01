@@ -1,18 +1,17 @@
 """Helper functions for ROS messaging"""
 import time
 from typing import Final, Literal, Optional
+from collections import namedtuple
 import cv2
 
 import numpy as np
 import tf2_ros
-import tf_transformations
-from rclpy.duration import Duration
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rclpy.node import Node
 from std_msgs.msg import Header
 
-from ._data import BBox
+BBox = namedtuple("BBox", "left bottom right top")
 
 # region ROS topic names
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"

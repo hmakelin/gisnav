@@ -1,7 +1,6 @@
 """GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages"""
 import json
 import socket
-import struct
 from datetime import datetime
 from typing import Final, Optional, Tuple
 
@@ -21,7 +20,6 @@ from pyproj import Transformer
 from ..decorators import ROS, narrow_types
 
 from .. import messaging
-from .._data import Attitude
 from ..constants import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
@@ -168,7 +166,7 @@ class MockGPSNode(Node):
             raise ValueError(error_msg)
         timer = self.create_timer(
             1 / publish_rate,
-            self.publish_sensor_gps if self.use_sensor_gps else self.publish_gps_input
+            self._publish
         )
         return timer
 
@@ -187,38 +185,10 @@ class MockGPSNode(Node):
             :attr:`.GISNode.geotransform`
         """
 
-    @ROS.publish(
-        ROS_TOPIC_SENSOR_GPS,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def publish_sensor_gps(self) -> Optional[SensorGps]:
-        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
-        is ``True``
-
-        Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
-        """
+    def _publish(self) -> None:
 
         @narrow_types(self)
-        def _sensor_gps(
-            camera_to_reference: TransformStamped,
-            geotransform: PointCloud2,
-            device_id: int,
-        ) -> SensorGps:
-            # Check if geotransform timestamp is newer than camera_to_reference timestamp - tf2 interpolation will
-            # not work for the reference frame because the reference frame updates are discontinuous.
-            # TODO: This check does not guarantee that we are using the geotransform computed from the same reference
-            #  frame as was used as the parent frame of the interpolated tf2 transform chain. It guarantees we are not
-            #  using one that is not too new, but does not guarantee we are not using one that is too old. It should
-            #  still reduce incorrect outputs significantly so it is added here for now.
-            if ((geotransform.header.stamp.nanosec > camera_to_reference.header.stamp.nanosec and
-                geotransform.header.stamp.sec == camera_to_reference.header.stamp.sec) or
-                    geotransform.header.stamp.sec > camera_to_reference.header.stamp.sec):
-                self.get_logger().warning(
-                    "geotransform timestamp is newer than camera to reference frame transform timestamp. Skipping "
-                    "publishing this SensorGps message as tf2 interpolation will most likely produce inaccurate results."
-                )
-                return None
-
+        def _publish_inner(camera_to_reference: TransformStamped, geotransform: PointCloud2) -> None:
             translation, rotation = (camera_to_reference.transform.translation,
                                      camera_to_reference.transform.rotation)
 
@@ -239,76 +209,104 @@ class MockGPSNode(Node):
             camera_yaw_degrees = int(camera_yaw_degrees % 360)
             # MAVLink definition 0 := not available
             camera_yaw_degrees = 360 if camera_yaw_degrees == 0 else camera_yaw_degrees
-            yaw_rad = np.radians(camera_yaw_degrees)
 
-            satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(camera_to_reference.header)
+            # Check if geotransform timestamp is newer than camera_to_reference timestamp - tf2 interpolation will
+            # not work for the reference frame because the reference frame updates are discontinuous.
+            # TODO: This check does not guarantee that we are using the geotransform computed from the same reference
+            #  frame as was used as the parent frame of the interpolated tf2 transform chain. It guarantees we are not
+            #  using one that is not too new, but does not guarantee we are not using one that is too old. It should
+            #  still reduce incorrect outputs significantly so it is added here for now.
+            if ((geotransform.header.stamp.nanosec > camera_to_reference.header.stamp.nanosec and
+                 geotransform.header.stamp.sec == camera_to_reference.header.stamp.sec) or
+                    geotransform.header.stamp.sec > camera_to_reference.header.stamp.sec):
+                self.get_logger().warning(
+                    "geotransform timestamp is newer than camera to reference frame transform timestamp. Skipping "
+                    "publishing this SensorGps message as tf2 interpolation will most likely produce inaccurate results."
+                )
+                return None
 
-            eph = 10.0
-            epv = 1.0
-
-            msg = SensorGps()
-            msg.timestamp = int(timestamp)
-            msg.timestamp_sample = int(timestamp)
-            msg.device_id = device_id
-            # msg.device_id = 0
-            msg.fix_type = 3
-            msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
-            msg.c_variance_rad = np.nan
-
-            msg.lat = int(translation_wgs84[1] * 1e7)
-            msg.lon = int(translation_wgs84[0] * 1e7)
+            lat = int(translation_wgs84[1] * 1e7)
+            lon = int(translation_wgs84[0] * 1e7)
 
             altitudes = self._convert_to_wgs84(translation_wgs84[1], translation_wgs84[0], translation_wgs84[2], self.dem_vertical_datum)
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
-                # todo Fix this - return type should be SensorGps
                 return None
 
-            msg.alt_ellipsoid = int(alt_ellipsoid * 1e3)
-            msg.alt = int(alt_amsl * 1e3)
+            timestamp = messaging.usec_from_header(camera_to_reference.header)
+            satellites_visible = np.iinfo(np.uint8).max
+            eph = 10.0
+            epv = 1.0
 
-            msg.eph = eph
-            msg.epv = epv
-            msg.hdop = 0.0
-            msg.vdop = 0.0
-            msg.noise_per_ms = 0
-            msg.automatic_gain_control = 0
-            msg.jamming_state = 0
-            msg.jamming_indicator = 0
-            msg.vel_m_s = 0.0
-            msg.vel_n_m_s = 0.0
-            msg.vel_e_m_s = 0.0
-            msg.vel_d_m_s = 0.0
-            msg.cog_rad = np.nan
-            msg.vel_ned_valid = True
-            msg.timestamp_time_relative = 0
-            msg.satellites_used = satellites_visible
-            msg.time_utc_usec = msg.timestamp
-            msg.heading = float(yaw_rad)
-            msg.heading_offset = 0.0
-            msg.heading_accuracy = 0.0
-
-            return msg
+            if self.use_sensor_gps:
+                self.sensor_gps(lat, lon, alt_ellipsoid, alt_amsl, camera_yaw_degrees, self._device_id, timestamp, eph, epv, satellites_visible)
+            else:
+                self.gps_input(lat, lon, alt_amsl, camera_yaw_degrees, timestamp, eph, epv, satellites_visible)
 
         camera_to_reference = messaging.get_transform(
             self, "reference", "camera",
             rclpy.time.Time()
         )
+        geotransform = self.geotransform
 
-        return _sensor_gps(
-            camera_to_reference,
-            self.geotransform,
-            self._device_id,
-        )
+        _publish_inner(camera_to_reference, geotransform)
 
-    @property
+    @narrow_types
+    @ROS.publish(
+        ROS_TOPIC_SENSOR_GPS,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def sensor_gps(self, lat: int, lon: int, altitude_ellipsoid: float, altitude_amsl: float, yaw_degrees: int, device_id: int, timestamp: int, eph: float, epv: float, satellites_visible: int) -> Optional[SensorGps]:
+        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
+        is ``True``
+
+        Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
+        """
+
+        yaw_rad = np.radians(yaw_degrees)
+
+        msg = SensorGps()
+        msg.timestamp = int(timestamp)
+        msg.timestamp_sample = int(timestamp)
+        msg.device_id = device_id
+        # msg.device_id = 0
+        msg.fix_type = 3
+        msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
+        msg.c_variance_rad = np.nan
+        msg.lat = lat
+        msg.lon = lon
+        msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
+        msg.alt = int(altitude_amsl * 1e3)
+        msg.eph = eph
+        msg.epv = epv
+        msg.hdop = 0.0
+        msg.vdop = 0.0
+        msg.noise_per_ms = 0
+        msg.automatic_gain_control = 0
+        msg.jamming_state = 0
+        msg.jamming_indicator = 0
+        msg.vel_m_s = 0.0
+        msg.vel_n_m_s = 0.0
+        msg.vel_e_m_s = 0.0
+        msg.vel_d_m_s = 0.0
+        msg.cog_rad = np.nan
+        msg.vel_ned_valid = True
+        msg.timestamp_time_relative = 0
+        msg.satellites_used = satellites_visible
+        msg.time_utc_usec = msg.timestamp
+        msg.heading = float(yaw_rad)
+        msg.heading_offset = 0.0
+        msg.heading_accuracy = 0.0
+
+        return msg
+
+    @narrow_types
     # @ROS.publish(
     #    ROS_TOPIC_GPS_INPUT,
     #    QoSPresetProfiles.SENSOR_DATA.value,
     # )
-    def publish_gps_input(self) -> Optional[dict]:  # Optional[GPSINPUT]
+    def gps_input(self, lat: int, lon: int, altitude_amsl: float, yaw_degrees: int, timestamp: int, eph: float, epv: float, satellites_visible: int) -> Optional[dict]:  # Optional[GPSINPUT]
         """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
         is ``False``
 
@@ -316,57 +314,36 @@ class MockGPSNode(Node):
             Does not use :class:`mavros_msgs.msg.GPSINPUT` message over MAVROS,
             sends a :term:`MAVLink` GPS_INPUT message directly to :term:`ArduPilot`.
         """
+        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
 
-        @narrow_types
-        def _gps_input(
-            vehicle_estimated_pose: PoseStamped,
-        ) -> Optional[dict]:
-            # TODO: check yaw sign (NED or ENU?)
-            q = messaging.as_np_quaternion(vehicle_estimated_pose.orientation)
-            yaw = Attitude(q=q).yaw
-            yaw = int(np.degrees(yaw % (2 * np.pi)))
-            yaw = 360 if yaw == 0 else yaw  # MAVLink definition 0 := not available
+        msg = dict(
+            usec=timestamp,
+            gps_id=0,
+            ignore_flags=0,
+            time_week=gps_time.week_number,
+            time_week_ms=int(gps_time.time_of_week * 1e3),
+            fix_type=3,
+            lat=lat,
+            lon=lon,
+            alt=altitude_amsl,
+            horiz_accuracy=eph,
+            vert_accuracy=epv,
+            speed_accuracy=5.0,
+            hdop=0.0,
+            vdop=0.0,
+            vn=0.0,
+            ve=0.0,
+            vd=0.0,
+            satellites_visible=satellites_visible,
+            yaw=yaw_degrees * 100,
+        )
 
-            satellites_visible = np.iinfo(np.uint8).max
-            timestamp = messaging.usec_from_header(vehicle_estimated_pose.header)
+        # TODO: handle None host or port
+        self._socket.sendto(
+            f"{json.dumps(msg)}".encode("utf-8"), (self.udp_host, self.udp_port)
+        )
 
-            eph = 10.0
-            epv = 1.0
-
-            gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
-
-            # TODO: lat, lon, alt
-            msg = dict(
-                usec=timestamp,
-                gps_id=0,
-                ignore_flags=0,
-                time_week=gps_time.week_number,
-                time_week_ms=int(gps_time.time_of_week * 1e3),
-                fix_type=3,
-                # lat=int(vehicle_estimated_geopose.pose.position.latitude * 1e7),
-                # lon=int(vehicle_estimated_geopose.pose.position.longitude * 1e7),
-                # alt=vehicle_estimated_altitude.amsl,
-                horiz_accuracy=eph,
-                vert_accuracy=epv,
-                speed_accuracy=5.0,
-                hdop=0.0,
-                vdop=0.0,
-                vn=0.0,
-                ve=0.0,
-                vd=0.0,
-                satellites_visible=satellites_visible,
-                yaw=yaw * 100,
-            )
-
-            # TODO: handle None host or port
-            self._socket.sendto(
-                f"{json.dumps(msg)}".encode("utf-8"), (self.udp_host, self.udp_port)
-            )
-
-            return msg
-
-        # TODO
-        return None
+        return msg
         # return _gps_input(
         #    self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
         # )

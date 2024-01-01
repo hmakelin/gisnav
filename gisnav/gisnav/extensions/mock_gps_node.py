@@ -204,6 +204,21 @@ class MockGPSNode(Node):
             geotransform: PointCloud2,
             device_id: int,
         ) -> SensorGps:
+            # Check if geotransform timestamp is newer than camera_to_reference timestamp - tf2 interpolation will
+            # not work for the reference frame because the reference frame updates are discontinuous.
+            # TODO: This check does not guarantee that we are using the geotransform computed from the same reference
+            #  frame as was used as the parent frame of the interpolated tf2 transform chain. It guarantees we are not
+            #  using one that is not too new, but does not guarantee we are not using one that is too old. It should
+            #  still reduce incorrect outputs significantly so it is added here for now.
+            if ((geotransform.header.stamp.nanosec > camera_to_reference.header.stamp.nanosec and
+                geotransform.header.stamp.sec == camera_to_reference.header.stamp.sec) or
+                    geotransform.header.stamp.sec > camera_to_reference.header.stamp.sec):
+                self.get_logger().warning(
+                    "geotransform timestamp is newer than camera to reference frame transform timestamp. Skipping "
+                    "publishing this SensorGps message as tf2 interpolation will most likely produce inaccurate results."
+                )
+                return None
+
             translation, rotation = (camera_to_reference.transform.translation,
                                      camera_to_reference.transform.rotation)
 

@@ -40,7 +40,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros.transform_broadcaster import TransformBroadcaster
-
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from builtin_interfaces.msg import Time
 
 from .. import messaging
 from ..constants import (
@@ -77,8 +78,25 @@ class PoseNode(Node):
 
         # Initialize the transform broadcaster
         self.broadcaster = TransformBroadcaster(self)
+        self.static_broadcaster = StaticTransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
+        # Pinhole camera model camera from to ROS 2 camera_optical (z-axis forward along optical axis) frame i.e.
+        # create a quaternion that represents the transformation from a coordinate frame where x points right, y points
+        # down, and z points backwards to the ROS 2 convention (REP 103 https://www.ros.org/reps/rep-0103.html#id21)
+        # where x points forward, y points left, and z points up
+        # TODO: is PoseNode the correct place to publish this transform?
+        #q = (0.7071, 0.0, -0.7071, 0.0)
+        q = (0.5, -0.5, -0.5, -0.5)
+        now = self.get_clock().now()
+        timestamp = Time()
+        timestamp.sec = now.seconds_nanoseconds()[0]
+        timestamp.nanosec = now.seconds_nanoseconds()[1]
+        transform_camera = messaging.create_transform_msg(
+            timestamp, "camera_pinhole", "camera", q, np.zeros(3)
+        )
+        self.static_broadcaster.sendTransform([transform_camera])
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -108,11 +126,11 @@ class PoseNode(Node):
             return None
 
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera", q, (-r @ t).squeeze()
+            msg.header.stamp, "world", "camera_pinhole", q, (-r @ t).squeeze()
         )
         self.broadcaster.sendTransform([transform_camera])
 
-        debug_msg = messaging.get_transform(self, "world", "camera",
+        debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
                                            rclpy.time.Time())
 
         debug_ref_image = self._cv_bridge.imgmsg_to_cv2(

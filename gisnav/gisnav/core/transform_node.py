@@ -249,7 +249,7 @@ class TransformNode(Node):
 
                 ref = deepcopy(orthoimage_stack[:, :, 0])
 
-                camera_pose_transform = messaging.get_transform(self, "reference", "camera",
+                camera_pose_transform = messaging.get_transform(self, "reference", "camera_pinhole",
                                                                 image.header.stamp)  # rclpy.time.Time()
 
                 if camera_pose_transform is not None:

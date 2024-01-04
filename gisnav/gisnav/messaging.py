@@ -101,6 +101,7 @@ FrameID = Literal[
     "reference",
     "base_link",
     "camera",
+    "camera_pinhole",
     "gimbal",
     "map",
     "world",

@@ -13,26 +13,28 @@ RUN apt-get update && \
     apt clean
 
 # Clone and setup PX4-Autopilot
-RUN git clone --branch v1.14.0-beta2 --single-branch \
+RUN git clone --branch v1.14.0 --single-branch --depth 1 \
         https://github.com/PX4/PX4-Autopilot.git && \
     cd PX4-Autopilot && \
     git -c submodule."Tools/simulation/jmavsim/jMAVSim".update=none \
         -c submodule."Tools/flightgear_bridge".update=none \
         -c submodule."Tools/simulation/jsbsim/jsbsim_bridge".update=none \
+        -c submodule."platforms/nuttx/NuttX/apps".update=none \
+        -c submodule."platforms/nuttx/NuttX/nuttx".update=none \
         submodule update --init --recursive && \
     bash Tools/setup/ubuntu.sh
 
 # Explicitly add required \
 WORKDIR PX4-Autopilot
 
-COPY merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world .
+COPY merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world 6011_typhoon_h480 .
 
 # Setup ksql_airport.world for HIL
 RUN pip install --no-cache-dir lxml && \
     python3 merge_xml.py iris_hitl_ksql_airport.world Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world
 
 # Configure XRCE-DDS bridge
-RUN python3 merge_yaml.py dds_topics.yaml src/modules/microdds_client/dds_topics.yaml
+RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topics.yaml
 
 # Apply configuration files
 #RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480

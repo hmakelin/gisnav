@@ -115,8 +115,6 @@ class PoseNode(Node):
 
         r, t = pose_stamped
 
-        t[2] = -t[2]
-
         rotation_4x4 = np.eye(4)
         rotation_4x4[:3, :3] = r
         try:
@@ -125,13 +123,15 @@ class PoseNode(Node):
             self.get_logger().warning("image_cb: Could not compute quaternion from estimated rotation. Returning None.")
             return None
 
+        camera_pos = (-r.T @ t).squeeze()
+        camera_pos[2] = -camera_pos[2]  # todo: implement cleaner way of getting camera position right
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera_pinhole", q, (-r @ t).squeeze()
+            msg.header.stamp, "world", "camera_pinhole", q, camera_pos
         )
         self.broadcaster.sendTransform([transform_camera])
 
         debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
-                                           rclpy.time.Time())
+                                            rclpy.time.Time())
 
         debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
             deepcopy(msg), desired_encoding="passthrough"

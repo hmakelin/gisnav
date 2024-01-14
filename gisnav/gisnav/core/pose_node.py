@@ -60,7 +60,7 @@ class PoseNode(Node):
     CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad keypoint matches"""
 
-    MIN_MATCHES = 7
+    MIN_MATCHES = 20
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):

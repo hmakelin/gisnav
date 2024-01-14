@@ -596,7 +596,7 @@ class GISNode(Node):
             self.old_bounding_box = bounding_box
 
             # Publish geotransform associated with the image msg, and the image message right after
-            image_msg.header = messaging.create_header("reference")
+            image_msg.header = messaging.create_header(self, "reference")
             height, width = img.shape[0:2]
             self.geotransform(
                 height, width, bounding_box, image_msg.header

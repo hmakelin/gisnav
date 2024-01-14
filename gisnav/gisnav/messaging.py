@@ -37,19 +37,16 @@ fast dynamics with higher lags as long as the timestamps are accurate.
 """
 
 
-def create_header(frame_id: str = "") -> Header:
+def create_header(node: Node, frame_id: str = "") -> Header:
     """Creates a class:`std_msgs.msg.Header` for an outgoing ROS message
 
     :param frame_id: Header frame_id value
     :return: ROS message header
     """
-    # TODO: use rclpy clock to create stamp
-    time_ns = time.time_ns()
-    sec = int(time_ns / 1e9)
-    nanosec = int(time_ns - (1e9 * sec))
+    now = node.get_clock().now()
     header = Header()
-    header.stamp.sec = sec
-    header.stamp.nanosec = nanosec
+    header.stamp.sec = now.seconds_nanoseconds()[0]
+    header.stamp.nanosec = now.seconds_nanoseconds()[1]
     header.frame_id = frame_id
     return header
 

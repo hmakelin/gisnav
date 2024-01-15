@@ -43,8 +43,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, Image, NavSatFix
-from sensor_msgs.msg import PointCloud2, PointField
+from sensor_msgs.msg import CameraInfo, Image, NavSatFix, PointCloud2, PointField, TimeReference
 from std_msgs.msg import Header
 from shapely.geometry import box
 
@@ -55,6 +54,7 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_GEOTRANSFORM,
+    MAVROS_TOPIC_TIME_REFERENCE
 )
 from ..decorators import ROS, cache_if, narrow_types
 
@@ -180,6 +180,7 @@ class GISNode(Node):
         # subscriptions to the appropriate ROS topics
         self.bounding_box
         self.camera_info
+        self.time_reference
 
         # TODO: use throttling in publish decorator, remove timer
         publish_rate = self.publish_rate
@@ -392,6 +393,14 @@ class GISNode(Node):
         """Vehicle GPS fix, or None if unknown or too old"""
 
     @property
+    @ROS.subscribe(
+        MAVROS_TOPIC_TIME_REFERENCE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def time_reference(self) -> Optional[TimeReference]:
+        """:term:`FCU` time reference via :term:`MAVROS`"""
+
+    @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
@@ -596,7 +605,10 @@ class GISNode(Node):
             self.old_bounding_box = bounding_box
 
             # Publish geotransform associated with the image msg, and the image message right after
-            image_msg.header = messaging.create_header(self, "reference")
+            # TODO: do not publish if time reference is None
+            if self.time_reference is None:
+                self.get_logger().warning("Publishing orthoimage without FCU time reference.")
+            image_msg.header = messaging.create_header(self, "reference", time_reference=self.time_reference)
             height, width = img.shape[0:2]
             self.geotransform(
                 height, width, bounding_box, image_msg.header

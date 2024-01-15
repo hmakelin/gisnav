@@ -45,6 +45,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.transform_broadcaster import TransformBroadcaster
+from sensor_msgs.msg import TimeReference
 
 from .. import messaging
 from ..constants import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX

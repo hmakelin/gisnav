@@ -245,17 +245,17 @@ class TransformNode(Node):
             )
             self.broadcaster.sendTransform([transform_camera])
 
-            if orthoimage is not None:
-
-                ref = deepcopy(orthoimage_stack[:, :, 0])
-
-                camera_pose_transform = messaging.get_transform(self, "reference", "camera_pinhole",
-                                                                image.header.stamp)  # rclpy.time.Time()
-
-                if camera_pose_transform is not None:
-                    h = orthoimage_stack.shape[0]
-                    messaging.visualize_transform(camera_pose_transform, ref, h,
-                                                  "Camera position in ref frame")
+            #if orthoimage is not None:
+            #
+            #    ref = deepcopy(orthoimage_stack[:, :, 0])
+            #
+            #    camera_pose_transform = messaging.get_transform(self, "reference", "camera_pinhole",
+            #                                                    image.header.stamp)  # rclpy.time.Time()
+            #
+            #    if camera_pose_transform is not None:
+            #        h = orthoimage_stack.shape[0]
+            #        messaging.visualize_transform(camera_pose_transform, ref, h,
+            #                                      "Camera position in ref frame")
 
 
             return pnp_image_msg

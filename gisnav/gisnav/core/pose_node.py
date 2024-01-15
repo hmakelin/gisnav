@@ -38,16 +38,16 @@ from cv_bridge import CvBridge
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, TimeReference
 from tf2_ros.transform_broadcaster import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
-from builtin_interfaces.msg import Time
 
 from .. import messaging
 from ..constants import (
-   ROS_NAMESPACE,
-   ROS_TOPIC_RELATIVE_PNP_IMAGE,
-   TRANSFORM_NODE_NAME,
+    ROS_NAMESPACE,
+    ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    TRANSFORM_NODE_NAME,
+    MAVROS_TOPIC_TIME_REFERENCE
 )
 from ..decorators import ROS, narrow_types
 
@@ -75,6 +75,7 @@ class PoseNode(Node):
         # initialize subscription
         self.camera_info
         self.image
+        self.time_reference
 
         # Initialize the transform broadcaster
         self.broadcaster = TransformBroadcaster(self)
@@ -87,16 +88,20 @@ class PoseNode(Node):
         # down, and z points backwards to the ROS 2 convention (REP 103 https://www.ros.org/reps/rep-0103.html#id21)
         # where x points forward, y points left, and z points up
         # TODO: is PoseNode the correct place to publish this transform?
-        #q = (0.7071, 0.0, -0.7071, 0.0)
         q = (0.5, -0.5, -0.5, -0.5)
-        now = self.get_clock().now()
-        timestamp = Time()
-        timestamp.sec = now.seconds_nanoseconds()[0]
-        timestamp.nanosec = now.seconds_nanoseconds()[1]
+        header = messaging.create_header(self, "", self.time_reference)  # time reference is not important here
         transform_camera = messaging.create_transform_msg(
-            timestamp, "camera_pinhole", "camera", q, np.zeros(3)
+            header.stamp, "camera_pinhole", "camera", q, np.zeros(3)
         )
         self.static_broadcaster.sendTransform([transform_camera])
+
+    @property
+    @ROS.subscribe(
+        MAVROS_TOPIC_TIME_REFERENCE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def time_reference(self) -> Optional[TimeReference]:
+        """:term:`FCU` time reference via :term:`MAVROS`"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -125,8 +130,18 @@ class PoseNode(Node):
 
         camera_pos = (-r.T @ t).squeeze()
         camera_pos[2] = -camera_pos[2]  # todo: implement cleaner way of getting camera position right
+
+        # TODO: hard coded assumption that image message here has timestamp in system time
+        time_reference = self.time_reference
+        if time_reference is None:
+            self.get_logger().warning("Publishing world to camera_pinhole transformation without time reference.")
+            stamp = msg.header.stamp
+        else:
+            stamp = (rclpy.time.Time.from_msg(msg.header.stamp)
+                     - (rclpy.time.Time.from_msg(time_reference.header.stamp)
+                        - rclpy.time.Time.from_msg(time_reference.time_ref))).to_msg()
         transform_camera = messaging.create_transform_msg(
-            msg.header.stamp, "world", "camera_pinhole", q, camera_pos
+            stamp, "world", "camera_pinhole", q, camera_pos
         )
         self.broadcaster.sendTransform([transform_camera])
 

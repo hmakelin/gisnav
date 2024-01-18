@@ -143,10 +143,20 @@ class PoseNode(Node):
         transform_camera = messaging.create_transform_msg(
             stamp, "world", "camera_pinhole", q, camera_pos
         )
-        self.broadcaster.sendTransform([transform_camera])
+        # We also publish a world_{timestamp} frame so that we will be able to trace the transform chain back to
+        # the exact timestamp (to match with the geotransform message). This is needed because interpolation will
+        # often produce very inaccurate results with the discontinous reference frame which is at the root of this
+        # transformation chain. The pnp_image timestamp which we use here is derived from the orthoimage timestamp
+        # which again is used as a proxy for the geotransform timestamp (i.e. they must be published with the same
+        # timestamps).
+        transform_camera_stamped = deepcopy(transform_camera)
+        #transform_camera_stamped.header.frame_id = f"{transform_camera.header.frame_id}_{msg.header.stamp.sec}_{msg.header.stamp.nanosec}"
+        self.broadcaster.sendTransform([transform_camera, transform_camera_stamped])
 
-        debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
-                                            rclpy.time.Time())
+        #debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
+        #                                    rclpy.time.Time())
+        debug_msg = messaging.get_transform(self, transform_camera_stamped.header.frame_id, "camera_pinhole",
+                                             rclpy.time.Time())
 
         debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
             deepcopy(msg), desired_encoding="passthrough"

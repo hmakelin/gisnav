@@ -608,7 +608,12 @@ class GISNode(Node):
             # TODO: do not publish if time reference is None
             if self.time_reference is None:
                 self.get_logger().warning("Publishing orthoimage without FCU time reference.")
-            image_msg.header = messaging.create_header(self, "reference", time_reference=self.time_reference)
+            image_msg.header = messaging.create_header(self, f"reference", time_reference=self.time_reference)
+            # The reference frame is discontinous so we use timestamps in the frame_id to couple it with the
+            # correct tf2 transformation chain. This is to prevent significant interpolation errors whenever the
+            # reference frame is updated and "jumps"
+            # TODO modify frame id - or is the timestamp information enough assuming orthoimage and geotransform
+            #  have the same timestamp?
             height, width = img.shape[0:2]
             self.geotransform(
                 height, width, bounding_box, image_msg.header

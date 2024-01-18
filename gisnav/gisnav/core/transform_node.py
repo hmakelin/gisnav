@@ -243,7 +243,16 @@ class TransformNode(Node):
             transform_camera = messaging.create_transform_msg(
                 pnp_image_msg.header.stamp, child_frame_id, parent_frame_id, q, translation
             )
-            self.broadcaster.sendTransform([transform_camera])
+            # We also publish a reference_{timestamp} frame so that we will be able to trace the transform chain back to
+            # the exact timestamp (to match with the geotransform message). This is needed because interpolation will
+            # often produce very inaccurate results with the discontinous reference frame. The orthoimage timestamp
+            # which we use here is used as a proxy for the geotransform timestamp (i.e. they must be published with
+            # the same timestamps).
+            # TODO: remove this assumption or make the design less brittle in some other way
+            transform_camera_stamped = deepcopy(transform_camera)
+            #transform_camera_stamped.header.frame_id = f"{transform_camera.header.frame_id}_{orthoimage.header.stamp.sec}_{orthoimage.header.stamp.nanosec}"
+            transform_camera_stamped.child_frame_id = f"{transform_camera.child_frame_id}_{orthoimage.header.stamp.sec}_{orthoimage.header.stamp.nanosec}"
+            self.broadcaster.sendTransform([transform_camera, transform_camera_stamped])
 
             #if orthoimage is not None:
             #

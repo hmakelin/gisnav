@@ -244,11 +244,14 @@ class MockGPSNode(Node):
             else:
                 self.gps_input(lat, lon, alt_amsl, camera_yaw_degrees, timestamp, eph, epv, satellites_visible)
 
-        camera_to_reference = messaging.get_transform(
-            self, "reference", "camera",
-            rclpy.time.Time()
-        )
         geotransform = self.geotransform
+        if self.geotransform is not None:
+            camera_to_reference = messaging.get_transform(
+                self, f"reference_{geotransform.header.stamp.sec}_{geotransform.header.stamp.nanosec}", "camera",
+                rclpy.time.Time()
+            )
+        else:
+            camera_to_reference = None
 
         _publish_inner(camera_to_reference, geotransform)
 

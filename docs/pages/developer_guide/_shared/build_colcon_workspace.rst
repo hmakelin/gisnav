@@ -4,18 +4,18 @@
         :selected:
 
         .. code-block:: bash
-            :caption: Build entire colcon workspace
+            :caption: Build entire workspace
 
-            mkdir -p ~/colcon_ws
+            cd ~/colcon_ws
             colcon build
             source install/setup.bash
 
-    .. tab-item:: GISNav package only
+    .. tab-item:: GISNav only
         :selected:
 
         .. code-block:: bash
             :caption: Build GISNav package
 
-            mkdir -p ~/colcon_ws
+            cd ~/colcon_ws
             colcon build --packages-select gisnav
             source install/setup.bash

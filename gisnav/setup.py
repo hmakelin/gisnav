@@ -138,6 +138,7 @@ setup(
             # "git+https://github.com/dronecrew/px4tools.git",
             "sphinx-copybutton",
             "sphinx-design",
+            "Sphinx-Substitution-Extensions",
             "sphinxcontrib-mermaid",
             "sphinxcontrib-video",
             "Sphinx",

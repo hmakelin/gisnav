@@ -33,6 +33,7 @@ extensions = [
     "sphinxcontrib.video",
     "sphinxcontrib.mermaid",
     "sphinx_copybutton",
+    "sphinx_substitution_extensions"
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -120,13 +121,24 @@ try:
 except subprocess.CalledProcessError:
     raise
 
-rst_epilog = f"""
+ros_version = "humble"
+# Define dynamic content (substitutions) here
+# This should reduce documentation maintenance burden
+# Substitutions must be in prolog (not epilot) - otherwise
+# Sphinx-Substition-Extensions might not work (substitutions inside directives)
+rst_prolog = f"""
 .. |release| replace:: {release}
 .. |version| replace:: {version}
+.. |vversion| replace:: {'v' + version}
+.. |ros_version| replace:: {ros_version}
+.. |ros_version_capitalized| replace:: Humble
+.. |ROS 2 install instructions| replace:: ROS 2 install instructions
+.. _ROS 2 install instructions: https://docs.ros.org/en/{ros_version}/Installation.html
+"""
 
+rst_epilog = f"""
 Updated on {datetime.datetime.today().strftime("%b %d, %Y")}
 
 GISNav release: |release|
-
 """
 

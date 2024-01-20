@@ -1,20 +1,18 @@
 Install locally
 ____________________________________________________
 
-Here we describe how to install GISNav locally on your development computer
-so that it is easy to make changes and re-test the software without having
-to rebuild a :term:`Docker` image.
+This page describes how to install GISNav locally on your development computer.
+With a local installation of GISNav it is easy to make changes and re-test the
+software without having to rebuild a :term:`Docker` image.
 
-If you are only interested in using but not necessarily developing GISNav, you
-will probably want to use the :ref:`Docker Compose builds <Deploy with Docker Compose>`
-instead of installing locally.
+If you are only interested in running but not necessarily developing GISNav, you
+will probably want to use the :ref:`Docker Compose services
+<Deploy with Docker Compose>` instead of installing locally.
 
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. include:: ../_shared/prerequisites/ros.rst
-
-.. include:: .../_shared/prerequisites/gisnav.rst
 
 .. include:: ../_shared/prerequisites/source_workspace.rst
 
@@ -25,80 +23,79 @@ Install GISNav system dependencies with the following commands:
 
 .. code-block:: bash
     :caption: Install GISNav system dependencies
+    :substitutions:
 
     cd ~/colcon_ws/src
 
-    git clone \
-        https://github.com/px4/px4_msgs.git
+    git clone --branch |vversion| https://github.com/hmakelin/gisnav.git
+    git clone https://github.com/px4/px4_msgs.git
     git clone \
         --branch gimbal-protocol-v2-plugin \
-        https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros
+        https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git \
+        mavros
 
     rosdep update
-    rosdep install --from-paths . -y --ignore-src
-
+    rosdep install --from-paths . -y -r --ignore-src
 
 Install Python dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You must install at least the :term:`core` dependencies.
-
-If you know you are not e.g. going to use the :class:`.MockGPSNode` :term:`extension`,
-you can skip installing the extended dependencies.
+You must install at least the :term:`core` dependencies. If you know you are not
+e.g. going to use the :class:`.MockGPSNode` :term:`extension`, you can skip
+installing the extended dependencies.
 
 The development dependencies are required for e.g. :ref:`generating documentation
 <Generate documentation>` and running :ref:`Launch tests`. They are highly recommended
 if you are doing development work on GISNav.
 
-You may optionally use a ``virtualenv`` for managing your Python dependencies
-inside your colcon workspace:
+.. note::
+    If you want to use a Python virtual environment for your GISNav Python
+    dependencies, see `this issue`_ first. We do not provide instructions here
+    as the workspace might not play nicely with the Python virtual environment.
 
-.. code-block:: bash
-    :caption: Manage Python dependencies with virtualenv (optional)
+    .. _this issue: https://github.com/ros2/ros2/issues/1094
 
-    cd ~/colcon_ws
-    python3 -m virtualenv venv
-    source venv/bin/activate
-
-Install the required and optional dependencies with the following commands:
+Install the required and optional Python dependencies with the following commands:
 
 .. tab-set::
 
-    .. tab-item:: Core dependencies
+    .. tab-item:: Core
         :selected:
 
         .. code-block:: bash
             :caption: Install GISNav core Python dependencies
 
-            cd ~/colcon_ws/src/gisnav/gisnav
-            pip3 install .
+            cd ~/colcon_ws/src/gisnav
+            pip3 install ./gisnav
 
-    .. tab-item:: Extended dependencies (optional)
+    .. tab-item:: Extended (optional)
 
         .. code-block:: bash
             :caption: Install GISNav extension Python dependencies
 
-            cd ~/colcon_ws/src/gisnav/gisnav
-            pip3 install .[mock_gps_node]
-            pip3 install .[qgis_node]
+            cd ~/colcon_ws/src/gisnav
+            pip3 install ./gisnav[mock_gps_node]
+            pip3 install ./gisnav[qgis_node]
 
-    .. tab-item:: Development dependencies (optional)
+        You can install the dependencies for any :term:`extension` node
+        by using its name as a package extra.
+
+    .. tab-item:: Development (optional)
 
         .. code-block:: bash
             :caption: Install GISNav development Python dependencies
 
-            cd ~/colcon_ws/src/gisnav/gisnav
-            pip3 install .[dev]
+            cd ~/colcon_ws/src/gisnav
+            pip3 install ./gisnav[dev]
 
 Build colcon workspace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build the GISNav package along with other dependencies you have in your colcon
-workspace. If you have already built the other dependencies (such as ``px4_msgs``
-for PX4 configuration) earlier you may want to skip rebuilding them and build
-GISNav only to save time:
+workspace. If you have already built the other dependencies (such as ``px4_msgs``)
+earlier you may want to skip rebuilding them and build GISNav only to save time:
 
-.. include:: ../launch/_build_colcon_workspace.rst
+.. include:: ../_shared/build_colcon_workspace.rst
 
 Once GISNav is installed, you can for example try :ref:`launching with the ROS 2
 launch system <Use ROS 2 launch system>`.

@@ -17,10 +17,9 @@ from pyproj import Transformer
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 
-from ..decorators import ROS
-
-from .. import messaging
+from .._decorators import ROS
 from ..constants import (
+    DELAY_DEFAULT_MS,
     POSE_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
@@ -104,7 +103,7 @@ class RVizNode(Node):
         return path
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',

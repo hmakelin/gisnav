@@ -2,28 +2,29 @@
 import json
 import socket
 from datetime import datetime
-from typing import Final, Optional, Tuple
+from typing import Final, Optional, Tuple, cast
 
 import numpy as np
-from geometry_msgs.msg import PoseStamped, Vector3, Vector3Stamped, TransformStamped
-from gps_time import GPSTime
-from px4_msgs.msg import SensorGps
 import rclpy
 import tf2_ros
+from geometry_msgs.msg import TransformStamped
+from gps_time import GPSTime
+from px4_msgs.msg import SensorGps
+from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 from sensor_msgs.msg import PointCloud2
-from pyproj import Transformer
 
-from ..decorators import ROS, narrow_types
-
-from .. import messaging
+from .. import _messaging as messaging
+from .._decorators import ROS, narrow_types
 from ..constants import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_GEOTRANSFORM,
+    ROS_TOPIC_SENSOR_GPS,
+    FrameID,
 )
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
@@ -99,7 +100,7 @@ class MockGPSNode(Node):
         if self.use_sensor_gps:
             self._mock_gps_pub = self.create_publisher(
                 SensorGps,
-                messaging.ROS_TOPIC_SENSOR_GPS,
+                ROS_TOPIC_SENSOR_GPS,
                 QoSPresetProfiles.SENSOR_DATA.value,
             )
             self._socket = None
@@ -112,9 +113,7 @@ class MockGPSNode(Node):
 
         publish_rate = self.publish_rate
         assert publish_rate is not None
-        self._publish_timer: Optional[Timer] = self._create_publish_timer(
-            publish_rate
-        )
+        self._publish_timer: Optional[Timer] = self._create_publish_timer(publish_rate)
 
         # Subscribe to geotransform
         self.geotransform
@@ -164,14 +163,10 @@ class MockGPSNode(Node):
             )
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
-        timer = self.create_timer(
-            1 / publish_rate,
-            self._publish
-        )
+        timer = self.create_timer(1 / publish_rate, self._publish)
         return timer
 
     @property
-    #@ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)  # TODO: get timestamp that matches orthoimage/reference frame
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_GEOTRANSFORM.replace("~", GIS_NODE_NAME)}',
@@ -186,26 +181,30 @@ class MockGPSNode(Node):
         """
 
     def _publish(self) -> None:
-
         @narrow_types(self)
-        def _publish_inner(camera_to_reference: TransformStamped, geotransform: PointCloud2) -> None:
-            translation, rotation = (camera_to_reference.transform.translation,
-                                     camera_to_reference.transform.rotation)
+        def _publish_inner(
+            camera_to_reference: TransformStamped, geotransform: PointCloud2
+        ) -> None:
+            translation, rotation = (
+                camera_to_reference.transform.translation,
+                camera_to_reference.transform.rotation,
+            )
 
             # Unpack the geotransformation affine matrix
             M = np.frombuffer(geotransform.data, dtype=np.float64).reshape(4, 4)
 
-            # Geotransform uses numpy convention: origin is top left corner and first axis is height -> need to swap x
-            # and y axis here and invert the first axis
-            # todo: do not hard code 735 - do this coordinate system transformation in GISNode._create_src_corners
-            #  instead
-            translation_wgs84 = M @ np.array([735 - translation.y, translation.x, translation.z, 1])
+            # Geotransform uses numpy convention: origin is top left corner and
+            # first axis is height -> need to swap x and y axis here and invert
+            # the first axis
+            # todo: do not hard code 735 - do this coordinate system transformation
+            #  in GISNode._create_src_corners instead
+            translation_wgs84 = M @ np.array(
+                [735 - translation.y, translation.x, translation.z, 1]
+            )
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw
-            camera_yaw_degrees = messaging.extract_yaw(
-                rotation
-            )
+            camera_yaw_degrees = messaging.extract_yaw(rotation)
             camera_yaw_degrees = int(camera_yaw_degrees % 360)
             # MAVLink definition 0 := not available
             camera_yaw_degrees = 360 if camera_yaw_degrees == 0 else camera_yaw_degrees
@@ -213,7 +212,12 @@ class MockGPSNode(Node):
             lat = int(translation_wgs84[1] * 1e7)
             lon = int(translation_wgs84[0] * 1e7)
 
-            altitudes = self._convert_to_wgs84(translation_wgs84[1], translation_wgs84[0], translation_wgs84[2], self.dem_vertical_datum)
+            altitudes = self._convert_to_wgs84(
+                translation_wgs84[1],
+                translation_wgs84[0],
+                translation_wgs84[2],
+                self.dem_vertical_datum,
+            )
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
@@ -225,19 +229,49 @@ class MockGPSNode(Node):
             epv = 1.0
 
             if self.use_sensor_gps:
-                self.sensor_gps(lat, lon, alt_ellipsoid, alt_amsl, camera_yaw_degrees, self._device_id, timestamp, eph, epv, satellites_visible)
+                self.sensor_gps(
+                    lat,
+                    lon,
+                    alt_ellipsoid,
+                    alt_amsl,
+                    camera_yaw_degrees,
+                    self._device_id,
+                    timestamp,
+                    eph,
+                    epv,
+                    satellites_visible,
+                )
             else:
-                self.gps_input(lat, lon, alt_amsl, camera_yaw_degrees, timestamp, eph, epv, satellites_visible)
+                self.gps_input(
+                    lat,
+                    lon,
+                    alt_amsl,
+                    camera_yaw_degrees,
+                    timestamp,
+                    eph,
+                    epv,
+                    satellites_visible,
+                )
 
-        # Must match transformation chain to correct reference frame using geotransform timestamp.
-        # The geotransform timestamp is a proxy for the orthoimage timestamp, which is also added to the frame_id
-        # of the reference frame. The reference frame is discontinous so it is not and should not be interpolated using
-        # tf2 to prevent jumps in estimation error whenever the reference frame is updated.
+        # Must match transformation chain to correct reference frame using
+        # geotransform timestamp. The geotransform timestamp is a proxy for the
+        # orthoimage timestamp, which is also added to the frame_id of the
+        # reference frame. The reference frame is discontinous so it is not and
+        # should not be interpolated using tf2 to prevent jumps in estimation
+        # error whenever the reference frame is updated.
         geotransform = self.geotransform
         if self.geotransform is not None:
+            ref_frame: FrameID = cast(
+                FrameID,
+                "reference_{}_{}".format(
+                    geotransform.header.stamp.sec, geotransform.header.stamp.nanosec
+                ),
+            )
             camera_to_reference = messaging.get_transform(
-                self, f"reference_{geotransform.header.stamp.sec}_{geotransform.header.stamp.nanosec}", "camera",
-                rclpy.time.Time()
+                self,
+                ref_frame,
+                "camera",
+                rclpy.time.Time(),
             )
         else:
             camera_to_reference = None
@@ -249,7 +283,19 @@ class MockGPSNode(Node):
         ROS_TOPIC_SENSOR_GPS,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def sensor_gps(self, lat: int, lon: int, altitude_ellipsoid: float, altitude_amsl: float, yaw_degrees: int, device_id: int, timestamp: int, eph: float, epv: float, satellites_visible: int) -> Optional[SensorGps]:
+    def sensor_gps(
+        self,
+        lat: int,
+        lon: int,
+        altitude_ellipsoid: float,
+        altitude_amsl: float,
+        yaw_degrees: int,
+        device_id: int,
+        timestamp: int,
+        eph: float,
+        epv: float,
+        satellites_visible: int,
+    ) -> Optional[SensorGps]:
         """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
         is ``True``
 
@@ -298,7 +344,17 @@ class MockGPSNode(Node):
     #    ROS_TOPIC_GPS_INPUT,
     #    QoSPresetProfiles.SENSOR_DATA.value,
     # )
-    def gps_input(self, lat: int, lon: int, altitude_amsl: float, yaw_degrees: int, timestamp: int, eph: float, epv: float, satellites_visible: int) -> Optional[dict]:  # Optional[GPSINPUT]
+    def gps_input(
+        self,
+        lat: int,
+        lon: int,
+        altitude_amsl: float,
+        yaw_degrees: int,
+        timestamp: int,
+        eph: float,
+        epv: float,
+        satellites_visible: int,
+    ) -> Optional[dict]:  # Optional[GPSINPUT]
         """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
         is ``False``
 
@@ -354,7 +410,9 @@ class MockGPSNode(Node):
         return 11469064
 
     @narrow_types
-    def _convert_to_wgs84(self, lat: float, lon: float, elevation: float, epsg_code: int) -> Optional[Tuple[float, float]]:
+    def _convert_to_wgs84(
+        self, lat: float, lon: float, elevation: float, epsg_code: int
+    ) -> Optional[Tuple[float, float]]:
         """
         Convert :term:`elevation` or :term:`altitude` from a specified vertical
         datum to :term:`WGS 84`.
@@ -372,14 +430,10 @@ class MockGPSNode(Node):
 
         # Create transformers
         transformer_to_wgs84 = Transformer.from_crs(
-            f"EPSG:{epsg_code}",
-            f"EPSG:{epsg_wgs84}",
-            always_xy=True
+            f"EPSG:{epsg_code}", f"EPSG:{epsg_wgs84}", always_xy=True
         )
         transformer_to_msl = Transformer.from_crs(
-            f"EPSG:{epsg_code}",
-            f"EPSG:{epsg_msl}",
-            always_xy=True
+            f"EPSG:{epsg_code}", f"EPSG:{epsg_msl}", always_xy=True
         )
 
         # Perform the transformations

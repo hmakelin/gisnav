@@ -10,21 +10,21 @@ file I/O, aiding in development and debugging.
     Currently SensorGps message (PX4) only (implement GPSINPUT to support
     ArduPilot)
 """
-from typing import Final, Union, Optional
+from typing import Final, Optional, Union
 
 import psycopg2
-from rclpy.node import Node
 from geographic_msgs.msg import BoundingBox
 from px4_msgs.msg import SensorGps
+from rcl_interfaces.msg import ParameterDescriptor
+from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from rcl_interfaces.msg import ParameterDescriptor
 
-from ..decorators import ROS, narrow_types
-from .. import messaging
+from .._decorators import ROS, narrow_types
 from ..constants import (
-    ROS_NAMESPACE,
     BBOX_NODE_NAME,
+    DELAY_DEFAULT_MS,
+    ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
 )
 from .mock_gps_node import MockGPSNode
@@ -43,18 +43,18 @@ class QGISNode(Node):
     """A read only ROS parameter descriptor"""
 
     DATABASE_CONFIG: Final = {
-        'dbname': 'gisnav',
-        'user': 'gisnav',
-        'password': 'gisnav',
-        'host': 'localhost',
-        'port': 5432,  # default PostgreSQL port is 5432
+        "dbname": "gisnav",
+        "user": "gisnav",
+        "password": "gisnav",
+        "host": "localhost",
+        "port": 5432,  # default PostgreSQL port is 5432
     }
     """Postgres database config used by this node."""
 
-    DEBUG_GPS_TABLE: Final = 'gps_table'
+    DEBUG_GPS_TABLE: Final = "gps_table"
     """Table name for mock GPS location"""
 
-    DEBUG_BBOX_TABLE: Final = 'bbox_table'
+    DEBUG_BBOX_TABLE: Final = "bbox_table"
     """Table name for :term:`FOV` :term:`bounding box`"""
 
     def __init__(self, *args, **kwargs):
@@ -66,15 +66,13 @@ class QGISNode(Node):
         super().__init__(*args, **kwargs)
 
         # Initialize ROS subscriptions by calling the decorated properties once
-        #self.bounding_box  # todo: this callback writes to disk very often
+        # self.bounding_box  # todo: this callback writes to disk very often
         self.sensor_gps
 
         sql_poll_rate = self.sql_poll_rate
         assert sql_poll_rate is not None
         self._db_connection = None  # TODO add type hint if possible
-        self._connect_sql_timer: Optional[Timer] = self._create_connect_sql_timer(
-            sql_poll_rate
-        )
+        self._connect_sql_timer: Timer = self._create_connect_sql_timer(sql_poll_rate)
 
     @narrow_types
     def _create_connect_sql_timer(self, poll_rate: float) -> Timer:
@@ -127,9 +125,7 @@ class QGISNode(Node):
                 assert self._db_connection is None
 
         if self._db_connection is None:
-            _connect_sql(
-                self.DATABASE_CONFIG, self.sql_poll_rate
-            )
+            _connect_sql(self.DATABASE_CONFIG, self.sql_poll_rate)
 
     def __del__(self):
         """Class destructor to close database connection"""
@@ -142,7 +138,9 @@ class QGISNode(Node):
         """:term:`SQL` connection attempt poll rate in Hz"""
 
     def _create_tables(self):
-        """Create (and recreate if exist) temporary tables for storing SensorGps and BoundingBox data as PostGIS geometries."""
+        """Create (and recreate if exist) temporary tables for storing SensorGps
+        and BoundingBox data as PostGIS geometries.
+        """
         drop_gps_table_query = f"""
             DROP TABLE IF EXISTS {self.DEBUG_GPS_TABLE};
         """
@@ -166,7 +164,8 @@ class QGISNode(Node):
         with self._db_connection.cursor() as cursor:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
 
-            # Drop the tables if they exist - we do not want to persist old debugging data
+            # Drop the tables if they exist - we do not want to persist old
+            # debugging data
             cursor.execute(drop_gps_table_query)
             cursor.execute(drop_bbox_table_query)
 
@@ -194,16 +193,19 @@ class QGISNode(Node):
                     VALUES (ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s);
                 """
                 try:
-                    cursor.execute(query, (msg.lon * 1e-7, msg.lat * 1e-7, msg.alt * 1e-3))
+                    cursor.execute(
+                        query, (msg.lon * 1e-7, msg.lat * 1e-7, msg.alt * 1e-3)
+                    )
                 except psycopg2.errors.UndefinedTable:
                     self.get_logger().error(
-                        f"Table f{self.DEBUG_GPS_TABLE} does not exist. Cannot insert SensorGps message."
+                        f"Table f{self.DEBUG_GPS_TABLE} does not exist. "
+                        f"Cannot insert SensorGps message."
                     )
 
             elif isinstance(msg, BoundingBox):
                 query = f"""
                     INSERT INTO {self.DEBUG_BBOX_TABLE} (geom)
-                    VALUES (ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING(' 
+                    VALUES (ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING('
                         || %s || ' ' || %s || ', '
                         || %s || ' ' || %s || ', '
                         || %s || ' ' || %s || ', '
@@ -211,14 +213,25 @@ class QGISNode(Node):
                         || %s || ' ' || %s || ')')), 4326));
                 """
                 try:
-                    cursor.execute(query, (msg.min_pt.longitude, msg.min_pt.latitude,
-                                           msg.min_pt.longitude, msg.max_pt.latitude,
-                                           msg.max_pt.longitude, msg.max_pt.latitude,
-                                           msg.max_pt.longitude, msg.min_pt.latitude,
-                                           msg.min_pt.longitude, msg.min_pt.latitude))
+                    cursor.execute(
+                        query,
+                        (
+                            msg.min_pt.longitude,
+                            msg.min_pt.latitude,
+                            msg.min_pt.longitude,
+                            msg.max_pt.latitude,
+                            msg.max_pt.longitude,
+                            msg.max_pt.latitude,
+                            msg.max_pt.longitude,
+                            msg.min_pt.latitude,
+                            msg.min_pt.longitude,
+                            msg.min_pt.latitude,
+                        ),
+                    )
                 except psycopg2.errors.UndefinedTable:
                     self.get_logger().error(
-                        f"Table f{self.DEBUG_BBOX_TABLE} does not exist. Cannot insert BoundingBox message."
+                        f"Table f{self.DEBUG_BBOX_TABLE} does not exist. "
+                        f"Cannot insert BoundingBox message."
                     )
 
             self._db_connection.commit()
@@ -237,7 +250,7 @@ class QGISNode(Node):
         """
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         MockGPSNode.ROS_TOPIC_SENSOR_GPS,
         QoSPresetProfiles.SENSOR_DATA.value,

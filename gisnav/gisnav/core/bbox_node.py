@@ -34,9 +34,9 @@ from typing import Final, Optional
 
 import numpy as np
 import pyproj
+import rclpy
 import tf2_ros
 import tf_transformations
-import rclpy
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
@@ -45,11 +45,15 @@ from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.transform_broadcaster import TransformBroadcaster
-from sensor_msgs.msg import TimeReference
 
-from .. import messaging
-from ..constants import ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX
-from ..decorators import ROS, narrow_types
+from .. import _messaging as messaging
+from .._decorators import ROS, narrow_types
+from ..constants import (
+    DELAY_DEFAULT_MS,
+    ROS_TOPIC_CAMERA_INFO,
+    ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
+    FrameID,
+)
 
 
 class BBoxNode(Node):
@@ -87,7 +91,7 @@ class BBoxNode(Node):
         self.fov_bounding_box
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         "/mavros/global_position/global",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -125,7 +129,10 @@ class BBoxNode(Node):
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
-    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
+    @ROS.subscribe(
+        ROS_TOPIC_CAMERA_INFO,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
@@ -321,7 +328,10 @@ class BBoxNode(Node):
 
         transform = (
             messaging.get_transform(
-                self, "map", "gimbal", rclpy.time.Time()  #self.vehicle_pose.header.stamp
+                self,
+                "map",
+                "gimbal",
+                rclpy.time.Time(),  # self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
             else None
@@ -387,8 +397,8 @@ class BBoxNode(Node):
             """
             # TODO publish relative transform with gimbaldeviceattitudestatus
             #  timestamp (this one now has vehicle pose timestamp)
-            parent_frame_id: messaging.FrameID = "map"
-            child_frame_id: messaging.FrameID = "gimbal"
+            parent_frame_id: FrameID = "map"
+            child_frame_id: FrameID = "gimbal"
 
             assert gimbal_device_attitude_status.flags == 12, (
                 "Currently GISNav only supports a two-axis gimbal that has "

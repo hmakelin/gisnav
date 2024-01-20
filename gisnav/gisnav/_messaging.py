@@ -1,53 +1,35 @@
 """Helper functions for ROS messaging"""
-import time
-from typing import Final, Literal, Optional
 from collections import namedtuple
-import cv2
+from typing import Optional
 
+import cv2
 import numpy as np
 import rclpy.time
 import tf2_ros
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import Quaternion, TransformStamped
 from rclpy.node import Node
-from std_msgs.msg import Header
 from sensor_msgs.msg import TimeReference
+from std_msgs.msg import Header
+
+from .constants import FrameID
 
 BBox = namedtuple("BBox", "left bottom right top")
 
-# region ROS topic names
-ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-"""Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
-over PX4 DDS bridge"""
 
-ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
-"""Name of ROS topic for :class:`sensor_msgs.msg.CameraInfo` messages"""
-
-ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
-"""Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
-
-# endregion ROS topic names
-DELAY_DEFAULT_MS: Final = 2000
-"""Max delay for things like global position"""
-
-
-DELAY_FAST_MS: Final = 500
-"""Max delay for messages with fast dynamics that go "stale" quickly, e.g.
-local position and attitude. The delay can be a bit higher than is
-intuitive because the vehicle EKF should be able to fuse things with
-fast dynamics with higher lags as long as the timestamps are accurate.
-"""
-
-
-def create_header(node: Node, frame_id: str = "", time_reference: Optional[TimeReference] = None) -> Header:
+def create_header(
+    node: Node, frame_id: str = "", time_reference: Optional[TimeReference] = None
+) -> Header:
     """Creates a class:`std_msgs.msg.Header` for an outgoing ROS message
 
-    If `time_reference` is provided, time_reference.header.stamp - time_reference.time is subtracted from the
-    message header stamp. This could e.g. be the difference between the local system time and the foreign :term:`FCU`
-    time.
+    If `time_reference` is provided, time_reference.header.stamp -
+    time_reference.time_ref is subtracted from the message header stamp. This
+    could e.g. be the difference between the local system time and the foreign
+    :term:`FCU` time.
 
     :param frame_id: Header frame_id value
-    :param time_reference: Optional time reference for synchronizing the timestamp
+    :param time_reference: Optional time reference for synchronizing the
+        timestamp
     :return: ROS message header
     """
     now = node.get_clock().now()
@@ -58,15 +40,21 @@ def create_header(node: Node, frame_id: str = "", time_reference: Optional[TimeR
 
     if time_reference is not None:
         # sync time
-        header.stamp = (rclpy.time.Time.from_msg(header.stamp)
-                        - (rclpy.time.Time.from_msg(time_reference.header.stamp)
-                           - rclpy.time.Time.from_msg(time_reference.time_ref))).to_msg()
+        header.stamp = (
+            rclpy.time.Time.from_msg(header.stamp)
+            - (
+                rclpy.time.Time.from_msg(time_reference.header.stamp)
+                - rclpy.time.Time.from_msg(time_reference.time_ref)
+            )
+        ).to_msg()
 
     return header
 
 
 def usec_from_header(header: Header) -> int:
-    """Returns timestamp in microseconds from :class:`.std_msgs.msg.Header` stamp"""
+    """Returns timestamp in microseconds from :class:`.std_msgs.msg.Header`
+    stamp
+    """
     return int(1e6 * header.stamp.sec + 1e-3 * header.stamp.nanosec)
 
 
@@ -108,38 +96,13 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
     )
 
 
-FrameID = Literal[
-    "reference",
-    "base_link",
-    "camera",
-    "camera_pinhole",
-    "gimbal",
-    "map",
-    "world",
-]
-"""Allowed ROS header frame_ids (used by tf2)
-    
-The 'camera' and 'world' frames are coordinate systems in the cv2 pinhole 
-camera model. The 'camera' frame follows the convention where the x axis
-points to the right from the body of the camera and z-axis forward along
-the optical axis, it is not the 'camera_optical' frame where the x axis 
-points in the direction of the optical axis.
-
-The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
-
-The 'reference' frame is the :term:'reference' arrays coordinate frame
-where the origin is the bottom left (ROS convention, not numpy/cv2 top left
-convention). x axis is the width axis, y axis is height.
-"""
-
-
 def create_transform_msg(
     stamp,
     parent_frame: FrameID,
     child_frame: FrameID,
     q: tuple,
     translation_vector: np.ndarray,
-) -> Optional[TransformStamped]:
+) -> TransformStamped:
     transform = TransformStamped()
 
     # transform.header.stamp = self.get_clock().now().to_msg()
@@ -185,8 +148,6 @@ def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp
 ) -> TransformStamped:
     try:
-        # Look up the transformation
-        #node.tf_buffer.can_transform(target_frame, source_frame, stamp, timeout=Duration(seconds=5.0))
         trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
         return trans
     except (
@@ -201,15 +162,25 @@ def get_transform(
         )
         return None
 
+
 def visualize_transform(transform, image, height, title):
     """Shows transform translation x and y position on image"""
-    t = np.array((transform.transform.translation.x, transform.transform.translation.y,
-                  transform.transform.translation.z))
-    # current image timestamp does not yet have the transform but this should get the previous one
-    x, y = int(t[0]), int(height - t[1])  # move height origin from bottom to top left for cv2
+    t = np.array(
+        (
+            transform.transform.translation.x,
+            transform.transform.translation.y,
+            transform.transform.translation.z,
+        )
+    )
+    # current image timestamp does not yet have the transform but this should
+    # get the previous one
+    x, y = int(t[0]), int(
+        height - t[1]
+    )  # move height origin from bottom to top left for cv2
     image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
     cv2.imshow(title, image)
     cv2.waitKey(1)
+
 
 def extract_yaw(q: Quaternion) -> float:
     """Calculate the yaw angle from a quaternion in the ENU frame.
@@ -230,12 +201,13 @@ def extract_yaw(q: Quaternion) -> float:
 
     return heading
 
-def extract_roll(q: Quaternion) -> float:
-    """
-    Calculate the roll angle from a quaternion.
 
-    :param q: A quaternion represented as a Quaternion object with attributes x, y, z, w.
-    :return: The roll angle in degrees.
+def extract_roll(q: Quaternion) -> float:
+    """Calculate the roll angle from a quaternion
+
+    :param q: A quaternion represented as a Quaternion object in (x, y, z, w)
+        format
+    :return: The roll angle in degrees
     """
     roll = np.arctan2(2 * (q.w * q.x + q.y * q.z), 1 - 2 * (q.x**2 + q.y**2))
     roll_deg = np.degrees(roll)

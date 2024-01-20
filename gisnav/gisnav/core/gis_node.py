@@ -28,7 +28,6 @@ downloading, storing, and publishing the :term:`orthophoto` and optional
         geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
         image -->|sensor_msgs/Image| TransformNode:::hidden
 """
-import struct
 from copy import deepcopy
 from typing import IO, Final, List, Optional, Tuple
 
@@ -43,20 +42,29 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, Image, NavSatFix, PointCloud2, PointField, TimeReference
-from std_msgs.msg import Header
+from sensor_msgs.msg import (
+    CameraInfo,
+    Image,
+    NavSatFix,
+    PointCloud2,
+    PointField,
+    TimeReference,
+)
 from shapely.geometry import box
+from std_msgs.msg import Header
 
-from .. import messaging
+from .. import _messaging as messaging
+from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
+    DELAY_DEFAULT_MS,
+    MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
+    ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_GEOTRANSFORM,
-    MAVROS_TOPIC_TIME_REFERENCE
+    ROS_TOPIC_RELATIVE_ORTHOIMAGE,
 )
-from ..decorators import ROS, cache_if, narrow_types
 
 
 class GISNode(Node):
@@ -64,10 +72,11 @@ class GISNode(Node):
     :term:`stacked <stack>` :class:`.Image` message.
 
     .. warning::
-        ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests`` library
-        under the hood but does not document the various exceptions it raises that
-        are passed through by ``OWSLib`` as part of its public API. The
-        :meth:`.get_map` method is therefore expected to raise `errors and exceptions
+        ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests``
+        library under the hood but does not document the various exceptions it
+        raises that are passed through by ``OWSLib`` as part of its public API.
+        The :meth:`.get_map` method is therefore expected to raise `errors and
+        exceptions
         <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_
         specific to the ``requests`` library.
 
@@ -141,8 +150,9 @@ class GISNode(Node):
     """
 
     ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
-    """Required overlap ratio between suggested new :term:`bounding box` and current
-    :term:`orthoimage` bounding box, under which a new map will be requested.
+    """Required overlap ratio between suggested new :term:`bounding box` and
+    current :term:`orthoimage` bounding box, under which a new map will be
+    requested.
     """
 
     ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
@@ -384,7 +394,7 @@ class GISNode(Node):
         return bounding_box
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         "/mavros/global_position/global",
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -414,7 +424,10 @@ class GISNode(Node):
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
-    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
+    @ROS.subscribe(
+        ROS_TOPIC_CAMERA_INFO,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
@@ -604,14 +617,21 @@ class GISNode(Node):
             #  manage these two interdependent attributes
             self.old_bounding_box = bounding_box
 
-            # Publish geotransform associated with the image msg, and the image message right after
-            # TODO: do not publish if time reference is None
+            # Publish geotransform associated with the image msg, and the image
+            # message right after
             if self.time_reference is None:
-                self.get_logger().warning("Publishing orthoimage without FCU time reference.")
-            image_msg.header = messaging.create_header(self, f"reference", time_reference=self.time_reference)
+                self.get_logger().warning(
+                    "Publishing orthoimage without FCU time reference."
+                )
+            image_msg.header = messaging.create_header(
+                self, "reference", time_reference=self.time_reference
+            )
             height, width = img.shape[0:2]
             self.geotransform(
-                height, width, bounding_box, image_msg.header  # use same header as for orthoimage message
+                height,
+                width,
+                bounding_box,
+                image_msg.header,  # use same header as for orthoimage message
             )
             return image_msg
         else:
@@ -621,26 +641,35 @@ class GISNode(Node):
         ROS_TOPIC_RELATIVE_GEOTRANSFORM,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def geotransform(self, height: int, width: int, bbox: BoundingBox, header: Header) -> Optional[PointCloud2]:
-        """3x3 Affine transformation that transforms orthoimage frame pixel coordinates to WGS84 lon,
-        lat coordinates
+    def geotransform(
+        self, height: int, width: int, bbox: BoundingBox, header: Header
+    ) -> Optional[PointCloud2]:
+        """3x3 Affine transformation that transforms orthoimage frame pixel
+        coordinates to WGS84 lon, lat coordinates
 
-        A :class:`sensor_msgs.msg.PointCloud2` message is repurposed to carry the 3-by-3 affine transformation matrix
-        since it has a header and is flexible enough to carry this kind of data in a byte array. The data is stored
-        in a PointField called `affine_matrix`.
+        A :class:`sensor_msgs.msg.PointCloud2` message is repurposed to carry
+        the 3-by-3 affine transformation matrix since it has a header and is
+        flexible enough to carry this kind of data in a byte array. The data
+        is stored in a PointField called `affine_matrix`.
 
         .. note::
-            The reference frame is discontinous so we use timestamps in the frame_id to couple it with the
-            correct tf2 transformation chain. This is to prevent significant interpolation errors whenever the
-            reference frame is updated and "jumps". The geotransform must be published with the exact same timestamp
-            as the orthoimage because the orthoimage timestamp will be used as a proxy for the geotransform
+            The reference frame is discontinous so we use timestamps in the
+            frame_id to couple it with the correct tf2 transformation chain.
+            This is to prevent significant interpolation errors whenever the
+            reference frame is updated and "jumps". The geotransform must be
+            published with the exact same timestamp as the orthoimage because
+            the orthoimage timestamp will be used as a proxy for the geotransform
             timestamp downstream in the processing chain.
 
         :param height: Height in pixels of the :term:`reference` image
-        :param width: Width in pixels of the :term:`reference` image (most likely same as height)
+        :param width: Width in pixels of the :term:`reference` image (most
+            likely same as height)
         :param bbox: :term:`WGS 84` :term:`bounding box` of the reference image
-        :param header: :term:`ROS` header for the outgoing message. Must be same as used for orthoimage message (with
-            same timestamp) in order to enable matching tf2 transformations to correct geotransforms.
+        :param header: :term:`ROS` header for the outgoing message. Must be same
+            as used for orthoimage message (with same timestamp) in order to
+            enable matching tf2 transformations to correct geotransforms.
+        :return: :class:`sensor_msgs.msg.PointCloud2` message representing a
+            3D affine transformation
         """
 
         def _boundingbox_to_geo_coords(
@@ -656,7 +685,8 @@ class GISNode(Node):
             be used for multiple matches.
 
             :param bbox: (geographic_msgs/BoundingBox): The bounding box.
-            :return: The geo coordinates as a list of (longitude, latitude) tuples.
+            :return: The geo coordinates as a list of (longitude, latitude)
+                tuples.
             """
             min_lon = bounding_box.min_pt.longitude
             min_lat = bounding_box.min_pt.latitude
@@ -725,7 +755,14 @@ class GISNode(Node):
         matrix_msg.height = 1
         matrix_msg.width = array_len
         matrix_msg.is_dense = False
-        matrix_msg.fields = [PointField(name='affine_matrix', offset=0, datatype=PointField.FLOAT64, count=array_len)]
+        matrix_msg.fields = [
+            PointField(
+                name="affine_matrix",
+                offset=0,
+                datatype=PointField.FLOAT64,
+                count=array_len,
+            )
+        ]
         matrix_msg.data = byte_array
 
         return matrix_msg
@@ -795,9 +832,11 @@ class GISNode(Node):
 
     @staticmethod
     def _create_src_corners(h: int, w: int) -> np.ndarray:
-        """Helper function that returns image corner pixel coordinates in a numpy array.
+        """Helper function that returns image corner pixel coordinates in a
+        numpy array.
 
-        Returns corners in following order: top-left, bottom-left, bottom-right, top-right
+        Returns corners in following order: top-left, bottom-left, bottom-right,
+        top-right.
 
         :param h: Source image height
         :param w: Source image width

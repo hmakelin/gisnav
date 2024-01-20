@@ -105,6 +105,7 @@ setup(
     maintainer_email=pdata.maintainer_email,
     description=pdata.description,
     license=pdata.license_name,
+    python_requires=">=3.7",
     install_requires=[
         "numpy>=1.24.2",
         "opencv-python",

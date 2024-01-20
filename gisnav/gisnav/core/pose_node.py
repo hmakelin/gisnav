@@ -1,8 +1,8 @@
 """This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating
 :term:`camera` relative pose between a :term:`query` and :term:`reference` image
 
-The pose is estimated by finding matching keypoints between the query and reference
-images and then solving the resulting :term:`PnP` problem.
+The pose is estimated by finding matching keypoints between the query and
+reference images and then solving the resulting :term:`PnP` problem.
 
 .. mermaid::
     :caption: :class:`.PoseNode` computational graph
@@ -24,32 +24,33 @@ images and then solving the resulting :term:`PnP` problem.
         image -->|sensor_msgs/Image| PoseNode
         pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
-from typing import Optional, Tuple
 from copy import deepcopy
+from typing import Optional, Tuple
 
-import rclpy
 import cv2
 import numpy as np
-import torch
+import rclpy
 import tf2_ros
 import tf_transformations
-
+import torch
 from cv_bridge import CvBridge
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
-from tf2_ros.transform_broadcaster import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros.transform_broadcaster import TransformBroadcaster
 
-from .. import messaging
+from .. import _messaging as messaging
+from .._decorators import ROS, narrow_types
 from ..constants import (
+    DELAY_DEFAULT_MS,
+    MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
+    ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
     TRANSFORM_NODE_NAME,
-    MAVROS_TOPIC_TIME_REFERENCE
 )
-from ..decorators import ROS, narrow_types
 
 
 class PoseNode(Node):
@@ -83,13 +84,17 @@ class PoseNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Pinhole camera model camera from to ROS 2 camera_optical (z-axis forward along optical axis) frame i.e.
-        # create a quaternion that represents the transformation from a coordinate frame where x points right, y points
-        # down, and z points backwards to the ROS 2 convention (REP 103 https://www.ros.org/reps/rep-0103.html#id21)
-        # where x points forward, y points left, and z points up
-        # TODO: is PoseNode the correct place to publish this transform?
+        # Pinhole camera model camera from to ROS 2 camera_optical (z-axis forward
+        # along optical axis) frame i.e. create a quaternion that represents
+        # the transformation from a coordinate frame where x points right, y points
+        # down, and z points backwards to the ROS 2 convention
+        # (REP 103 https://www.ros.org/reps/rep-0103.html#id21) where x points
+        # forward, y points left, and z points up
+        # TODO: is PoseNode the appropriate place to publish this transform?
         q = (0.5, -0.5, -0.5, -0.5)
-        header = messaging.create_header(self, "", self.time_reference)  # time reference is not important here
+        header = messaging.create_header(
+            self, "", self.time_reference
+        )  # time reference is not important here
         transform_camera = messaging.create_transform_msg(
             header.stamp, "camera_pinhole", "camera", q, np.zeros(3)
         )
@@ -105,7 +110,10 @@ class PoseNode(Node):
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
-    @ROS.subscribe(messaging.ROS_TOPIC_CAMERA_INFO, QoSPresetProfiles.SENSOR_DATA.value)
+    @ROS.subscribe(
+        ROS_TOPIC_CAMERA_INFO,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
@@ -125,38 +133,41 @@ class PoseNode(Node):
         try:
             q = tf_transformations.quaternion_from_matrix(rotation_4x4)
         except np.linalg.LinAlgError:
-            self.get_logger().warning("image_cb: Could not compute quaternion from estimated rotation. Returning None.")
+            self.get_logger().warning(
+                "image_cb: Could not compute quaternion from estimated rotation. "
+                "Returning None."
+            )
             return None
 
         camera_pos = (-r.T @ t).squeeze()
-        camera_pos[2] = -camera_pos[2]  # todo: implement cleaner way of getting camera position right
+        camera_pos[2] = -camera_pos[
+            2
+        ]  # todo: implement cleaner way of getting camera position right
 
-        # TODO: hard coded assumption that image message here has timestamp in system time
+        # TODO: implicit assumption that image message here has timestamp in system time
         time_reference = self.time_reference
         if time_reference is None:
-            self.get_logger().warning("Publishing world to camera_pinhole transformation without time reference.")
+            self.get_logger().warning(
+                "Publishing world to camera_pinhole transformation without time "
+                "reference."
+            )
             stamp = msg.header.stamp
         else:
-            stamp = (rclpy.time.Time.from_msg(msg.header.stamp)
-                     - (rclpy.time.Time.from_msg(time_reference.header.stamp)
-                        - rclpy.time.Time.from_msg(time_reference.time_ref))).to_msg()
+            stamp = (
+                rclpy.time.Time.from_msg(msg.header.stamp)
+                - (
+                    rclpy.time.Time.from_msg(time_reference.header.stamp)
+                    - rclpy.time.Time.from_msg(time_reference.time_ref)
+                )
+            ).to_msg()
         transform_camera = messaging.create_transform_msg(
             stamp, "world", "camera_pinhole", q, camera_pos
         )
-        # We also publish a world_{timestamp} frame so that we will be able to trace the transform chain back to
-        # the exact timestamp (to match with the geotransform message). This is needed because interpolation will
-        # often produce very inaccurate results with the discontinous reference frame which is at the root of this
-        # transformation chain. The pnp_image timestamp which we use here is derived from the orthoimage timestamp
-        # which again is used as a proxy for the geotransform timestamp (i.e. they must be published with the same
-        # timestamps).
-        transform_camera_stamped = deepcopy(transform_camera)
-        #transform_camera_stamped.header.frame_id = f"{transform_camera.header.frame_id}_{msg.header.stamp.sec}_{msg.header.stamp.nanosec}"
-        self.broadcaster.sendTransform([transform_camera]) #, transform_camera_stamped])
+        self.broadcaster.sendTransform([transform_camera])
 
-        debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
-                                            rclpy.time.Time())
-        #debug_msg = messaging.get_transform(self, transform_camera_stamped.header.frame_id, "camera_pinhole",
-        #                                     rclpy.time.Time())
+        debug_msg = messaging.get_transform(
+            self, "world", "camera_pinhole", rclpy.time.Time()
+        )
 
         debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
             deepcopy(msg), desired_encoding="passthrough"
@@ -166,10 +177,15 @@ class PoseNode(Node):
         # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
         if debug_msg is not None and self.camera_info is not None:
             debug_ref_image = debug_ref_image[:, :, 1]  # second channel is world
-            messaging.visualize_transform(debug_msg, debug_ref_image, self.camera_info.height, "Camera position in world frame")
+            messaging.visualize_transform(
+                debug_msg,
+                debug_ref_image,
+                self.camera_info.height,
+                "Camera position in world frame",
+            )
 
     @property
-    @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", TRANSFORM_NODE_NAME)}',
@@ -226,7 +242,7 @@ class PoseNode(Node):
         ) | elevation_16bit_low.astype(np.uint16)
 
         # Optionally display images
-        #self._display_images("Query", query_img, "Reference", reference_img)
+        # self._display_images("Query", query_img, "Reference", reference_img)
 
         if torch.cuda.is_available():
             qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0

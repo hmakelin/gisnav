@@ -94,20 +94,20 @@ FrameID = Literal[
     "map",
     "world",
 ]
-"""Allowed ROS header frame_ids (used by tf2)
+"""Allowed ROS header frame_ids (used by :term:`tf2`)
 
-The 'camera_pinhole' and 'world' frames are coordinate systems in the cv2
-pinhole camera model. The 'camera' frame follows the convention where the x
+The ``camera_pinhole`` and ``world`` frames are coordinate systems in the cv2
+pinhole camera model. The ``camera`` frame follows the convention where the x
 axis points to the right from the body of the camera and z-axis forward along
-the optical axis, it is not the 'camera_optical' frame where the x axis
+the optical axis, it is not the ``camera_optical`` frame where the x axis
 points in the direction of the optical axis.
 
-The 'base_link' frame is defined as the vehicle body :term:`FRD` frame.
+The ``base_link`` frame is defined as the vehicle body :term:`FRD` frame.
 
-The 'reference' frame is the :term:'reference' arrays coordinate frame
+The ``reference`` frame is the :term:`reference` arrays coordinate frame
 where the origin is the bottom left (ROS convention, not numpy/cv2 top left
 convention). x axis is the width axis, y axis is height. The static
-'reference_{}_{}' frame (in relation to :term:`WGS 84` coordinates)
+``reference_{}_{}`` frame (in relation to :term:`WGS 84` coordinates)
 is intended to be suffixed with the :term:`ROS` second and nanosecond
 integer timestamps to allow the tf2 transformation chain to be matched
 to the exact same reference frame that was used to for deriving the

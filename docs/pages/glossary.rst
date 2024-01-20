@@ -665,6 +665,7 @@ relate to external interfaces.
     MAVSDK
         :term:`MAVLink` software development kit: `mavsdk.mavlink.io/main/en/index.html <https://mavsdk.mavlink.io/main/en/index.html>`_
 
+    micro-ROS-agent
     micro-ROS Agent
         A :term:`ROS` package that wraps the Micro XRCE-DDS Agent :term:`middleware`:
         `github.com/micro-ROS/micro-ROS-Agent <https://github.com/micro-ROS/micro-ROS-Agent>`_
@@ -702,6 +703,9 @@ relate to external interfaces.
 
     RViz
         :term:`ROS` 3D visualization software: https://github.com/ros2/rviz
+
+    tf2
+        :term:`ROS 2` transformations library: `wiki.ros.org/tf2 <http://wiki.ros.org/tf2>`_
 
     Torch
         An open source machine learning software library: `torch.ch <http://torch.ch/>`_

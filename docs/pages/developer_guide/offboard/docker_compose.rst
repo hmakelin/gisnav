@@ -83,6 +83,7 @@ interfaces between the Docker Compose services:
         subgraph middleware_layer["Middleware Layer"]
             micro_ros_agent[Micro-ROS-Agent]
             mavros[MAVROS]
+            gscam[gscam]
         end
 
         subgraph application_layer["Application Layer"]
@@ -107,6 +108,7 @@ interfaces between the Docker Compose services:
         gisnav -->|WMS| mapserver
         gisnav -->|ROS Connection| mavros
         gisnav -->|ROS Connection| micro_ros_agent
+        gisnav -->|ROS Connection| gscam
 
         mavros -->|Mavlink| ardupilot
         mavros -->|Mavlink| px4

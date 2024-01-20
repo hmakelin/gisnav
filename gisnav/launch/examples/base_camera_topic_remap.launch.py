@@ -33,6 +33,10 @@ def generate_launch_description():
             parameters=[
                 os.path.join(package_share_dir, "launch/params/transform_node.yaml")
             ],
+            remappings=[
+                (ROS_IMAGE_TOPIC, "image"),
+                (ROS_CAMERA_INFO_TOPIC, "camera_info"),
+            ],
         )
     )
     ld.add_action(
@@ -52,10 +56,6 @@ def generate_launch_description():
             executable="pose_node",
             parameters=[
                 os.path.join(package_share_dir, "launch/params/pose_node.yaml")
-            ],
-            remappings=[
-                (ROS_IMAGE_TOPIC, "image"),
-                (ROS_CAMERA_INFO_TOPIC, "camera_info"),
             ],
         )
     )

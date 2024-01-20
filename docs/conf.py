@@ -1,6 +1,7 @@
 import os
 import sys
-
+import subprocess
+import datetime
 from gisnav._data import PackageData
 
 sys.path.insert(0, os.path.abspath("../gisnav"))
@@ -45,6 +46,8 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 todo_include_todos = True
 
 language = "en"
+
+html_last_updated_fmt = "%b %d, %Y"
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -104,7 +107,26 @@ mermaid_init_js = """
     });
 """
 
+# -- Version information -----------------------------------------------------
+
 # Make version number accessible in .rst files
 # rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
 version = package_data.version
 release = version
+
+# Add git tag to release
+try:
+    release = subprocess.check_output(["git", "describe", "--tags"]).strip().decode('utf-8')
+except subprocess.CalledProcessError:
+    raise
+
+rst_epilog = f"""
+.. |release| replace:: {release}
+.. |version| replace:: {version}
+
+Updated on {datetime.datetime.today().strftime("%b %d, %Y")}
+
+GISNav release: |release|
+
+"""
+

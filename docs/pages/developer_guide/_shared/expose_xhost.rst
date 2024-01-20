@@ -1,4 +1,4 @@
-Expose your ``xhost`` to your Docker containers (see e.g.
+Expose your :term:`X server` to your Docker containers (see e.g.
 `ROS GUI Tutorial <http://wiki.ros.org/docker/Tutorials/GUI>`_) with the
 following command:
 
@@ -8,7 +8,7 @@ following command:
         :selected:
 
         .. code-block:: bash
-            :caption: Expose xhost to Docker containers with names containing ``gisnav`` only
+            :caption: Expose X server to containers with names containing ``gisnav`` only
 
             for containerId in $(docker ps -f name=gisnav -aq); do
                 xhost +local:$(docker inspect --format='{{ .Config.Hostname }}' $containerId)
@@ -17,6 +17,6 @@ following command:
     .. tab-item:: Easy but less safe
 
         .. code-block:: bash
-            :caption: Expose xhost to any client
+            :caption: Expose X server to any client
 
             xhost +

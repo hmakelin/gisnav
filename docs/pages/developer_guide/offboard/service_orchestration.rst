@@ -3,8 +3,8 @@ ____________________________________________________
 The easiest way to deploy GISNav and its :ref:`supporting Docker Compose services
 <Deploy with Docker Compose>` is using :term:`Make`. A :ref:`Target naming scheme`
 has been devised to describe the different types of available deployments. Read
-below how the scheme works and try out some of the example commands to gain a better
-understanding.
+below how the scheme works and try out some of the example commands to understand
+how the GISNav's supporting services are orchestrated.
 
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

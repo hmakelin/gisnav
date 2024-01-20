@@ -543,6 +543,9 @@ ____________________________________________________
     OGC
         Open Geospatial Consortium: `ogc.org <https://www.ogc.org/>`_
 
+    OS
+        Operating System
+
     OSM
         :term:`OpenStreetMap`
 
@@ -698,8 +701,15 @@ relate to external interfaces.
     Torch
         An open source machine learning software library: `torch.ch <http://torch.ch/>`_
 
+    Ubuntu
+        A Linux distribution, only supported :term:`OS` for GISNav:
+        `https://ubuntu.com/ <https://ubuntu.com/>`_
+
     VRT
         :term:`GDAL` Virtual Format (file format)
+
+    X Server
+        Window system that comes with :term:`Ubuntu`: `www.x.org/wiki/ <https://www.x.org/wiki/>`_
 
     YAML
         A data serialization language: `yaml.org <https://yaml.org/>`_

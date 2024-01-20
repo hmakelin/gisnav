@@ -4,4 +4,4 @@ To shutdown the services run the following command:
     :caption: Shutdown all services
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose down
+    docker compose -p gisnav down

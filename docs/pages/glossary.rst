@@ -66,7 +66,8 @@ correct alternative should be easily inferred from the context they are used in.
         Deployment or implementation of GISNav which is enough to implement
         core functionality needed by an :term:`extension`. GISNav is intended
         to be extended by adding more application or integration specific
-        :term:`nodes` instead of adding new features to :term:`core` nodes.
+        :term:`nodes <Node>` instead of adding new features to :term:`core`
+        nodes.
 
         .. seealso::
             :ref:`Core data flow graph`
@@ -699,6 +700,9 @@ relate to external interfaces.
 
     QEMU
         A :term:`FOSS` full-system emulator: `qemu.org <https://www.qemu.org/>`_
+
+    QGIS
+        A :term:`GIS` client (and server): `qgis.org/en/site/ <https://qgis.org/en/site/>`_
 
     QGroundControl
         :term:`GCS` software: `qgroundcontrol.com <http://qgroundcontrol.com/>`_

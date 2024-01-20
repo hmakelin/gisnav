@@ -1,7 +1,7 @@
 Troubleshooting
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Windows or :term:`GUI` not appearing
+Windows or GUI not appearing
 ************************************************
 
 Expose xhost

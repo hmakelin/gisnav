@@ -151,12 +151,12 @@ class PoseNode(Node):
         # timestamps).
         transform_camera_stamped = deepcopy(transform_camera)
         #transform_camera_stamped.header.frame_id = f"{transform_camera.header.frame_id}_{msg.header.stamp.sec}_{msg.header.stamp.nanosec}"
-        self.broadcaster.sendTransform([transform_camera, transform_camera_stamped])
+        self.broadcaster.sendTransform([transform_camera]) #, transform_camera_stamped])
 
-        #debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
-        #                                    rclpy.time.Time())
-        debug_msg = messaging.get_transform(self, transform_camera_stamped.header.frame_id, "camera_pinhole",
-                                             rclpy.time.Time())
+        debug_msg = messaging.get_transform(self, "world", "camera_pinhole",
+                                            rclpy.time.Time())
+        #debug_msg = messaging.get_transform(self, transform_camera_stamped.header.frame_id, "camera_pinhole",
+        #                                     rclpy.time.Time())
 
         debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
             deepcopy(msg), desired_encoding="passthrough"

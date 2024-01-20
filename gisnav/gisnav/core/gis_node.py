@@ -609,14 +609,9 @@ class GISNode(Node):
             if self.time_reference is None:
                 self.get_logger().warning("Publishing orthoimage without FCU time reference.")
             image_msg.header = messaging.create_header(self, f"reference", time_reference=self.time_reference)
-            # The reference frame is discontinous so we use timestamps in the frame_id to couple it with the
-            # correct tf2 transformation chain. This is to prevent significant interpolation errors whenever the
-            # reference frame is updated and "jumps"
-            # TODO modify frame id - or is the timestamp information enough assuming orthoimage and geotransform
-            #  have the same timestamp?
             height, width = img.shape[0:2]
             self.geotransform(
-                height, width, bounding_box, image_msg.header
+                height, width, bounding_box, image_msg.header  # use same header as for orthoimage message
             )
             return image_msg
         else:
@@ -633,6 +628,19 @@ class GISNode(Node):
         A :class:`sensor_msgs.msg.PointCloud2` message is repurposed to carry the 3-by-3 affine transformation matrix
         since it has a header and is flexible enough to carry this kind of data in a byte array. The data is stored
         in a PointField called `affine_matrix`.
+
+        .. note::
+            The reference frame is discontinous so we use timestamps in the frame_id to couple it with the
+            correct tf2 transformation chain. This is to prevent significant interpolation errors whenever the
+            reference frame is updated and "jumps". The geotransform must be published with the exact same timestamp
+            as the orthoimage because the orthoimage timestamp will be used as a proxy for the geotransform
+            timestamp downstream in the processing chain.
+
+        :param height: Height in pixels of the :term:`reference` image
+        :param width: Width in pixels of the :term:`reference` image (most likely same as height)
+        :param bbox: :term:`WGS 84` :term:`bounding box` of the reference image
+        :param header: :term:`ROS` header for the outgoing message. Must be same as used for orthoimage message (with
+            same timestamp) in order to enable matching tf2 transformations to correct geotransforms.
         """
 
         def _boundingbox_to_geo_coords(

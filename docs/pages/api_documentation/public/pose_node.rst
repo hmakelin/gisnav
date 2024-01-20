@@ -1,6 +1,6 @@
-Static configuration
+PoseNode
 ____________________________________________________
-.. automodule:: gisnav.static_configuration
+.. automodule:: gisnav.core.pose_node
    :autosummary:
    :members:
    :undoc-members:

@@ -1,6 +1,6 @@
-PnPNode
+Decorators
 ____________________________________________________
-.. automodule:: gisnav.core.pnp_node
+.. automodule:: gisnav._messaging
    :autosummary:
    :members:
    :undoc-members:

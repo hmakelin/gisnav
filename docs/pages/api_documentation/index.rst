@@ -17,7 +17,7 @@ what you are looking for.
     public/bbox_node
     public/gis_node
     public/transform_node
-    public/pnp_node
+    public/pose_node
 
 .. toctree::
     :caption: Extensions
@@ -26,9 +26,9 @@ what you are looking for.
     public/rviz_node
 
 .. toctree::
-    :caption: Configuration
+    :caption: Static API
 
-    public/static_configuration
+    public/constants
     public/gisnav
 
 .. toctree::
@@ -40,8 +40,5 @@ what you are looking for.
 .. toctree::
     :caption: Private API
 
-    private/assertions
-    private/rclpy_decorators
-    private/state_listener
-    private/mock_state_publisher
-    test/mocks
+    private/decorators
+    private/messaging

@@ -6,12 +6,13 @@ GISNav requires access to a :term:`GIS` server that serves high resolution
 of the :term:`vehicle`. The orthoimagery consisting of :term:`orthophoto` and
 optional :term:`DEM` rasters are requested from a :term:`WMS` service which
 allows querying rasters by an arbitrary :term:`bounding box`, and DEM elevation
-values by an arbitrary global position via its :term:`GetMap` and
-:term:`GetFeatureInfo` requests.
+values by an arbitrary global position via its :term:`GetMap` requests.
 
 The DEM is optionally used to input ground elevation z-coordinates to the
-:term:`PnP` problem solved by GISNav's :term:`pose` estimation algorithm. If
-a DEM is not available GISNav simply assumes a planar ground elevation.
+:term:`PnP` problem solved by GISNav's :term:`pose` estimation algorithm in
+:class:`.PoseNode`. If a DEM is not available GISNav simply assumes a planar
+ground elevation, which may be sufficient when flying at higher altitudes where
+an isometric perspective does not significantly distort the perceived image.
 
 Example setups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -22,25 +23,26 @@ and not depend on an internet connection. For development it may sometimes be
 more convenient to proxy an existing commercial tile-based endpoint.
 
 .. note::
-    Commercial web-based map services are often `tile-based`_ (as opposed to WMS) because it is more
-    efficient to serve pre-rendered tiles than to render unique rasters for each individual requested bounding
-    box. You will need a WMS proxy if you decide to go with a tile-based endpoint.
+    Commercial web-based map services are often `tile-based`_ (as opposed to WMS)
+    because it is more efficient to serve pre-rendered tiles than to render unique
+    rasters for each individual requested bounding box. You will need a WMS proxy
+    if you decide to go with a tile-based endpoint.
 
     .. _tile-based: https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
 
 .. warning::
-    Many commercial services explicitly prohibit the caching of map tiles in their Terms of Use (ToU),
-    especially if their business model is based on billing API requests. This is mainly to prevent
-    disintermediation in case their tiles are redistributed to a large number of end users.
+    Many commercial services explicitly prohibit the caching of map tiles in
+    their Terms of Use (ToU), especially if their business model is based on
+    billing API requests. This is mainly to prevent disintermediation in case
+    their tiles are redistributed to a large number of end users.
 
-    While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you
-    should still make sure you understand the ToU of the service you are using and that it fits your planned
-    use case.
+    While caching tiles onboard your own drone is likely not the kind of misuse
+    targeted by such clauses, you should still make sure you understand the ToU
+    of the service you are using and that it fits your planned use case.
 
-If you are fine with using maps for the KSQL airport area only, then you
-can use the :ref:`provided Docker Compose mapserver service
-<List of services>`, otherwise follow these instructions to self-host
-a :term:`MapServer` instance:
+If you are fine with using maps for the :term:`KSQL` airport area only, then you
+can use the :ref:`provided Docker Compose mapserver service <List of services>`,
+otherwise follow these instructions to self-host a :term:`MapServer` instance:
 
 .. seealso::
     See :ref:`GIS software` for :term:`free and open-source software (FOSS)
@@ -48,7 +50,8 @@ a :term:`MapServer` instance:
 
 To follow these instructions you will need:
 
-* An :term:`AWS` account and AWS CLI, **or alternatively**, an `EarthExplorer`_ account
+* An :term:`AWS` account and AWS CLI, **or alternatively**, an `EarthExplorer`_
+  account
 * :term:`GDAL` installed
 
 .. _EarthExplorer: https://earthexplorer.usgs.gov
@@ -62,7 +65,8 @@ if you already have AWS CLI set up:
 .. _AWS S3 bucket: https://registry.opendata.aws/naip/
 
 .. warning::
-    This is a **Requester Pays** bucket and the files can be very large so download only what you need.
+    This is a **Requester Pays** bucket and the files can be very large so
+    download only what you need.
 
 .. code-block:: bash
     :caption: Download a NAIP imagery product from the AWS S3 bucket
@@ -75,13 +79,15 @@ if you already have AWS CLI set up:
       mapfiles/
 
 .. note::
-    * The NAIP imagery is in the public domain. However, you must create an EROS account to download
-      the rasters from EarthExplorer, or use secondary sources such as the AWS S3 bucket mentioned above. The
-      data is not redistributed in the `gisnav-docker`_ repository to keep its size manageable.
-    * You do not need an account to browse for product IDs with EarthExplorer. An account is only needed if you
-      want to download products.
+    NAIP imagery is in the public domain. However, you must create an EROS
+    account to download the rasters from EarthExplorer, or use secondary sources
+    such as the AWS S3 bucket mentioned above.
 
-Once you have the imagery, use GDAL to make a ``naip.vrt`` VRT file out of your downloaded GeoTIFFs:
+    You do not need an account to browse for product IDs with EarthExplorer.
+    An account is only needed if you want to download products.
+
+Once you have the imagery, use GDAL to make a ``naip.vrt`` VRT file out of your
+downloaded GeoTIFFs:
 
 .. code-block:: bash
     :caption: Use GDAL to create a VRT from TIFF files
@@ -89,16 +95,14 @@ Once you have the imagery, use GDAL to make a ``naip.vrt`` VRT file out of your 
     cd mapfiles/
     gdalbuildvrt naip.vrt *.tif
 
-Once you have your .tif and .vrt files, you can run host them through a MapServer container:
+Once you have your .tif and .vrt files, you can run host them through a MapServer
+container:
 
 .. code-block:: bash
     :caption: Serve the map layer using the MapServer Docker image
 
-    cd ~/gisnav-docker
-    export CONTAINER_NAME=gisnav-mapserver
     export MAPSERVER_PATH=/etc/mapserver
     docker run \
-      --name $CONTAINER_NAME \
       -p 80:80 \
       -v $PWD/mapfiles/:$MAPSERVER_PATH/:ro \
       camptocamp/mapserver
@@ -146,26 +150,28 @@ orthoimagery that should be suitable for use with GISNav:
 .. _NLS orthophotos: https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/expert-users/product-descriptions/orthophotos
 
 .. note::
-    If you have a drone, you can also use readily available `photogrammetry`_ software to create your own maps for your
-    local region of interest
+    If you have a drone, you can also use readily available `photogrammetry`_
+    software to create your own maps for your local region of interest.
 
 .. _photogrammetry: https://en.wikipedia.org/wiki/Photogrammetry
 
 Rasterizing vector data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-In some cases useful map data is not directly provided in raster but in vector format. The GISNav SITL service in
-the `gisnav-docker`_ repository utilizes vector-format elevation data from `OSM Buildings`_ to determine building
-heights in the simulation area to improve accuracy* of pose estimates especially at lower flight altitudes where the
-perceived planarity of the terrain is lower. For an example on how the vector data is rasterized using GDAL,
-see `this gisnav-docker setup script`_.
+In some cases useful map data is not directly provided in raster but in vector
+format. The GISNav ``mapserver`` service uses vector-format elevation data from
+`OSM Buildings`_ to determine building heights in the simulation area to improve
+accuracy* of pose estimates especially at lower flight altitudes where the
+perceived planarity of the terrain is lower. For an example on how the vector
+data is rasterized using GDAL, see the `mapserver service Dockerfile`_.
 
 .. note::
-    \*The GISNav SITL demo simulation does not actually benefit from the building height data because the simulated
-    KSQL Airport model buildings are all featureless black blocks. See :ref:`SITL simulation quirks` for more
+    \*The GISNav SITL demo simulation does not actually benefit from the building
+    height data because the simulated KSQL Airport model buildings are all
+    featureless black blocks. See :ref:`SITL simulation quirks` for more
     information.
 
 .. _OSM Buildings: https://osmbuildings.org/
-.. _this gisnav-docker setup script: https://github.com/hmakelin/gisnav-docker/blob/master/scripts/setup_mapserver.sh
+.. _mapserver service Dockerfile: https://github.com/hmakelin/gisnav/blob/master/docker/mapserver/Dockerfile
 
 SITL simulation quirks with DEMs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -175,11 +181,12 @@ featureless grey blocks, so any pose estimation model will most likely not use
 them for matching. This means any building elevation data (see :ref:`Rasterizing
 vector data`) will not technically be used to improve pose estimates in the
 SITL simulation. The below figure illustrates how :term:`LoFTR` finds keypoints
-at an even density throughout the simulated drone's field of view except on the
+at an even density throughout the simulated vehicle's field of view except on the
 featureless buildings.
 
 .. _KSQL Airport Gazebo model: https://docs.px4.io/main/en/simulation/gazebo_worlds.html#ksql-airport
 
 .. figure:: ../../../_static/img/gisnav_sitl_featureless_buildings.jpg
 
-    LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)
+    LoFTR does not find keypoints on featureless buildings or terrain (SITL
+    simulation)

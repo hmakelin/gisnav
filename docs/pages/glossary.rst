@@ -125,7 +125,8 @@ correct alternative should be easily inferred from the context they are used in.
 
     GetFeatureInfo
         A :term:`WMS` operation for requesting non-:term:`raster` features from
-        :term:`GIS` servers.
+        :term:`GIS` servers. Used in earlier versions of GISNav to fetch DEM
+        values for specific points but no longer used.
 
     GetMap
         A :term:`WMS` operation for requesting :term:`raster` images from
@@ -570,6 +571,10 @@ ____________________________________________________
 
     SQL
         Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`_
+
+    ToU
+    TOU
+        Terms of Use
 
     USGS
         United States Geological Survey

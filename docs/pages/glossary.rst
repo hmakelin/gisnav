@@ -17,6 +17,7 @@ Some terms may have multiple definitions (denoted by bullet points) and the
 correct alternative should be easily inferred from the context they are used in.
 
 .. glossary::
+    :sorted:
 
     Altitude
         Altitude of :term:`vehicle` in any vertical datum or reference level.
@@ -42,7 +43,8 @@ correct alternative should be easily inferred from the context they are used in.
         estimation.
 
         .. seealso:: Learn more
-            https://wiki.openstreetmap.org/wiki/Bounding_Box
+            `wiki.openstreetmap.org/wiki/Bounding_Box
+            <https://wiki.openstreetmap.org/wiki/Bounding_Box>`_
 
     Bucket
         An :term:`AWS` S3 bucket
@@ -130,7 +132,8 @@ correct alternative should be easily inferred from the context they are used in.
         :term:`GIS` servers.
 
         .. seealso:: Learn more
-            https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
+            `opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
+            <https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap>`_
 
     Absolute position
     Global position
@@ -273,10 +276,11 @@ correct alternative should be easily inferred from the context they are used in.
           system.
 
         .. seealso:: Learn more
-             https://en.wikipedia.org/wiki/Orthophoto
+             `en.wikipedia.org/wiki/Orthophoto
+             <https://en.wikipedia.org/wiki/Orthophoto>`_
 
         .. todo::
-            The jargon here is still a bit fuzzy: sometimes the aligned and
+            The jargon here is still a bit loose: sometimes the aligned and
             stacked :term:`DEM` :term:`raster` is included in the term
             "orthoimage", and the term "orthophoto" is used for the
             high-resolution image only.
@@ -307,7 +311,8 @@ correct alternative should be easily inferred from the context they are used in.
         :term:`PnP` is used as an acronym.
 
         .. seealso:: Learn more
-            https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+            `docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+            <https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_
 
     Pose
         A spatial pose in three dimensions including :term:`position` and
@@ -335,7 +340,8 @@ correct alternative should be easily inferred from the context they are used in.
         not e.g. for an :term:`image` from the :term:`camera`.
 
         .. seealso:: Learn more
-            https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
+            `carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
+            <https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best>`_
 
     Reference
     Reference image
@@ -408,6 +414,7 @@ Abbreviations
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     BBox
         :term:`Bounding box`
@@ -431,6 +438,7 @@ Acronyms
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     AGL
         :term:`Altitude` or :term:`Elevation` Above Ground Level
@@ -458,7 +466,8 @@ ____________________________________________________
         Digital Elevation Model
 
         .. seealso::
-            https://en.wikipedia.org/wiki/Digital_elevation_model
+            `en.wikipedia.org/wiki/Digital_elevation_model
+            <https://en.wikipedia.org/wiki/Digital_elevation_model>`_
 
     ENU
         East-North-Up coordinate system
@@ -480,7 +489,8 @@ ____________________________________________________
         Free and Open Source Software
 
         .. seealso::
-            https://en.wikipedia.org/wiki/Free_and_open-source_software
+            `en.wikipedia.org/wiki/Free_and_open-source_software
+            <https://en.wikipedia.org/wiki/Free_and_open-source_software>`_
 
     FoV
     FOV
@@ -522,7 +532,7 @@ ____________________________________________________
         National Agriculture Imagery Program
 
         .. seealso::
-            https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip
+            `USGS NAIP website <https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip>`_
 
     NED
         North-East-Down coordinate system
@@ -556,7 +566,7 @@ ____________________________________________________
         Software In The Loop simulation
 
     SQL
-        Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`
+        Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`_
 
     USGS
         United States Geological Survey
@@ -566,7 +576,7 @@ ____________________________________________________
 
     WGS
     WGS 84
-        A World Geodetic System coordinate system: `en.wikipedia.org/wiki/World_Geodetic_System <https://en.wikipedia.org/wiki/World_Geodetic_System>`
+        A World Geodetic System coordinate system: `en.wikipedia.org/wiki/World_Geodetic_System <https://en.wikipedia.org/wiki/World_Geodetic_System>`_
 
     WMS
     WMTS
@@ -589,6 +599,7 @@ used in the project) but should list many of the main ones, especially if they
 relate to external interfaces.
 
 .. glossary::
+    :sorted:
 
     ArduPilot
         ArduPilot open source autopilot: `ardupilot.org <https://ardupilot.org/>`_
@@ -660,10 +671,10 @@ relate to external interfaces.
         Hardware standard for open source autopilots: `pixhawk.org <https://pixhawk.org/>`_
 
     PostGIS
-        :term:`GIS` extension for :term:`Postgres`: `postgis.net <https://postgis.net/>`
+        :term:`GIS` extension for :term:`Postgres`: `postgis.net <https://postgis.net/>`_
 
     Postgres
-        An :term:`SQL` server: `postgresql.org <https://www.postgresql.org/>`
+        An :term:`SQL` server: `postgresql.org <https://www.postgresql.org/>`_
 
     PX4
         PX4 Autopilot: `px4.io <https://px4.io/>`_
@@ -697,6 +708,7 @@ Other
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     KSQL
         ICAO airport code for San Carlos Airport in California (used as simulation

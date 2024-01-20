@@ -6,7 +6,7 @@ from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
 from gisnav._data import PackageData
-from gisnav.core.constants import ROS_IMAGE_TOPIC, ROS_CAMERA_INFO_TOPIC
+from gisnav.core.constants import ROS_CAMERA_INFO_TOPIC, ROS_IMAGE_TOPIC
 
 
 def generate_launch_description():

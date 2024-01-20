@@ -11,6 +11,7 @@ from launch_ros.actions import Node
 
 from gisnav._data import PackageData
 
+
 def generate_launch_description():
     """Generates shared autopilot agnostic launch description"""
     dirname = os.path.dirname(__file__)

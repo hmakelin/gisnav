@@ -26,14 +26,12 @@ Install GISNav system dependencies with the following commands:
     :substitutions:
 
     cd ~/colcon_ws/src
-
     git clone --branch |vversion| https://github.com/hmakelin/gisnav.git
     git clone https://github.com/px4/px4_msgs.git
     git clone \
         --branch gimbal-protocol-v2-plugin \
         https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git \
         mavros
-
     rosdep update
     rosdep install --from-paths . -y -r --ignore-src
 

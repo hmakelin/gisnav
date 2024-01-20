@@ -4,14 +4,16 @@
         :selected:
 
         .. code-block:: bash
-            :caption: Launch local development version of GISNav using ROS 2 launch system
+            :caption: Launch development configuration for PX4
 
+            cd ~/colcon_ws
             ros2 launch gisnav px4.dev.launch.py
 
     .. tab-item:: ArduPilot
         :selected:
 
         .. code-block:: bash
-            :caption: Launch local development version of GISNav using ROS 2 launch system
+            :caption: Launch development configuration for ArduPilot
 
+            cd ~/colcon_ws
             ros2 launch gisnav ardupilot.dev.launch.py

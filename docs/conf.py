@@ -1,7 +1,8 @@
-import os
-import sys
-import subprocess
 import datetime
+import os
+import subprocess
+import sys
+
 from gisnav._data import PackageData
 
 sys.path.insert(0, os.path.abspath("../gisnav"))
@@ -33,7 +34,7 @@ extensions = [
     "sphinxcontrib.video",
     "sphinxcontrib.mermaid",
     "sphinx_copybutton",
-    "sphinx_substitution_extensions"
+    "sphinx_substitution_extensions",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -117,7 +118,9 @@ release = version
 
 # Add git tag to release
 try:
-    release = subprocess.check_output(["git", "describe", "--tags"]).strip().decode('utf-8')
+    release = (
+        subprocess.check_output(["git", "describe", "--tags"]).strip().decode("utf-8")
+    )
 except subprocess.CalledProcessError:
     raise
 
@@ -141,4 +144,3 @@ Updated on {datetime.datetime.today().strftime("%b %d, %Y")}
 
 GISNav release: |release|
 """
-

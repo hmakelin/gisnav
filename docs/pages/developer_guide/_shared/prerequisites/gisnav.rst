@@ -1,9 +1,9 @@
-* You will need to have cloned the GISNav source code into a :term:`colcon`
-  workspace:
+* You will need to have cloned the GISNav source code into your :term:`ROS`
+  colcon workspace:
 
-.. code-block:: bash
+  .. code-block:: bash
     :caption: Clone GISNav source code into colcon workspace
+    :substitutions:
 
-    mkdir -p ~/colcon_ws/src
     cd ~/colcon_ws/src
-    git clone https://github.com/hmakelin/gisnav.git
+    git clone --branch |vversion| https://github.com/hmakelin/gisnav.git

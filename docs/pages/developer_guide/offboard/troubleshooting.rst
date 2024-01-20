@@ -2,23 +2,23 @@ Troubleshooting
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Windows or :term:`GUI` not appearing
-************************
+************************************************
 
 Expose xhost
-________________________
+________________________________________________
 
 If the :term:`Gazebo`, :term:`QGroundControl` or :term:`RViz` windows do not
 appear on your screen soon after
 :ref:`deploying your Docker Compose services <Deploy with Docker Compose>`, you
 may need to expose your ``xhost`` to your containers.
 
-.. include:: _expose_xhost.rst
+.. include:: ../_shared/expose_xhost.rst
 
 Simulation is slow
-************************
+************************************************
 
 Headless mode
-________________________
+________________________________________________
 
 When developing on a lower performance system or when doing automated testing
 (e.g. with :term:`MAVSDK`) you may want to run the :term:`Gazebo` simulation
@@ -48,20 +48,20 @@ in headless mode to increase performance:
             docker compose -f docker-compose.headless.yaml up ardupilot
 
 GPU temperature
-________________________
+________________________________________________
 
 Check your :term:`GPU` temperature to ensure it's not overheating and not
 being throttled.
 
 Match visualization not appearing
-************************
+************************************************
 
 Here we assume the :term:`SITL` or :term:`HIL` simulation is working but
 GISNav itself does not appear to be working since the match visualization
 does not appear.
 
 Disable SharedMemory for Fast DDS
-________________________
+________________________________________________
 
     [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7412:
     open_and_lock_file failed -> Function open_port_internal
@@ -83,10 +83,10 @@ or discussion `here`_ and restarting the ROS daemon with the new configuration:
     ros2 daemon start
 
 ArduPilot simulation not working
-************************
+************************************************
 
 Disable AppArmor
-________________________
+________________________________________________
 
 .. warning::
     Consider the security implications to your system before trying this out.
@@ -96,10 +96,10 @@ not seem to be starting when running the containers, you may need to run them
 image with ``--security-opt apparmor:unconfined`` or ``--privileged`` options.
 
 General debugging
-************************
+************************************************
 
 Run shell inside container
-________________________
+________________________________________________
 
 If you need to do debugging on your
 :ref:`Docker Compose images <Deploy with Docker Compose>` with :term:`GUI`

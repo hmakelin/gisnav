@@ -140,7 +140,7 @@ setup(
             "sphinx-design",
             "sphinxcontrib-mermaid",
             "sphinxcontrib-video",
-            "Sphinx<7",
+            "Sphinx",
             "types-PyYAML",
         ],
     },

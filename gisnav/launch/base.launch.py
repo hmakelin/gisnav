@@ -1,7 +1,4 @@
-"""Launches GISNav :term:`core` nodes
-
-The :class:`.CVNode` and :class:`.GISNode` nodes are launched from this file.
-"""
+"""Launches GISNav :term:`core` nodes"""
 import os
 
 from ament_index_python.packages import get_package_share_directory

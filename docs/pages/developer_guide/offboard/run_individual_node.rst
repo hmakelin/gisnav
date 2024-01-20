@@ -14,7 +14,7 @@ functional deployments you should look into deploying GISNav
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: _prerequisites_install_locally.rst
+.. include:: ../_shared/prerequisites/install_locally.rst
 
 Run node with custom log level
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

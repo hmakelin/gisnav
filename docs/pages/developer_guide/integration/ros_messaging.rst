@@ -3,14 +3,14 @@ ____________________________________________________
 The natural way to integrate GISNav with other systems is via `ROS 2 <https://docs.ros.org/>`_. GISNav depends on ROS 2
 for both external and internal communication. If you have a ROS 2 node, you can talk to GISNav.
 
-For simple integrations you might only be interested in the :ref:`Aircraft GeoPose estimate topics`. For an overview of
-all available topics, see :ref:`Remapping ROS 2 topics`.
+For an overview of all available topics, see :ref:`Remapping ROS 2 topics`.
 
 
 Core data flow graph
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-TODO
+.. todo::
+    Add diagram
 
 Motivation for the data flow graph design:
 
@@ -39,19 +39,20 @@ the maintainability of the :term:`core` system.
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-To integrate GISNav with your own ROS system, you will likely have to do some
-topic name remapping. See the examples below on how to :ref:`Use ROS 2 launch system`
-and :ref:`Run individual ROS node` with remapped topic names:
+To integrate GISNav with your own :term:`ROS` system, you will likely have to do
+some topic name remapping. See the examples below on how to :ref:`launch
+<Use ROS 2 launch system>` and :ref:`run <Run individual ROS nodes>` GISNav ROS
+nodes with remapped topic names:
 
 .. tab-set::
 
-    .. tab-item:: ROS 2 launch with topic name remapping
+    .. tab-item:: ros2 launch
         :selected:
 
         The below diff is an example remapping for the camera topics for :class:`.PoseEstimationNode`:
 
-        .. literalinclude:: ../../../../launch/examples/base_camera_topic_remap.launch.py
-            :diff: ../../../../launch/base.launch.py
+        .. literalinclude:: ../../../../gisnav/launch/examples/base_camera_topic_remap.launch.py
+            :diff: ../../../../gisnav/launch/base.launch.py
             :caption: Camera topic name remap in a launch file
             :language: python
 
@@ -62,7 +63,7 @@ and :ref:`Run individual ROS node` with remapped topic names:
 
             ros2 launch gisnav examples/base_camera_topic_remap.launch.py
 
-    .. tab-item:: Run individual ROS node with topic name remapping
+    .. tab-item:: ros2 run
 
         The below command launches camera topics for :class:`.PoseEstimationNode`:
 

@@ -44,6 +44,8 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 todo_include_todos = True
 
+language = "en"
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for

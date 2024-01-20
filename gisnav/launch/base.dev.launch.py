@@ -1,8 +1,7 @@
 """Launches GISNav :term:`core` nodes
 
-The :class:`.CVNode` and :class:`.GISNode` nodes are launched from this file.
-
-The dev version of this launch file alse launches :class:`.RVizNode`.
+The dev version of this launch file also launches :class:`.RVizNode` and
+:class:`.QGISNode`.
 """
 import os
 
@@ -11,7 +10,6 @@ from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
 from gisnav._data import PackageData
-
 
 def generate_launch_description():
     """Generates shared autopilot agnostic launch description"""

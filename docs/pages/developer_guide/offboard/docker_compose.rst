@@ -12,11 +12,11 @@ help you customize GISNav's deployments beyond what the Makefile offers.
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: _prerequisites_docker.rst
+.. include:: ../_shared/prerequisites/docker.rst
 
-.. include:: _prerequisites_gisnav.rst
+.. include:: ../_shared/prerequisites/gisnav.rst
 
-.. include:: _prerequisites_compose_project_name_env_variable.rst
+.. include:: ../_shared/prerequisites/compose_project_name_env_variable.rst
 
 List of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -122,9 +122,9 @@ page locally, ensure you have the :ref:`prerequisites <Prerequisites>` installed
 then follow the below steps to create, deploy, and shutdown the required services.
 
 Build and create
-***********
+**********************
 
-.. include:: _build_and_create_docker_intro.rst
+.. include:: build_and_create_docker_intro.rst
 
 .. code-block:: bash
     :caption: Build images and create containers
@@ -141,14 +141,14 @@ Build and create
         gisnav
 
 Expose xhost
-***********
+**********************
 
-.. include:: _expose_xhost.rst
+.. include:: ../_shared/expose_xhost.rst
 
 Deploy
-***********
+**********************
 
-.. include:: _deploy_docker_intro.rst
+.. include:: ../_shared/deploy_docker_intro.rst
 
 .. tab-set::
 
@@ -186,18 +186,18 @@ Deploy
                 gisnav
 
 Shutdown
-***********
+**********************
 
-.. include:: _docker_compose_shutdown.rst
+.. include:: ../_shared/docker_compose_shutdown.rst
 
 
 Deploy for local development
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build and create
-***********
+**********************
 
-.. include:: _build_and_create_docker_intro.rst
+.. include:: ../_shared/build_and_create_docker_intro.rst
 
 When deploying for local development, the difference to
 :ref:`deploying the Get Started demonstration <Deploy demonstration>` is that
@@ -218,14 +218,14 @@ we do not include the ``gisnav`` service which is assumed to be
         px4
 
 Expose xhost
-***********
+**********************
 
-.. include:: _expose_xhost.rst
+.. include:: ../_shared/expose_xhost.rst
 
 Deploy
-***********
+**********************
 
-.. include:: _deploy_docker_intro.rst
+.. include:: ../_shared/deploy_docker_intro.rst
 
 .. tab-set::
 
@@ -261,15 +261,15 @@ Deploy
                 px4
 
 Launch GISNav
-***********
+**********************
 
 After you have your supporting services deployed you would typically
 :ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your
 locally installed development version of GISNav:
 
-.. include:: _launch_gisnav_with_ros2_launch.rst
+.. include:: ../_shared/launch_gisnav_with_ros2_launch.rst
 
 Shutdown
-***********
+**********************
 
-.. include:: _docker_compose_shutdown.rst
+.. include:: ../_shared/docker_compose_shutdown.rst

@@ -12,11 +12,11 @@ instead of installing locally.
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: ../launch/_prerequisites_ros.rst
+.. include:: ../_shared/prerequisites/ros.rst
 
-.. include:: ../launch/_prerequisites_gisnav.rst
+.. include:: .../_shared/prerequisites/gisnav.rst
 
-.. include:: ../launch/_prerequisites_source_workspace.rst
+.. include:: ../_shared/prerequisites/source_workspace.rst
 
 Install system dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

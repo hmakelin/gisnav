@@ -1,5 +1,5 @@
 **************************************************
-User Guide
+User guide
 **************************************************
 This section provides instruction on how you can integrate GISNav with your project as well as configure and extend
 it to match your use case.
@@ -9,31 +9,31 @@ it to match your use case.
     software-in-the-loop (SITL) simulation environment.
 
 .. toctree::
-    :caption: Use GISNav
+    :caption: Development
 
-    launch/service_orchestration
-    launch/docker_compose
-    launch/ros2_launch_system
-    launch/run_individual_node
-    launch/troubleshooting
+    development/system_requirements
+    development/install_gisnav
+    development/test_gisnav
 
 .. toctree::
-    :caption: Develop GISNav
+    :caption: Offboard simulation
 
-    develop/system_requirements
-    develop/install_gisnav
-    develop/test_gisnav
+    offboard/service_orchestration
+    offboard/docker_compose
+    offboard/ros2_launch_system
+    offboard/run_individual_node
+    offboard/troubleshooting
 
 .. toctree::
-    :caption: Onboard SITL & HIL
+    :caption: Onboard simulation
 
     onboard/companion_computer
     onboard/jetson_pixhawk
 
 .. toctree::
-    :caption: Configure & integrate
+    :caption: Integration and configuration
 
-    integrate/gis_server
-    integrate/modify_params
-    integrate/ros_messaging
-    integrate/mock_gps
+    integration/gis_server
+    integration/modify_params
+    integration/ros_messaging
+    integration/mock_gps

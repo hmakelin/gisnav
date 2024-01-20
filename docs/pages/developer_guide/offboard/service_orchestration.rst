@@ -16,9 +16,9 @@ the following command:
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: _prerequisites_docker.rst
+.. include:: ../_shared/prerequisites/docker.rst
 
-.. include:: _prerequisites_gisnav.rst
+.. include:: ../_shared/prerequisites/gisnav.rst
 
 Make target naming scheme
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

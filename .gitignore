@@ -32,3 +32,6 @@ gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 debian
 .pybuild
 *.deb
+
+# mypy
+.mypy_cache

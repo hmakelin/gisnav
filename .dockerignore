@@ -25,3 +25,6 @@ gisnav/test/sitl/output/
 gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 .benchmarks/
+
+# mypy
+.mypy_cache

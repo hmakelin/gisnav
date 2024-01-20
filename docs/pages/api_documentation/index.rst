@@ -30,6 +30,7 @@ what you are looking for.
 
     public/mock_gps_node
     public/rviz_node
+    public/qgis_node
 
 .. toctree::
     :caption: Static API

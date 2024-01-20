@@ -576,6 +576,10 @@ ____________________________________________________
     TOU
         Terms of Use
 
+    UDP
+        User Datagram Protocol: `en.wikipedia.org/wiki/User_Datagram_Protocol
+        <https://en.wikipedia.org/wiki/User_Datagram_Protocol>`
+
     USGS
         United States Geological Survey
 
@@ -598,7 +602,6 @@ ____________________________________________________
 
             * https://www.ogc.org/standards/wmts
 
-
 Proper names
 ____________________________________________________
 
@@ -614,6 +617,9 @@ relate to external interfaces.
 
     colcon
         A build automation tool used by :term:`ROS 2`: `colcon.readthedocs.io/en/released/ <https://colcon.readthedocs.io/en/released/>`_
+
+    CUDA
+        NVIDIA parallel computing platform: `developer.nvidia.com/cuda-zone <https://developer.nvidia.com/cuda-zone>`_
 
     DDS
     Data Distribution Service

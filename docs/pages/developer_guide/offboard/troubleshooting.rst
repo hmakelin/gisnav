@@ -7,8 +7,8 @@ Windows or :term:`GUI` not appearing
 Expose xhost
 ________________________________________________
 
-If the :term:`Gazebo`, :term:`QGroundControl` or :term:`RViz` windows do not
-appear on your screen soon after
+If the :term:`Gazebo`, :term:`QGroundControl`, :term:`RViz` or :term:`QGIS`
+windows do not appear on your screen soon after
 :ref:`deploying your Docker Compose services <Deploy with Docker Compose>`, you
 may need to expose your ``xhost`` to your containers.
 
@@ -46,6 +46,24 @@ in headless mode to increase performance:
 
             cd ~/colcon_ws/src/gisnav/docker
             docker compose -f docker-compose.headless.yaml up ardupilot
+
+GPU drivers not available
+________________________________________________
+
+Your system might not be using the GPU. Check that CUDA is available:
+
+.. code-block::
+    :caption: Check CUDA availability
+
+    hmakelin@hmakelin-MS-7D48:~/colcon_ws/src/gisnav$ python3
+    Python 3.10.12 (main, Nov 20 2023, 15:14:05) [GCC 11.4.0] on linux
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> import torch
+    >>> torch.cuda.is_available()
+    True
+
+Sometimes this command will not return ``True`` and possibly raises an error. Try
+updating your drivers and/or restarting your computer.
 
 GPU temperature
 ________________________________________________
@@ -85,6 +103,10 @@ or discussion `here`_ and restarting the ROS daemon with the new configuration:
 ArduPilot simulation not working
 ************************************************
 
+.. todo::
+    Currently ArduPilot support is broken and the simulation is not expected
+    to work. Use PX4 instead.
+
 Disable AppArmor
 ________________________________________________
 
@@ -110,4 +132,7 @@ service container using the following command:
     :caption: Run bash inside px4 service container
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose run px4 bash
+    docker compose -p gisnav run px4 bash
+
+You will need to use ``docker compose`` here instead of ``docker`` to for the
+GUI applications to work properly.

@@ -5,15 +5,17 @@ Mock GPS messages
     The configurations presented in this section are intended for simulation
     use only. Do not use these on real drone flights.
 
-:class:`.MockGPSNode` creates :class:`mavros_msgs.msg.GPSINPUT` (for :term:`ArduPilot*)
-and :class:`px4_msgs.msg.SensorGps` (for :term:`PX4`) messages from the received
-:class:`geographic_msgs.msg.GeoPoseStamped` and
-:class:`mavros_msgs.msg.Altitude` messages.
+The :class:`.MockGPSNode` creates mock :class:`mavros_msgs.msg.GPSINPUT` (
+:term:`ArduPilot`\*) and :class:`px4_msgs.msg.SensorGps` (:term:`PX4`) messages
+from the based on the estimated :attr:`.MockGPSNode.geotransform` and
+``camera`` to ``reference`` frame transformations.
 
 .. note::
     \* Currently :class:`.MockGPSNode` does not use the MAVROS GPS_INPUT plugin
     to publish the :class:`mavros_msgs.msg.GPSINPUT` message and publishes the
-    `MAVLink GPS_INPUT`_ message directly over UDP instead.
+    `MAVLink GPS_INPUT`_ message directly over UDP instead. This is because the
+    ROS middleware possibly does not transmit the GPS_INPUT message to ArduPilot
+    in the expected way.
 
     .. _MAVLink GPS_INPUT: https://mavlink.io/en/messages/common.html#GPS_INPUT
 
@@ -53,6 +55,10 @@ tolerant of especially horitontal variance:
 
 Ardupilot integration
 ****************************************************
+
+.. todo::
+    ArduPilot integration is currently broken. Needs work in both Docker images
+    and in :class:`.MockGPSNode`. In the meantime, use the PX4 examples.
 
 See the `GPS Input page in ArduPilot official documentation`_ for instructions
 on how to configure the GPSInput module for ArduPilot.

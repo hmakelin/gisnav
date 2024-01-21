@@ -137,11 +137,13 @@ class TestTopographyCase(unittest.TestCase):
         found_names_and_namespaces = self._get_names_and_namespaces_within_timeout(10)
         found_nodes_with_ns = set(found_names_and_namespaces)
 
-        #print(found_names_and_namespaces)
+        # print(found_names_and_namespaces)
 
         missing_nodes_with_ns = expected_nodes_with_ns - found_nodes_with_ns
-        assert not missing_nodes_with_ns, \
-            f"Not all expected nodes with namespaces were discovered. Missing: {missing_nodes_with_ns}"
+        assert not missing_nodes_with_ns, (
+            f"Not all expected nodes with namespaces were discovered. "
+            f"Missing: {missing_nodes_with_ns}"
+        )
 
     def test_topic_names_and_types(self):
         """Tests that nodes subscribe to and publish the expected ROS topics
@@ -153,29 +155,10 @@ class TestTopographyCase(unittest.TestCase):
         found_topics_and_types = self._get_topic_names_and_types_within_timeout(10)
         found_topics_and_types = set(found_topics_and_types)
 
-        #print(found_topics_and_types)
+        # print(found_topics_and_types)
 
         missing_topics_and_types = expected_topics_with_types - found_topics_and_types
-        assert not missing_topics_and_types, \
-            f"Not all expected topics and types were discovered. Missing: {missing_topics_and_types}"
-
-    def test_topic_names_and_types(self):
-        """Tests that nodes subscribe to and publish the expected ROS topics"""
-        # names, _ = tuple(zip(self.EXPECTED_TOPICS, self.EXPECTED_TYPES)
-
-        found_names_and_types = self._get_topic_names_and_types_within_timeout()
-        found_names, found_types = tuple(zip(*found_names_and_types))
-
-        print(found_names)
-        print(found_types)
-
-        # assert set(names).issubset(
-        #    found_names
-        # ), f"Not all topics were discovered ({set(names).difference(found_names)})."
-        # for name, type_ in self.TOPIC_NAMES_AND_TYPES:
-        #    types = dict(found_names_and_types).get(name)
-        #    assert types is not None
-        #    self.assertEqual(
-        #        type_.__class__.__name__.replace("Metaclass_", ""),
-        #        types[0].split("/")[-1],
-        #    )
+        assert not missing_topics_and_types, (
+            f"Not all expected topics and types were discovered. "
+            f"Missing: {missing_topics_and_types}"
+        )

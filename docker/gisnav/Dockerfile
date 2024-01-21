@@ -79,6 +79,6 @@ HEALTHCHECK --interval=10s --timeout=3s \
   ros2 node list | grep -q cv_node && \
   ros2 node list | grep -q gis_node" || exit 1
 
-WORKDIR /opt/colcon_ws/src/gisnav/gisnav
+WORKDIR /opt/colcon_ws/src/gisnav
 SHELL ["/bin/bash", "-c"]
 ENTRYPOINT ["/entrypoint.sh"]

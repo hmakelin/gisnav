@@ -7,7 +7,9 @@ from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
 
-from test.launch.testcases import TestTopographyArduPilotCase  # isort: skip  # noqa: F401
+from test.launch.testcases import (  # isort: skip  # noqa: F401
+    TestTopographyArduPilotCase,  # isort: skip  # noqa: F401
+)
 
 
 @pytest.mark.launch_test

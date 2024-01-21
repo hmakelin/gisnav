@@ -150,6 +150,12 @@ class TestTopographyCase(unittest.TestCase):
         This test allows for more nodes than expected to be running without failing.
         """
         expected_topics_with_types = set(zip(self.EXPECTED_TOPICS, self.EXPECTED_TYPES))
+        try:
+            # Remove potential placeholder blank "" tuples
+            expected_topics_with_types.remove(("", ""))
+        except KeyError:
+            # this is probably a PX4 test and not an ArduPilot test
+            pass
 
         found_topics_and_types = self._get_topic_names_and_types_within_timeout(5)
 
@@ -167,7 +173,8 @@ class TestTopographyCase(unittest.TestCase):
 
 
 class TestTopographyArduPilotCase(TestTopographyCase):
-
+    # Add blank ""s as placeholders to keep tuple same size as tuple being
+    # overridden. Otherwise mypy will complain.
     EXPECTED_TOPICS = (
         "/camera/camera_info",
         "/camera/image_raw",
@@ -183,9 +190,12 @@ class TestTopographyArduPilotCase(TestTopographyCase):
         "/rosout",
         "/tf",
         "/tf_static",
+        "",
     )
     """Names of topics that should be found when running the launch configuration"""
 
+    # Add ""s as placeholders to keep tuple same size as tuple being
+    # overridden. Otherwise mypy will complain.
     EXPECTED_TYPES = (
         "sensor_msgs/msg/CameraInfo",
         "sensor_msgs/msg/Image",
@@ -201,5 +211,6 @@ class TestTopographyArduPilotCase(TestTopographyCase):
         "rcl_interfaces/msg/Log",
         "tf2_msgs/msg/TFMessage",
         "tf2_msgs/msg/TFMessage",
+        "",
     )
     """Types of :py:data:`~EXPECTED_TOPICS` in corresponding order"""

@@ -16,7 +16,7 @@ it to match your use case.
     development/test_gisnav
 
 .. toctree::
-    :caption: Offboard simulation
+    :caption: Off-vehicle simulation
 
     offboard/service_orchestration
     offboard/docker_compose
@@ -25,7 +25,7 @@ it to match your use case.
     offboard/troubleshooting
 
 .. toctree::
-    :caption: Onboard simulation
+    :caption: On-vehicle simulation
 
     onboard/companion_computer
     onboard/jetson_pixhawk

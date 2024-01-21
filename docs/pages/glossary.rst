@@ -192,9 +192,12 @@ correct alternative should be easily inferred from the context they are used in.
             :term:`Absolute position`, :term:`Global position`
 
     Map
+        One of the :term:`tf2` ``frame_id``\s used by GISNav:
+        :py:data:`.FrameID`
+
         .. todo::
-            Available (not defined here). For terms that could all be
-            considered "maps", see "orthoimage", "orthophoto", "raster",
+            Could be used more generally as a concept. For terms that could all
+            be considered "maps", see "orthoimage", "orthophoto", "raster",
             "reference", "DEM", and "stack".
 
     Message
@@ -253,9 +256,15 @@ correct alternative should be easily inferred from the context they are used in.
         (e.g. running the :term:`GCS`) that is not carried :term:`onboard`
         and does not draw power from the :term:`vehicle` battery.
 
+        .. todo::
+            Change offboard to mean off FCU, not off vehicle?
+
     Onboard
         Anything carried by the :term:`vehicle` that would draw power from its
         battery, including the :term:`FMU` and the :term:`companion computer`.
+
+        .. todo::
+            Change onboard to mean on FCU, not on vehicle?
 
     Orientation
         :term:`Vehicle` or :term:`camera` orientation (attitude) in 3D space,

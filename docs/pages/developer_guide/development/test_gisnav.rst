@@ -1,34 +1,121 @@
 Test GISNav
 ____________________________________________________
 
-This section describes how you can run and test your :ref:`local GISNav installation
-<Install locally>`. The instructions here are useful mainly if you are doing
-development work on GISNav.
+This section describes how you run some of the test suites included with GISNav.
+The instructions here are useful mainly if you are doing development work on
+GISNav.
 
 Prerequisites
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Install GISNav along with all :term:`extended <Extension>` and development
-  dependencies as described :ref:`here <Install locally>`
+The prerequisites depend on whether you are running the tests for a local
+installation or on a Docker container:
 
-  or
+.. tab-set::
 
-* Build or download the GISNav docker image
+    .. tab-item:: Local
+        :selected:
+
+        .. include:: ../_shared/prerequisites/install_locally.rst
+
+    .. tab-item:: Docker
+
+        .. include:: ../_shared/prerequisites/build_or_pull_gisnav_docker.rst
+
+Static analysis
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Static analysis runs the pre-commit configuration in the repository root
+directory on all files, not just the ones staged for commit:
+
+.. tab-set::
+
+    .. tab-item:: Local
+        :selected:
+
+        .. code-block:: bash
+            :caption: Run static analysis
+
+            cd ~/colcon_ws/src/gisnav
+            make test-static
+
+    .. tab-item:: Docker
+
+        .. code-block:: bash
+            :caption: Run static analysis
+
+            docker compose -p gisnav run gisnav make test-static
 
 Launch tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-`Launch tests <https://index.ros.org/p/launch_testing/>`_ are provided for smoke testing launch files for common
-launch configurations in the :py:mod:`test.launch` package:
+Luanch tests using the `ROS launch_testing package
+<https://index.ros.org/p/launch_testing/>`_ are provided for smoke testing
+launch files for common launch configurations in the :py:mod:`test.launch`
+package. They are quick tests  that would typically reveal basic issues with
+the nodes, like a node not starting properly or crashing soon after startup.
+
+.. tab-set::
+
+    .. tab-item:: Local
+        :selected:
+
+        .. code-block:: bash
+            :caption: Run launch tests
+
+            cd ~/colcon_ws/src/gisnav
+            make test-launch
+
+    .. tab-item:: Docker
+
+        .. code-block:: bash
+            :caption: Run launch tests
+
+            docker compose -p gisnav run gisnav make test-launch
+
+You can also try running only specific launch tests with commands like below:
 
 .. code-block:: bash
-    :caption: Run ROS launch tests
+    :caption: Run ROS specific launch tests
 
-    cd ~/colcon_ws
+    cd ~/colcon_ws/src/gisnav
     launch_test src/gisnav/gisnav/test/launch/test_px4_launch.py
+
+
+Unit tests
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. todo::
+    Implement a basic set of unit tests that is useful
 
 SITL tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The SITL tests are powerful automated test suites that simulate GISNav in an
+end-to-end loop with the autopilot inside a simulated world with simulated but
+realistic sensor data.
+
+Additional prerequisites
+****************************************************
+
+SITL tests require a number of supporting services to successfully complete:
+
+* You must have made the ``create-offboard-sitl-dev-px4`` Make target:
+
+  .. code-block:: bash
+      :caption: Create containers for supporting services
+
+      cd ~/colcon_ws/src/gisnav/docker
+      make build-offboard-sitl-dev-px4
+      make create-offboard-silt-dev-px4
+      make expose-xhost
+
+  .. seealso::
+      For more information see :ref:`Building, creating and running services`
+
+Run SITL tests
+****************************************************
+
 SITL tests are under the ``gisnav/test/sitl`` folder. Use the below ``make``
 command to run the SITL test:
 
@@ -71,5 +158,5 @@ configuration:
     :caption: Run and inspect code coverage report
 
     cd ~/colcon_ws
-    python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/gisnav/test/test_px4_launch.py
+    python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/gisnav/test/launch/test_px4_launch.py
     python3 -m coverage report

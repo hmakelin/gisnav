@@ -4,7 +4,7 @@ import unittest
 from typing import List, Tuple
 
 import rclpy
-
+import rclpy.node
 
 class TestTopographyCase(unittest.TestCase):
     """Tests that all nodes initialize with the correct :term:`ROS` topic

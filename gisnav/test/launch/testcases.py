@@ -134,10 +134,9 @@ class TestTopographyCase(unittest.TestCase):
         """
         expected_nodes_with_ns = set(zip(self.EXPECTED_NODES, self.EXPECTED_NAMESPACES))
 
-        found_names_and_namespaces = self._get_names_and_namespaces_within_timeout(10)
-        found_nodes_with_ns = set(found_names_and_namespaces)
+        found_names_and_namespaces = self._get_names_and_namespaces_within_timeout(5)
 
-        # print(found_names_and_namespaces)
+        found_nodes_with_ns = set(found_names_and_namespaces)
 
         missing_nodes_with_ns = expected_nodes_with_ns - found_nodes_with_ns
         assert not missing_nodes_with_ns, (
@@ -152,10 +151,13 @@ class TestTopographyCase(unittest.TestCase):
         """
         expected_topics_with_types = set(zip(self.EXPECTED_TOPICS, self.EXPECTED_TYPES))
 
-        found_topics_and_types = self._get_topic_names_and_types_within_timeout(10)
-        found_topics_and_types = set(found_topics_and_types)
+        found_topics_and_types = self._get_topic_names_and_types_within_timeout(5)
 
-        # print(found_topics_and_types)
+        # the list is unhashable (using set() below)
+        found_topics_and_types_unlisted = [
+            (topic, type_[0]) for topic, type_ in found_topics_and_types
+        ]
+        found_topics_and_types = set(found_topics_and_types_unlisted)
 
         missing_topics_and_types = expected_topics_with_types - found_topics_and_types
         assert not missing_topics_and_types, (

@@ -1,2 +1,3 @@
-rviz_node:
-  ros__parameters: []
+gisnav:
+  rviz_node:
+    ros__parameters: []

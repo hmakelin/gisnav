@@ -1,2 +1,3 @@
-bbox_node:
-  ros__parameters: []
+gisnav:
+  bbox_node:
+    ros__parameters: []

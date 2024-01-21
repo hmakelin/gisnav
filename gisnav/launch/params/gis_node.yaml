@@ -1,7 +1,8 @@
-gis_node:
-  ros__parameters:
-    wms_url: 'http://127.0.0.1:80/wms'
-    wms_layers: ['imagery']
-    wms_dem_layers: ['osm-buildings']
-    wms_format: 'image/jpeg'
-    min_map_overlap_update_threshold: 0.85
+gisnav:
+  gis_node:
+    ros__parameters:
+      wms_url: 'http://127.0.0.1:80/wms'
+      wms_layers: ['imagery']
+      wms_dem_layers: ['osm-buildings']
+      wms_format: 'image/jpeg'
+      min_map_overlap_update_threshold: 0.85

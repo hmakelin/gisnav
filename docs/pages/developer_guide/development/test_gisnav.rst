@@ -158,5 +158,5 @@ configuration:
     :caption: Run and inspect code coverage report
 
     cd ~/colcon_ws
-    python3 -m coverage run --branch --include */site-packages/gisnav/* src/gisnav/gisnav/test/launch/test_px4_launch.py
+    python3 -m coverage run --branch --include *gisnav* src/gisnav/gisnav/test/launch/test_px4_launch.py
     python3 -m coverage report

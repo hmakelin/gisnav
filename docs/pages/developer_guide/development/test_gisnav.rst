@@ -20,6 +20,8 @@ installation or on a Docker container:
 
     .. tab-item:: Docker
 
+        .. include:: ../_shared/prerequisites/gisnav.rst
+
         .. include:: ../_shared/prerequisites/build_or_pull_gisnav_docker.rst
 
 Static analysis

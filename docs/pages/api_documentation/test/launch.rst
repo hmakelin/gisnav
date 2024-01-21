@@ -1,7 +1,7 @@
 Launch tests
 ____________________________________________________
 
-.. automodule:: test.launch
+.. automodule:: test.launch.testcases
    :autosummary:
    :members:
    :undoc-members:

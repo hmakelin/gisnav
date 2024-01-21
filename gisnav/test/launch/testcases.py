@@ -164,3 +164,42 @@ class TestTopographyCase(unittest.TestCase):
             f"Not all expected topics and types were discovered. "
             f"Missing: {missing_topics_and_types}"
         )
+
+
+class TestTopographyArduPilotCase(TestTopographyCase):
+
+    EXPECTED_TOPICS = (
+        "/camera/camera_info",
+        "/camera/image_raw",
+        "/gisnav/bbox_node/fov/bounding_box",
+        "/gisnav/gis_node/geotransform",
+        "/gisnav/gis_node/orthoimage",
+        "/gisnav/transform_node/image",
+        "/mavros/gimbal_control/device/attitude_status",
+        "/mavros/global_position/global",
+        "/mavros/local_position/pose",
+        "/mavros/time_reference",
+        "/parameter_events",
+        "/rosout",
+        "/tf",
+        "/tf_static",
+    )
+    """Names of topics that should be found when running the launch configuration"""
+
+    EXPECTED_TYPES = (
+        "sensor_msgs/msg/CameraInfo",
+        "sensor_msgs/msg/Image",
+        "geographic_msgs/msg/BoundingBox",
+        "sensor_msgs/msg/PointCloud2",
+        "sensor_msgs/msg/Image",
+        "sensor_msgs/msg/Image",
+        "mavros_msgs/msg/GimbalDeviceAttitudeStatus",
+        "sensor_msgs/msg/NavSatFix",
+        "geometry_msgs/msg/PoseStamped",
+        "sensor_msgs/msg/TimeReference",
+        "rcl_interfaces/msg/ParameterEvent",
+        "rcl_interfaces/msg/Log",
+        "tf2_msgs/msg/TFMessage",
+        "tf2_msgs/msg/TFMessage",
+    )
+    """Types of :py:data:`~EXPECTED_TOPICS` in corresponding order"""

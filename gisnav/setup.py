@@ -113,6 +113,7 @@ setup(
         "requests",
         "setuptools",
         "shapely>=1.8.2",
+        "torch>=2.1.0",
         "OWSLib>=0.25.0",
     ],
     tests_require=["pytest"],

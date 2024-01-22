@@ -480,21 +480,26 @@ ____________________________________________________
             `en.wikipedia.org/wiki/Digital_elevation_model
             <https://en.wikipedia.org/wiki/Digital_elevation_model>`_
 
-    ENU
-        East-North-Up coordinate system
-
-        .. note::
-            Up means in the direction of zenith.
-
     EKF
         Extended Kalman Filter
 
         .. seealso::
             :term:`Navigation filter`
 
+    ENU
+        East-North-Up coordinate system
+
+        .. note::
+            Up means in the direction of zenith.
+
+    EOL
+        End-of-life, e.g. in context of ROS distributions that are no longer
+        officially supported.
+
     FCU
     FMU
-        Flight Control Unit / Flight Management Unit
+        Flight Control Unit / Flight Management Unit. For example,
+        :term:`Pixhawk`.
 
     FOSS
         Free and Open Source Software

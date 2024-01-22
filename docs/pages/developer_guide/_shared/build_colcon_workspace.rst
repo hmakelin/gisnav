@@ -11,7 +11,6 @@
             source install/setup.bash
 
     .. tab-item:: GISNav only
-        :selected:
 
         .. code-block:: bash
             :caption: Build GISNav package

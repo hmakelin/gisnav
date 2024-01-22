@@ -13,7 +13,6 @@
               COMPOSE_PROJECT_NAME=gisnav
 
       .. tab-item:: Current session
-          :selected:
 
           .. code-block:: bash
               :caption: Set ``COMPOSE_PROJECT_NAME`` environment variable
@@ -21,7 +20,6 @@
               export COMPOSE_PROJECT_NAME=gisnav
 
       .. tab-item:: Persistent
-          :selected:
 
           .. code-block:: bash
               :caption: Set ``COMPOSE_PROJECT_NAME`` environment variable

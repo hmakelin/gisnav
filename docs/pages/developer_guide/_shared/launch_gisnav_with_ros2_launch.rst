@@ -10,7 +10,6 @@
             ros2 launch gisnav px4.dev.launch.py
 
     .. tab-item:: ArduPilot
-        :selected:
 
         .. code-block:: bash
             :caption: Launch development configuration for ArduPilot

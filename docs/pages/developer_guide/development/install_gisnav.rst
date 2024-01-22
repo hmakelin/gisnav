@@ -35,6 +35,11 @@ Install GISNav system dependencies with the following commands:
     rosdep update
     rosdep install --from-paths . -y -r --ignore-src
 
+.. note::
+    If you want to use a ROS distribution that has reached end-of-life (EOL)
+    like Foxy, you can add the ``--include-eol-distros`` option to
+    ``rosdep update``.
+
 Install Python dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

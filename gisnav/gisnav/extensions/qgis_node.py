@@ -1,10 +1,10 @@
-"""This module contains a :term:`ROS 2` node for interacting with an in-memory
-PostgreSQL database. The node enables real-time data visualization in QGIS
-by subscribing to specific GISNav :term:`core` output messages and updating the
-database accordingly.
+"""This module contains a :term:`ROS 2` node for interacting with a PostgreSQL
+database. The node enables real-time data visualization in QGIS by subscribing
+to specific GISNav :term:`core` output messages and updating the database
+accordingly.
 
-This node enables real-time visualization of data in QGIS without the need for
-file I/O, aiding in development and debugging.
+This node enables real-time visualization of data in QGIS, aiding in
+development and debugging.
 
 .. todo::
     Currently SensorGps message (PX4) only (implement GPSINPUT to support

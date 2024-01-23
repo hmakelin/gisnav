@@ -35,16 +35,32 @@ from .core import BBoxNode, GISNode, PoseNode, TransformNode
 
 try:
     from .extensions.qgis_node import QGISNode
+
+
+    def run_qgis_node():
+        """Spins up a :class:`.QGISNode`"""
+        _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)
+
 except ModuleNotFoundError as e:
     print(f"Could not import QGISNode because a module was not found: {e}")
 
 try:
     from .extensions.mock_gps_node import MockGPSNode
+
+    def run_mock_gps_node():
+        """Spins up a :class:`.MockGPSNode`"""
+        _run(MockGPSNode, MOCK_GPS_NODE_NAME, **_rclpy_node_kwargs)
+
 except ModuleNotFoundError as e:
     print(f"Could not import MockGPSNode because a module was not found: {e}")
 
 try:
     from .extensions.rviz_node import RVizNode
+
+    def run_rviz_node():
+        """Spins up a :class:`.RVizNode`"""
+        _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
+
 except ModuleNotFoundError as e:
     print(f"Could not import RVizNode because a module was not found: {e}")
 
@@ -110,18 +126,3 @@ def run_transform_node():
 def run_pose_node():
     """Spins up a :class:`.PoseNode`"""
     _run(PoseNode, POSE_NODE_NAME, **_rclpy_node_kwargs)
-
-
-def run_mock_gps_node():
-    """Spins up a :class:`.MockGPSNode`"""
-    _run(MockGPSNode, MOCK_GPS_NODE_NAME, **_rclpy_node_kwargs)
-
-
-def run_rviz_node():
-    """Spins up a :class:`.RVizNode`"""
-    _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
-
-
-def run_qgis_node():
-    """Spins up a :class:`.QGISNode`"""
-    _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)

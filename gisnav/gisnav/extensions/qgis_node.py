@@ -6,6 +6,9 @@ accordingly.
 This node enables real-time visualization of data in QGIS, aiding in
 development and debugging.
 
+.. note::
+    This node depends on :class:`.MockGPSNode`.
+
 .. todo::
     Currently SensorGps message (PX4) only (implement GPSINPUT to support
     ArduPilot)

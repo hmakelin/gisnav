@@ -1,5 +1,5 @@
-* You must either build the ``gisnav`` Docker image from local sources, or pull
-  it from the GitHub Container Registry (GHCR):
+* You must have either built the ``gisnav`` Docker image from local sources, or
+  pulled it it from the container registry:
 
   .. tab-set::
 

@@ -3,10 +3,8 @@ This module contains a :term:`ROS 2` node for publishing messages to
 :term:`RViz`. The node simplifies data visualization from across different
 parts of the :term:`core` system, aiding development and debugging.
 
-The below graph depicts how :class:`.RVizNode` publishes the :term:`vehicle` and
-:term:`ground track` :term:`path` that can be susbcribed to and visualized by
-:term:`RViz`, making it easier to see where GISNav thinks the vehicle is compared
-to where the vehicle :term:`navigation filter` thinks it is:
+.. todo::
+    Update this node after redesign - currently does not work
 """
 from collections import deque
 from typing import Final, Optional

@@ -521,6 +521,9 @@ ____________________________________________________
     GCS
         :term:`Ground Control Station`
 
+    GHCR
+        GitHub Container Registry
+
     GIS
         Geographic Information System
 

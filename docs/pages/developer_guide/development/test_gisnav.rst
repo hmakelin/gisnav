@@ -46,6 +46,7 @@ directory on all files, not just the ones staged for commit:
         .. code-block:: bash
             :caption: Run static analysis
 
+            cd ~/colcon_ws/src/gisnav/docker
             docker compose -p gisnav run gisnav make test-static
 
 Launch tests
@@ -73,6 +74,7 @@ the nodes, like a node not starting properly or crashing soon after startup.
         .. code-block:: bash
             :caption: Run launch tests
 
+            cd ~/colcon_ws/src/gisnav/docker
             docker compose -p gisnav run gisnav make test-launch
 
 You can also try running only specific launch tests with commands like below:

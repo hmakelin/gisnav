@@ -36,7 +36,6 @@ from .core import BBoxNode, GISNode, PoseNode, TransformNode
 try:
     from .extensions.qgis_node import QGISNode
 
-
     def run_qgis_node():
         """Spins up a :class:`.QGISNode`"""
         _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)

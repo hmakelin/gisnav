@@ -32,9 +32,21 @@ from .constants import (
     TRANSFORM_NODE_NAME,
 )
 from .core import BBoxNode, GISNode, PoseNode, TransformNode
-from .extensions.mock_gps_node import MockGPSNode
-from .extensions.qgis_node import QGISNode
-from .extensions.rviz_node import RVizNode
+
+try:
+    from .extensions.qgis_node import QGISNode
+except ModuleNotFoundError as e:
+    print(f"Could not import QGISNode because a module was not found: {e}")
+
+try:
+    from .extensions.mock_gps_node import MockGPSNode
+except ModuleNotFoundError as e:
+    print(f"Could not import MockGPSNode because a module was not found: {e}")
+
+try:
+    from .extensions.rviz_node import RVizNode
+except ModuleNotFoundError as e:
+    print(f"Could not import RVizNode because a module was not found: {e}")
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):

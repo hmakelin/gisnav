@@ -115,6 +115,7 @@ setup(
         "shapely>=1.8.2",
         "torch>=2.1.0",
         "OWSLib>=0.25.0",
+        "kornia==0.6.10",
     ],
     tests_require=["pytest"],
     extras_require={

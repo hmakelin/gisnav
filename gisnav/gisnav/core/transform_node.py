@@ -94,6 +94,10 @@ class TransformNode(Node):
         self.camera_info
         self.image
 
+        # setup publisher to pass launch test without image callback being
+        # triggered
+        self.pnp_image
+
         # Initialize the transform broadcaster and listener
         self.broadcaster = TransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()

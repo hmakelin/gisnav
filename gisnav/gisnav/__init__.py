@@ -21,16 +21,47 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 
-from .core import CVNode, GISNode
-from .extensions.mock_gps_node import MockGPSNode
-from .extensions.rviz_node import RVizNode
-from .static_configuration import (
-    CV_NODE_NAME,
+from .constants import (
+    BBOX_NODE_NAME,
     GIS_NODE_NAME,
     MOCK_GPS_NODE_NAME,
+    POSE_NODE_NAME,
+    QGIS_NODE_NAME,
     ROS_NAMESPACE,
     RVIZ_NODE_NAME,
+    TRANSFORM_NODE_NAME,
 )
+from .core import BBoxNode, GISNode, PoseNode, TransformNode
+
+try:
+    from .extensions.qgis_node import QGISNode
+
+    def run_qgis_node():
+        """Spins up a :class:`.QGISNode`"""
+        _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)
+
+except ModuleNotFoundError as e:
+    print(f"Could not import QGISNode because a module was not found: {e}")
+
+try:
+    from .extensions.mock_gps_node import MockGPSNode
+
+    def run_mock_gps_node():
+        """Spins up a :class:`.MockGPSNode`"""
+        _run(MockGPSNode, MOCK_GPS_NODE_NAME, **_rclpy_node_kwargs)
+
+except ModuleNotFoundError as e:
+    print(f"Could not import MockGPSNode because a module was not found: {e}")
+
+try:
+    from .extensions.rviz_node import RVizNode
+
+    def run_rviz_node():
+        """Spins up a :class:`.RVizNode`"""
+        _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
+
+except ModuleNotFoundError as e:
+    print(f"Could not import RVizNode because a module was not found: {e}")
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -76,21 +107,21 @@ _rclpy_node_kwargs = {
 }
 
 
+def run_bbox_node():
+    """Spins up a :class:`.BBoxNode`"""
+    _run(BBoxNode, BBOX_NODE_NAME, **_rclpy_node_kwargs)
+
+
 def run_gis_node():
     """Spins up a :class:`.GISNode`"""
     _run(GISNode, GIS_NODE_NAME, **_rclpy_node_kwargs)
 
 
-def run_cv_node():
-    """Spins up a :class:`.CVNode`"""
-    _run(CVNode, CV_NODE_NAME, **_rclpy_node_kwargs)
+def run_transform_node():
+    """Spins up a :class:`.TransformNode`"""
+    _run(TransformNode, TRANSFORM_NODE_NAME, **_rclpy_node_kwargs)
 
 
-def run_mock_gps_node():
-    """Spins up a :class:`.MockGPSNode`"""
-    _run(MockGPSNode, MOCK_GPS_NODE_NAME, **_rclpy_node_kwargs)
-
-
-def run_rviz_node():
-    """Spins up a :class:`.RVizNode`"""
-    _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
+def run_pose_node():
+    """Spins up a :class:`.PoseNode`"""
+    _run(PoseNode, POSE_NODE_NAME, **_rclpy_node_kwargs)

@@ -1,11 +1,8 @@
-"""Package containing GISNav :term:`core` :term:`ROS` nodes
+"""Package containing GISNav :term:`core` :term:`ROS` nodes"""
 
-:class:`.CVNode` subscribes to :class:`.GISNode` published topics, so the
-relative :term:`topic` names are defined here in the package ``__init__`` module
-and made available to each node contained in therein.
-"""
-
-from .cv_node import CVNode
+from .bbox_node import BBoxNode
 from .gis_node import GISNode
+from .pose_node import PoseNode
+from .transform_node import TransformNode
 
-__all__ = ["CVNode", "GISNode"]
+__all__ = ["BBoxNode", "TransformNode", "PoseNode", "GISNode"]

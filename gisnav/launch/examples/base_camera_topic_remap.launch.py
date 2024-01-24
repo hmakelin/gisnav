@@ -1,17 +1,12 @@
-"""Launches GISNav's autopilot agnostic nodes
-
-The :class:`.CVNode`,  :class:`.BBoxNode`, and :class:`.MapNode`
-nodes are autopilot agnostic and are launched from a shared description
-defined in this file.
-"""
+"""Launches GISNav :term:`core` nodes"""
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription  # type: ignore
 from launch_ros.actions import Node
 
-from gisnav.data import PackageData
-from gisnav.nodes.base.camera_subscriber_node import CameraSubscriberNode
+from gisnav._data import PackageData
+from gisnav.core.constants import ROS_CAMERA_INFO_TOPIC, ROS_IMAGE_TOPIC
 
 
 def generate_launch_description():
@@ -25,9 +20,23 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="map_node",
-            executable="map_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/map_node.yaml")],
+            name="gis_node",
+            executable="gis_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/gis_node.yaml")],
+        )
+    )
+    ld.add_action(
+        Node(
+            package="gisnav",
+            name="transform_node",
+            executable="transform_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/transform_node.yaml")
+            ],
+            remappings=[
+                (ROS_IMAGE_TOPIC, "image"),
+                (ROS_CAMERA_INFO_TOPIC, "camera_info"),
+            ],
         )
     )
     ld.add_action(
@@ -43,16 +52,10 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="gisnav",
-            name="pose_estimation_node",
-            executable="pose_estimation_node",
+            name="pose_node",
+            executable="pose_node",
             parameters=[
-                os.path.join(
-                    package_share_dir, "launch/params/pose_estimation_node.yaml"
-                )
-            ],
-            remappings=[
-                (CameraSubscriberNode.ROS_IMAGE_TOPIC, "image"),
-                (CameraSubscriberNode.ROS_CAMERA_INFO_TOPIC, "camera_info"),
+                os.path.join(package_share_dir, "launch/params/pose_node.yaml")
             ],
         )
     )

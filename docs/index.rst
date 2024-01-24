@@ -1,32 +1,28 @@
 #####################################
-GISNav Developer Documentation
+GISNav developer documentation
 #####################################
 Welcome to GISNav's developer documentation!
 
-.. card:: Get Started
+.. card:: Get started
     :link: pages/get_started.html
 
     A quick demonstration of GNSS-free visual navigation with GISNav
 
-.. card:: Developer Guide
+.. card:: Developer guide
     :link: pages/developer_guide/index.html
 
     Instructions on how to integrate GISNav with your own project and how to extend its functionality
 
-.. card:: API Documentation
+.. card:: API documentation
     :link: pages/api_documentation/index.html
 
     GISNav public API reference for developers
 
-.. card:: Contribute
-    :link: pages/contribute.html
-
-    Contributions to GISNav are welcome! Please see this page for guidance
 
 Generate documentation
 _________________________________________
-To build this Sphinx documentation yourself, first install the :ref:`GISNav ROS package` including the
-:ref:`Development dependencies` and then run:
+To build this Sphinx documentation yourself, first :ref:`Install locally` including
+the development dependencies and then run:
 
 .. code-block:: bash
     :caption: Build Sphinx documentation
@@ -52,5 +48,4 @@ The HTML documentation will then appear in the ``~/colcon_ws/src/gisnav/docs/_bu
    pages/get_started
    pages/developer_guide/index
    pages/api_documentation/index
-   pages/contribute
    pages/glossary

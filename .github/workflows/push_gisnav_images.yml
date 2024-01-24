@@ -46,4 +46,3 @@ jobs:
         run: |
           cd colcon_ws/src/gisnav
           docker buildx build --build-arg ROS_VERSION=humble --push --platform linux/amd64,linux/arm64 -f docker/gisnav/Dockerfile -t ghcr.io/hmakelin/gisnav:${TAG:-latest} .
-

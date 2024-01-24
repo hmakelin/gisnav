@@ -1,11 +1,71 @@
-import os
-import sys
+from __future__ import annotations
 
-from gisnav._data import PackageData
+import datetime
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from typing import Optional, Union
+from xml.etree import ElementTree
 
 sys.path.insert(0, os.path.abspath("../gisnav"))
 
 # -- Version information -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PackageData:
+    """Stores data parsed from package.xml (not comprehensive)"""
+
+    package_name: str
+    version: str
+    description: Optional[str]
+    author: Optional[str]
+    author_email: Optional[str]
+    maintainer: Optional[str]
+    maintainer_email: Optional[str]
+    license_name: Optional[str]
+
+    @staticmethod
+    def require_not_none(text: Optional[Union[str, ElementTree.Element]]):
+        """Raises ValueError if input is not a string but None"""
+        if text is None:
+            raise ValueError("Expected not None")
+        return text
+
+    @classmethod
+    def parse_package_data(cls, package_file: str) -> PackageData:
+        """Parses package.xml in current folder
+
+        :param package_file: Absolute path to package.xml file
+        :return: Parsed package data
+        :raise FileNotFoundError: If package.xml file is not found
+        """
+        if os.path.isfile(package_file):
+            tree = ElementTree.parse(package_file)
+            root = tree.getroot()
+
+            author = root.find("author")
+            maintainer = root.find("maintainer")
+            kwargs = {
+                "package_name": cls.require_not_none(root.findtext("name")),
+                "version": cls.require_not_none(root.findtext("version")),
+                "description": root.findtext("description"),
+                "author": root.findtext("author"),
+                "author_email": author.attrib.get("email")
+                if author is not None
+                else None,
+                "maintainer": root.findtext("maintainer"),
+                "maintainer_email": maintainer.attrib.get("email")
+                if maintainer is not None
+                else None,
+                "license_name": root.findtext("license"),
+            }
+            package_data = PackageData(**kwargs)
+            return package_data
+        else:
+            raise FileNotFoundError(f"Could not find package file at {package_file}.")
+
 
 package_data = PackageData.parse_package_data(os.path.abspath("../gisnav/package.xml"))
 
@@ -32,6 +92,7 @@ extensions = [
     "sphinxcontrib.video",
     "sphinxcontrib.mermaid",
     "sphinx_copybutton",
+    "sphinx_substitution_extensions",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -43,6 +104,10 @@ templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 todo_include_todos = True
+
+language = "en"
+
+html_last_updated_fmt = "%b %d, %Y"
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -102,7 +167,38 @@ mermaid_init_js = """
     });
 """
 
+# -- Version information -----------------------------------------------------
+
 # Make version number accessible in .rst files
 # rst_epilog = f'.. |version| replace:: **v{package_data.version}**'
 version = package_data.version
 release = version
+
+# Add git tag to release
+try:
+    release = (
+        subprocess.check_output(["git", "describe", "--tags"]).strip().decode("utf-8")
+    )
+except subprocess.CalledProcessError:
+    raise
+
+ros_version = "humble"
+# Define dynamic content (substitutions) here
+# This should reduce documentation maintenance burden
+# Substitutions must be in prolog (not epilot) - otherwise
+# Sphinx-Substition-Extensions might not work (substitutions inside directives)
+rst_prolog = f"""
+.. |release| replace:: {release}
+.. |version| replace:: {version}
+.. |vversion| replace:: {'v' + version}
+.. |ros_version| replace:: {ros_version}
+.. |ros_version_capitalized| replace:: Humble
+.. |ROS 2 install instructions| replace:: ROS 2 install instructions
+.. _ROS 2 install instructions: https://docs.ros.org/en/{ros_version}/Installation.html
+"""
+
+rst_epilog = f"""
+Updated on {datetime.datetime.today().strftime("%b %d, %Y")}
+
+GISNav release: |release|
+"""

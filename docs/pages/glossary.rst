@@ -17,6 +17,7 @@ Some terms may have multiple definitions (denoted by bullet points) and the
 correct alternative should be easily inferred from the context they are used in.
 
 .. glossary::
+    :sorted:
 
     Altitude
         Altitude of :term:`vehicle` in any vertical datum or reference level.
@@ -42,7 +43,8 @@ correct alternative should be easily inferred from the context they are used in.
         estimation.
 
         .. seealso:: Learn more
-            https://wiki.openstreetmap.org/wiki/Bounding_Box
+            `wiki.openstreetmap.org/wiki/Bounding_Box
+            <https://wiki.openstreetmap.org/wiki/Bounding_Box>`_
 
     Bucket
         An :term:`AWS` S3 bucket
@@ -64,8 +66,8 @@ correct alternative should be easily inferred from the context they are used in.
         Deployment or implementation of GISNav which is enough to implement
         core functionality needed by an :term:`extension`. GISNav is intended
         to be extended by adding more application or integration specific
-        :term:`nodes` instead of adding new features to :term:`core` nodes.
-        Consists of :class:`.GISNode` and :class:`.CVNode`.
+        :term:`nodes <Node>` instead of adding new features to :term:`core`
+        nodes.
 
         .. seealso::
             :ref:`Core data flow graph`
@@ -124,14 +126,16 @@ correct alternative should be easily inferred from the context they are used in.
 
     GetFeatureInfo
         A :term:`WMS` operation for requesting non-:term:`raster` features from
-        :term:`GIS` servers.
+        :term:`GIS` servers. Used in earlier versions of GISNav to fetch DEM
+        values for specific points but no longer used.
 
     GetMap
         A :term:`WMS` operation for requesting :term:`raster` images from
         :term:`GIS` servers.
 
         .. seealso:: Learn more
-            https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
+            `opengeospatial.github.io/e-learning/wms/text/operations.html#getmap
+            <https://opengeospatial.github.io/e-learning/wms/text/operations.html#getmap>`_
 
     Absolute position
     Global position
@@ -188,9 +192,12 @@ correct alternative should be easily inferred from the context they are used in.
             :term:`Absolute position`, :term:`Global position`
 
     Map
+        One of the :term:`tf2` ``frame_id``\s used by GISNav:
+        :py:data:`.FrameID`
+
         .. todo::
-            Available (not defined here). For terms that could all be
-            considered "maps", see "orthoimage", "orthophoto", "raster",
+            Could be used more generally as a concept. For terms that could all
+            be considered "maps", see "orthoimage", "orthophoto", "raster",
             "reference", "DEM", and "stack".
 
     Message
@@ -249,9 +256,15 @@ correct alternative should be easily inferred from the context they are used in.
         (e.g. running the :term:`GCS`) that is not carried :term:`onboard`
         and does not draw power from the :term:`vehicle` battery.
 
+        .. todo::
+            Change offboard to mean off FCU, not off vehicle?
+
     Onboard
         Anything carried by the :term:`vehicle` that would draw power from its
         battery, including the :term:`FMU` and the :term:`companion computer`.
+
+        .. todo::
+            Change onboard to mean on FCU, not on vehicle?
 
     Orientation
         :term:`Vehicle` or :term:`camera` orientation (attitude) in 3D space,
@@ -274,10 +287,11 @@ correct alternative should be easily inferred from the context they are used in.
           system.
 
         .. seealso:: Learn more
-             https://en.wikipedia.org/wiki/Orthophoto
+             `en.wikipedia.org/wiki/Orthophoto
+             <https://en.wikipedia.org/wiki/Orthophoto>`_
 
         .. todo::
-            The jargon here is still a bit fuzzy: sometimes the aligned and
+            The jargon here is still a bit loose: sometimes the aligned and
             stacked :term:`DEM` :term:`raster` is included in the term
             "orthoimage", and the term "orthophoto" is used for the
             high-resolution image only.
@@ -308,7 +322,8 @@ correct alternative should be easily inferred from the context they are used in.
         :term:`PnP` is used as an acronym.
 
         .. seealso:: Learn more
-            https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+            `docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+            <https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_
 
     Pose
         A spatial pose in three dimensions including :term:`position` and
@@ -336,7 +351,8 @@ correct alternative should be easily inferred from the context they are used in.
         not e.g. for an :term:`image` from the :term:`camera`.
 
         .. seealso:: Learn more
-            https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
+            `carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best
+            <https://carto.com/blog/raster-vs-vector-whats-the-difference-which-is-best>`_
 
     Reference
     Reference image
@@ -367,14 +383,11 @@ correct alternative should be easily inferred from the context they are used in.
     Stacked
     Stacked image
     Stacked raster
-        The :term:`orthophoto` stacked together with its aligned :term:`DEM`
-        :term:`raster`, representing a "3D orthoimage".
-
-        .. todo::
-            Consider dropping this terminology completely and fixing the orthoimage
-            and orthophoto terms instead. Alternatively, could be extended by
-            stacking all kinds of layers from GIS server besides just orthoimagery
-            and DEMs.
+        * The :term:`orthophoto` stacked together with its aligned :term:`DEM`
+          :term:`raster`, representing a "3D orthoimage".
+        * The rotated 8-bit grayscale :term:`query` image, 8-bit grayscale :term:`reference` image,
+          and the 16-bit reference DEM stacked together in a single 4-channel (alpha channel) image.
+          Most likely in one of ``CvBridge`` supported (``rgb8`` or ``bgra8``) formats.
 
     Subscribe
     Subscriber
@@ -412,6 +425,7 @@ Abbreviations
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     BBox
         :term:`Bounding box`
@@ -435,6 +449,7 @@ Acronyms
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     AGL
         :term:`Altitude` or :term:`Elevation` Above Ground Level
@@ -462,13 +477,8 @@ ____________________________________________________
         Digital Elevation Model
 
         .. seealso::
-            https://en.wikipedia.org/wiki/Digital_elevation_model
-
-    ENU
-        East-North-Up coordinate system
-
-        .. note::
-            Up means in the direction of zenith.
+            `en.wikipedia.org/wiki/Digital_elevation_model
+            <https://en.wikipedia.org/wiki/Digital_elevation_model>`_
 
     EKF
         Extended Kalman Filter
@@ -476,15 +486,27 @@ ____________________________________________________
         .. seealso::
             :term:`Navigation filter`
 
+    ENU
+        East-North-Up coordinate system
+
+        .. note::
+            Up means in the direction of zenith.
+
+    EOL
+        End-of-life, e.g. in context of ROS distributions that are no longer
+        officially supported.
+
     FCU
     FMU
-        Flight Control Unit / Flight Management Unit
+        Flight Control Unit / Flight Management Unit. For example,
+        :term:`Pixhawk`.
 
     FOSS
         Free and Open Source Software
 
         .. seealso::
-            https://en.wikipedia.org/wiki/Free_and_open-source_software
+            `en.wikipedia.org/wiki/Free_and_open-source_software
+            <https://en.wikipedia.org/wiki/Free_and_open-source_software>`_
 
     FoV
     FOV
@@ -498,6 +520,9 @@ ____________________________________________________
 
     GCS
         :term:`Ground Control Station`
+
+    GHCR
+        GitHub Container Registry
 
     GIS
         Geographic Information System
@@ -526,7 +551,7 @@ ____________________________________________________
         National Agriculture Imagery Program
 
         .. seealso::
-            https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip
+            `USGS NAIP website <https://www.usgs.gov/centers/eros/science/usgs-eros-archive-aerial-photography-national-agriculture-imagery-program-naip>`_
 
     NED
         North-East-Down coordinate system
@@ -536,6 +561,9 @@ ____________________________________________________
 
     OGC
         Open Geospatial Consortium: `ogc.org <https://www.ogc.org/>`_
+
+    OS
+        Operating System
 
     OSM
         :term:`OpenStreetMap`
@@ -559,11 +587,26 @@ ____________________________________________________
     SITL
         Software In The Loop simulation
 
+    SQL
+        Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`_
+
+    ToU
+    TOU
+        Terms of Use
+
+    UDP
+        User Datagram Protocol: `en.wikipedia.org/wiki/User_Datagram_Protocol
+        <https://en.wikipedia.org/wiki/User_Datagram_Protocol>`
+
     USGS
         United States Geological Survey
 
     VNC
         Virtual Network Computing
+
+    WGS
+    WGS 84
+        A World Geodetic System coordinate system: `en.wikipedia.org/wiki/World_Geodetic_System <https://en.wikipedia.org/wiki/World_Geodetic_System>`_
 
     WMS
     WMTS
@@ -577,7 +620,6 @@ ____________________________________________________
 
             * https://www.ogc.org/standards/wmts
 
-
 Proper names
 ____________________________________________________
 
@@ -586,12 +628,16 @@ used in the project) but should list many of the main ones, especially if they
 relate to external interfaces.
 
 .. glossary::
+    :sorted:
 
     ArduPilot
         ArduPilot open source autopilot: `ardupilot.org <https://ardupilot.org/>`_
 
     colcon
         A build automation tool used by :term:`ROS 2`: `colcon.readthedocs.io/en/released/ <https://colcon.readthedocs.io/en/released/>`_
+
+    CUDA
+        NVIDIA parallel computing platform: `developer.nvidia.com/cuda-zone <https://developer.nvidia.com/cuda-zone>`_
 
     DDS
     Data Distribution Service
@@ -643,6 +689,7 @@ relate to external interfaces.
     MAVSDK
         :term:`MAVLink` software development kit: `mavsdk.mavlink.io/main/en/index.html <https://mavsdk.mavlink.io/main/en/index.html>`_
 
+    micro-ROS-agent
     micro-ROS Agent
         A :term:`ROS` package that wraps the Micro XRCE-DDS Agent :term:`middleware`:
         `github.com/micro-ROS/micro-ROS-Agent <https://github.com/micro-ROS/micro-ROS-Agent>`_
@@ -656,6 +703,12 @@ relate to external interfaces.
     Pixhawk
         Hardware standard for open source autopilots: `pixhawk.org <https://pixhawk.org/>`_
 
+    PostGIS
+        :term:`GIS` extension for :term:`Postgres`: `postgis.net <https://postgis.net/>`_
+
+    Postgres
+        An :term:`SQL` server: `postgresql.org <https://www.postgresql.org/>`_
+
     PX4
         PX4 Autopilot: `px4.io <https://px4.io/>`_
 
@@ -664,6 +717,9 @@ relate to external interfaces.
 
     QEMU
         A :term:`FOSS` full-system emulator: `qemu.org <https://www.qemu.org/>`_
+
+    QGIS
+        A :term:`GIS` client (and server): `qgis.org/en/site/ <https://qgis.org/en/site/>`_
 
     QGroundControl
         :term:`GCS` software: `qgroundcontrol.com <http://qgroundcontrol.com/>`_
@@ -675,11 +731,21 @@ relate to external interfaces.
     RViz
         :term:`ROS` 3D visualization software: https://github.com/ros2/rviz
 
+    tf2
+        :term:`ROS 2` transformations library: `wiki.ros.org/tf2 <http://wiki.ros.org/tf2>`_
+
     Torch
         An open source machine learning software library: `torch.ch <http://torch.ch/>`_
 
+    Ubuntu
+        A Linux distribution, only supported :term:`OS` for GISNav:
+        `https://ubuntu.com/ <https://ubuntu.com/>`_
+
     VRT
         :term:`GDAL` Virtual Format (file format)
+
+    X Server
+        Window system that comes with :term:`Ubuntu`: `www.x.org/wiki/ <https://www.x.org/wiki/>`_
 
     YAML
         A data serialization language: `yaml.org <https://yaml.org/>`_
@@ -688,6 +754,7 @@ Other
 ____________________________________________________
 
 .. glossary::
+    :sorted:
 
     KSQL
         ICAO airport code for San Carlos Airport in California (used as simulation

@@ -7,7 +7,7 @@ Visualization Manager:
       Color: 160; 160; 164
       Enabled: true
       Line Style:
-        Line Width: 0.03
+        Line Width: 0.029999999329447746
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -19,80 +19,37 @@ Visualization Manager:
       Plane Cell Count: 80
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 25; 255; 0
+    - Class: rviz_default_plugins/TF
       Enabled: true
-      Head Diameter: 0.3
-      Head Length: 0.2
-      Line Style: Lines
-      Line Width: 0.03
-      Name: GPS Path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 25; 255; 0
-      Pose Style: Arrows
-      Shaft Diameter: 0.1
-      Shaft Length: 1.0
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /gisnav/rviz_node/vehicle/path
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 0; 25; 255
-      Enabled: true
-      Head Diameter: 0.3
-      Head Length: 0.2
-      Line Style: Lines
-      Line Width: 0.03
-      Name: Camera Path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 0; 25; 255
-      Pose Style: Arrows
-      Shaft Diameter: 0.1
-      Shaft Length: 1.0
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /gisnav/rviz_node/camera/path
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 25; 255; 0
-      Enabled: true
-      Head Diameter: 0.3
-      Head Length: 0.2
-      Line Style: Lines
-      Line Width: 0.03
-      Name: GPS Path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 25; 255; 0
-      Pose Style: Arrows
-      Shaft Diameter: 0.1
-      Shaft Length: 1.0
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /gisnav/rviz_node/vehicle/path
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        base_link:
+          Value: true
+        gimbal:
+          Value: true
+        map:
+          Value: true
+        ltp:
+          Value: true
+        query_image:
+          Value: true
+        reference_image:
+          Value: true
+        wgs_84:
+          Value: true
+      Marker Scale: 100
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        map:
+          base_link:
+            {}
+          camera:
+            {}
+      Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
@@ -109,6 +66,9 @@ Visualization Manager:
     - Class: rviz_default_plugins/Measure
       Line color: 128; 128; 0
     - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.06853891909122467
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -134,41 +94,3 @@ Visualization Manager:
     Current:
       Class: rviz_default_plugins/TF
   Value: true
-  Views:
-    Current:
-      Class: rviz_default_plugins/Orbit
-      Distance: 300
-      Enable Stereo Rendering:
-        Stereo Eye Separation: 0.05999999865889549
-        Stereo Focal Distance: 1
-        Swap Stereo Eyes: false
-        Value: false
-      Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
-      Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05000000074505806
-      Invert Z Axis: false
-      Name: Current View
-      Near Clip Distance: 0.009999999776482582
-      Pitch: 0.785398006439209
-      Target Frame: <Fixed Frame>
-      Value: Orbit (rviz)
-      Yaw: 0.785398006439209
-    Saved: ~
-Window Geometry:
-  Displays:
-    collapsed: false
-  Height: 846
-  Hide Left Dock: false
-  Hide Right Dock: false
-  Selection:
-    collapsed: false
-  Tool Properties:
-    collapsed: false
-  Views:
-    collapsed: false
-  Width: 1200
-  X: 1513
-  Y: 111

@@ -25,10 +25,10 @@ jobs:
 
       - name: Install node
         run: |
-          apt-get update
-          apt-get -y install curl
+          sudo apt-get update
+          sudo apt-get -y install curl
           curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          apt-get install -y nodejs
+          sudo apt-get install -y nodejs
 
       - name: Setup pages
         uses: actions/configure-pages@v1

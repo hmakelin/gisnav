@@ -13,14 +13,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
-    container: ghcr.io/${{ github.repository }}:latest
     defaults:
       run:
         shell: bash
     steps:
       - name: Build Sphinx docs
         run: |
-          make docs
+          mkdir -p docs/_build
+          docker run ghcr.io/${{ github.repository }}:latest make docs
+          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/_build docs
 
       - name: Install node
         run: |

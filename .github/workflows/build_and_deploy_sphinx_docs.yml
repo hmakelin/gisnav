@@ -40,7 +40,7 @@ jobs:
       #    ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
 
       - name: Upload pages artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v2
         with:
           path: 'docs/_build/html/'
 
@@ -60,4 +60,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@main
+        uses: actions/deploy-pages@v3

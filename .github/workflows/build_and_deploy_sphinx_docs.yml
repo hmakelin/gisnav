@@ -33,11 +33,11 @@ jobs:
       - name: Setup pages
         uses: actions/configure-pages@v1
 
-      - name: Make "Upload pages artifact" step work with containers
-        run: |
-          mkdir -p ${{runner.temp}}
-          mkdir -p /__w/_temp
-          ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
+      #- name: Make "Upload pages artifact" step work with containers
+      #  run: |
+      #    mkdir -p ${{runner.temp}}
+      #    mkdir -p /__w/_temp
+      #    ln -s ${{runner.temp}}/artifact.tar /__w/_temp/artifact.tar
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v1

@@ -9,23 +9,18 @@ on:
   # Allows running manually from the Actions tab
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
     runs-on: ubuntu-20.04
-    container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+    container: ghcr.io/${{ github.repository }}:latest
     defaults:
       run:
         shell: bash
     steps:
       - name: Build Sphinx docs
         run: |
-          mkdir docs
-          docker run ghcr.io/${{ github.repository }}:latest cd /opt/colcon_ws/src/gisnav && make docs
-          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/_build docs
+          make docs
 
       - name: Install node
         run: |

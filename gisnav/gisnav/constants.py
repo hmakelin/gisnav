@@ -1,4 +1,4 @@
-"""This module contains the static configuration of the :term:`ROS`namespace
+"""This module contains the static configuration of the :term:`ROS` namespace
 and node and topic names
 
 Using this module nodes that talk to each other can refer to a single source

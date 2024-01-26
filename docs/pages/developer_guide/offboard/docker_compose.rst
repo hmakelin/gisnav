@@ -61,6 +61,8 @@ a brief description of their intended use.
 | ``gisnav``          | GISNav :term:`ROS 2` package for demonstration use only. Launches GISNav with the PX4         |
 |                     | configuration by default. Can also be launched for ArduPilot.                                 |
 +---------------------+-----------------------------------------------------------------------------------------------+
+| ``postgres``        | :term:`PostGIS` server for as backend to ``mapserver`` and :class:`.QGISNode`.                |
++---------------------+-----------------------------------------------------------------------------------------------+
 
 External interfaces
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -19,7 +19,7 @@ RUN apt-get update --fix-missing && \
 RUN cd gisnav/gisnav && \
     rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
-    apt-get -y install python3-pip && \
+    apt-get -y install python3-pip libpq-dev && \
     pip install . .[mock_gps_node] .[qgis_node] .[dev]
 
 # TODO: no need to install egm96-5 separately after pygeodesy was refactored out in gisnav-gpu branch?

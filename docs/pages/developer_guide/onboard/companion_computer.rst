@@ -1,6 +1,9 @@
 Jetson Nano SITL
 ____________________________________________________
 
+.. todo::
+    GISNav ``v0.65.0`` now comes with ``arm64`` images. Update section on QEMU.
+
 This page contains instructions on how to to run a GISNav on an :term:`onboard`
 :term:`Jetson Nano` computer while a :term:`SITL` simulation runs on a development
 computer to get a better idea of performance in a real use case.

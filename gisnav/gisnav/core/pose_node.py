@@ -8,7 +8,7 @@ reference images and then solving the resulting :term:`PnP` problem.
     :caption: :class:`.PoseNode` computational graph
 
     graph LR
-        subgraph PnPNode
+        subgraph PoseNode
             pose[gisnav/pose_node/pose]
         end
 
@@ -65,6 +65,11 @@ class PoseNode(Node):
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):
+        """Class initializer
+
+        :param args: Positional arguments to parent :class:`.Node` constructor
+        :param kwargs: Keyword arguments to parent :class:`.Node` constructor
+        """
         super().__init__(*args, **kwargs)
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -193,13 +198,11 @@ class PoseNode(Node):
         callback=_image_cb,
     )
     def image(self) -> Optional[Image]:
-        """term:`Query`, :term:`reference`, and :term:`elevation` image
+        """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
         in a single 4-channel :term:`stack`. The query image is in the first
         channel, the reference image is in the second, and the elevation reference
         is in the last two (sum them together to get a 16-bit elevation reference).
 
-        The header frame_id is a PROJ string that contains the information to
-        project the relative pose into a global pose.
 
         .. note::
             The existing :class:`sensor_msgs.msg.Image` message is repurposed
@@ -217,7 +220,7 @@ class PoseNode(Node):
         """Converts incoming 4-channel image to torch tensors
 
         :param image_quad: A 4-channel image where the first channel is the
-            :term:`Query`, the second channel is the 8-bit
+            :term:`query`, the second channel is the 8-bit
             :term:`elevation reference`, and the last two channels combined
             represent the 16-bit :term:`elevation reference`.
         """

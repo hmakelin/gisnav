@@ -1,6 +1,9 @@
 Pixhawk & Jetson Nano HIL
 ____________________________________________________
 
+.. todo::
+    GISNav ``v0.65.0`` now comes with ``arm64`` images. Update section on QEMU.
+
 This section provides an example on how to run GISNav on a :term:`Jetson Nano`
 in a :term:`PX4` :term:`HIL` simulation on a :term:`Pixhawk` :term:`FMU`. This
 example uses the `NXP FMUK66-E board`_ as an example but any `PX4 supported board`_
@@ -153,7 +156,7 @@ choose ``nxp_fmuk66-e_default`` for this example:
 Deploy offboard services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following steps to deploy the :term:`offboard` servuces are based on the
+The following steps to deploy the :term:`offboard` services are based on the
 official `PX4 HIL simulation instructions`_. The ``px4`` Docker compose service
 has a custom ``iris_hitl`` model and a ``hitl_iris_ksql_airport.world`` Gazebo world
 that we are going to use in this example:

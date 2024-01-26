@@ -14,11 +14,13 @@ RUN apt-get update --fix-missing && \
     chmod +x /entrypoint.sh
 
 # Install GISNav dependencies
+# We install all extended dependencies so that we can do development work like
+# building the full documentation inside the container
 RUN cd gisnav/gisnav && \
     rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     apt-get -y install python3-pip && \
-    pip install . .[mock_gps_node] .[dev]
+    pip install . .[mock_gps_node] .[qgis_node] .[dev]
 
 # TODO: no need to install egm96-5 separately after pygeodesy was refactored out in gisnav-gpu branch?
 # Install GIS related dependencies

@@ -126,8 +126,8 @@ Mock GPS demo
 
 To deploy the mock :term:`GPS` demonstration introduced on the :ref:`Get Started`
 page locally, ensure your development system satisfies all the :ref:`prerequisites
-<Prerequisites>` and then follow the below steps to create, deploy, and shutdown
-the required services.
+<Prerequisites>` and then follow the below steps to create, start, and shutdown
+the required containers.
 
 
 .. code-block:: bash
@@ -145,36 +145,18 @@ the required services.
 
 .. include:: ../_shared/expose_xhost.rst
 
-.. tab-set::
+.. code-block:: bash
+    :caption: Start containers
 
-    .. tab-item:: Foreground
-        :selected:
+    cd ~/colcon_ws/src/gisnav/docker
+    docker compose -p gisnav start \
+        mapserver \
+        micro-ros-agent \
+        mavros \
+        qgc \
+        px4 \
+        gisnav
 
-        .. code-block:: bash
-            :caption: Deploy services
-
-            cd ~/colcon_ws/src/gisnav/docker
-            docker compose -p gisnav up \
-                mapserver \
-                micro-ros-agent \
-                mavros \
-                qgc \
-                px4 \
-                gisnav
-
-    .. tab-item:: Detached
-
-        .. code-block:: bash
-            :caption: Deploy services
-
-            cd ~/colcon_ws/src/gisnav/docker
-            docker compose -p gisnav up -d \
-                mapserver \
-                micro-ros-agent \
-                mavros \
-                qgc \
-                px4 \
-                gisnav
 
 .. include:: ../_shared/docker_compose_shutdown.rst
 
@@ -192,48 +174,29 @@ we do not include the ``gisnav`` service which is assumed to be
     cd ~/colcon_ws/src/gisnav/docker
     docker compose create --build \
         mapserver \
-        torch-serve \
         micro-ros-agent \
         mavros \
         qgc \
         rviz \
-        px4
+        px4 \
+        qgis \
+        postgres
 
 .. include:: ../_shared/expose_xhost.rst
 
-.. tab-set::
+.. code-block:: bash
+    :caption: Start containers
 
-    .. tab-item:: Foreground
-        :selected:
-
-        .. code-block:: bash
-            :caption: Deploy containers
-
-            cd ~/colcon_ws/src/gisnav/docker
-            docker compose up \
-                mapserver \
-                torch-serve \
-                micro-ros-agent \
-                mavros \
-                qgc \
-                rviz \
-                px4
-
-    .. tab-item:: Detached
-
-        .. code-block:: bash
-            :caption: Run demo services
-
-            cd ~/colcon_ws/src/gisnav/docker
-            docker compose up -d \
-                mapserver \
-                torch-serve \
-                micro-ros-agent \
-                mavros \
-                qgc \
-                rviz \
-                px4
-
+    cd ~/colcon_ws/src/gisnav/docker
+    docker compose start \
+        mapserver \
+        micro-ros-agent \
+        mavros \
+        qgc \
+        rviz \
+        px4 \
+        qgis \
+        postgres
 
 After you have your supporting services deployed you would typically
 :ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your

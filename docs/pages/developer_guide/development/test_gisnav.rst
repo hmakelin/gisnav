@@ -111,7 +111,7 @@ SITL tests require a number of supporting services to successfully complete:
 
       cd ~/colcon_ws/src/gisnav/docker
       make build-offboard-sitl-dev-px4
-      make create-offboard-silt-dev-px4
+      make create-offboard-sitl-dev-px4
       make expose-xhost
 
   .. seealso::

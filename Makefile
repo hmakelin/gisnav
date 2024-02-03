@@ -8,6 +8,11 @@ include docker/Makefile
 
 .PHONY: docs
 docs:
-	mkdir -p docs/_build && d2 docs/pages/developer_guide/offboard/_external_interfaces.d2 docs/_build/external_interfaces.html
+	mkdir -p docs/_build && \
+	    d2 --font-regular="docs/_static/fonts/Poppins Regular.ttf" \
+	    --font-bold="docs/_static/fonts/Poppins Medium.ttf" \
+	    --font-italic="docs/_static/fonts/Poppins Regular.ttf" \
+	    docs/pages/developer_guide/offboard/_external_interfaces.d2 \
+	    docs/_build/external_interfaces.html
 	@$(MAKE) -C docs html
 	@cd docs/_build/html && touch .nojekyll  # for GitHub Pages

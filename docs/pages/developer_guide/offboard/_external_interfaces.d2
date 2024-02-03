@@ -1,0 +1,103 @@
+mavlink: gisnav_mavlink {
+  style: {
+    stroke-dash: 3
+    fill: transparent
+  }
+  tooltip: gisnav_mavlink is a Docker bridge network for isolating services that require communication (via mavlink or ROS) with simulation (autopilot) services.
+  qgc: gisnav-qgc-1 {
+    tooltip: Ground control software
+    link: https://github.com/hmakelin/gisnav/blob/master/docker/qgc/Dockerfile
+  }
+  simulation: Simulation services {
+    tooltip: The simulation services contain the autopilot and simulator in one service
+    px4: gisnav-px4-1 {
+      tooltip: PX4 SITL simulation including Gazebo server and client
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/px4/Dockerfile
+    }
+    ardupilot: gisnav-ardupilot-1 {
+      tooltip: ArduPilot SITL simulation including Gazebo server and client\n(support currently broken)
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/ardupilot/Dockerfile
+    }
+  }
+  middleware: Middleware services {
+    tooltip: The middleware services facilitate communication between GISNav and the autopilot
+    mavros: gisnav-mavros-1 {
+      tooltip: MAVROS middleware
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/mavros/Dockerfile
+    }
+    micro-ros-agent: gisnav-micro-ros-agent-1 {
+      tooltip: micro-ROS Agent middleware
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/micro-ros-agent/Dockerfile
+    }
+    gscam: gisnav-gscam-1 {
+      tooltip: GSCam GStreamer-based camera middleware
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/gscam/Dockerfile
+    }
+  }
+  application: Application services {
+    tooltip: The application services have access to both mavlink and gis networks
+    gisnav: gisnav-gisnav-1 {
+      style: {
+        stroke: "#ff4136"
+      }
+      tooltip: GISNav ROS 2 application
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
+    }
+    autoheal: Autoheal {
+      tooltip: Automatically restarts unhealthy containers
+    }
+  }
+  qgc -> simulation.px4: MAVLink
+  # qgc -> ardupilot: MAVLink
+  simulation.px4 -> middleware.mavros: MAVLink
+  simulation.px4 -> middleware.micro-ros-agent: TCP uORB bridge
+  middleware.mavros -> application.gisnav: ROS\n(Fast DDS shared memory)
+  middleware.micro-ros-agent -> application.gisnav: ROS\n(Fast DDS shared memory)
+  middleware.gscam -> application.gisnav: ROS\n(Fast DDS shared memory)
+  simulation.px4 -> middleware.gscam: 5600/UDP
+}
+
+gis: gisnav_gis {
+  style: {
+    stroke-dash: 3
+    fill: transparent
+  }
+  tooltip: gisnav_gis is a Docker bridge network for isolating services that require communication with GIS services.
+  gis: GIS services {
+    tooltip: GIS services serve orthoimagery and DEMs via OGC standard interfaces
+    mapserver: gisnav-mapserver-1 {
+      tooltip: MapServer GIS for serving maps
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/mapserver/Dockerfile
+    }
+    qgis: gisnav-qgis-1 {
+      tooltip: QGIS client for viewing maps
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/qgis/Dockerfile
+    }
+  }
+  postgres: gisnav-postgres-1 {
+    tooltip: PostGIS data back-end for GIS services
+    link: https://github.com/hmakelin/gisnav/blob/master/docker/postgres/Dockerfile
+  }
+  application: Application services {
+    tooltip: The application services have access to both mavlink and gis networks
+    gisnav: gisnav-gisnav-1 {
+      style: {
+        stroke: "#ff4136"
+      }
+      tooltip: GISNav ROS 2 application
+      link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
+    }
+    autoheal: Autoheal {
+      tooltip: Automatically restarts unhealthy containers
+    }
+  }
+  application.gisnav -> gis.mapserver: WMS
+  gis.mapserver -> postgres: TCP
+  gis.qgis -> postgres: TCP
+}
+
+mavlink.application -- gis.application: Access to both networks {
+  style: {
+    bold: true
+  }
+}

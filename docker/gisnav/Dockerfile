@@ -24,7 +24,7 @@ RUN cd gisnav/gisnav && \
 
 # TODO: no need to install egm96-5 separately after pygeodesy was refactored out in gisnav-gpu branch?
 # Install GIS related dependencies
-RUN apt-get -y install software-properties-common python3-pip wget && \
+RUN apt-get -y install software-properties-common python3-pip wget curl && \
     add-apt-repository ppa:ubuntugis/ppa && \
     apt-get update && \
     apt-get -y install gdal-bin libgdal-dev geographiclib-tools && \
@@ -45,6 +45,9 @@ RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
     rosdep install --from-paths . -y -r --ignore-src && \
     cd .. && \
     colcon build --packages-ignore mavros mavros_extras libmavconn
+
+# Install D2 for building diagrams in docs
+RUN curl -fsSL https://d2lang.com/install.sh | sh -s --
 
 # TODO: proper health check - check that public facing topics are publishing
 HEALTHCHECK --interval=10s --timeout=3s \

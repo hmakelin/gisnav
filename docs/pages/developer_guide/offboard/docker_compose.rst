@@ -70,53 +70,8 @@ External interfaces
 The below diagram describes the system architecture through the external
 interfaces between the Docker Compose services:
 
-.. mermaid::
-
-    graph BT
-        subgraph ground_control_layer["Ground Control Layer"]
-            qgc[QGC]
-        end
-
-        subgraph autopilot_layer["Autopilot Layer"]
-            px4[PX4]
-            ardupilot[ArduPilot]
-        end
-
-        subgraph middleware_layer["Middleware Layer"]
-            micro_ros_agent[Micro-ROS-Agent]
-            mavros[MAVROS]
-            gscam[gscam]
-        end
-
-        subgraph application_layer["Application Layer"]
-            gisnav[GISNav]
-            rviz[RViz]
-            autoheal[Autoheal]
-        end
-
-        subgraph gis_layer["GIS Layer"]
-            mapserver[Mapserver]
-            qgis[QGIS]
-        end
-
-        subgraph data_layer["Data Layer"]
-            postgres[Postgres]
-        end
-
-        postgres -->|Database Connection| mapserver
-        postgres -->|Database Connection| qgis
-
-        mapserver -.-> gisnav
-        gisnav -->|WMS| mapserver
-        gisnav -->|ROS Connection| mavros
-        gisnav -->|ROS Connection| micro_ros_agent
-        gisnav -->|ROS Connection| gscam
-
-        mavros -->|Mavlink| ardupilot
-        mavros -->|Mavlink| px4
-        micro_ros_agent -->|"TCP UORB Bridge"| px4
-        px4 -->|Mavlink| qgc
-        ardupilot -->|Mavlink| qgc
+.. raw:: html
+    :file: ../../../_build/external_interfaces.html
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

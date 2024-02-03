@@ -639,6 +639,9 @@ relate to external interfaces.
     CUDA
         NVIDIA parallel computing platform: `developer.nvidia.com/cuda-zone <https://developer.nvidia.com/cuda-zone>`_
 
+    D2
+        A diagram scripting language: `d2lang.com <https://d2lang.com/>`
+
     DDS
     Data Distribution Service
         A :term:`middleware` protocol and standard:
@@ -688,6 +691,10 @@ relate to external interfaces.
 
     MAVSDK
         :term:`MAVLink` software development kit: `mavsdk.mavlink.io/main/en/index.html <https://mavsdk.mavlink.io/main/en/index.html>`_
+
+    Mermaid
+    mermaid.js
+        A diagram scripting language: `mermaid.js.org <https://mermaid.js.org/>`
 
     micro-ROS-agent
     micro-ROS Agent

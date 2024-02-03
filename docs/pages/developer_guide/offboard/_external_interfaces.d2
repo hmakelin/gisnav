@@ -1,9 +1,11 @@
 vars: {
   d2-config: {
-    # match colors here https://pydata-sphinx-theme.readthedocs.io/en/v0.9.0/user_guide/customizing.html#color-variables
+    # try to match colors, see also here
+    # https://pydata-sphinx-theme.readthedocs.io/en/v0.9.0/user_guide/customizing.html#color-variables
     dark-theme-overrides: {
       N7: "#14181e"  # --pst-color-background
-      B1: "#9c5ffd"  # --pst-color-secondary
+      B1: "#ffffff"  # --pst-color-secondary #9c5ffd
+      B2: "#ffffff"  # --pst-color-secondary #9c5ffd
     }
   }
 
@@ -53,7 +55,7 @@ mavlink: gisnav_mavlink {
       tooltip: GISNav ROS 2 application
       link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
     }
-    autoheal: Autoheal {
+    autoheal: gisnav-autoheal-1 {
       tooltip: Service that monitors and automatically restarts unhealthy containers
     }
   }
@@ -97,7 +99,7 @@ gis: gisnav_gis {
       tooltip: GISNav ROS 2 application
       link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
     }
-    autoheal: Autoheal {
+    autoheal: gisnav-autoheal-1 {
       tooltip: Service that monitors and automatically restarts unhealthy containers
     }
   }

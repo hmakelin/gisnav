@@ -25,7 +25,7 @@ The `docker-compose.yaml
 <https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
 file defines all services used to support GISNav deployments. The diagram below
 describes the system architecture through the external interfaces between the
-Docker Compose services:
+Docker Compose services. The GISNav service is outlined in red.
 
 .. dropdown:: See YAML source code
     :icon: code
@@ -36,6 +36,10 @@ Docker Compose services:
 
 .. todo::
     Split mavlink network into mavlink and ROS networks
+
+.. note::
+    The application services have access to both networks and are not actually
+    duplicated.
 
 .. raw:: html
     :file: ../../../_build/external_interfaces.html

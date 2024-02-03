@@ -18,57 +18,21 @@ Prerequisites
 
 .. include:: ../_shared/prerequisites/compose_project_name_env_variable.rst
 
-List of services
+Overview of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``docker/docker-compose.yaml`` file defines all services used to support
-GISNav deployments. Provided below is a list of the service names along with
-a brief description of their intended use.
+The `docker-compose.yaml
+<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
+file defines all services used to support GISNav deployments. The diagram below
+describes the system architecture through the external interfaces between the
+Docker Compose services:
 
 .. dropdown:: See YAML source code
     :icon: code
 
     .. literalinclude:: ../../../../docker/docker-compose.yaml
-        :caption: Docker Compose base services
+        :caption: Docker Compose services
         :language: yaml
-
-+---------------------+-----------------------------------------------------------------------------------------------+
-| Service             | Description                                                                                   |
-+=====================+===============================================================================================+
-| ``ardupilot``       | :term:`ArduPilot` :term:`Gazebo` :term:`SITL` simulation. Starts the ``gazebo-iris`` model    |
-|                     | with added static down (:term:`FRD`) facing :term:`camera` at the :term:`KSQL` Airport.       |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``px4``             | :term:`PX4` Gazebo SITL simulation. Starts the ``typhoon_h480`` model at the KSQL Airport.    |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``mavros``          | :term:`MAVROS` middleware. Used as autopilot middleware with both PX4 and ArduPilot.          |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``micro-ros-agent`` | :term:`Micro-ROS agent` middleware. Used for PX4 SITL for outgoing :class:`SensorGps`         |
-|                     | :term:`messages`.                                                                             |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``qgc``             | :term:`QGroundControl` ground control software for controlling the :term:`vehicle`.           |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``mapserver``       | :term:`GIS` server with self-hosted :term:`NAIP` and :term:`OSM` Buildings data covering      |
-|                     | KSQL airport.                                                                                 |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``autoheal``        | Monitors :term:`Docker` container health and restarts containers marked as unhealthy. Used in |
-|                     | the :term:`onboard` :term:`HIL` deployment configuration.                                     |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``gscam``           | Bridge for integrating video stream from camera into :term:`ROS` via :term:`GStreamer`.       |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``qgis``            | :term:`QGIS` client :term:`GUI` preconfigured with ``mapserver`` WMS connection for           |
-|                     | inspecting and managing onboard maps.                                                         |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``gisnav``          | GISNav :term:`ROS 2` package for demonstration use only. Launches GISNav with the PX4         |
-|                     | configuration by default. Can also be launched for ArduPilot.                                 |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``postgres``        | :term:`PostGIS` server for as backend to ``mapserver`` and :class:`.QGISNode`.                |
-+---------------------+-----------------------------------------------------------------------------------------------+
-
-External interfaces
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The below diagram describes the system architecture through the external
-interfaces between the Docker Compose services:
 
 .. raw:: html
     :file: ../../../_build/external_interfaces.html

@@ -41,7 +41,7 @@ more convenient to proxy an existing commercial tile-based endpoint.
     of the service you are using and that it fits your planned use case.
 
 If you are fine with using maps for the :term:`KSQL` airport area only, then you
-can use the :ref:`provided Docker Compose mapserver service <List of services>`,
+can use the :ref:`provided Docker Compose mapserver service <Overview of services>`,
 otherwise follow these instructions to self-host a :term:`MapServer` instance:
 
 .. seealso::

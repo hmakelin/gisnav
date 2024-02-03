@@ -14,32 +14,32 @@ mavlink: gisnav_mavlink {
   }
   tooltip: gisnav_mavlink is a Docker bridge network for isolating services that require communication (via mavlink or ROS) with simulation (autopilot) services.
   qgc: gisnav-qgc-1 {
-    tooltip: Ground control software
+    tooltip: Ground control GUI for controlling the vehicle
     link: https://github.com/hmakelin/gisnav/blob/master/docker/qgc/Dockerfile
   }
   simulation: Simulation services {
     tooltip: The simulation services contain the autopilot and simulator in one service
     px4: gisnav-px4-1 {
-      tooltip: PX4 SITL simulation including Gazebo server and client
+      tooltip: PX4 Gazebo SITL simulation of the Typhoon H480 hexacopter with simulated MAVLink gimbal protocol v2 3-axis gimbal at KSQL airport
       link: https://github.com/hmakelin/gisnav/blob/master/docker/px4/Dockerfile
     }
     ardupilot: gisnav-ardupilot-1 {
-      tooltip: ArduPilot SITL simulation including Gazebo server and client\n(support currently broken)
+      tooltip: ArduPilot Gazebo SITL simulationof the gazebo-iris quadcopter at KSQL airport with a vehicle body fixed downward facing simulated camera\n(ArduPilot support currently broken)
       link: https://github.com/hmakelin/gisnav/blob/master/docker/ardupilot/Dockerfile
     }
   }
   middleware: Middleware services {
     tooltip: The middleware services facilitate communication between GISNav and the autopilot
     mavros: gisnav-mavros-1 {
-      tooltip: MAVROS middleware
+      tooltip: MAVROS is used as the primary autopilot middleware for both PX4 and ArduPilot
       link: https://github.com/hmakelin/gisnav/blob/master/docker/mavros/Dockerfile
     }
     micro-ros-agent: gisnav-micro-ros-agent-1 {
-      tooltip: micro-ROS Agent middleware
+      tooltip: micro-ROS Agent middleware used in PX4 SITL and HIL simulation specifically for relaying SensorGps uORB messages back to the FCu
       link: https://github.com/hmakelin/gisnav/blob/master/docker/micro-ros-agent/Dockerfile
     }
     gscam: gisnav-gscam-1 {
-      tooltip: GSCam GStreamer-based camera middleware
+      tooltip: GSCam GStreamer-based camera middleware for publishing video stream into ROS
       link: https://github.com/hmakelin/gisnav/blob/master/docker/gscam/Dockerfile
     }
   }
@@ -53,7 +53,7 @@ mavlink: gisnav_mavlink {
       link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
     }
     autoheal: Autoheal {
-      tooltip: Automatically restarts unhealthy containers
+      tooltip: Service that monitors and automatically restarts unhealthy containers
     }
   }
   qgc -> simulation.px4: MAVLink
@@ -75,16 +75,16 @@ gis: gisnav_gis {
   gis: GIS services {
     tooltip: GIS services serve orthoimagery and DEMs via OGC standard interfaces
     mapserver: gisnav-mapserver-1 {
-      tooltip: MapServer GIS for serving maps
+      tooltip: MapServer GIS with self-hosted NAIP and OSM Buildings data covering the KSQL airport demo region
       link: https://github.com/hmakelin/gisnav/blob/master/docker/mapserver/Dockerfile
     }
     qgis: gisnav-qgis-1 {
-      tooltip: QGIS client for viewing maps
+      tooltip: QGIS GUI client preconfigured with MapServer and PostGIS connections
       link: https://github.com/hmakelin/gisnav/blob/master/docker/qgis/Dockerfile
     }
   }
   postgres: gisnav-postgres-1 {
-    tooltip: PostGIS data back-end for GIS services
+    tooltip: PostGIS backend for MapServer and QGIS
     link: https://github.com/hmakelin/gisnav/blob/master/docker/postgres/Dockerfile
   }
   application: Application services {
@@ -97,7 +97,7 @@ gis: gisnav_gis {
       link: https://github.com/hmakelin/gisnav/blob/master/docker/gisnav/Dockerfile
     }
     autoheal: Autoheal {
-      tooltip: Automatically restarts unhealthy containers
+      tooltip: Service that monitors and automatically restarts unhealthy containers
     }
   }
   application.gisnav -> gis.mapserver: WMS

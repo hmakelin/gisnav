@@ -480,6 +480,10 @@ ____________________________________________________
             `en.wikipedia.org/wiki/Digital_elevation_model
             <https://en.wikipedia.org/wiki/Digital_elevation_model>`_
 
+    DNS
+        Domain Name System: `en.wikipedia.org/wiki/Domain_Name_System
+        <https://en.wikipedia.org/wiki/Domain_Name_System>`_
+
     EKF
         Extended Kalman Filter
 
@@ -589,6 +593,11 @@ ____________________________________________________
 
     SQL
         Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`_
+
+    TCP
+    TCP/IP
+    IP
+        Transmission Control Protocol/Internet Protocol
 
     ToU
     TOU

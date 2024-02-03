@@ -27,6 +27,9 @@ file defines all services used to support GISNav deployments. The diagram below
 describes the system architecture through the external interfaces between the
 Docker Compose services. The GISNav service is outlined in red.
 
+The Docker bridge networks have in-built DNS which means the container names
+depicted in the diagram resolve to their respective IP addresses.
+
 .. dropdown:: See YAML source code
     :icon: code
 

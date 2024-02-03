@@ -66,7 +66,7 @@ mavlink: gisnav_mavlink {
   middleware.mavros -> application.gisnav: ROS\n(Fast DDS shared memory)
   middleware.micro-ros-agent -> application.gisnav: ROS\n(Fast DDS shared memory)
   middleware.gscam -> application.gisnav: ROS\n(Fast DDS shared memory)
-  simulation.px4 -> middleware.gscam: 5600/UDP
+  simulation.px4 -> middleware.gscam: 5600/UDP\napplication/x-rtp, media=video, clock-rate=90000, encoding-name=H264
 }
 
 gis: gisnav_gis {

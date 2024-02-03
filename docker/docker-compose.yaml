@@ -1,5 +1,24 @@
 version: "3.4"
 
+networks:
+  gis:
+    driver: bridge
+  mavlink:
+    driver: bridge
+
+x-mavlink-net: &mavlink-net
+  networks:
+    - mavlink
+
+x-gis-net: &gis-net
+  networks:
+    - gis
+
+x-all-net: &all-net
+  networks:
+    - mavlink
+    - gis
+
 # platforms is a sequence not a mapping so careful when merging
 # with something that defines its own platforms
 x-base: &base
@@ -7,9 +26,7 @@ x-base: &base
     dockerfile: Dockerfile
     #platforms:
     #  - "linux/amd64"
-  network_mode: host
-  #networks:
-  #  - gisnav-network
+  #network_mode: host
 
 # devices is a sequence not a mapping so careful when merging
 # with something that defines its own devices
@@ -55,7 +72,7 @@ services:
     command: /usr/local/bin/start-server
 
   micro-ros-agent:
-    <<: [*base, *ros]
+    <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
       #platforms:
@@ -64,7 +81,7 @@ services:
     command: udp4 -p 8888
 
   mavros:
-    <<: [*base, *ros]
+    <<: [*base, *ros, *mavlink-net]
     build:
       context: mavros
       args:
@@ -75,7 +92,7 @@ services:
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
-    <<: [*base, *x11]
+    <<: [*base, *x11, *mavlink-net]
     build:
       context: qgc
     volumes:
@@ -88,7 +105,7 @@ services:
   # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
   #  duplicates these build arguments. They should be changed together.
   gisnav:
-    <<: [*base, *ros, *tty, *nvidia-gpu]
+    <<: [*base, *ros, *tty, *nvidia-gpu, *all-net]
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
     image: ghcr.io/hmakelin/gisnav:latest
     build:
@@ -99,11 +116,9 @@ services:
     command: ros2 launch gisnav px4.dev.launch.py
 
   px4:
-    <<: [*base, *x11, *tty, *nvidia-gpu]
+    <<: [*base, *x11, *tty, *nvidia-gpu, *mavlink-net]
     build:
       context: px4
-      args:
-        ROS_VERSION: foxy
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
@@ -111,7 +126,7 @@ services:
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
   ardupilot:
-    <<: [*base, *x11, *nvidia-gpu]
+    <<: [*base, *x11, *nvidia-gpu, *mavlink-net]
     build:
       context: ardupilot
     volumes:
@@ -123,7 +138,7 @@ services:
 
   # Note: build context is repository root
   rviz:
-    <<: [*base, *x11, *ros, *nvidia-gpu]
+    <<: [*base, *x11, *ros, *nvidia-gpu, *mavlink-net]
     build:
       context: rviz
       args:
@@ -131,7 +146,7 @@ services:
     command: rviz2 -d gisnav_config.rviz
 
   gscam:
-    <<: [*base, *ros]
+    <<: [*base, *ros, *mavlink-net]
     build:
       context: gscam
       args:
@@ -148,7 +163,7 @@ services:
       - "camera_info_url:=file:///camera_calibration.yaml"
 
   autoheal:
-    <<: [*base]
+    <<: [*base, *all-net]
     image: willfarrell/autoheal
     restart: always
     environment:
@@ -157,22 +172,18 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   qgis:
-    <<: [*base, *x11]
+    <<: [*base, *x11, *gis-net]
     build:
       context: qgis
     command: qgis
 
   postgres:
-    <<: [ *base ]
+    <<: [*base, *gis-net]
     build:
       context: postgres
-    ports:
-      - "5432:5432"  # Map PostgreSQL's default port to the host
+    #ports:
+    #  - "5432:5432"  # Map PostgreSQL's default port to the host
     environment:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
-
-#networks:
-#  gisnav-network:
-#    driver: bridge

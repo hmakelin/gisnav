@@ -44,7 +44,12 @@ jobs:
           docker buildx create --use
 
       # TODO: try to use docker-compose.yaml file to avoid having to specify redundant build args here
+      # Build arm64 and amd64 images separately to be more efficient with disk
+      # space on GitHub runner
       - name: Build and push GISNav multi-arch Docker images
         run: |
           cd colcon_ws/src/gisnav
-          docker buildx build --build-arg ROS_VERSION=humble --push --platform linux/amd64,linux/arm64 -f docker/gisnav/Dockerfile -t ghcr.io/hmakelin/gisnav:${TAG:-latest} .
+          docker buildx build --build-arg ROS_VERSION=humble --push --platform linux/amd64 -f docker/gisnav/Dockerfile -t ghcr.io/hmakelin/gisnav:${TAG:-latest} .
+          docker rmi ghcr.io/hmakelin/gisnav:${TAG:-latest}
+          docker system prune --force
+          docker buildx build --build-arg ROS_VERSION=humble --push --platform linux/arm64 -f docker/gisnav/Dockerfile -t ghcr.io/hmakelin/gisnav:${TAG:-latest} .

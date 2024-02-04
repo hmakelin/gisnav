@@ -21,10 +21,20 @@ RUN git clone --branch v1.14.0 --single-branch --depth 1 \
         submodule update --init --recursive && \
     bash Tools/setup/ubuntu.sh
 
-# Explicitly add required \
+# Build and install MAVLink router
+RUN cd $HOME && \
+    git clone --branch v3 --depth 1 https://github.com/mavlink-router/mavlink-router.git && \
+    cd mavlink-router && \
+    git submodule update --init --recursive && \
+    apt install -y git ninja-build pkg-config gcc g++ systemd && \
+    pip3 install meson>=0.55 && \
+    meson setup build . && \
+    ninja -C build && \
+    ninja -C build install
+
 WORKDIR PX4-Autopilot
 
-COPY merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world 6011_typhoon_h480 .
+COPY . .
 
 # Setup ksql_airport.world for HIL
 # empy must be version 3.3.4, see below commit
@@ -41,5 +51,10 @@ RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topic
 # The hostname of the gscam service in the network is assumed to be gisnav-gscam-1
 ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
 
+RUN mkdir -p /etc/mavlink-router && \
+    mv etc/mavlink-router/main.conf /etc/mavlink-router/main.conf
+
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
+
+# No health check - if simulation dies makes no sense to restart via autoheal

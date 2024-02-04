@@ -89,7 +89,7 @@ services:
       #platforms:
       #  - "linux/amd64"
       #  - "linux/arm64"
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14550@localhost:14557
 
   qgc:
     <<: [*base, *x11, *mavlink-net]

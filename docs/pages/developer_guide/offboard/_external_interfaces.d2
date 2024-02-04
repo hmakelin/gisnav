@@ -59,9 +59,8 @@ mavlink: gisnav_mavlink {
       tooltip: Service that monitors and automatically restarts unhealthy containers
     }
   }
-  qgc -> simulation.px4: MAVLink
-  # qgc -> ardupilot: MAVLink
-  simulation.px4 -> middleware.mavros: MAVLink
+  qgc <-> simulation.px4: MAVLink 14550/udp
+  simulation.px4 <-> middleware.mavros: MAVLink 14550/udp
   simulation.px4 -> middleware.micro-ros-agent: TCP uORB bridge
   middleware.mavros -> application.gisnav: ROS\n(Fast DDS shared memory)
   middleware.micro-ros-agent -> application.gisnav: ROS\n(Fast DDS shared memory)

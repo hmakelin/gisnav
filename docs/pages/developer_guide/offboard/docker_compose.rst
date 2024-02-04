@@ -38,7 +38,9 @@ depicted in the diagram resolve to their respective IP addresses.
         :language: yaml
 
 .. todo::
-    Split mavlink network into mavlink and ROS networks
+    Split mavlink network into mavlink and ROS networks. For ROS the intention
+    is to use the shared memory device instead of serializing and going through
+    the network stack since we will be passing a lot of images around.
 
 .. note::
     The application services have access to both networks and are not actually

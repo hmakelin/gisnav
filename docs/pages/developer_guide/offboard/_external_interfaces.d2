@@ -62,9 +62,9 @@ mavlink: gisnav_mavlink {
   qgc <-> simulation.px4: MAVLink 14550/udp
   simulation.px4 <-> middleware.mavros: MAVLink 14540/udp
   simulation.px4 -> middleware.micro-ros-agent: TCP uORB bridge
-  middleware.mavros -> application.gisnav: ROS 2\n(Fast DDS shared memory)
-  middleware.micro-ros-agent -> application.gisnav: ROS 2\n(Fast DDS shared memory)
-  middleware.gscam -> application.gisnav: ROS 2\n(Fast DDS shared memory)
+  middleware.mavros -> application.gisnav: ROS 2\n(Fast DDS via /dev/shm)
+  middleware.micro-ros-agent -> application.gisnav: ROS 2\n(Fast DDS via /dev/shm)
+  middleware.gscam -> application.gisnav: ROS 2\n(Fast DDS via /dev/shm)
   simulation.px4 -> middleware.gscam: 5600/UDP\napplication/x-rtp, media=video, clock-rate=90000, encoding-name=H264
 }
 

@@ -52,9 +52,12 @@ RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topic
 ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
 
 RUN mkdir -p /etc/mavlink-router && \
-    mv etc/mavlink-router/main.conf /etc/mavlink-router/main.conf
+    mv etc/mavlink-router/main.conf /etc/mavlink-router/main.conf && \
+    chmod +x ./entrypoint.sh
 
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
 # No health check - if simulation dies makes no sense to restart via autoheal
+
+ENTRYPOINT ["./entrypoint.sh"]

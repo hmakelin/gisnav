@@ -60,7 +60,7 @@ mavlink: gisnav_mavlink {
     }
   }
   qgc <-> simulation.px4: MAVLink 14550/udp
-  simulation.px4 <-> middleware.mavros: MAVLink 14550/udp
+  simulation.px4 <-> middleware.mavros: MAVLink 14540/udp
   simulation.px4 -> middleware.micro-ros-agent: TCP uORB bridge
   middleware.mavros -> application.gisnav: ROS\n(Fast DDS shared memory)
   middleware.micro-ros-agent -> application.gisnav: ROS\n(Fast DDS shared memory)

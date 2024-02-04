@@ -44,8 +44,20 @@ depicted in the diagram resolve to their respective IP addresses.
     The application services have access to both networks and are not actually
     duplicated.
 
-.. raw:: html
-    :file: ../../../_build/external_interfaces.html
+.. tab-set::
+
+    .. tab-item:: SITL simulation
+        :selected:
+
+        .. raw:: html
+            :file: ../../../_build/external_interfaces.html
+
+    .. tab-item:: HIL simulation
+        :selected:
+
+            .. todo::
+                Add diagrams for different deployment configurations, e.g.
+                including use Docker Compose overrides.
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

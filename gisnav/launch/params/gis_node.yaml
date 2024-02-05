@@ -1,7 +1,7 @@
 gisnav:
   gis_node:
     ros__parameters:
-      wms_url: 'http://127.0.0.1:80/wms'
+      wms_url: 'http://gisnav-mapserver-1:80/wms'
       wms_layers: ['imagery']
       wms_dem_layers: ['osm-buildings']
       wms_format: 'image/jpeg'

@@ -61,7 +61,7 @@ x-tty: &tty
 
 services:
   mapserver:
-    <<: *base
+    <<: [*base, *gis-net]
     build:
       context: mapserver
       args:

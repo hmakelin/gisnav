@@ -8,7 +8,7 @@ MAP
     METADATA
         "wms_title"           "GISNav WMS"
         "wms_abstract"        "GISNav simulation maps for KSQL airport area"
-        "wms_onlineresource"  "http://localhost:80/wms"
+        "wms_onlineresource"  "http://gisnav-mapserver-1:80/wms"
         "wms_srs"             "EPSG:3857 EPSG:4326"
         "wms_enable_request"  "GetMap GetFeatureInfo GetCapabilities"
         "wms_feature_info_mime_type" "text/plain"

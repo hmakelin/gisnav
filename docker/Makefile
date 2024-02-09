@@ -172,7 +172,7 @@ $(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* q
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
 # List of Docker Compose service names that need GUI access
-GUI_SERVICES = px4 ardupilot qgc rviz qgis
+GUI_SERVICES = px4 ardupilot qgc rviz qgis gisnav
 
 # Expose xhost to containers that need GUI (see x11 extension in docker-compose.yaml)
 expose-xhost:

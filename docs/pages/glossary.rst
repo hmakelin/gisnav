@@ -25,6 +25,9 @@ correct alternative should be easily inferred from the context they are used in.
         .. todo::
             Describe AGL, AMSL, ellipsoid and other flavors of altitude used by GISNav.
 
+    Anchor
+        A :term:`YAML` anchor
+
     Extension
     Extended functionality
         Functionality beyond GISNav :term:`core` functionality. For example,

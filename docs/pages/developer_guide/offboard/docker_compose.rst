@@ -48,19 +48,26 @@ depicted in the diagram resolve to their respective IP addresses.
 
 .. tab-set::
 
-    .. tab-item:: SITL simulation
+    .. tab-item:: SITL simulation & GISNav on host
         :selected:
 
         .. warning::
             The ``px4`` service must be started at the same time as or after
-            the ``qgc`` and ``mavros`` services are started. Otherwise the
-            mavlink router will not know their IP address in the
+            the ``qgc``, ``mavros`` and ``micro-ros-agent`` services are started.
+            Otherwise the ``px4`` service will not know their IP addresses in the
             ``gisnav_mavlink`` network. See the `px4/entrypoint.sh
             <https://github.com/hmakelin/gisnav/blob/master/docker/px4/entrypoint.sh>`_
             file for details.
 
         .. raw:: html
             :file: ../../../_build/external_interfaces.html
+
+    .. tab-item:: SITL simulation & GISNav on companion computer
+        :selected:
+
+            .. todo::
+                Add diagrams for different deployment configurations, e.g.
+                including use Docker Compose overrides.
 
     .. tab-item:: HIL simulation
         :selected:

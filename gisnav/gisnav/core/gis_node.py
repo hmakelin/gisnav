@@ -87,11 +87,11 @@ class GISNode(Node):
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
     """Default WMS URL
-    
-    When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the host 
-    name of the MapServer container ``gisnav-mapserver-1`` should be used instead. 
-    This should already be configured in the `default launch parameter file 
-    <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.yaml>`_ 
+
+    When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the host
+    name of the MapServer container ``gisnav-mapserver-1`` should be used instead.
+    This should already be configured in the `default launch parameter file
+    <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.yaml>`_
     which overrides this default value.
     """
 

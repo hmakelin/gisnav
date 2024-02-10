@@ -25,11 +25,15 @@ correct alternative should be easily inferred from the context they are used in.
         .. todo::
             Describe AGL, AMSL, ellipsoid and other flavors of altitude used by GISNav.
 
+    Anchor
+        A :term:`YAML` anchor
+
     Extension
     Extended functionality
-        Functionality beyond GISNav :term:`core` functionality. For example,
-        :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
-        or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+        * Functionality beyond GISNav :term:`core` functionality. For example,
+          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
+          or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+        * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
     Autopilot
         Autopilot flight control software such as :term:`PX4` or :term:`ArduPilot`.
@@ -480,6 +484,10 @@ ____________________________________________________
             `en.wikipedia.org/wiki/Digital_elevation_model
             <https://en.wikipedia.org/wiki/Digital_elevation_model>`_
 
+    DNS
+        Domain Name System: `en.wikipedia.org/wiki/Domain_Name_System
+        <https://en.wikipedia.org/wiki/Domain_Name_System>`_
+
     EKF
         Extended Kalman Filter
 
@@ -590,6 +598,11 @@ ____________________________________________________
     SQL
         Structured Query Language: `en.wikipedia.org/wiki/SQL <https://en.wikipedia.org/wiki/SQL>`_
 
+    TCP
+    TCP/IP
+    IP
+        Transmission Control Protocol/Internet Protocol
+
     ToU
     TOU
         Terms of Use
@@ -620,6 +633,10 @@ ____________________________________________________
 
             * https://www.ogc.org/standards/wmts
 
+    XRCE
+        :term:`DDS` for eXtremely Resource Constrained Environments (`DDS-XRCE
+        protocol <https://www.omg.org/spec/DDS-XRCE/1.0/About-DDS-XRCE>`_)
+
 Proper names
 ____________________________________________________
 
@@ -638,6 +655,9 @@ relate to external interfaces.
 
     CUDA
         NVIDIA parallel computing platform: `developer.nvidia.com/cuda-zone <https://developer.nvidia.com/cuda-zone>`_
+
+    D2
+        A diagram scripting language: `d2lang.com <https://d2lang.com/>`_
 
     DDS
     Data Distribution Service
@@ -688,6 +708,10 @@ relate to external interfaces.
 
     MAVSDK
         :term:`MAVLink` software development kit: `mavsdk.mavlink.io/main/en/index.html <https://mavsdk.mavlink.io/main/en/index.html>`_
+
+    Mermaid
+    mermaid.js
+        A diagram scripting language: `mermaid.js.org <https://mermaid.js.org/>`
 
     micro-ROS-agent
     micro-ROS Agent

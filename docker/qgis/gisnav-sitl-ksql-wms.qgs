@@ -22,32 +22,32 @@
     <customproperties>
       <Option/>
     </customproperties>
-    <layer-tree-layer providerKey="postgres" source="dbname='gisnav' host=0.0.0.0 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bbox_table&quot; (geom)" expanded="1" id="bbox_table_97de01db_65c9_4f61_bbd1_fd2879dab46a" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="bbox_table" patch_size="-1,-1">
+    <layer-tree-layer providerKey="postgres" source="dbname='gisnav' host=gisnav-postgres-1 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bbox_table&quot; (geom)" expanded="1" id="bbox_table_97de01db_65c9_4f61_bbd1_fd2879dab46a" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="bbox_table" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
     </layer-tree-layer>
-    <layer-tree-layer providerKey="postgres" source="dbname='gisnav' host=0.0.0.0 port=5432 key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;gps_table&quot; (geom)" expanded="1" id="gps_table_73d9a660_1f73_4d91_b2b1_13dc9344dd3e" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="gps_table" patch_size="-1,-1">
+    <layer-tree-layer providerKey="postgres" source="dbname='gisnav' host=gisnav-postgres-1 port=5432 key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;gps_table&quot; (geom)" expanded="1" id="gps_table_73d9a660_1f73_4d91_b2b1_13dc9344dd3e" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="gps_table" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
     </layer-tree-layer>
-    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=usgs-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms" expanded="1" id="_308e0247_ac52_4b88_9a44_01670727c7b6" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="USGS DEM" patch_size="-1,-1">
+    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=usgs-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms" expanded="1" id="_308e0247_ac52_4b88_9a44_01670727c7b6" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="USGS DEM" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
     </layer-tree-layer>
-    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms" expanded="1" id="_d6cf33d8_6ebd_44b7_8829_22a3ffc69fd2" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="OSM Buildings" patch_size="-1,-1">
+    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms" expanded="1" id="_d6cf33d8_6ebd_44b7_8829_22a3ffc69fd2" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="OSM Buildings" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
     </layer-tree-layer>
-    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms" expanded="1" id="_a5146e71_9af4_4015_8489_b80df961ab83" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="OSM Buildings USGS DEM" patch_size="-1,-1">
+    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms" expanded="1" id="_a5146e71_9af4_4015_8489_b80df961ab83" legend_split_behavior="0" legend_exp="" checked="Qt::Unchecked" name="OSM Buildings USGS DEM" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
     </layer-tree-layer>
-    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=imagery&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms" expanded="1" id="_a4c7ccc0_67ab_4885_9e81_a454f50a7d83" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="NAIP Imagery" patch_size="-1,-1">
+    <layer-tree-layer providerKey="wms" source="crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=imagery&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms" expanded="1" id="_a4c7ccc0_67ab_4885_9e81_a454f50a7d83" legend_split_behavior="0" legend_exp="" checked="Qt::Checked" name="NAIP Imagery" patch_size="-1,-1">
       <customproperties>
         <Option/>
       </customproperties>
@@ -204,7 +204,7 @@
         <ymax>38.00055600000000311</ymax>
       </wgs84extent>
       <id>_308e0247_ac52_4b88_9a44_01670727c7b6</id>
-      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=usgs-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms</datasource>
+      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=usgs-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -409,7 +409,7 @@
         <ymax>37.56509700000000151</ymax>
       </wgs84extent>
       <id>_a4c7ccc0_67ab_4885_9e81_a454f50a7d83</id>
-      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=imagery&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms</datasource>
+      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=imagery&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -614,7 +614,7 @@
         <ymax>37.55616200000000049</ymax>
       </wgs84extent>
       <id>_a5146e71_9af4_4015_8489_b80df961ab83</id>
-      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms</datasource>
+      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings-dem&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -819,7 +819,7 @@
         <ymax>37.55616200000000049</ymax>
       </wgs84extent>
       <id>_d6cf33d8_6ebd_44b7_8829_22a3ffc69fd2</id>
-      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings&amp;styles&amp;tilePixelRatio=0&amp;url=http://localhost:80/wms</datasource>
+      <datasource>crs=EPSG:4326&amp;dpiMode=7&amp;format=image/png&amp;layers=osm-buildings&amp;styles&amp;tilePixelRatio=0&amp;url=http://gisnav-mapserver-1:80/wms</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -1024,7 +1024,7 @@
         <ymax>37.52623026374844528</ymax>
       </wgs84extent>
       <id>bbox_table_97de01db_65c9_4f61_bbd1_fd2879dab46a</id>
-      <datasource>dbname='gisnav' host=0.0.0.0 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table="public"."bbox_table" (geom)</datasource>
+      <datasource>dbname='gisnav' host=gisnav-postgres-1 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table="public"."bbox_table" (geom)</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -1504,7 +1504,7 @@ def my_form_open(dialog, layer, feature):
         <ymax>37.52386149999999532</ymax>
       </wgs84extent>
       <id>gps_table_73d9a660_1f73_4d91_b2b1_13dc9344dd3e</id>
-      <datasource>dbname='gisnav' host=0.0.0.0 port=5432 key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table="public"."gps_table" (geom)</datasource>
+      <datasource>dbname='gisnav' host=gisnav-postgres-1 port=5432 key='id' srid=4326 type=Point checkPrimaryKeyUnicity='1' table="public"."gps_table" (geom)</datasource>
       <keywordList>
         <value></value>
       </keywordList>
@@ -2131,7 +2131,7 @@ def my_form_open(dialog, layer, feature):
       </spatialrefsys>
     </CoordinateCustomCrs>
   </ProjectDisplaySettings>
-  <ProjectGpsSettings autoCommitFeatures="0" destinationLayer="bbox_table_97de01db_65c9_4f61_bbd1_fd2879dab46a" destinationLayerProvider="postgres" destinationFollowsActiveLayer="1" autoAddTrackVertices="0" destinationLayerSource="dbname='gisnav' host=0.0.0.0 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bbox_table&quot; (geom)" destinationLayerName="bbox_table">
+  <ProjectGpsSettings autoCommitFeatures="0" destinationLayer="bbox_table_97de01db_65c9_4f61_bbd1_fd2879dab46a" destinationLayerProvider="postgres" destinationFollowsActiveLayer="1" autoAddTrackVertices="0" destinationLayerSource="dbname='gisnav' host=gisnav-postgres-1 port=5432 key='id' srid=4326 type=Polygon checkPrimaryKeyUnicity='1' table=&quot;public&quot;.&quot;bbox_table&quot; (geom)" destinationLayerName="bbox_table">
     <timeStampFields/>
   </ProjectGpsSettings>
 </qgis>

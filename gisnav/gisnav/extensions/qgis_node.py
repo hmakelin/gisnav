@@ -49,7 +49,7 @@ class QGISNode(Node):
         "dbname": "gisnav",
         "user": "gisnav",
         "password": "gisnav",
-        "host": "localhost",
+        "host": "gisnav-postgres-1",
         "port": 5432,  # default PostgreSQL port is 5432
     }
     """Postgres database config used by this node."""

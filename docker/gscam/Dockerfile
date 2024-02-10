@@ -4,9 +4,6 @@ FROM ros:${ROS_VERSION}
 ARG ROS_VERSION
 ENV ROS_VERSION=${ROS_VERSION}
 
-COPY camera_calibration.yaml gscam_params.yaml /
-COPY --chmod=755 entrypoint.sh /
-
 RUN apt-get update && \
     apt-get -y dist-upgrade && \
     apt-get -y install gstreamer1.0-tools libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
@@ -17,7 +14,10 @@ RUN apt-get update && \
 
 HEALTHCHECK --interval=10s --timeout=3s \
   CMD /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && \
-    ros2 node list | grep -q gscam_node" || exit 1
+    ros2 node list | grep -q gscam_publisher" || exit 1
+
+COPY camera_calibration.yaml gscam_params.yaml /
+COPY --chmod=755 entrypoint.sh /
 
 SHELL ["/bin/bash", "-c"]
 ENTRYPOINT ["/entrypoint.sh"]

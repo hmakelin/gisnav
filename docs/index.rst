@@ -22,7 +22,8 @@ Welcome to GISNav's developer documentation!
 Generate documentation
 _________________________________________
 To build this Sphinx documentation yourself, first :ref:`Install locally` including
-the development dependencies and then run:
+the development dependencies, then `install D2 <https://d2lang.com/tour/install/>`_
+and then run:
 
 .. code-block:: bash
     :caption: Build Sphinx documentation

@@ -86,7 +86,14 @@ class GISNode(Node):
     """  # noqa: E501
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
-    """Default WMS URL"""
+    """Default WMS URL
+
+    When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the host
+    name of the MapServer container ``gisnav-mapserver-1`` should be used instead.
+    This should already be configured in the `default launch parameter file
+    <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.yaml>`_
+    which overrides this default value.
+    """
 
     ROS_D_VERSION = "1.3.0"
     """Default WMS version"""
@@ -342,7 +349,7 @@ class GISNode(Node):
         def _connect_wms(url: str, version: str, timeout: int, poll_rate: float):
             try:
                 assert self._wms_client is None
-                self.get_logger().info("Connecting to WMS endpoint...")
+                self.get_logger().info(f"Connecting to WMS endpoint at {url}...")
                 self._wms_client = WebMapService(url, version=version, timeout=timeout)
                 self.get_logger().info("WMS client connection established.")
 

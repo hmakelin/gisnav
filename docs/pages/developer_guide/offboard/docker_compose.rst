@@ -18,105 +18,63 @@ Prerequisites
 
 .. include:: ../_shared/prerequisites/compose_project_name_env_variable.rst
 
-List of services
+Overview of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``docker/docker-compose.yaml`` file defines all services used to support
-GISNav deployments. Provided below is a list of the service names along with
-a brief description of their intended use.
+The `docker-compose.yaml
+<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
+file defines all services used to support GISNav deployments. The diagram below
+describes the system architecture through the external interfaces between the
+Docker Compose services. The GISNav service is outlined in red.
+
+The Docker bridge networks have in-built DNS which means the container names
+depicted in the diagram resolve to their respective IP addresses.
 
 .. dropdown:: See YAML source code
     :icon: code
 
     .. literalinclude:: ../../../../docker/docker-compose.yaml
-        :caption: Docker Compose base services
+        :caption: Docker Compose services
         :language: yaml
 
-+---------------------+-----------------------------------------------------------------------------------------------+
-| Service             | Description                                                                                   |
-+=====================+===============================================================================================+
-| ``ardupilot``       | :term:`ArduPilot` :term:`Gazebo` :term:`SITL` simulation. Starts the ``gazebo-iris`` model    |
-|                     | with added static down (:term:`FRD`) facing :term:`camera` at the :term:`KSQL` Airport.       |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``px4``             | :term:`PX4` Gazebo SITL simulation. Starts the ``typhoon_h480`` model at the KSQL Airport.    |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``mavros``          | :term:`MAVROS` middleware. Used as autopilot middleware with both PX4 and ArduPilot.          |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``micro-ros-agent`` | :term:`Micro-ROS agent` middleware. Used for PX4 SITL for outgoing :class:`SensorGps`         |
-|                     | :term:`messages`.                                                                             |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``qgc``             | :term:`QGroundControl` ground control software for controlling the :term:`vehicle`.           |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``mapserver``       | :term:`GIS` server with self-hosted :term:`NAIP` and :term:`OSM` Buildings data covering      |
-|                     | KSQL airport.                                                                                 |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``autoheal``        | Monitors :term:`Docker` container health and restarts containers marked as unhealthy. Used in |
-|                     | the :term:`onboard` :term:`HIL` deployment configuration.                                     |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``gscam``           | Bridge for integrating video stream from camera into :term:`ROS` via :term:`GStreamer`.       |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``qgis``            | :term:`QGIS` client :term:`GUI` preconfigured with ``mapserver`` WMS connection for           |
-|                     | inspecting and managing onboard maps.                                                         |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``gisnav``          | GISNav :term:`ROS 2` package for demonstration use only. Launches GISNav with the PX4         |
-|                     | configuration by default. Can also be launched for ArduPilot.                                 |
-+---------------------+-----------------------------------------------------------------------------------------------+
-| ``postgres``        | :term:`PostGIS` server for as backend to ``mapserver`` and :class:`.QGISNode`.                |
-+---------------------+-----------------------------------------------------------------------------------------------+
+.. todo::
+    Split mavlink network into mavlink and ROS networks. For ROS the intention
+    is to use the shared memory device instead of serializing and going through
+    the network stack since we will be passing a lot of images around.
 
-External interfaces
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.. note::
+    The application services have access to both networks and are not actually
+    duplicated.
 
-The below diagram describes the system architecture through the external
-interfaces between the Docker Compose services:
+.. tab-set::
 
-.. mermaid::
+    .. tab-item:: SITL simulation & GISNav on host
+        :selected:
 
-    graph BT
-        subgraph ground_control_layer["Ground Control Layer"]
-            qgc[QGC]
-        end
+        .. warning::
+            The ``px4`` service must be started at the same time as or after
+            the ``qgc``, ``mavros`` and ``micro-ros-agent`` services are started.
+            Otherwise the ``px4`` service will not know their IP addresses in the
+            ``gisnav_mavlink`` network. See the `px4/entrypoint.sh
+            <https://github.com/hmakelin/gisnav/blob/master/docker/px4/entrypoint.sh>`_
+            file for details.
 
-        subgraph autopilot_layer["Autopilot Layer"]
-            px4[PX4]
-            ardupilot[ArduPilot]
-        end
+        .. raw:: html
+            :file: ../../../_build/external_interfaces.html
 
-        subgraph middleware_layer["Middleware Layer"]
-            micro_ros_agent[Micro-ROS-Agent]
-            mavros[MAVROS]
-            gscam[gscam]
-        end
+    .. tab-item:: SITL simulation & GISNav on companion computer
+        :selected:
 
-        subgraph application_layer["Application Layer"]
-            gisnav[GISNav]
-            rviz[RViz]
-            autoheal[Autoheal]
-        end
+            .. todo::
+                Add diagrams for different deployment configurations, e.g.
+                including use Docker Compose overrides.
 
-        subgraph gis_layer["GIS Layer"]
-            mapserver[Mapserver]
-            qgis[QGIS]
-        end
+    .. tab-item:: HIL simulation
+        :selected:
 
-        subgraph data_layer["Data Layer"]
-            postgres[Postgres]
-        end
-
-        postgres -->|Database Connection| mapserver
-        postgres -->|Database Connection| qgis
-
-        mapserver -.-> gisnav
-        gisnav -->|WMS| mapserver
-        gisnav -->|ROS Connection| mavros
-        gisnav -->|ROS Connection| micro_ros_agent
-        gisnav -->|ROS Connection| gscam
-
-        mavros -->|Mavlink| ardupilot
-        mavros -->|Mavlink| px4
-        micro_ros_agent -->|"TCP UORB Bridge"| px4
-        px4 -->|Mavlink| qgc
-        ardupilot -->|Mavlink| qgc
+            .. todo::
+                Add diagrams for different deployment configurations, e.g.
+                including use Docker Compose overrides.
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

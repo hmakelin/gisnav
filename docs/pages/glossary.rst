@@ -30,9 +30,10 @@ correct alternative should be easily inferred from the context they are used in.
 
     Extension
     Extended functionality
-        Functionality beyond GISNav :term:`core` functionality. For example,
-        :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
-        or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+        * Functionality beyond GISNav :term:`core` functionality. For example,
+          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
+          or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+        * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
     Autopilot
         Autopilot flight control software such as :term:`PX4` or :term:`ArduPilot`.
@@ -632,6 +633,10 @@ ____________________________________________________
 
             * https://www.ogc.org/standards/wmts
 
+    XRCE
+        :term:`DDS` for eXtremely Resource Constrained Environments (`DDS-XRCE
+        protocol <https://www.omg.org/spec/DDS-XRCE/1.0/About-DDS-XRCE>`_)
+
 Proper names
 ____________________________________________________
 
@@ -652,7 +657,7 @@ relate to external interfaces.
         NVIDIA parallel computing platform: `developer.nvidia.com/cuda-zone <https://developer.nvidia.com/cuda-zone>`_
 
     D2
-        A diagram scripting language: `d2lang.com <https://d2lang.com/>`
+        A diagram scripting language: `d2lang.com <https://d2lang.com/>`_
 
     DDS
     Data Distribution Service

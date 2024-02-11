@@ -23,11 +23,13 @@ Overview of services
 
 The |Docker Compose file|_ defines all services used to support GISNav deployments.
 The diagram below describes the system architecture through the external
-interfaces between the Docker Compose services. The GISNav service is outlined
-in red.
+interfaces and Docker bridge networks shared between the Docker Compose services.
 
 The Docker bridge networks have in-built DNS which means the container names
-depicted in the diagram resolve to their respective IP addresses.
+resolve to their respective IP addresses. The container name will equal the
+service name prefixed with ``gisnav-`` and suffixed with ``-1``. So for example
+deploying the ``mapserver`` service using the Compose file will start a
+Docker container with the hostname ``gisnav-mapserver-1``.
 
 .. todo::
     Split mavlink network into mavlink and ROS networks. For ROS the intention
@@ -35,12 +37,7 @@ depicted in the diagram resolve to their respective IP addresses.
     the network stack since we will be passing a lot of images around.
 
 .. note::
-    * The application services have access to both networks.
-    * The container names will be prefixed with ``gisnav-`` and suffixed
-      with ``-1``. For example deploying the ``mapserver`` service using the
-      Compose file will start a Docker container with the name
-      ``gisnav-mapserver-1``. This container name is also the hostname of the
-      container in the Docker bridge network DNS.
+    The application services have access to both ``gis`` and ``mavlink`` networks.
 
 .. mermaid::
 
@@ -84,9 +81,6 @@ depicted in the diagram resolve to their respective IP addresses.
         application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
         gis_mapserver -->|5432/tcp| gis_postgres
         gis_qgis -->|5432/tcp| gis_postgres
-
-        application -.-|Access to both networks| gis
-        mavlink -.-|Access to both networks| application
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink network

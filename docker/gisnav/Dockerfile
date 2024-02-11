@@ -46,9 +46,6 @@ RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
     cd .. && \
     colcon build --packages-ignore mavros mavros_extras libmavconn
 
-# Install D2 for building diagrams in docs
-RUN curl -fsSL https://d2lang.com/install.sh | sh -s --
-
 # TODO: proper health check - check that public facing topics are publishing
 HEALTHCHECK --interval=10s --timeout=3s \
   CMD /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && \

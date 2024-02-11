@@ -21,21 +21,13 @@ Prerequisites
 Overview of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The `docker-compose.yaml
-<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
-file defines all services used to support GISNav deployments. The diagram below
-describes the system architecture through the external interfaces between the
-Docker Compose services. The GISNav service is outlined in red.
+The |Docker Compose file|_ defines all services used to support GISNav deployments.
+The diagram below describes the system architecture through the external
+interfaces between the Docker Compose services. The GISNav service is outlined
+in red.
 
 The Docker bridge networks have in-built DNS which means the container names
 depicted in the diagram resolve to their respective IP addresses.
-
-.. dropdown:: See YAML source code
-    :icon: code
-
-    .. literalinclude:: ../../../../docker/docker-compose.yaml
-        :caption: Docker Compose services
-        :language: yaml
 
 .. todo::
     Split mavlink network into mavlink and ROS networks. For ROS the intention
@@ -43,38 +35,62 @@ depicted in the diagram resolve to their respective IP addresses.
     the network stack since we will be passing a lot of images around.
 
 .. note::
-    The application services have access to both networks and are not actually
-    duplicated.
+    * The application services have access to both networks.
+    * The container names will be prefixed with ``gisnav-`` and suffixed
+      with ``-1``. For example deploying the ``mapserver`` service using the
+      Compose file will start a Docker container with the name
+      ``gisnav-mapserver-1``. This container name is also the hostname of the
+      container in the Docker bridge network DNS.
 
-.. tab-set::
+.. mermaid::
 
-    .. tab-item:: SITL simulation & GISNav on host
-        :selected:
+    graph TD
+        subgraph mavlink ["gisnav_mavlink"]
+            mavlink_qgc[qgc]
+            subgraph simulation ["Simulation Services"]
+                simulation_px4[px4]
+                simulation_ardupilot[ardupilot]
+            end
+            subgraph middleware ["Middleware Services"]
+                middleware_mavros[mavros]
+                middleware_micro_ros_agent[micro-ros-agent]
+                middleware_gscam[gscam]
+            end
+        end
 
-        .. warning::
-            The ``px4`` service must be started at the same time as or after
-            the ``qgc``, ``mavros`` and ``micro-ros-agent`` services are started.
-            Otherwise the ``px4`` service will not know their IP addresses in the
-            ``gisnav_mavlink`` network. See the `px4/entrypoint.sh
-            <https://github.com/hmakelin/gisnav/blob/master/docker/px4/entrypoint.sh>`_
-            file for details.
+        subgraph gis_mavlink ["gisnav_gis & gisnav_mavlink"]
+            subgraph application ["Application Services"]
+                application_gisnav[gisnav]
+                application_autoheal[autoheal]
+            end
+        end
 
-        .. raw:: html
-            :file: ../../../_build/external_interfaces.html
+        subgraph gis ["gisnav_gis"]
+            subgraph gis_services ["GIS Services"]
+                gis_mapserver[mapserver]
+                gis_qgis[qgis]
+            end
+            gis_postgres[postgres]
+        end
 
-    .. tab-item:: SITL simulation & GISNav on companion computer
-        :selected:
+        mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
+        simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
+        simulation_px4 -->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
+        simulation_px4 -->|5600/udp\nRTP H.264 Video| middleware_gscam
+        middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+        middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+        middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
-            .. todo::
-                Add diagrams for different deployment configurations, e.g.
-                including use Docker Compose overrides.
+        application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
+        gis_mapserver -->|5432/tcp| gis_postgres
+        gis_qgis -->|5432/tcp| gis_postgres
 
-    .. tab-item:: HIL simulation
-        :selected:
+        application -.-|Access to both networks| gis
+        mavlink -.-|Access to both networks| application
 
-            .. todo::
-                Add diagrams for different deployment configurations, e.g.
-                including use Docker Compose overrides.
+        classDef network fill:transparent,stroke-dasharray:5 5;
+        class mavlink,gis,gis_mavlink network
+
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

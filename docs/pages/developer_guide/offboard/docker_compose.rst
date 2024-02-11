@@ -45,7 +45,7 @@ depicted in the diagram resolve to their respective IP addresses.
 .. mermaid::
 
     graph TD
-        subgraph mavlink ["gisnav_mavlink"]
+        subgraph mavlink ["mavlink"]
             mavlink_qgc[qgc]
             subgraph simulation ["Simulation Services"]
                 simulation_px4[px4]
@@ -58,14 +58,14 @@ depicted in the diagram resolve to their respective IP addresses.
             end
         end
 
-        subgraph gis_mavlink ["gisnav_gis & gisnav_mavlink"]
+        subgraph gis_mavlink ["gis & mavlink"]
             subgraph application ["Application Services"]
                 application_gisnav[gisnav]
                 application_autoheal[autoheal]
             end
         end
 
-        subgraph gis ["gisnav_gis"]
+        subgraph gis ["gis"]
             subgraph gis_services ["GIS Services"]
                 gis_mapserver[mapserver]
                 gis_qgis[qgis]

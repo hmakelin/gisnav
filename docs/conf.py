@@ -197,7 +197,7 @@ rst_prolog = f"""
 .. _ROS 2 install instructions: https://docs.ros.org/en/{ros_version}/Installation.html
 .. |Docker Compose file| replace:: Docker Compose file
 .. _Docker Compose file: https://github.com/hmakelin/gisnav/blob/v{version}/docker/docker-compose.yaml
-"""
+"""  # noqa: E501
 
 rst_epilog = f"""
 Updated on {datetime.datetime.today().strftime("%b %d, %Y")}

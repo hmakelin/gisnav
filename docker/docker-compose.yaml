@@ -24,9 +24,6 @@ x-all-net: &all-net
 x-base: &base
   build:
     dockerfile: Dockerfile
-    #platforms:
-    #  - "linux/amd64"
-  #network_mode: host
 
 # devices is a sequence not a mapping so careful when merging
 # with something that defines its own devices
@@ -66,18 +63,12 @@ services:
       context: mapserver
       args:
         DOCKER_TAG: latest
-      #platforms:
-      #  - "linux/amd64"
-      #  - "linux/arm64"
     command: /usr/local/bin/start-server
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
-      #platforms:
-      #  - "linux/amd64"
-      #  - "linux/arm64"
     command: udp4 -p 8888
 
   mavros:
@@ -86,9 +77,6 @@ services:
       context: mavros
       args:
         ROS_VERSION: humble
-      #platforms:
-      #  - "linux/amd64"
-      #  - "linux/arm64"
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
 
   qgc:
@@ -116,7 +104,15 @@ services:
       args:
         ROS_VERSION: humble
     command: ros2 launch gisnav px4.dev.launch.py
+    depends_on:
+      - px4
+      - mavros
+      - micro-ros-agent
+      - gscam
+      - mapserver
 
+  # The px4 service depends on mavros, mapserver and micro-ros-agent because
+  # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu, *mavlink-net]
     build:
@@ -126,6 +122,10 @@ services:
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
+    depends_on:
+      - mavros
+      - mapserver
+      - micro-ros-agent
 
   ardupilot:
     <<: [*base, *x11, *nvidia-gpu, *mavlink-net]
@@ -178,13 +178,14 @@ services:
     build:
       context: qgis
     command: qgis
+    depends_on:
+      - postgres
+      - mapserver
 
   postgres:
     <<: [*base, *gis-net]
     build:
       context: postgres
-    #ports:
-    #  - "5432:5432"  # Map PostgreSQL's default port to the host
     environment:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav

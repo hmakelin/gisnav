@@ -79,6 +79,12 @@ depicted in the diagram resolve to their respective IP addresses.
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+The interdependencies between different services are hard-coded into the
+`docker-compose.yaml
+<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
+file and typically you will only need to explicitly start one service unless
+you also want to start optional services.
+
 Mock GPS demo
 ********************************************
 
@@ -92,14 +98,7 @@ the required containers.
     :caption: Build images and create containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav create --build \
-        mapserver \
-        micro-ros-agent \
-        mavros \
-        qgc \
-        px4 \
-        gisnav
-
+    docker compose -p gisnav create --build gisnav qgc
 
 .. include:: ../_shared/expose_xhost.rst
 
@@ -107,14 +106,7 @@ the required containers.
     :caption: Start containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav start \
-        mapserver \
-        micro-ros-agent \
-        mavros \
-        qgc \
-        px4 \
-        gisnav
-
+    docker compose -p gisnav start gisnav qgc
 
 .. include:: ../_shared/docker_compose_shutdown.rst
 
@@ -131,13 +123,11 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose create --build \
-        mapserver \
-        micro-ros-agent \
-        mavros \
         qgc \
         rviz \
         px4 \
         qgis \
+        mapserver \
         postgres
 
 .. include:: ../_shared/expose_xhost.rst
@@ -147,13 +137,11 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose start \
-        mapserver \
-        micro-ros-agent \
-        mavros \
         qgc \
         rviz \
         px4 \
         qgis \
+        mapserver \
         postgres
 
 After you have your supporting services deployed you would typically

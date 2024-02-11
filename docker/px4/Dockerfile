@@ -34,7 +34,9 @@ RUN cd $HOME && \
 
 WORKDIR PX4-Autopilot
 
-COPY . .
+# Do not copy Dockerfile so that it can be edited without invalidating this
+# layer
+COPY 6011_typhoon_h480 merge_yaml.py merge_xml.py dds_topics.yaml iris_hitl_ksql_airport.world entrypoint.sh etc .
 
 # Setup ksql_airport.world for HIL
 # empy must be version 3.3.4, see below commit
@@ -52,7 +54,7 @@ RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topic
 ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
 
 RUN mkdir -p /etc/mavlink-router && \
-    mv etc/mavlink-router/main.conf /etc/mavlink-router/main.conf && \
+    mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
     chmod +x ./entrypoint.sh
 
 # Make initial builds (for faster startup in the future)

@@ -124,8 +124,8 @@ services:
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
     depends_on:
       - mavros
-      - mapserver
       - micro-ros-agent
+      - qgc
 
   ardupilot:
     <<: [*base, *x11, *nvidia-gpu, *mavlink-net]

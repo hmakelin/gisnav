@@ -108,7 +108,7 @@ the required containers.
     :caption: Build images and create containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav create --build gisnav qgc
+    docker compose -p gisnav create --build gisnav
 
 .. include:: ../_shared/expose_xhost.rst
 
@@ -116,7 +116,7 @@ the required containers.
     :caption: Start containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav start gisnav qgc
+    docker compose -p gisnav start gisnav
 
 .. include:: ../_shared/docker_compose_shutdown.rst
 
@@ -133,12 +133,9 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose create --build \
-        qgc \
-        rviz \
         px4 \
-        qgis \
-        mapserver \
-        postgres
+        rviz \
+        qgis
 
 .. include:: ../_shared/expose_xhost.rst
 
@@ -147,18 +144,14 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose start \
-        qgc \
-        rviz \
         px4 \
-        qgis \
-        mapserver \
-        postgres
+        rviz \
+        qgis
 
 After you have your supporting services deployed you would typically
 :ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your
 locally installed development version of GISNav:
 
 .. include:: ../_shared/launch_gisnav_with_ros2_launch.rst
-
 
 .. include:: ../_shared/docker_compose_shutdown.rst

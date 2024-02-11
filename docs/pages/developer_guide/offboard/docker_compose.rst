@@ -79,21 +79,21 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
         application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
-        gis_mapserver -->|5432/tcp| gis_postgres
+        gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
+        application_gisnav -->|5432/tcp| gis_postgres
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink network
+
 
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The interdependencies between different services are hard-coded into the
-`docker-compose.yaml
-<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
-file and typically you will only need to explicitly start one service unless
-you also want to start optional services.
+|Docker Compose file|_ and typically you will need to explicitly start
+only a few services unless you also want to start optional services.
 
 Mock GPS demo
 ********************************************

@@ -1,6 +1,4 @@
-ARG DOCKER_TAG=latest
-
-FROM camptocamp/mapserver:${DOCKER_TAG}
+FROM ubuntu:jammy
 
 ARG NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
 ARG OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
@@ -16,15 +14,24 @@ ARG DEM_FILENAME="USGS_13_n38w123_20220810.tif"
 ARG DEM_4326_FILENAME="USGS_13_n38w123_20220810__EPSG_4326.tif"
 ARG COMPOUND_FILENAME="osm-buildings-dem.tif"
 
-COPY mapfiles/ /etc/mapserver/
-COPY templates/ /etc/mapserver/
+ENV DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /etc/mapserver
+# Update apt repository and install necessary packages
+RUN apt-get update && apt-get install -y \
+    cgi-mapserver \
+    mapserver-bin \
+    apache2 \
+    libapache2-mod-fcgid \
+    gdal-bin \
+    libgdal-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install tools to download and unzip maps from Google Drive
 RUN apt-get update && \
     apt-get -y install unzip python3-pip wget && \
     pip3 install gdown
+
+WORKDIR /etc/mapserver
 
 # Download NAIP raster imagery
 RUN gdown $NAIP_GDOWN_ID -O $NAIP_ZIP_FILENAME && \
@@ -57,9 +64,32 @@ RUN wget "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/hist
 # Assume DEM is low resolution enough to not model the buildings already included in OSM Buildings
 RUN gdal_calc.py -A $DEM_4326_FILENAME -B $OSM_TIF_FILENAME --outfile=$COMPOUND_FILENAME --calc="A+B" --extent=intersect
 
+COPY mapfiles/ /etc/mapserver/
+COPY templates/ /etc/mapserver/
+
+# Enable Apache modules
+RUN a2enmod rewrite && a2enmod fcgid && a2enmod cgi
+
+# Configure Apache to serve the MapServer CGI
+# Add .cgi suffix to the executable to make Apache correctly handle the
+# requests
+RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver.conf \
+    && echo "    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "    AddHandler fcgid-script .fcgi" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "    AddHandler cgi-script .cgi .pl" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "    Require all granted" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "</Directory>" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/" >> /etc/apache2/conf-available/mapserver.conf \
+    && a2enconf mapserver \
+    && mv /usr/lib/cgi-bin/mapserv /usr/lib/cgi-bin/mapserv.cgi \
+    && chmod +x /usr/lib/cgi-bin/mapserv.cgi
+
 # Setup complete, start MapServer with default mapfile
 COPY entrypoint.sh /
 
 RUN chmod 755 /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+# Command to start Apache in the foreground
+CMD ["apache2ctl", "-D", "FOREGROUND"]

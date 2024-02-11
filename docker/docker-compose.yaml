@@ -61,9 +61,7 @@ services:
     <<: [*base, *gis-net]
     build:
       context: mapserver
-      args:
-        DOCKER_TAG: latest
-    command: /usr/local/bin/start-server
+    command: apache2ctl -D FOREGROUND
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]

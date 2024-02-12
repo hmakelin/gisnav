@@ -87,9 +87,6 @@ RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver
 # Setup complete, start MapServer with default mapfile
 COPY entrypoint.sh /
 
-RUN chmod 755 /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Command to start Apache in the foreground
-CMD ["apache2ctl", "-D", "FOREGROUND"]

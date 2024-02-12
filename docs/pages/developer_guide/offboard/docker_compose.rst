@@ -79,21 +79,21 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
         application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
-        gis_mapserver -->|5432/tcp| gis_postgres
+        gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
+        application_gisnav -->|5432/tcp| gis_postgres
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink network
+
 
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The interdependencies between different services are hard-coded into the
-`docker-compose.yaml
-<https://github.com/hmakelin/gisnav/blob/master/docker/docker-compose.yaml>`_
-file and typically you will only need to explicitly start one service unless
-you also want to start optional services.
+|Docker Compose file|_ and typically you will need to explicitly start
+only a few services unless you also want to start optional services.
 
 Mock GPS demo
 ********************************************
@@ -108,7 +108,7 @@ the required containers.
     :caption: Build images and create containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav create --build gisnav qgc
+    docker compose -p gisnav create --build gisnav
 
 .. include:: ../_shared/expose_xhost.rst
 
@@ -116,7 +116,7 @@ the required containers.
     :caption: Start containers
 
     cd ~/colcon_ws/src/gisnav/docker
-    docker compose -p gisnav start gisnav qgc
+    docker compose -p gisnav start gisnav
 
 .. include:: ../_shared/docker_compose_shutdown.rst
 
@@ -133,12 +133,9 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose create --build \
-        qgc \
-        rviz \
         px4 \
-        qgis \
-        mapserver \
-        postgres
+        rviz \
+        qgis
 
 .. include:: ../_shared/expose_xhost.rst
 
@@ -147,18 +144,14 @@ we do not include the ``gisnav`` service which is assumed to be
 
     cd ~/colcon_ws/src/gisnav/docker
     docker compose start \
-        qgc \
-        rviz \
         px4 \
-        qgis \
-        mapserver \
-        postgres
+        rviz \
+        qgis
 
 After you have your supporting services deployed you would typically
 :ref:`use the ROS 2 launch system <Use ROS 2 launch system>` to launch your
 locally installed development version of GISNav:
 
 .. include:: ../_shared/launch_gisnav_with_ros2_launch.rst
-
 
 .. include:: ../_shared/docker_compose_shutdown.rst

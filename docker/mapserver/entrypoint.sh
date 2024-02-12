@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
-export MS_MAPFILE=/etc/mapserver/mapserver.map
+# Remove any stale PID or socket files before starting Apache
+rm -f /var/run/apache2/apache2.pid
+rm -f /var/run/apache2/cgisock.*
 
 exec "$@"

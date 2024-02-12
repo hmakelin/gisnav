@@ -3,8 +3,10 @@ version: "3.4"
 networks:
   gis:
     driver: bridge
+    attachable: true
   mavlink:
     driver: bridge
+    attachable: true
 
 x-mavlink-net: &mavlink-net
   networks:
@@ -61,9 +63,7 @@ services:
     <<: [*base, *gis-net]
     build:
       context: mapserver
-      args:
-        DOCKER_TAG: latest
-    command: /usr/local/bin/start-server
+    command: apache2ctl -D FOREGROUND
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
@@ -124,8 +124,8 @@ services:
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
     depends_on:
       - mavros
-      - mapserver
       - micro-ros-agent
+      - qgc
 
   ardupilot:
     <<: [*base, *x11, *nvidia-gpu, *mavlink-net]
@@ -138,7 +138,6 @@ services:
     privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
 
-  # Note: build context is repository root
   rviz:
     <<: [*base, *x11, *ros, *nvidia-gpu, *mavlink-net]
     build:

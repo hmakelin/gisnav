@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies that are common across both architectures
 RUN apt-get update && apt-get install -y \
+    gdal-bin \
     wget \
     libasound2 \
     libgtk-3-0 \

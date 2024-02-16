@@ -17,17 +17,26 @@
                 <p>Below you can find websites that provide high resolution
                     orthoimagery in the public domain or with public-domain-like licensing
                     terms.</p>
-                <p>You should be accessing this page using the onboard browser.
-                    The onboard browser will download the files to the onboard
-                    <code>/etc/mapserver</code> shared volume by default where the GIS
-                    server will be able to pick them up. You can browse to any website to
-                    download imagery: as long as you download it using the onboard browser
-                    it will be placed in the correct folder. Any GDAL supported raster
+                <p>You should be accessing this page using the Firefox web browser
+                    included with the downloader service. The downloader service
+                    will automatically extract the downloaded files to the
+                    onboard <code>/etc/mapserver</code> shared volume from where
+                    MapServer is able to pick them up. Don't worry - the mapfile
+                    will be regenerated when files are added so your MapServer
+                    configuration is always up-to-date.</p>
+                <p>You can browse to any website to download imagery: as long
+                    as you download it using the downloader service it will be
+                    placed on the shared volume. Any GDAL supported raster
                     formats - zipped or unzipped - should work.</p>
                 <ul class="flex-column">
                     <li class="nav-item">
                         <a class="nav-link" href="https://earthexplorer.usgs.gov/">
                             Earth Explorer - USGS NAIP (USA)
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://drive.google.com/uc?id=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U&export=download">
+                            Google Drive - USGS NAIP (USA) - no login
                         </a>
                     </li>
                     <li class="nav-item">
@@ -39,7 +48,9 @@
                 </ul>
                 <h3>How did I get here?</h3>
                 <p>You can start the onboard browser and open this page by typing in the
-                    following command in your Bash shell:</p>
+                    following commands in your Bash shell:</p>
+                <code>cd ~/colcon_ws/src/gisnav/docker</code>
+                <br>
                 <code>docker compose -p gisnav up downloader</code>
             </div>
         </main>

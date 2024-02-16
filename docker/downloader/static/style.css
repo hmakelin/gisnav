@@ -3,17 +3,13 @@ body {
 }
 
 footer {
-    padding: 10px;
-    word-wrap: break-word;
-    margin-top: auto;
-    width: 100%;
-    bottom: 0
+  word-wrap: break-word;
+  margin-top: auto;
 }
 
 .container {
   max-width: 400px;
   margin: 0 auto;
-  padding: 20px;
 }
 
 main {

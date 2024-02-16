@@ -205,4 +205,4 @@ services:
       - mapserver-volume:/etc/mapserver
 
 volumes:
-  - mapserver-volume:
+  mapserver-volume:

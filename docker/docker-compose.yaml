@@ -64,6 +64,8 @@ services:
     build:
       context: mapserver
     command: apache2ctl -D FOREGROUND
+    volumes:
+      - mapserver-volume:/etc/mapserver  # TODO: make read only? :ro
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
@@ -189,3 +191,18 @@ services:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
+
+  downloader:
+    <<: [*base, *gis-net] # TODO: make this work with *x11 and *gpu extensions
+    build:
+      context: downloader
+    command: firefox "file:///srv/downloader/index.html"
+    environment:
+      QT_X11_NO_MITSHM: 1 # TODO: make this work with *x11 extension
+      DISPLAY: ${DISPLAY} # TODO: make this work with *x11 extension
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix # TODO: make this work with *x11 extension
+      - mapserver-volume:/etc/mapserver
+
+volumes:
+  - mapserver-volume:

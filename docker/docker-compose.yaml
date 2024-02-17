@@ -38,15 +38,22 @@ x-nvidia-gpu: &nvidia-gpu
             count: 1
             capabilities: [ gpu ]
 
-# volumes is a sequence not a mapping so careful when merging
-# with something that defines its own volumes
-x-x11: &x11
+x-x11-environment: &x11-environment
   environment:
     QT_X11_NO_MITSHM: 1
     DISPLAY: ${DISPLAY}
+
+x-x11-volumes: &x11-volumes
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix:ro
     - /dev/dri:/dev/dri  # Needed at least by rviz
+
+# volumes is a sequence not a mapping so careful when merging with something
+# that defines its own volumes.
+# This is split into sub-extensions because downloader needs the environment
+# but also needs to extend volumes and YAML does not support merging sequences.
+x-x11: &x11
+  <<: [*x11-environment, *x11-volumes]
 
 x-ros: &ros
   environment:
@@ -193,15 +200,12 @@ services:
       POSTGRES_PASSWORD: gisnav
 
   downloader:
-    <<: [*base, *gis-net] # TODO: make this work with *x11 and *gpu extensions
+    <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
       context: downloader
     command: firefox "file:///srv/downloader/index.html"
-    environment:
-      QT_X11_NO_MITSHM: 1 # TODO: make this work with *x11 extension
-      DISPLAY: ${DISPLAY} # TODO: make this work with *x11 extension
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix # TODO: make this work with *x11 extension
+      - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
       - mapserver-volume:/etc/mapserver
 
 volumes:

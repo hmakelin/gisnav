@@ -12,6 +12,10 @@
 # target directory, while keeping the download directory clean and free of processed files.
 set -e
 
+# Remove any stale PID or socket files before starting Apache
+rm -f /var/run/apache2/apache2.pid
+rm -f /var/run/apache2/cgisock.*
+
 # Script settings and monitored directory configurations.
 DOWNLOAD_DIR="/root/Downloads"
 TARGET_DIR="/etc/mapserver/imagery"

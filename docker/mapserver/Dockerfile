@@ -1,4 +1,18 @@
-FROM ubuntu:jammy
+FROM ubuntu:jammy AS apache
+
+# Update apt repository and install necessary packages
+RUN apt-get update && apt-get install -y \
+    cgi-mapserver \
+    mapserver-bin \
+    apache2 \
+    libapache2-mod-fcgid \
+    gdal-bin \
+    libgdal-dev \
+    unzip \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM apache AS mapserver
 
 ARG NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
 ARG OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
@@ -16,19 +30,9 @@ ARG COMPOUND_FILENAME="osm-buildings-dem.tif"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update apt repository and install necessary packages
-RUN apt-get update && apt-get install -y \
-    cgi-mapserver \
-    mapserver-bin \
-    apache2 \
-    libapache2-mod-fcgid \
-    gdal-bin \
-    libgdal-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install tools to download and unzip maps from Google Drive
 RUN apt-get update && \
-    apt-get -y install unzip python3-pip wget && \
+    apt-get -y install python3-pip && \
     pip3 install gdown
 
 WORKDIR /etc/mapserver
@@ -87,6 +91,63 @@ RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver
 # Setup complete, start MapServer with default mapfile
 COPY entrypoint.sh /
 
-RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+FROM apache AS fileserver
+
+# Avoid prompts from apt and messages from debconf
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y \
+    php \
+    libapache2-mod-php \
+    php-zip \
+    php-mbstring \
+    php-dom \
+    php-xml \
+    inotify-tools \
+    libasound2 \
+    libgtk-3-0 \
+    libdbus-glib-1-2 \
+    libx11-xcb1 \
+    bzip2 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /var/www/ && \
+    cd /var/www && \
+    wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
+    unzip filegator_latest.zip && \
+    rm filegator_latest.zip
+
+RUN chown -R www-data:www-data filegator/ && \
+    chmod -R 775 filegator/
+
+RUN echo " \
+<VirtualHost *:80> \
+    DocumentRoot /var/www/filegator/dist \
+</VirtualHost> \
+" >> /etc/apache2/sites-available/filegator.conf
+
+# Install Firefox (not via Snap)
+# Detect architecture using dpkg (more reliable in Debian-based containers)
+RUN ARCH=$(dpkg --print-architecture) && \
+    FIREFOX_VERSION=102.0 && \
+    if [ "$ARCH" = "amd64" ]; then \
+        FIREFOX_URL="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        FIREFOX_URL="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-aarch64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2"; \
+    else \
+        echo "Unsupported architecture"; exit 1; \
+    fi && \
+    wget -q ${FIREFOX_URL} -O /tmp/firefox.tar.bz2 && \
+    tar xjf /tmp/firefox.tar.bz2 -C /opt/ && \
+    ln -s /opt/firefox/firefox /usr/local/bin/firefox && \
+    rm /tmp/firefox.tar.bz2
+
+RUN a2dissite 000-default.conf && a2ensite filegator.conf
+
+# Setup complete, start MapServer with default mapfile
+COPY fs_entrypoint.sh /
 
 ENTRYPOINT ["/entrypoint.sh"]

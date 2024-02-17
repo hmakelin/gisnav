@@ -71,7 +71,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
                 gis_postgres[postgres]
                 gis_mapserver_volume[mapserver-volume]
             end
-            gis_downloader[downloader]
+            gis_fileserver[fileserver]
         end
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
@@ -87,7 +87,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
         gis_mapserver ---|/etc/mapserver| gis_mapserver_volume
-        gis_downloader ---|/etc/mapserver| gis_mapserver_volume
+        gis_fileserver ---|/etc/mapserver| gis_mapserver_volume
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink network

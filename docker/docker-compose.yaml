@@ -70,6 +70,7 @@ services:
     <<: [*base, *gis-net]
     build:
       context: mapserver
+      target: mapserver
     command: apache2ctl -D FOREGROUND
     volumes:
       - mapserver-volume:/etc/mapserver  # TODO: make read only? :ro
@@ -199,11 +200,12 @@ services:
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
 
-  downloader:
+  fileserver:
     <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
-      context: downloader
-    command: firefox "file:///srv/downloader/index.html"
+      context: mapserver  # mapserver multi-stage build builds fileserver too
+      target: fileserver
+    command: apache2ctl -D FOREGROUND && firefox "http://gisnav-fileserver-1"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
       - mapserver-volume:/etc/mapserver

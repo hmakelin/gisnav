@@ -47,18 +47,18 @@ do
 
     # Regenerate the VRT file if a raster file is detected or after unzipping
     if [[ "$BASENAME" =~ \.(tif|tiff|jp2|ecw|img)$ ]]; then
-        echo "Raster file detected, regenerating VRT..."
+        echo "Raster file detected, regenerating VRT. You can safely ignore errors or warnings relating to missing files below unless you expect specific files to be present. Pay attention to the difference between the two supported TIFF file extensions: .tif and .tiff."
         # Update the VRT file to include all raster files in DOWNLOAD_DIR
         gdalbuildvrt "$VRT_FILE" "$DOWNLOAD_DIR"/*.tif "$DOWNLOAD_DIR"/*.tiff "$DOWNLOAD_DIR"/*.jp2 "$DOWNLOAD_DIR"/*.ecw "$DOWNLOAD_DIR"/*.img
 
-        # Copy all raster files to TARGET_DIR
+        # Move all raster files to TARGET_DIR
         echo "Moving raster files to $TARGET_DIR..."
         find "$DOWNLOAD_DIR" -regex ".*\.\(tif\|tiff\|jp2\|ecw\|img\)$" -exec mv {} "$TARGET_DIR/" \;
 
-        # Copy the VRT file to TARGET_DIR *after* moving the raster files
+        # Move the VRT file to TARGET_DIR *after* moving the raster files
         # as this overwrites the potential old one already there
         echo "Moving VRT file to $TARGET_DIR..."
-        cp "$VRT_FILE" "$TARGET_DIR/$VRT_FILE"
+        mv "$VRT_FILE" "$TARGET_DIR/$VRT_FILE"
     fi
 done &
 

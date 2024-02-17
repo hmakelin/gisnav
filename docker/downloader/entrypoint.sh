@@ -13,9 +13,12 @@
 set -e
 
 # Script settings and monitored directory configurations.
-DOWNLOAD_DIR="/etc/mapserver"
+DOWNLOAD_DIR="/root/Downloads"
 TARGET_DIR="/etc/mapserver/imagery"
 VRT_FILE="downloaded-orthoimagery.vrt"
+
+mkdir -p $DOWNLOAD_DIR
+mkdir -p $TARGET_DIR
 
 # Start monitoring the download directory for new files, deletions, and movements.
 inotifywait -m -e create -e moved_to -e delete "$DOWNLOAD_DIR" --format '%w%f' | while read FILE
@@ -23,12 +26,23 @@ do
     echo "Detected change in file: $FILE"
     BASENAME=$(basename "$FILE")
 
+    # Skip temporary download files
+    if [[ "$BASENAME" =~ \.part$|\.download$ ]]; then
+        echo "Ignoring partial download file: $FILE"
+        continue
+    fi
+
     if [[ "$BASENAME" =~ \.zip$ ]]; then
-        # If the file is a ZIP file, unzip it to the DOWNLOAD_DIR
-        echo "Unzipping $FILE..."
-        unzip -o "$FILE" -d "$DOWNLOAD_DIR"
-        # Remove the ZIP file after unzipping if desired
-        rm "$FILE"
+        # Attempt to unzip the file
+        echo "Attempting to unzip $FILE..."
+        if ! unzip -o "$FILE" -d "$DOWNLOAD_DIR" > /dev/null 2>&1; then
+            echo "Unzip failed, possibly due to incomplete download: $FILE. Will retry on next trigger."
+            continue
+        else
+            echo "Unzipped successfully: $FILE"
+            # Optionally, delete the ZIP file after successful extraction
+            rm "$FILE"
+        fi
     fi
 
     # Regenerate the VRT file if a raster file is detected or after unzipping
@@ -46,6 +60,6 @@ do
         echo "Moving VRT file to $TARGET_DIR..."
         cp "$VRT_FILE" "$TARGET_DIR/$VRT_FILE"
     fi
-done
+done &
 
 exec "$@"

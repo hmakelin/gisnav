@@ -7,6 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install dependencies that are common across both architectures
 RUN apt-get update && apt-get install -y \
     gdal-bin \
+    inotify-tools \
+    unzip \
     wget \
     libasound2 \
     libgtk-3-0 \
@@ -33,5 +35,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm /tmp/firefox.tar.bz2
 
 COPY static /srv/downloader
+COPY entrypoint.sh /
+
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

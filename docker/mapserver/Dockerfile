@@ -91,6 +91,8 @@ RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver
 # Setup complete, start MapServer with default mapfile
 COPY entrypoint.sh /
 
+RUN chmod +x entrypoint.sh
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 FROM apache AS fileserver
@@ -114,21 +116,6 @@ RUN apt-get update && \
     bzip2 && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /var/www/ && \
-    cd /var/www && \
-    wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
-    unzip filegator_latest.zip && \
-    rm filegator_latest.zip
-
-RUN chown -R www-data:www-data filegator/ && \
-    chmod -R 775 filegator/
-
-RUN echo " \
-<VirtualHost *:80> \
-    DocumentRoot /var/www/filegator/dist \
-</VirtualHost> \
-" >> /etc/apache2/sites-available/filegator.conf
-
 # Install Firefox (not via Snap)
 # Detect architecture using dpkg (more reliable in Debian-based containers)
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -145,9 +132,23 @@ RUN ARCH=$(dpkg --print-architecture) && \
     ln -s /opt/firefox/firefox /usr/local/bin/firefox && \
     rm /tmp/firefox.tar.bz2
 
+RUN mkdir -p /var/www/ && \
+    cd /var/www && \
+    wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
+    unzip filegator_latest.zip && \
+    rm filegator_latest.zip && \
+    chown -R www-data:www-data filegator && \
+    chmod -R 775 filegator
+
+RUN echo "<VirtualHost *:80>" > /etc/apache2/sites-available/filegator.conf && \
+    echo "  DocumentRoot /var/www/filegator/dist" >> /etc/apache2/sites-available/filegator.conf && \
+    echo "</VirtualHost>" >> /etc/apache2/sites-available/filegator.conf
+
 RUN a2dissite 000-default.conf && a2ensite filegator.conf
 
 # Setup complete, start MapServer with default mapfile
 COPY fs_entrypoint.sh /
 
-ENTRYPOINT ["/entrypoint.sh"]
+RUN chmod +x fs_entrypoint.sh
+
+ENTRYPOINT ["/fs_entrypoint.sh"]

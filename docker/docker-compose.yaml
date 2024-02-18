@@ -73,7 +73,7 @@ services:
       target: mapserver
     command: apache2ctl -D FOREGROUND
     volumes:
-      - mapserver-volume:/etc/mapserver  # TODO: make read only? :ro
+      - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
@@ -208,7 +208,7 @@ services:
     command: apache2ctl -D FOREGROUND && firefox "http://gisnav-fileserver-1"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
-      - mapserver-volume:/etc/mapserver
+      - maps-volume:/var/www/filegator/repository
 
 volumes:
-  mapserver-volume:
+  maps-volume:

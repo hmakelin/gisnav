@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     cgi-mapserver \
     mapserver-bin \
     apache2 \
+    inotify-tools \
     libapache2-mod-fcgid \
     gdal-bin \
     libgdal-dev \
@@ -91,7 +92,7 @@ RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver
 # Setup complete, start MapServer with default mapfile
 COPY entrypoint.sh /
 
-RUN chmod +x entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -108,7 +109,6 @@ RUN apt-get update && \
     php-mbstring \
     php-dom \
     php-xml \
-    inotify-tools \
     libasound2 \
     libgtk-3-0 \
     libdbus-glib-1-2 \

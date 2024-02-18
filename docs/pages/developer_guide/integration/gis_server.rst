@@ -188,3 +188,28 @@ featureless buildings.
 
     LoFTR does not find keypoints on featureless buildings or terrain (SITL
     simulation)
+
+Managing onboard map rasters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+    Work in progress
+
+A shared volume is used to provide a way for external file manager services
+to add and delete maps onboard. The MapServer static mapfile points to a VRT
+file which is automatically regenerated whenever a change is detected on the
+shared volume which contains the source raster files.
+
+.. mermaid::
+
+    graph TB
+        subgraph mapserver
+            note1[inotify automatically extracts GDAL supported\nformats and regenerates VRT file to which\nthe default mapfile points]
+            subgraph SharedVolume[Shared volume]
+                /etc/mapserver/imagery
+                /etc/mapserver/dems
+            end
+            note2[mapfile and VRT file not on shared volume.\nOnly external user managed map rasters.]
+        end
+        fileserver[External file manager] -->|add/delete/view| SharedVolume
+        GDAL[GDAL supported raster formats] -->|.zip, .jp2, .tif, .tiff, .ecw, etc.| SharedVolume

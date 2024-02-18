@@ -205,7 +205,7 @@ services:
     build:
       context: mapserver  # mapserver multi-stage build builds fileserver too
       target: fileserver
-    command: apache2ctl -D FOREGROUND && firefox "http://gisnav-fileserver-1"
+    command: firefox "http://gisnav-fileserver-1"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
       - maps-volume:/var/www/filegator/repository

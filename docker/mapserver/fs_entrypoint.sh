@@ -5,4 +5,6 @@ set -e
 rm -f /var/run/apache2/apache2.pid
 rm -f /var/run/apache2/cgisock.*
 
+apache2ctl -D FOREGROUND &
+
 exec "$@"

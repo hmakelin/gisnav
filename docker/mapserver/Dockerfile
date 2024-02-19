@@ -104,6 +104,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y \
     php \
+    jq \
     libapache2-mod-php \
     php-zip \
     php-mbstring \
@@ -132,13 +133,29 @@ RUN ARCH=$(dpkg --print-architecture) && \
     ln -s /opt/firefox/firefox /usr/local/bin/firefox && \
     rm /tmp/firefox.tar.bz2
 
+COPY logo-no-background.svg /
+
+# Setup filegator and add some customization so that we know we are
+# still within GISNav. Granting guest user permissions here will skip the login
+# screen on launch.
+# TODO clone specific version and build with customizations - current customizations
+#  are very brittle in case the app structure is changed in a new release
 RUN mkdir -p /var/www/ && \
     cd /var/www && \
     wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
     unzip filegator_latest.zip && \
     rm filegator_latest.zip && \
     chown -R www-data:www-data filegator && \
-    chmod -R 775 filegator
+    chmod -R 775 filegator && \
+    cd filegator && \
+    cp configuration_sample.php configuration.php && \
+    sed -i "s/'app_name' => 'FileGator'/'app_name' => 'GISNav'/g" configuration.php && \
+    sed -i "s|'logo' => 'https://filegator.io/filegator_logo.svg'|'logo' => 'img/logo-no-background.svg'|g" configuration.php && \
+    mkdir -p dist/img && \
+    cp /logo-no-background.svg dist/img && \
+    sed -i 's/#34b891/#ff4136/g' dist/css/app.css && \
+    jq '.["2"].permissions = "read|write|upload|download|zip"' private/users.json.blank > temp.json && mv temp.json private/users.json
+
 
 RUN echo "<VirtualHost *:80>" > /etc/apache2/sites-available/filegator.conf && \
     echo "  DocumentRoot /var/www/filegator/dist" >> /etc/apache2/sites-available/filegator.conf && \
@@ -149,6 +166,6 @@ RUN a2dissite 000-default.conf && a2ensite filegator.conf
 # Setup complete, start MapServer with default mapfile
 COPY fs_entrypoint.sh /
 
-RUN chmod +x fs_entrypoint.sh
+RUN chmod +x /fs_entrypoint.sh
 
 ENTRYPOINT ["/fs_entrypoint.sh"]

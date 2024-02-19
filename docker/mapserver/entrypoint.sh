@@ -39,6 +39,7 @@ do
     if [[ "$BASENAME" =~ \.zip$ ]]; then
         # Attempt to unzip the file
         echo "Attempting to unzip $FILE..."
+        sleep 0.5  # unzip might fail without this sleep if upload just completed
         if ! unzip -o "$FILE" -d "$DOWNLOAD_DIR" > /dev/null 2>&1; then
             echo "Unzip failed, possibly due to incomplete download: $FILE. Will retry on next trigger."
             continue

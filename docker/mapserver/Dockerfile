@@ -151,6 +151,7 @@ RUN mkdir -p /var/www/ && \
     cp configuration_sample.php configuration.php && \
     sed -i "s/'app_name' => 'FileGator'/'app_name' => 'GISNav'/g" configuration.php && \
     sed -i "s|'logo' => 'https://filegator.io/filegator_logo.svg'|'logo' => 'img/logo-no-background.svg'|g" configuration.php && \
+    sed -i 's/100 \* 1024 \* 1024/2 \* 1024 \* 1024 \* 1024/g' configuration.php && \
     mkdir -p dist/img && \
     cp /logo-no-background.svg dist/img && \
     sed -i 's/#34b891/#ff4136/g' dist/css/app.css && \

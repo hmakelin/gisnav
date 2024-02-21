@@ -69,7 +69,7 @@ services:
   mapserver:
     <<: [*base, *gis-net]
     build:
-      context: mapserver
+      context: apache
       target: mapserver
     command: apache2ctl -D FOREGROUND
     volumes:
@@ -203,7 +203,7 @@ services:
   fileserver:
     <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
-      context: mapserver  # mapserver multi-stage build builds fileserver too
+      context: apache
       target: fileserver
     command: firefox "http://gisnav-fileserver-1"
     volumes:

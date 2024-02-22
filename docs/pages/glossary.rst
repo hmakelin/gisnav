@@ -592,6 +592,10 @@ ____________________________________________________
     RPY
         Roll, pitch, yaw
 
+    SCP
+    scp
+        Secure Copy Protocol
+
     SITL
         Software In The Loop simulation
 
@@ -671,6 +675,8 @@ relate to external interfaces.
         Tool for defining and running multi-container :term:`Docker` applications:
         `docs.docker.com/compose <https://docs.docker.com/compose/>`_
 
+    FileGator
+        A :term:`FOSS` self-hosted file management application: `docs.filegator.io/ <https://docs.filegator.io/>`_
     Gazebo
         Simulation software: `gazebosim.org <https://gazebosim.org/home>`_
 

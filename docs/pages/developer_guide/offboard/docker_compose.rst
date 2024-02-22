@@ -18,6 +18,10 @@ Prerequisites
 
 .. include:: ../_shared/prerequisites/compose_project_name_env_variable.rst
 
+
+.. include:: ../../../../docker/DOCKER.rst
+
+
 Overview of services
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -67,7 +71,11 @@ Docker container with the hostname ``gisnav-mapserver-1``.
                 gis_mapserver[mapserver]
                 gis_qgis[qgis]
             end
-            gis_postgres[postgres]
+            subgraph data_services ["Data Services"]
+                gis_postgres[postgres]
+                gis_maps_volume[maps-volume]
+            end
+            gis_fileserver[fileserver]
         end
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
@@ -77,11 +85,13 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+        application_gisnav -->|5432/tcp| gis_postgres
 
         application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
         gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
-        application_gisnav -->|5432/tcp| gis_postgres
+        gis_mapserver ---|/etc/mapserver| gis_maps_volume
+        gis_fileserver ---|/etc/mapserver| gis_maps_volume
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink network

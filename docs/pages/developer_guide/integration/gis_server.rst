@@ -41,8 +41,11 @@ more convenient to proxy an existing commercial tile-based endpoint.
     of the service you are using and that it fits your planned use case.
 
 If you are fine with using maps for the :term:`KSQL` airport area only, then you
-can use the :ref:`provided Docker Compose mapserver service <Overview of services>`,
-otherwise follow these instructions to self-host a :term:`MapServer` instance:
+can use the :ref:`provided Docker Compose mapserver service <Overview of services>`.
+See :ref:`Managing onboard map rasters` for how to add more maps for ``mapserver``
+service.
+
+Otherwise follow these instructions to self-host a :term:`MapServer` instance:
 
 .. seealso::
     See :ref:`GIS software` for :term:`free and open-source software (FOSS)
@@ -162,7 +165,7 @@ format. The GISNav ``mapserver`` service uses vector-format elevation data from
 `OSM Buildings`_ to determine building heights in the simulation area to improve
 accuracy* of pose estimates especially at lower flight altitudes where the
 perceived planarity of the terrain is lower. For an example on how the vector
-data is rasterized using GDAL, see the `mapserver service Dockerfile`_.
+data is rasterized using GDAL, see this `old mapserver service Dockerfile`_.
 
 .. note::
     \*The GISNav SITL demo simulation does not actually benefit from the building
@@ -171,7 +174,7 @@ data is rasterized using GDAL, see the `mapserver service Dockerfile`_.
     information.
 
 .. _OSM Buildings: https://osmbuildings.org/
-.. _mapserver service Dockerfile: https://github.com/hmakelin/gisnav/blob/master/docker/mapserver/Dockerfile
+.. _mapserver service Dockerfile: https://github.com/hmakelin/gisnav/blob/v0.65.0/docker/mapserver/Dockerfile
 
 SITL simulation quirks with DEMs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -188,3 +191,29 @@ featureless buildings.
 
     LoFTR does not find keypoints on featureless buildings or terrain (SITL
     simulation)
+
+Managing onboard map rasters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A shared volume is used to provide a way for external file manager services
+to add and delete maps onboard. The MapServer static mapfile points to a VRT
+file which is automatically regenerated whenever a change is detected on the
+shared volume which contains the source raster files.
+
+A sample :term:`FileGator` based ``fileserver`` service is defined in the
+``docker/docker-compose.yaml`` for managing maps on the shared volume. The
+application is not necessary - e.g. ``scp`` could also be used instead.
+
+.. mermaid::
+
+    graph TB
+        subgraph mapserver
+            note1[inotify automatically extracts GDAL supported\nformats and regenerates VRT file to which\nthe default mapfile points]
+            subgraph SharedVolume[Shared volume]
+                /etc/mapserver/maps/imagery
+                /etc/mapserver/maps/dem
+            end
+            note2[mapfile and VRT file not on shared volume.\nOnly external user managed map rasters.]
+        end
+        fileserver[External file manager] -->|add/delete| SharedVolume
+        GDAL[GDAL supported raster formats] -->|.zip, .jp2, .tif, .tiff, .ecw, etc.| SharedVolume

@@ -1,0 +1,43 @@
+MAP
+  NAME "gisnav_wms"
+  PROJECTION
+    "init=epsg:4326"
+  END
+  EXTENT -180 -90 180 90
+  WEB
+    METADATA
+        "wms_title"           "GISNav WMS"
+        "wms_abstract"        "GISNav orthoimagery and digital elevation model (DEM) WMS service"
+        "wms_onlineresource"  "http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wms_srs"             "EPSG:3857 EPSG:4326"
+        "wms_enable_request"  "GetMap GetCapabilities"
+        "wms_feature_info_mime_type" "text/plain"
+    END
+  END
+  LAYER
+    NAME          "imagery"
+    DATA          "/etc/mapserver/imagery.vrt"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:26910"
+    END
+    METADATA
+      "wms_title"       "GISNav orthoimagery"
+      "wms_abstract"    "Aggregated orthoimagery from shared volume orthoimagery folder"
+    END
+    TOLERANCE 1
+  END
+  LAYER
+    NAME          "dem"
+    DATA          "/etc/mapserver/dem.vrt"
+    TYPE RASTER
+    PROJECTION
+      "init=epsg:4326"
+    END
+    METADATA
+      "wms_title"       "GISNav digital elevation models (DEM)"
+      "wms_abstract"    "Aggregated Digital Elevation Model (DEM) from shared volume dem folder"
+    END
+    TOLERANCE 1
+  END
+END

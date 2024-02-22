@@ -116,7 +116,7 @@ class GISNode(Node):
         resolution aerial or satellite imagery.
     """
 
-    ROS_D_DEM_LAYERS = ["osm-buildings-dem"]
+    ROS_D_DEM_LAYERS = ["dem"]
     """Default WMS GetMap request layers parameter for DEM raster
 
     .. note::

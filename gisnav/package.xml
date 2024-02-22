@@ -34,6 +34,19 @@
   <depend>tf_transformations</depend>
   <depend>tf2_ros</depend>
 
+  <!-- torch, kornia (deep learning dependencies) are still in setup.py -->
+  <depend>python3-opencv</depend>s
+  <depend>python3-numpy</depend>
+  <depend>python3-pyproj</depend>
+  <depend>python3-requests</depend>
+  <depend>python3-setuptools</depend> <!-- setuptools is build dependency only? -->
+  <depend>python3-shapely</depend>
+  <depend>python3-owslib</depend>
+
+  <!-- need these to install things from setup.py -->
+  <depend>python3-pip</depend>
+  <depend>libpq-dev</depend>
+
   <export>
     <build_type>ament_python</build_type>
   </export>

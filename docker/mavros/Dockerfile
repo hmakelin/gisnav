@@ -14,6 +14,13 @@ SHELL ["/bin/bash", "-c"]
 
 WORKDIR /opt/colcon_ws/src/
 
+# Install GeographicLib related dependencies
+RUN apt-get -y install software-properties-common wget curl && \
+    add-apt-repository ppa:ubuntugis/ppa && \
+    apt-get update && \
+    apt-get -y install gdal-bin libgdal-dev geographiclib-tools && \
+    geographiclib-get-geoids egm96-5
+
 # Get mavros with gimbal protocol v2 plugin and build mavros_msgs only
 # mavros_msgs is needed by both downstream images so it is already built here
 # adds an additional custom patch to gps_input.cpp
@@ -57,23 +64,13 @@ WORKDIR /opt/colcon_ws/src/
 # Copy package.xml only to install system dependencies
 COPY gisnav/package.xml gisnav/gisnav/package.xml
 
-# Install GISNav system dependencies
-# We install all extended dependencies so that we can do development work like
-# building the full documentation inside the container. We will not install
-# the setup.py python dependencies.
+# Install GISNav system dependencies - we will install
+# the setup.py python dependencies later.
 RUN cd gisnav/gisnav && \
     rosdep update && \
-    rosdep install --from-paths . -y -r --ignore-src
-
-# TODO: no need to install egm96-5 separately after pygeodesy was refactored out in gisnav-gpu branch?
-# Install GIS related dependencies
-RUN apt-get -y install software-properties-common wget curl && \
-    add-apt-repository ppa:ubuntugis/ppa && \
-    apt-get update && \
-    apt-get -y install gdal-bin libgdal-dev geographiclib-tools && \
-    geographiclib-get-geoids egm96-5 && \
+    rosdep install --from-paths . -y -r --ignore-src && \
     rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
+    apt clean
 
 # Build px4_msgs, add custom patch to only get SensorGps message
 RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \

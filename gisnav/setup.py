@@ -113,7 +113,7 @@ setup(
         #"requests",
         #"setuptools",
         #"shapely>=1.8.2",
-        #"OWSLib>=0.25.0",
+        "OWSLib>=0.25.0",
         "torch>=2.1.0",
         "kornia==0.6.10",
     ],

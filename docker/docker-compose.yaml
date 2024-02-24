@@ -86,7 +86,7 @@ services:
     volumes:
       - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=MapServer
         - homepage.description=MapServer GIS service
 
@@ -96,7 +96,7 @@ services:
       context: micro-ros-agent
     command: udp4 -p 8888
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=micro-ROS agent
         - homepage.description=uORB to ROS (PX4) middleware
 
@@ -109,7 +109,7 @@ services:
         ROS_VERSION: humble
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=MAVROS
         - homepage.description=MAVLink to ROS middleware
 
@@ -123,6 +123,10 @@ services:
       - /dev/dri:/dev/dri
       - /var/run/docker.sock:/var/run/docker.sock:ro
     privileged: true
+    labels:
+        - homepage.group=Core services
+        - homepage.name=QGroundControl
+        - homepage.description=Ground control software with GUI for controlling the vehicle
 
   # Note: build context is repository root
   # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
@@ -147,7 +151,7 @@ services:
       - gscam
       - mapserver
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=GISNav
         - homepage.description=Generates mock GPS messages for FCU using visual map-based navigation
 
@@ -166,6 +170,10 @@ services:
       - mavros
       - micro-ros-agent
       - qgc
+    labels:
+        - homepage.group=Development services
+        - homepage.name=PX4
+        - homepage.description=PX4 simulation and firmware tool
 
   ardupilot:
     <<: [*base, *x11, *nvidia-gpu, *mavlink-net]
@@ -177,6 +185,10 @@ services:
       - /dev/dri:/dev/dri
     privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
+    labels:
+        - homepage.group=Development services
+        - homepage.name=Ardupilot
+        - homepage.description=Ardupilot simulation and firmware tool
 
   rviz:
     <<: [*base, *x11, *ros, *nvidia-gpu, *mavlink-net]
@@ -185,6 +197,10 @@ services:
       args:
         ROS_VERSION: humble
     command: rviz2 -d gisnav_config.rviz
+    labels:
+        - homepage.group=Development services
+        - homepage.name=RViz
+        - homepage.description=ROS visualization tool
 
   gscam:
     <<: [*base, *ros, *mavlink-net]
@@ -203,7 +219,7 @@ services:
       - "-p"
       - "camera_info_url:=file:///camera_calibration.yaml"
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=gscam
         - homepage.description=GStreamer camera middleware
 
@@ -216,9 +232,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
-        - homepage.group=System services
+        - homepage.group=Core services
         - homepage.name=Autoheal
-        - homepage.description=Monitors and maintains health of other system services.
+        - homepage.description=Monitors and maintains health of other services.
 
   qgis:
     <<: [*base, *x11, *gis-net]
@@ -228,6 +244,10 @@ services:
     depends_on:
       - postgres
       - mapserver
+    labels:
+        - homepage.group=Development services
+        - homepage.name=QGIS
+        - homepage.description=GIS client for viewing map rasters
 
   postgres:
     <<: [*base, *gis-net]
@@ -238,7 +258,7 @@ services:
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
     labels:
-        - homepage.group=System services
+        - homepage.group=Development services
         - homepage.name=Postgres
         - homepage.description=PostGIS relational database for efficiently storing geographical information
 
@@ -254,9 +274,9 @@ services:
       - maps-volume:/var/www/filegator/repository
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
-        - homepage.group=Configuration
+        - homepage.group=Admin services
         - homepage.name=FileGator
-        - homepage.description=File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files.
+        - homepage.description=File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files
         - homepage.href=http://gisnav-fileserver-1
 
   # Give this thing access to all networks to see docker container status?
@@ -265,7 +285,7 @@ services:
     build:
       context: homepage
     labels:
-        - homepage.group=System services
+        - homepage.group=Admin services
         - homepage.name=Homepage
         - homepage.description=Administration dashboard
     depends_on:

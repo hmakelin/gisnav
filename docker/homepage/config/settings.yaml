@@ -4,10 +4,15 @@ language: en
 favicon: images/gisnav-website-favicon-color.png
 showStats: true
 layout:
-  Configuration:
+  Admin services:
     icon: mdi-cog
   Download maps:
     icon: mdi-map-plus
-  System services:
+  Core services:
+    icon: mdi-shield-alert
+    style: row
+    columns: 4
+  Development services:
+    icon: mdi-code-braces
     style: row
     columns: 4

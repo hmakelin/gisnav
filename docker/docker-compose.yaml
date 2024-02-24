@@ -98,7 +98,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=micro-ROS agent
-        - homepage.description=uORB to ROS (PX4) middleware service
+        - homepage.description=uORB to ROS (PX4) middleware
 
   mavros:
     <<: [*base, *ros, *mavlink-net]
@@ -111,7 +111,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=MAVROS
-        - homepage.description=MAVLink to ROS middleware service
+        - homepage.description=MAVLink to ROS middleware
 
   qgc:
     <<: [*base, *x11, *mavlink-net]
@@ -149,7 +149,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=GISNav
-        - homepage.description=GISNav visual map-based navigation service
+        - homepage.description=Generates mock GPS messages for FCU using visual map-based navigation
 
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
@@ -205,7 +205,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=gscam
-        - homepage.description=GStreamer camera middleware service
+        - homepage.description=GStreamer camera middleware
 
   autoheal:
     <<: [*base, *all-net]
@@ -218,7 +218,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=Autoheal
-        - homepage.description=Autoheal service. Monitors and maintains health of other system services.
+        - homepage.description=Monitors and maintains health of other system services.
 
   qgis:
     <<: [*base, *x11, *gis-net]
@@ -240,7 +240,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=Postgres
-        - homepage.description=Postgres & PostGIS database service
+        - homepage.description=PostGIS relational database for efficiently storing geographical information
 
   # todo: open web browser from homepage service, not from here
   fileserver:
@@ -256,7 +256,7 @@ services:
     labels:
         - homepage.group=Configuration
         - homepage.name=FileGator
-        - homepage.description=FileGator file management service. Remove orthoimagery and DEMs or edit ROS configuration files.
+        - homepage.description=File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files.
         - homepage.href=http://gisnav-fileserver-1
 
   # Give this thing access to all networks to see docker container status?
@@ -267,7 +267,7 @@ services:
     labels:
         - homepage.group=System services
         - homepage.name=Homepage
-        - homepage.description=Homepage administration dashboard service
+        - homepage.description=Administration dashboard
     depends_on:
       - fileserver  # depends on fileserver bc currently fileserver opens the web browser
 

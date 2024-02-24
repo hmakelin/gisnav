@@ -100,7 +100,6 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_mapserver ---|/etc/mapserver| gis_maps_volume
         fileserver ---|/etc/mapserver/maps| gis_maps_volume
 
-        homepage ---|/etc/mapserver/maps| gis_maps_volume
         homepage ---|TCP| fileserver
 
         classDef network fill:transparent,stroke-dasharray:5 5;

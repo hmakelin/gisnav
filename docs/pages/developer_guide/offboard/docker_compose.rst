@@ -65,7 +65,6 @@ Docker container with the hostname ``gisnav-mapserver-1``.
                 application_autoheal[autoheal]
             end
         end
-
         subgraph gis ["gis"]
             subgraph gis_services ["GIS Services"]
                 gis_mapserver[mapserver]
@@ -73,17 +72,17 @@ Docker container with the hostname ``gisnav-mapserver-1``.
             end
             subgraph data_services ["Data Services"]
                 gis_postgres[postgres]
-                gis_maps_volume[maps-volume]
             end
         end
 
         subgraph admin ["admin"]
             homepage[homepage]
-        end
-
-        subgraph admin_gis ["admin & gis"]
             fileserver[fileserver]
         end
+
+        application_docs_volume[docs-volume]
+        application_ros_params_volume[ros-params-volume]
+        gis_maps_volume[maps-volume]
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
         simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
@@ -99,12 +98,15 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_qgis -->|5432/tcp| gis_postgres
         gis_mapserver ---|/etc/mapserver| gis_maps_volume
         fileserver ---|/etc/mapserver/maps| gis_maps_volume
+        fileserver ---|/path/to/ros/params| application_ros_params_volume
+        application_docs_volume ---|/path/to/built/docs| application_gisnav
+        application_ros_params_volume ---|/path/to/ros/params/in/colcon/ws| application_gisnav
+        homepage ---|/path/to/docs:ro| application_docs_volume
 
         homepage ---|TCP| fileserver
 
         classDef network fill:transparent,stroke-dasharray:5 5;
         class mavlink,gis,gis_mavlink,admin,admin_gis network
-
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

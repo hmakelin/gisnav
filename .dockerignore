@@ -1,3 +1,6 @@
+# The gisnav service uses the repo root as build context so we
+# use a .dockerignore file here to prevent some files from being
+# included in the image
 # Python virtual environment
 venv/
 

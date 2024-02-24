@@ -32,6 +32,8 @@ x-all-net: &all-net
 
 # platforms is a sequence not a mapping so careful when merging
 # with something that defines its own platforms
+# TODO: use a more restricted solution than exposing the docker socket
+#  directly for monitoring services
 x-base: &base
   build:
     dockerfile: Dockerfile

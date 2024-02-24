@@ -3,3 +3,11 @@ language: en
 #background: images/logo-no-background.svg
 favicon: images/gisnav-website-favicon-color.png
 showStats: true
+layout:
+  Configuration:
+    icon: mdi-cog
+  Download maps:
+    icon: mdi-map-plus
+  System services:
+    style: row
+    columns: 4

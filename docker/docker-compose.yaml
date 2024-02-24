@@ -97,8 +97,8 @@ services:
     command: udp4 -p 8888
     labels:
         - homepage.group=System services
-        - homepage.name=MAVROS
-        - homepage.description=uORB to ROS middleware service
+        - homepage.name=micro-ROS agent
+        - homepage.description=uORB to ROS (PX4) middleware service
 
   mavros:
     <<: [*base, *ros, *mavlink-net]
@@ -254,9 +254,9 @@ services:
       - maps-volume:/var/www/filegator/repository
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
-        - homepage.group=System services
+        - homepage.group=Configuration
         - homepage.name=FileGator
-        - homepage.description=FileGator file management service. Add and remove orthoimagery and DEMs, or edit ROS configuration files.
+        - homepage.description=FileGator file management service. Remove orthoimagery and DEMs or edit ROS configuration files.
         - homepage.href=http://gisnav-fileserver-1
 
   # Give this thing access to all networks to see docker container status?
@@ -268,6 +268,8 @@ services:
         - homepage.group=System services
         - homepage.name=Homepage
         - homepage.description=Homepage administration dashboard service
+    depends_on:
+      - fileserver  # depends on fileserver bc currently fileserver opens the web browser
 
 volumes:
   maps-volume:

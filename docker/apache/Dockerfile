@@ -1,5 +1,7 @@
 FROM ubuntu:jammy AS apache
 
+LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
+
 # Update apt repository and install necessary packages
 RUN apt-get update && apt-get install -y \
     cgi-mapserver \

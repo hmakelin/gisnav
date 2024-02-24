@@ -7,6 +7,9 @@ networks:
   mavlink:
     driver: bridge
     attachable: true
+  admin:
+    driver: bridge
+    attachable: true
 
 x-mavlink-net: &mavlink-net
   networks:
@@ -16,16 +19,24 @@ x-gis-net: &gis-net
   networks:
     - gis
 
+x-admin-net: &admin-net
+  networks:
+    - gis
+    - admin
+
 x-all-net: &all-net
   networks:
     - mavlink
     - gis
+
 
 # platforms is a sequence not a mapping so careful when merging
 # with something that defines its own platforms
 x-base: &base
   build:
     dockerfile: Dockerfile
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
 
 # devices is a sequence not a mapping so careful when merging
 # with something that defines its own devices
@@ -74,12 +85,20 @@ services:
     command: apache2ctl -D FOREGROUND
     volumes:
       - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
+    labels:
+        - homepage.group=System services
+        - homepage.name=MapServer
+        - homepage.description=MapServer GIS service
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
     command: udp4 -p 8888
+    labels:
+        - homepage.group=System services
+        - homepage.name=MAVROS
+        - homepage.description=uORB to ROS middleware service
 
   mavros:
     <<: [*base, *ros, *mavlink-net]
@@ -89,6 +108,10 @@ services:
       args:
         ROS_VERSION: humble
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
+    labels:
+        - homepage.group=System services
+        - homepage.name=MAVROS
+        - homepage.description=MAVLink to ROS middleware service
 
   qgc:
     <<: [*base, *x11, *mavlink-net]
@@ -98,6 +121,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     privileged: true
 
   # Note: build context is repository root
@@ -122,6 +146,10 @@ services:
       - micro-ros-agent
       - gscam
       - mapserver
+    labels:
+        - homepage.group=System services
+        - homepage.name=GISNav
+        - homepage.description=GISNav visual map-based navigation service
 
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
@@ -174,6 +202,10 @@ services:
       - "gscam_params.yaml"
       - "-p"
       - "camera_info_url:=file:///camera_calibration.yaml"
+    labels:
+        - homepage.group=System services
+        - homepage.name=gscam
+        - homepage.description=GStreamer camera middleware service
 
   autoheal:
     <<: [*base, *all-net]
@@ -183,6 +215,10 @@ services:
       AUTOHEAL_CONTAINER_LABEL: all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+        - homepage.group=System services
+        - homepage.name=Autoheal
+        - homepage.description=Autoheal service. Monitors and maintains health of other system services.
 
   qgis:
     <<: [*base, *x11, *gis-net]
@@ -201,16 +237,37 @@ services:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
+    labels:
+        - homepage.group=System services
+        - homepage.name=Postgres
+        - homepage.description=Postgres & PostGIS database service
 
+  # todo: open web browser from homepage service, not from here
   fileserver:
     <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
       context: apache
       target: fileserver
-    command: firefox "http://gisnav-fileserver-1"
+    command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
       - maps-volume:/var/www/filegator/repository
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+        - homepage.group=System services
+        - homepage.name=FileGator
+        - homepage.description=FileGator file management service. Add and remove orthoimagery and DEMs, or edit ROS configuration files.
+        - homepage.href=http://gisnav-fileserver-1
+
+  # Give this thing access to all networks to see docker container status?
+  homepage:
+    <<: [*base, *x11-environment, *nvidia-gpu, *admin-net]
+    build:
+      context: homepage
+    labels:
+        - homepage.group=System services
+        - homepage.name=Homepage
+        - homepage.description=Homepage administration dashboard service
 
 volumes:
   maps-volume:

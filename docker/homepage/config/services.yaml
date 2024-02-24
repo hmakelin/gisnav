@@ -1,0 +1,13 @@
+- Download maps:
+    - EarthExplorer:
+        href: https://earthexplorer.usgs.gov/
+        description: Public domain high-resolution aerial imagery from United States Geological Survey (USGS)
+    - MapSite:
+        href: https://asiointi.maanmittauslaitos.fi/karttapaikka/
+        description: Public domain high-resolution aerial imagery from Finnish National Land Survey (NLS)
+    - ArcGIS Online:
+        href: https://www.arcgis.com/index.html
+        description: Commercial imagery
+    - Maxar:
+        href: https://maxar.com/maxar-intelligence/products/satellite-imagery
+        description: Commercial high-resolution satellite imagery

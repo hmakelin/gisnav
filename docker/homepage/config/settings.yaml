@@ -16,3 +16,7 @@ layout:
     icon: mdi-code-braces
     style: row
     columns: 4
+  System monitoring:
+    icon: mdi-developer-board
+    style: row
+    columns: 4

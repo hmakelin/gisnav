@@ -292,6 +292,7 @@ services:
         - homepage.href=http://gisnav-fileserver-1
 
   # Give this thing access to all networks to see docker container status?
+  # extra_hosts with docker host needed for monitoring service
   homepage:
     <<: [*base, *x11-environment, *nvidia-gpu, *admin-net]
     build:
@@ -302,6 +303,24 @@ services:
         - homepage.description=Administration dashboard
     depends_on:
       - fileserver  # depends on fileserver bc currently fileserver opens the web browser
+      - monitoring
+    extra_hosts:
+        - "host.docker.internal:host-gateway"
+
+  monitoring:
+    <<: [ *base, *x11-environment, *nvidia-gpu ] #, *admin-net ]
+    image: nicolargo/glances:latest-full
+    pid: host
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
+    environment:
+      - "GLANCES_OPT=-w"
+    labels:
+        - homepage.group=Admin services
+        - homepage.name=Glances
+        - homepage.description=System monitor
 
 volumes:
   maps-volume:

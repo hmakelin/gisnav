@@ -81,7 +81,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         end
 
         application_docs_volume[docs-volume]
-        application_ros_params_volume[ros-params-volume]
+        application_gisnav_volume[gisnav-volume]
         gis_maps_volume[maps-volume]
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
@@ -98,9 +98,9 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_qgis -->|5432/tcp| gis_postgres
         gis_mapserver ---|/etc/mapserver| gis_maps_volume
         fileserver ---|/etc/mapserver/maps| gis_maps_volume
-        fileserver ---|/path/to/ros/params| application_ros_params_volume
+        fileserver ---|/var/www/filegator/gisnav| application_gisnav_volume
         application_docs_volume ---|/path/to/built/docs| application_gisnav
-        application_ros_params_volume ---|/path/to/ros/params/in/colcon/ws| application_gisnav
+        application_gisnav_volume ---|/opt/colcon_ws/install/gisnav/share/gisnav/launch/params| application_gisnav
         homepage ---|/path/to/docs:ro| application_docs_volume
 
         homepage ---|TCP| fileserver

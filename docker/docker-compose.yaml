@@ -145,6 +145,11 @@ services:
       target: gisnav
       args:
         ROS_VERSION: humble
+    volumes:
+      - /dev/shm:/dev/shm
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
+      - gisnav-volume:/opt/colcon_ws/install/gisnav/share/gisnav/launch/params
     command: ros2 launch gisnav px4.dev.launch.py
     depends_on:
       - px4
@@ -210,6 +215,9 @@ services:
       context: gscam
       args:
         ROS_VERSION: humble
+    volumes:
+      - /dev/shm:/dev/shm  # todo: make work with *ros anchor
+      - gscam-volume:/etc/gscam
     command:
       - "ros2"
       - "run"
@@ -217,9 +225,9 @@ services:
       - "gscam_node"
       - "--ros-args"
       - "--params-file"
-      - "gscam_params.yaml"
+      - "/etc/gscam/gscam_params.yaml"
       - "-p"
-      - "camera_info_url:=file:///camera_calibration.yaml"
+      - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
     labels:
         - homepage.group=Core services
         - homepage.name=gscam
@@ -273,7 +281,9 @@ services:
     command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
-      - maps-volume:/var/www/filegator/repository
+      - maps-volume:/var/www/filegator/repository/mapserver
+      - gscam-volume:/var/www/filegator/repository/gscam
+      - gisnav-volume:/var/www/filegator/repository/gisnav
       - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
         - homepage.group=Admin services
@@ -295,3 +305,5 @@ services:
 
 volumes:
   maps-volume:
+  gscam-volume:
+  gisnav-volume:

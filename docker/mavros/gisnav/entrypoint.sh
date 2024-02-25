@@ -7,4 +7,35 @@ source "/opt/colcon_ws/install/setup.bash" --
 # Needed for pip installed dev tools like pre-commit and sphinx-build
 export PATH=/usr/lib/gisnav:$PATH
 
+# Move .yaml param files to shared volume so that they can be edited via
+# file manager:
+# Source directory where the original .yaml files are located
+SOURCE_DIR="/opt/colcon_ws/install/gisnav/share/gisnav/launch/params"
+
+# Target directory where the .yaml files should be moved to (shared volume)
+TARGET_DIR="/etc/gisnav/"
+
+# Check if the source directory exists and has yaml files
+if [ -d "$SOURCE_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml 2>/dev/null)" ]; then
+    # Iterate over each .yaml file in the source directory
+    for file in $SOURCE_DIR/*.yaml; do
+        # Extract filename from the path
+        filename=$(basename "$file")
+
+        # Move the file to the target directory
+        mv "$file" "$TARGET_DIR"
+
+        # Check if move was successful before creating a symlink
+        if [ $? -eq 0 ]; then
+            echo "INFO: Moved $filename to $TARGET_DIR"
+            # Create a symbolic link in the source directory pointing to the new location
+            ln -s "${TARGET_DIR}${filename}" "${SOURCE_DIR}/${filename}"
+        else
+            echo "ERROR: Failed to move $filename"
+        fi
+    done
+else
+    echo "INFO: Launch parameter files not found on container - likely already moved to shared volume or directory does not exist"
+fi
+
 exec "$@"

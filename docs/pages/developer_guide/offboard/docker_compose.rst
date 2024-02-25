@@ -104,10 +104,18 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         application_gisnav_volume ---|/opt/colcon_ws/install/gisnav/share/gisnav/launch/params| application_gisnav
         homepage ---|/path/to/docs:ro| application_docs_volume
 
-        homepage ---|TCP| fileserver
+        homepage ---|3000/tcp| fileserver
+
+        subgraph host ["host"]
+            monitoring["monitoring (on host network)"]
+            docker_host["docker host"]
+        end
+
+        monitoring ---|61208/tcp| homepage
+        docker_host ---|/var/run/docker.sock| monitoring
 
         classDef network fill:transparent,stroke-dasharray:5 5;
-        class mavlink,gis,gis_mavlink,admin,admin_gis network
+        class mavlink,gis,gis_mavlink,admin,admin_gis,host network
 
 Example deployments
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

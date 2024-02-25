@@ -36,9 +36,10 @@ deploying the ``mapserver`` service using the Compose file will start a
 Docker container with the hostname ``gisnav-mapserver-1``.
 
 .. todo::
-    Split mavlink network into mavlink and ROS networks. For ROS the intention
-    is to use the shared memory device instead of serializing and going through
-    the network stack since we will be passing a lot of images around.
+    * Split mavlink network into mavlink and ROS networks. For ROS the intention
+      is to use the shared memory device instead of serializing and going through
+      the network stack since we will be passing a lot of images around.
+    * Build and expose static docs to home page - possibly no need for a server
 
 .. note::
     The application services have access to both ``gis`` and ``mavlink`` networks.

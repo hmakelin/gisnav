@@ -15,8 +15,12 @@ SOURCE_DIR="/opt/colcon_ws/install/gisnav/share/gisnav/launch/params"
 # Target directory where the .yaml files should be moved to (shared volume)
 TARGET_DIR="/etc/gisnav/"
 
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "WARNING: Target directory $TARGET_DIR does not exist. Please use Docker Compose to create the image to ensure ROS launch parameters are moved to a shared volume."
+fi
+
 # Check if the source directory exists and has yaml files
-if [ -d "$SOURCE_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml 2>/dev/null)" ]; then
+if [ -d "$SOURCE_DIR" ] && [ -d "$TARGET_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml 2>/dev/null)" ]; then
     # Iterate over each .yaml file in the source directory
     for file in $SOURCE_DIR/*.yaml; do
         # Extract filename from the path

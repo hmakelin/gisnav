@@ -194,8 +194,8 @@ services:
     command: bash -c "cd ~ && make sim_vehicle"
     labels:
         - homepage.group=Development services
-        - homepage.name=Ardupilot
-        - homepage.description=Ardupilot simulation and firmware tool
+        - homepage.name=ArduPilot
+        - homepage.description=ArduPilot simulation and firmware tool
 
   rviz:
     <<: [*base, *x11, *ros, *nvidia-gpu, *mavlink-net]

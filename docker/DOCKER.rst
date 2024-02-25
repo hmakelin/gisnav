@@ -69,7 +69,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         end
 
         subgraph volumes ["User managed shared volumes"]
-            gscam_volume[gscam_volume]
+            gscam_volume[gscam-volume]
             gis_maps_volume[maps-volume]
             application_gisnav_volume[gisnav-volume]
         end

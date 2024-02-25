@@ -81,9 +81,12 @@ Docker container with the hostname ``gisnav-mapserver-1``.
             fileserver[fileserver]
         end
 
+        subgraph volumes ["User managed shared volumes"]
+            gscam_volume[gscam_volume]
+            gis_maps_volume[maps-volume]
+            application_gisnav_volume[gisnav-volume]
+        end
         application_docs_volume[docs-volume]
-        application_gisnav_volume[gisnav-volume]
-        gis_maps_volume[maps-volume]
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
         simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
@@ -98,16 +101,16 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
         gis_mapserver ---|/etc/mapserver| gis_maps_volume
-        fileserver ---|/etc/mapserver/maps| gis_maps_volume
-        fileserver ---|/var/www/filegator/gisnav| application_gisnav_volume
+        application_gisnav ---|/opt/colcon_ws/install/gisnav/share/gisnav/launch/params| application_gisnav_volume
         application_docs_volume ---|/path/to/built/docs| application_gisnav
-        application_gisnav_volume ---|/opt/colcon_ws/install/gisnav/share/gisnav/launch/params| application_gisnav
-        homepage ---|/path/to/docs:ro| application_docs_volume
-
         homepage ---|3000/tcp| fileserver
+        fileserver ---|"/var/www/filegator/"| volumes
+        gscam_volume ---|/etc/gscam| middleware_gscam
+
+        application_docs_volume ---|/path/to/docs:ro| homepage
 
         subgraph host ["host"]
-            monitoring["monitoring"]
+            monitoring["monitoring (on host network)"]
             docker_host["docker host"]
         end
 

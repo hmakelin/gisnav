@@ -107,7 +107,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         homepage ---|3000/tcp| fileserver
 
         subgraph host ["host"]
-            monitoring["monitoring (on host network)"]
+            monitoring["monitoring"]
             docker_host["docker host"]
         end
 

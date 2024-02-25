@@ -68,7 +68,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
             fileserver[fileserver]
         end
 
-        subgraph volumes ["User managed shared volumes"]
+        subgraph volumes ["User managed\nshared volumes"]
             gscam_volume[gscam-volume]
             gis_maps_volume[maps-volume]
             application_gisnav_volume[gisnav-volume]
@@ -88,7 +88,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
         gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
         gis_qgis -->|5432/tcp| gis_postgres
         gis_mapserver ---|/etc/mapserver| gis_maps_volume
-        application_gisnav ---|/opt/colcon_ws/install/gisnav/share/gisnav/launch/params| application_gisnav_volume
+        application_gisnav ---|.../gisnav/launch/params| application_gisnav_volume
         application_docs_volume ---|/path/to/built/docs| application_gisnav
         homepage ---|3000/tcp| fileserver
         fileserver ---|"/var/www/filegator/"| volumes

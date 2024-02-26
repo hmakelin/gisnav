@@ -39,7 +39,7 @@ if [ -d "$SOURCE_DIR" ] && [ -d "$TARGET_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml
         fi
     done
 else
-    echo "INFO: Launch parameter files not found on container - likely already moved to shared volume or directory does not exist"
+    echo "INFO: Launch parameter files or target volume not found on container - likely already moved to shared volume or shared volume is not mounted."
 fi
 
 exec "$@"

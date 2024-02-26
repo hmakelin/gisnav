@@ -149,7 +149,7 @@ services:
       - /dev/shm:/dev/shm
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
-      - gisnav-volume:/opt/colcon_ws/install/gisnav/share/gisnav/launch/params
+      - gisnav-volume:/etc/gisnav
     command: ros2 launch gisnav px4.dev.launch.py
     depends_on:
       - px4

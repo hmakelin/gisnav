@@ -26,16 +26,21 @@ if [ -d "$SOURCE_DIR" ] && [ -d "$TARGET_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml
         # Extract filename from the path
         filename=$(basename "$file")
 
-        # Move the file to the target directory
-        mv "$file" "$TARGET_DIR"
-
-        # Check if move was successful before creating a symlink
-        if [ $? -eq 0 ]; then
-            echo "INFO: Moved $filename to $TARGET_DIR"
-            # Create a symbolic link in the source directory pointing to the new location
-            ln -s "${TARGET_DIR}${filename}" "${SOURCE_DIR}/${filename}"
+        # Check if the file already exists in the target directory
+        if [ -e "$TARGET_DIR/$filename" ]; then
+            echo "WARNING: $filename already exists in $TARGET_DIR. Skipping move."
         else
-            echo "ERROR: Failed to move $filename"
+            # Move the file to the target directory
+            mv "$file" "$TARGET_DIR"
+
+            # Check if move was successful before creating a symlink
+            if [ $? -eq 0 ]; then
+                echo "INFO: Moved $filename to $TARGET_DIR"
+                # Create a symbolic link in the source directory pointing to the new location
+                ln -s "${TARGET_DIR}/${filename}" "${SOURCE_DIR}/${filename}"
+            else
+                echo "ERROR: Failed to move $filename"
+            fi
         fi
     done
 else

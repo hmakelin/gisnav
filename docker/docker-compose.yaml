@@ -37,8 +37,6 @@ x-all-net: &all-net
 x-base: &base
   build:
     dockerfile: Dockerfile
-  volumes:
-    - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
 
 # devices is a sequence not a mapping so careful when merging
 # with something that defines its own devices
@@ -66,7 +64,7 @@ x-x11-volumes: &x11-volumes
 # This is split into sub-extensions because downloader needs the environment
 # but also needs to extend volumes and YAML does not support merging sequences.
 x-x11: &x11
-  <<: [*x11-environment, *x11-volumes]
+  <<: [ *x11-environment, *x11-volumes ]
 
 x-ros: &ros
   environment:
@@ -123,7 +121,6 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     privileged: true
     labels:
         - homepage.group=Core services
@@ -284,7 +281,6 @@ services:
       - maps-volume:/var/www/filegator/repository/mapserver
       - gscam-volume:/var/www/filegator/repository/gscam
       - gisnav-volume:/var/www/filegator/repository/gisnav
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     labels:
         - homepage.group=Admin services
         - homepage.name=FileGator
@@ -306,6 +302,8 @@ services:
       - monitoring
     extra_hosts:
         - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
 
   monitoring:
     <<: [ *base, *x11-environment, *nvidia-gpu ] #, *admin-net ]

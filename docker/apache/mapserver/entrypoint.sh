@@ -49,6 +49,8 @@ process_directory_change() {
         fi
     fi
 
+    sleep 0.5
+
     if [[ "$BASENAME" =~ \.(tif|tiff|jp2|ecw|img)$ ]]; then
         echo "Raster file detected, regenerating VRT."
         cd /etc/mapserver && gdalbuildvrt "$VRT_FILE" "$DIR_PATH"/*.tif "$DIR_PATH"/*.tiff "$DIR_PATH"/*.jp2 "$DIR_PATH"/*.ecw "$DIR_PATH"/*.img
@@ -69,7 +71,7 @@ done &
 
 # Move demo imagery and DEM over to shared volume if still on image
 # This should trigger the inotify script
-mv /etc/mapserver/$NAIP_ZIP_FILENAME $IMAGERY_DIR | echo "NAIP imagery not found on container - likely already moved to shared volume"
-mv /etc/mapserver/$DEM_FILENAME $DEM_DIR | echo "USGS DEM not found on container - likely already moved to shared volume"
+mv /etc/mapserver/$NAIP_ZIP_FILENAME $IMAGERY_DIR || echo "NAIP imagery not found on container - likely already moved to shared volume"
+mv /etc/mapserver/$DEM_FILENAME $DEM_DIR || echo "USGS DEM not found on container - likely already moved to shared volume"
 
 exec "$@"

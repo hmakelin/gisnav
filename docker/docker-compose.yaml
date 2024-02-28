@@ -7,6 +7,9 @@ networks:
   mavlink:
     driver: bridge
     attachable: true
+  admin:
+    driver: bridge
+    attachable: true
 
 x-mavlink-net: &mavlink-net
   networks:
@@ -16,13 +19,21 @@ x-gis-net: &gis-net
   networks:
     - gis
 
+x-admin-net: &admin-net
+  networks:
+    - gis
+    - admin
+
 x-all-net: &all-net
   networks:
     - mavlink
     - gis
 
+
 # platforms is a sequence not a mapping so careful when merging
 # with something that defines its own platforms
+# TODO: use a more restricted solution than exposing the docker socket
+#  directly for monitoring services
 x-base: &base
   build:
     dockerfile: Dockerfile
@@ -53,7 +64,7 @@ x-x11-volumes: &x11-volumes
 # This is split into sub-extensions because downloader needs the environment
 # but also needs to extend volumes and YAML does not support merging sequences.
 x-x11: &x11
-  <<: [*x11-environment, *x11-volumes]
+  <<: [ *x11-environment, *x11-volumes ]
 
 x-ros: &ros
   environment:
@@ -74,12 +85,20 @@ services:
     command: apache2ctl -D FOREGROUND
     volumes:
       - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
+    labels:
+        - homepage.group=Core services
+        - homepage.name=MapServer
+        - homepage.description=MapServer GIS service
 
   micro-ros-agent:
     <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
     command: udp4 -p 8888
+    labels:
+        - homepage.group=Core services
+        - homepage.name=micro-ROS agent
+        - homepage.description=uORB to ROS (PX4) middleware
 
   mavros:
     <<: [*base, *ros, *mavlink-net]
@@ -89,6 +108,10 @@ services:
       args:
         ROS_VERSION: humble
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
+    labels:
+        - homepage.group=Core services
+        - homepage.name=MAVROS
+        - homepage.description=MAVLink to ROS middleware
 
   qgc:
     <<: [*base, *x11, *mavlink-net]
@@ -99,6 +122,10 @@ services:
       - /dev/shm:/dev/shm
       - /dev/dri:/dev/dri
     privileged: true
+    labels:
+        - homepage.group=Core services
+        - homepage.name=QGroundControl
+        - homepage.description=Ground control software with GUI for controlling the vehicle
 
   # Note: build context is repository root
   # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
@@ -115,6 +142,11 @@ services:
       target: gisnav
       args:
         ROS_VERSION: humble
+    volumes:
+      - /dev/shm:/dev/shm
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
+      - gisnav-volume:/etc/gisnav
     command: ros2 launch gisnav px4.dev.launch.py
     depends_on:
       - px4
@@ -122,6 +154,10 @@ services:
       - micro-ros-agent
       - gscam
       - mapserver
+    labels:
+        - homepage.group=Core services
+        - homepage.name=GISNav
+        - homepage.description=Generates mock GPS messages for FCU using visual map-based navigation
 
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
@@ -138,6 +174,10 @@ services:
       - mavros
       - micro-ros-agent
       - qgc
+    labels:
+        - homepage.group=Development services
+        - homepage.name=PX4
+        - homepage.description=PX4 simulation and firmware tool
 
   ardupilot:
     <<: [*base, *x11, *nvidia-gpu, *mavlink-net]
@@ -149,6 +189,10 @@ services:
       - /dev/dri:/dev/dri
     privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
+    labels:
+        - homepage.group=Development services
+        - homepage.name=ArduPilot
+        - homepage.description=ArduPilot simulation and firmware tool
 
   rviz:
     <<: [*base, *x11, *ros, *nvidia-gpu, *mavlink-net]
@@ -157,6 +201,10 @@ services:
       args:
         ROS_VERSION: humble
     command: rviz2 -d gisnav_config.rviz
+    labels:
+        - homepage.group=Development services
+        - homepage.name=RViz
+        - homepage.description=ROS visualization tool
 
   gscam:
     <<: [*base, *ros, *mavlink-net]
@@ -164,6 +212,9 @@ services:
       context: gscam
       args:
         ROS_VERSION: humble
+    volumes:
+      - /dev/shm:/dev/shm  # todo: make work with *ros anchor
+      - gscam-volume:/etc/gscam
     command:
       - "ros2"
       - "run"
@@ -171,9 +222,13 @@ services:
       - "gscam_node"
       - "--ros-args"
       - "--params-file"
-      - "gscam_params.yaml"
+      - "/etc/gscam/gscam_params.yaml"
       - "-p"
-      - "camera_info_url:=file:///camera_calibration.yaml"
+      - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
+    labels:
+        - homepage.group=Core services
+        - homepage.name=gscam
+        - homepage.description=GStreamer camera middleware
 
   autoheal:
     <<: [*base, *all-net]
@@ -183,6 +238,10 @@ services:
       AUTOHEAL_CONTAINER_LABEL: all
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+        - homepage.group=Core services
+        - homepage.name=Autoheal
+        - homepage.description=Monitors and maintains health of other services.
 
   qgis:
     <<: [*base, *x11, *gis-net]
@@ -192,6 +251,10 @@ services:
     depends_on:
       - postgres
       - mapserver
+    labels:
+        - homepage.group=Development services
+        - homepage.name=QGIS
+        - homepage.description=GIS client for viewing map rasters
 
   postgres:
     <<: [*base, *gis-net]
@@ -201,16 +264,63 @@ services:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
+    labels:
+        - homepage.group=Development services
+        - homepage.name=Postgres
+        - homepage.description=PostGIS relational database for efficiently storing geographical information
 
+  # todo: open web browser from homepage service, not from here
   fileserver:
     <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
       context: apache
       target: fileserver
-    command: firefox "http://gisnav-fileserver-1"
+    command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
-      - maps-volume:/var/www/filegator/repository
+      - maps-volume:/var/www/filegator/repository/mapserver
+      - gscam-volume:/var/www/filegator/repository/gscam
+      - gisnav-volume:/var/www/filegator/repository/gisnav
+    labels:
+        - homepage.group=Admin services
+        - homepage.name=FileGator
+        - homepage.description=File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files
+        - homepage.href=http://gisnav-fileserver-1
+
+  # Give this thing access to all networks to see docker container status?
+  # extra_hosts with docker host needed for monitoring service
+  homepage:
+    <<: [*base, *x11-environment, *nvidia-gpu, *admin-net]
+    build:
+      context: homepage
+    labels:
+        - homepage.group=Admin services
+        - homepage.name=Homepage
+        - homepage.description=Administration dashboard
+    depends_on:
+      - fileserver  # depends on fileserver bc currently fileserver opens the web browser
+      - monitoring
+    extra_hosts:
+        - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
+
+  monitoring:
+    <<: [ *base, *x11-environment, *nvidia-gpu ] #, *admin-net ]
+    image: nicolargo/glances:latest-full
+    pid: host
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
+    environment:
+      - "GLANCES_OPT=-w"
+    labels:
+        - homepage.group=Admin services
+        - homepage.name=Glances
+        - homepage.description=System monitor
 
 volumes:
   maps-volume:
+  gscam-volume:
+  gisnav-volume:

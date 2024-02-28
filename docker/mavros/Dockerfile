@@ -80,14 +80,15 @@ RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     colcon build --packages-select px4_msgs
 
 # Copy rest of gisnav ros2 package
-COPY gisnav/ gisnav/
+COPY . gisnav/
 
 WORKDIR /opt/colcon_ws/src/gisnav
 
 # Install python dependencies, mainly torch and related CUDA deps
 # Finally, build gisnav
-RUN pip install . .[mock_gps_node] .[qgis_node] .[dev] && \
-    cd ../.. && \
+RUN cd gisnav && \
+    pip install . .[mock_gps_node] .[qgis_node] .[dev] && \
+    cd /opt/colcon_ws && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
     source install/setup.bash && \
     colcon build --packages-select gisnav

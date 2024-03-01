@@ -115,7 +115,8 @@ correct alternative should be easily inferred from the context they are used in.
         simulation.
 
     Frame
-        * A spatial coordinate reference frame
+        * A spatial coordinate reference frame, especially as defined in
+          :term:`ROS`
         * An :term:`image` frame (i.e. a single frame from a video stream)
 
     Geopose
@@ -124,9 +125,9 @@ correct alternative should be easily inferred from the context they are used in.
         ``geographic_msgs/GeoPoseStamped`` type :term:`ROS` :term:`message` .
 
         .. todo::
-            Need separate term for a global orientation (in earth fixed frame)?
-            Geopose specifically requires an orientation in earth fixed frame
-            and not a relative orientation.
+            No longer used since GISNav v0.65.0. :class:`RVizNode` has not
+            yet been updated and might use this term so it is kept in the
+            glossary.
 
     GetFeatureInfo
         A :term:`WMS` operation for requesting non-:term:`raster` features from
@@ -196,13 +197,17 @@ correct alternative should be easily inferred from the context they are used in.
             :term:`Absolute position`, :term:`Global position`
 
     Map
-        One of the :term:`tf2` ``frame_id``\s used by GISNav:
-        :py:data:`.FrameID`
+    map
+        * A world-fixed ROS coordinate :term:`frame <Frame>` as defined in
+          `REP 105 <https://www.ros.org/reps/rep-0105.html>`_. In GISNav the
+          ``map`` frame is defined as declared by :term:`MAVROS`.
+        * A :term:`raster` retrieved from a :term:`GIS` system. Generic
+          term that could e.g. mean :term:`orthoimagery` or :term:`DEMs <DEM>`
+          depending on context.
 
         .. todo::
-            Could be used more generally as a concept. For terms that could all
-            be considered "maps", see "orthoimage", "orthophoto", "raster",
-            "reference", "DEM", and "stack".
+            Define ``map`` frame independently of MAVROS - could use the
+            bounding box ``reference`` frame here instead.
 
     Message
         A :term:`ROS` message.
@@ -411,6 +416,11 @@ correct alternative should be easily inferred from the context they are used in.
     Vehicle
         The unmanned aircraft that uses GISNav for navigation. Can e.g. be a
         quadcopter of fixed-wing aircraft.
+
+        .. todo::
+            Adopt the term ``robot`` as an alias for vehicle to better align with
+            :term:`ROS` terminology? Vehicle seems to be the term adopted by
+            both PX4 and ArduPilot.
 
     World
     World coordinates

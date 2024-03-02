@@ -59,6 +59,11 @@ ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera/estimated/pose"
 :attr:`.PnPNode.camera_estimated_pose`.
 """
 
+ROS_TOPIC_RELATIVE_POSE_WITH_COVARIANCE: Final = "~/pose_with_covariance"
+"""Relative :term:`topic` into which :class:`.PoseNode` publishes
+:attr:`.PoseNode.pose_with_covariance`.
+"""
+
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
 """The :term:`MAVROS` time reference topic that has the difference between
 the local system time and the foreign :term:`FCU` time

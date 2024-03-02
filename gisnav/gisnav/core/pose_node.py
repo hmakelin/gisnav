@@ -34,6 +34,7 @@ import tf2_ros
 import tf_transformations
 import torch
 from cv_bridge import CvBridge
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -49,6 +50,7 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    ROS_TOPIC_RELATIVE_POSE_WITH_COVARIANCE,
     TRANSFORM_NODE_NAME,
 )
 
@@ -122,15 +124,13 @@ class PoseNode(Node):
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
 
-    def _image_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image` message"""
-        preprocessed = self.preprocess(msg)
-        inferred = self.inference(preprocessed)
-        pose_stamped = self.postprocess(inferred)
-
-        if pose_stamped is None:
-            return None
-
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_POSE_WITH_COVARIANCE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def pose_with_covariance(
+        self, pose_stamped: Tuple[np.ndarray, np.ndarray], header
+    ) -> Optional[PoseWithCovarianceStamped]:
         r, t = pose_stamped
 
         rotation_4x4 = np.eye(4)
@@ -145,30 +145,49 @@ class PoseNode(Node):
             return None
 
         camera_pos = (-r.T @ t).squeeze()
-        camera_pos[2] = -camera_pos[
-            2
-        ]  # todo: implement cleaner way of getting camera position right
+        camera_pos[2] = -camera_pos[2]
 
-        # TODO: implicit assumption that image message here has timestamp in system time
-        time_reference = self.time_reference
-        if time_reference is None:
-            self.get_logger().warning(
-                "Publishing world to camera_pinhole transformation without time "
-                "reference."
-            )
-            stamp = msg.header.stamp
-        else:
-            stamp = (
-                rclpy.time.Time.from_msg(msg.header.stamp)
-                - (
-                    rclpy.time.Time.from_msg(time_reference.header.stamp)
-                    - rclpy.time.Time.from_msg(time_reference.time_ref)
-                )
-            ).to_msg()
-        transform_camera = messaging.create_transform_msg(
-            stamp, "world", "camera_pinhole", q, camera_pos
+        pose_covariance_stamped = PoseWithCovarianceStamped()
+        pose_covariance_stamped.header.stamp = (
+            header.stamp
+        )  # Or adjusted stamp if using time_reference
+        pose_covariance_stamped.header.frame_id = "world"
+
+        pose_covariance_stamped.pose.pose.position.x = camera_pos[0]
+        pose_covariance_stamped.pose.pose.position.y = camera_pos[1]
+        pose_covariance_stamped.pose.pose.position.z = camera_pos[2]
+        pose_covariance_stamped.pose.pose.orientation = Quaternion(
+            x=q[0], y=q[1], z=q[2], w=q[3]
         )
-        self.broadcaster.sendTransform([transform_camera])
+
+        # Define covariance
+        # Assuming 5m standard deviation for x and y, 2m for z,
+        # and half of x/y for their covariance
+        covariance = [0.0] * 36  # Initialize with zeros
+        covariance[0] = 5**2  # Variance for x
+        covariance[7] = 5**2  # Variance for y
+        covariance[14] = 2**2  # Variance for z
+        covariance[1] = covariance[6] = 2.5**2  # Covariance between x and y
+
+        pose_covariance_stamped.pose.covariance = covariance
+
+        return pose_covariance_stamped
+
+    def _image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.image` message"""
+        preprocessed = self.preprocess(msg)
+        inferred = self.inference(preprocessed)
+        pose_stamped = self.postprocess(inferred)
+
+        if pose_stamped is None:
+            return None
+
+        self.pose_with_covariance(pose_stamped, msg.header)
+
+        # transform_camera = messaging.create_transform_msg(
+        #    stamp, "world", "camera_pinhole", q, camera_pos
+        # )
+        # self.broadcaster.sendTransform([transform_camera])
 
         debug_msg = messaging.get_transform(
             self, "world", "camera_pinhole", rclpy.time.Time()

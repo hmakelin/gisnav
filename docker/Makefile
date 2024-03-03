@@ -227,7 +227,8 @@ dev:
 	docker compose -p gisnav start mapserver
 
 	# Extract the IP address of the mapserver container
-	$(eval MAPSERVER_IP=$(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1))
+	$(eval MAPSERVER_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1`)
+	@echo "Debug: MAPSERVER_IP is '$(MAPSERVER_IP)'"
 
 	# Check if the entry already exists and update the /etc/hosts file
 	@if grep -q "gisnav-mapserver-1" /etc/hosts; then \

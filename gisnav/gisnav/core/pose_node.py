@@ -133,6 +133,8 @@ class PoseNode(Node):
     ) -> Optional[PoseWithCovarianceStamped]:
         r, t = pose_stamped
 
+        self.get_logger().error(f"Publishing pose with covariance")
+
         rotation_4x4 = np.eye(4)
         rotation_4x4[:3, :3] = r
         try:
@@ -164,9 +166,9 @@ class PoseNode(Node):
         # Assuming 5m standard deviation for x and y, 2m for z,
         # and half of x/y for their covariance
         covariance = [0.0] * 36  # Initialize with zeros
-        covariance[0] = 5**2  # Variance for x
-        covariance[7] = 5**2  # Variance for y
-        covariance[14] = 2**2  # Variance for z
+        covariance[0] = 5.0**2  # Variance for x
+        covariance[7] = 5.0**2  # Variance for y
+        covariance[14] = 2.0**2  # Variance for z
         covariance[1] = covariance[6] = 2.5**2  # Covariance between x and y
 
         pose_covariance_stamped.pose.covariance = covariance

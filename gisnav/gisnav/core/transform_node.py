@@ -296,7 +296,7 @@ class TransformNode(Node):
 
         transform = (
             messaging.get_transform(
-                self, "map", "gimbal", rclpy.time.Time()
+                self, "map", "camera", rclpy.time.Time()  # gimbal
             )  # query_image.header.stamp)
             if self.image is not None
             else None

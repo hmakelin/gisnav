@@ -71,4 +71,15 @@ def generate_launch_description():
             ],
         )
     )
+    ld.add_action(
+        Node(
+            package="robot_localization",
+            name="ekf_node",
+            namespace="robot_localization",
+            executable="ekf_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/ekf_node.yaml")
+            ],
+        )
+    )
     return ld

@@ -33,6 +33,7 @@
   <depend>ros2launch</depend>
   <depend>tf_transformations</depend>
   <depend>tf2_ros</depend>
+  <depend>robot_localization</depend>
 
   <!-- torch, kornia (deep learning dependencies) are still in setup.py -->
   <depend>python3-opencv</depend>s

@@ -49,7 +49,6 @@ Motivation for the data flow graph design:
     graph TB
         MAVROS -->|"NavSatFix"| BBoxNode
         MAVROS -->|"GimbalDeviceAttitudeStatus"| BBoxNode
-        BBoxNode -->|"TransformStamped"| map_to_camera
 
         subgraph core["GISNav core nodes"]
             BBoxNode -->|"BoundingBox"| GISNode
@@ -58,10 +57,11 @@ Motivation for the data flow graph design:
         end
 
         subgraph tf["tf topic"]
-            map_to_camera["map --> camera"]
-            reference_to_world["reference_[timestamp] --> world"]
             camera_pinhole_to_world["camera_pinhole --> world"]
+            reference_to_world["reference_[timestamp] --> world"]
+            map_to_camera["map --> camera"]
             camera_to_reference["camera --> reference_[timestamp]"]
+
         end
 
         subgraph tf_static["tf_static topic"]
@@ -72,15 +72,24 @@ Motivation for the data flow graph design:
             MockGPSNode["MockGPSNode"]
         end
 
-        gscam -->|"Image"| TransformNode
+        gscam ---->|"Image"| TransformNode
+
         GISNode -->|"PointCloud2\nreference_[timestamp]"| MockGPSNode
-
-        TransformNode -->|"TransformStamped"| reference_to_world
-        PoseNode -->|"TransformStamped"| camera_pinhole_to_world
-        PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
-
         camera_to_reference -->|"TransformStamped"| MockGPSNode
 
+        PoseNode --->|"TransformStamped"| camera_pinhole_to_world
+        PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
+        TransformNode -->|"TransformStamped"| reference_to_world
+        BBoxNode -->|"TransformStamped"| map_to_camera
+
+
+.. note::
+    The reason for publishing the ``PointCloud2`` message separately is that
+    tf2 does not support non-rigid transforms (transform from reference frame
+    to :term:`WGS 84` involves scaling). The timestamp in the
+    ``reference_[timestamp]`` frame is used to ensure that a transformation
+    chain ending in that frame is coupled with the correct ``PointCloud2``
+    message.
 
 .. todo::
 

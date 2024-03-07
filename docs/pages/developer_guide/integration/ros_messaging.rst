@@ -45,27 +45,41 @@ Motivation for the data flow graph design:
     did not use on it and relied on custom topics for publishing transformations.
 
 .. mermaid::
-    graph LR
+
+    graph TB
         MAVROS -->|"NavSatFix"| BBoxNode
         MAVROS -->|"GimbalDeviceAttitudeStatus"| BBoxNode
         BBoxNode -->|"TransformStamped"| map_to_camera
-        subgraph Core
+
+        subgraph core["GISNav core nodes"]
             BBoxNode -->|"BoundingBox"| GISNode
             GISNode -->|"Image"| TransformNode
             TransformNode -->|"Image"| PoseNode
         end
 
-        subgraph tf
+        subgraph tf["tf topic"]
             map_to_camera["map --> camera"]
-            reference_to_world["reference --> world"]
+            reference_to_world["reference_[timestamp] --> world"]
             camera_to_world["camera --> world"]
         end
 
-        GISNode -->|PointCloud2| MockGPSNode:::hidden
+        subgraph tf_static["tf_static topic"]
+            camera_to_camera_pinhole["camera --> camera_pinhole"]
+        end
+
+        subgraph extension["GISNav extension nodes"]
+            MockGPSNode["MockGPSNode"]
+        end
+
+        gscam -->|"Image"| TransformNode
+        GISNode -->|"PointCloud2\nreference_[timestamp]"| MockGPSNode
 
         TransformNode -->|"TransformStamped"| reference_to_world
         PoseNode -->|"TransformStamped"| camera_to_world
-        gscam -->|"Image"| TransformNode
+        PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
+
+        reference_to_world -->|"TransformStamped"| MockGPSNode
+
 
 .. todo::
 

@@ -99,6 +99,9 @@ Motivation for the data flow graph design:
     * In MockGPSNode, retrieve ``base_link`` (vehicle) to ``reference_[timestamp]``
       transform instead of ``camera`` to ``reference_[timestamp]``.
     * Try not to mix REP 105 and OpenCV PnP problem frame names.
+    * Replace ``PointCloud2`` message with JSON formatted ``String`` message?
+      Choice of ``PointCloud2`` to represent an affine transform (3-by-3 matrix)
+      feels arbitrary.
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

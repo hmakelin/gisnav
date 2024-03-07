@@ -74,7 +74,7 @@ Motivation for the data flow graph design:
 
         gscam ---->|"Image"| TransformNode
 
-        GISNode -->|"PointCloud2\nreference_[timestamp]"| MockGPSNode
+        GISNode -->|"PointCloud2\nreference_[timestamp] --> WGS 84"| MockGPSNode
         camera_to_reference -->|"TransformStamped"| MockGPSNode
 
         PoseNode --->|"TransformStamped"| camera_pinhole_to_world

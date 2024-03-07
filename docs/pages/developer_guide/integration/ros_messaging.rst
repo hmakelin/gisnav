@@ -60,7 +60,8 @@ Motivation for the data flow graph design:
         subgraph tf["tf topic"]
             map_to_camera["map --> camera"]
             reference_to_world["reference_[timestamp] --> world"]
-            camera_to_world["camera --> world"]
+            camera_pinhole_to_world["camera_pinhole --> world"]
+            camera_to_reference["camera --> reference_[timestamp]"]
         end
 
         subgraph tf_static["tf_static topic"]
@@ -75,17 +76,19 @@ Motivation for the data flow graph design:
         GISNode -->|"PointCloud2\nreference_[timestamp]"| MockGPSNode
 
         TransformNode -->|"TransformStamped"| reference_to_world
-        PoseNode -->|"TransformStamped"| camera_to_world
+        PoseNode -->|"TransformStamped"| camera_pinhole_to_world
         PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
 
-        reference_to_world -->|"TransformStamped"| MockGPSNode
+        camera_to_reference -->|"TransformStamped"| MockGPSNode
 
 
 .. todo::
 
-    * From BBoxNode, publish map to base_link and base_link to camera
+    * From BBoxNode, publish map to ``base_link`` and ``base_link`` to ``camera``
       transformations separately to simplify implementation and reduce amount
       of maintained code.
+    * In MockGPSNode, retrieve ``base_link`` (vehicle) to ``reference_[timestamp]``
+      transform instead of ``camera`` to ``reference_[timestamp]``.
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

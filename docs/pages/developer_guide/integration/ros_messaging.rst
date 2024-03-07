@@ -98,6 +98,7 @@ Motivation for the data flow graph design:
       of maintained code.
     * In MockGPSNode, retrieve ``base_link`` (vehicle) to ``reference_[timestamp]``
       transform instead of ``camera`` to ``reference_[timestamp]``.
+    * Try not to mix REP 105 and OpenCV PnP problem frame names.
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

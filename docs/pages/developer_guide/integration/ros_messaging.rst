@@ -44,6 +44,35 @@ Motivation for the data flow graph design:
     :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
     did not use on it and relied on custom topics for publishing transformations.
 
+.. mermaid::
+    graph LR
+        MAVROS -->|"NavSatFix"| BBoxNode
+        MAVROS -->|"GimbalDeviceAttitudeStatus"| BBoxNode
+        BBoxNode -->|"TransformStamped"| map_to_camera
+        subgraph Core
+            BBoxNode -->|"BoundingBox"| GISNode
+            GISNode -->|"Image"| TransformNode
+            TransformNode -->|"Image"| PoseNode
+        end
+
+        subgraph tf
+            map_to_camera["map --> camera"]
+            reference_to_world["reference --> world"]
+            camera_to_world["camera --> world"]
+        end
+
+        GISNode -->|PointCloud2| MockGPSNode:::hidden
+
+        TransformNode -->|"TransformStamped"| reference_to_world
+        PoseNode -->|"TransformStamped"| camera_to_world
+        gscam -->|"Image"| TransformNode
+
+.. todo::
+
+    * From BBoxNode, publish map to base_link and base_link to camera
+      transformations separately to simplify implementation and reduce amount
+      of maintained code.
+
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To integrate GISNav with your own :term:`ROS` system, you will likely have to do

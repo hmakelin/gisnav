@@ -7,42 +7,8 @@ talk to GISNav.
 
 Core data flow graph
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Take a look at the :term:`core` node ROS topography diagrams to understand
+Take a look at the :term:`core` node ROS topography diagram to understand
 how the ROS messages flow through the application:
-
-* :ref:`BBoxNode`
-* :ref:`GISNode`
-* :ref:`TransformNode`
-* :ref:`PoseNode`
-
-Motivation for the data flow graph design:
-
-* **Unidirectional Flow:**
-
-  The system is designed to avoid bidirectional loops that could potentially
-  cause significant delays. This streamlined, one-way flow facilitates real-time
-  operation and enhances performance.
-
-* **Modular Structure:**
-
-  Rather than having a monolithic single node, which can be challenging to
-  maintain, the architecture is broken down into multiple specialized nodes.
-  This modular approach allows for focused expertise within each node, such as
-  the dedicated OpenCV node for image processing and the GIS library node for
-  geographic information processing. For the GIS node, optimization is concerned
-  more about efficient IO and multithreading, while for the CV node optimization
-  may mean minimizing unnecessary image array transformations and using
-  multiprocessing.
-
-* **Extensibility:**
-
-  The architecture allows for :term:`extended functionality` via ROS messaging.
-  This design facilitates integration with various applications and helps with
-  the maintainability of the :term:`core` system.
-
-.. note::
-    :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
-    did not use on it and relied on custom topics for publishing transformations.
 
 .. mermaid::
 
@@ -59,9 +25,8 @@ Motivation for the data flow graph design:
         subgraph tf["tf topic"]
             camera_pinhole_to_world["camera_pinhole --> world"]
             reference_to_world["reference_[timestamp] --> world"]
-            map_to_camera["map --> camera"]
             camera_to_reference["camera --> reference_[timestamp]"]
-
+            map_to_camera["map --> camera"]
         end
 
         subgraph tf_static["tf_static topic"]
@@ -77,27 +42,30 @@ Motivation for the data flow graph design:
         GISNode -->|"PointCloud2\nreference_[timestamp] --> WGS 84"| MockGPSNode
         camera_to_reference -->|"TransformStamped"| MockGPSNode
 
-        PoseNode --->|"TransformStamped"| camera_pinhole_to_world
+        PoseNode -->|"TransformStamped"| camera_pinhole_to_world
         PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
         TransformNode -->|"TransformStamped"| reference_to_world
         BBoxNode -->|"TransformStamped"| map_to_camera
 
+        classDef tfClass fill:transparent,stroke-dasharray:5 5;
+        class tf,tf_static tfClass
+
 
 .. note::
-    The reason for publishing the ``PointCloud2`` message separately is that
-    tf2 does not support non-rigid transforms (transform from reference frame
-    to :term:`WGS 84` involves scaling). The timestamp in the
-    ``reference_[timestamp]`` frame is used to ensure that a transformation
-    chain ending in that frame is coupled with the correct ``PointCloud2``
-    message.
+    * The reason for publishing the ``PointCloud2`` message separately is that
+      tf2 does not support non-rigid transforms (transform from reference frame
+      to :term:`WGS 84` involves scaling). The timestamp in the
+      ``reference_[timestamp]`` frame is used to ensure that a transformation
+      chain ending in that frame is coupled with the correct ``PointCloud2``
+      message.
+    * :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
+      did not use on it and relied on custom topics for publishing transformations.
 
 .. todo::
 
     * From BBoxNode, publish map to ``base_link`` and ``base_link`` to ``camera``
       transformations separately to simplify implementation and reduce amount
       of maintained code.
-    * In MockGPSNode, retrieve ``base_link`` (vehicle) to ``reference_[timestamp]``
-      transform instead of ``camera`` to ``reference_[timestamp]``.
     * Try not to mix REP 105 and OpenCV PnP problem frame names.
     * Replace ``PointCloud2`` message with JSON formatted ``String`` message?
       Choice of ``PointCloud2`` to represent an affine transform (3-by-3 matrix)

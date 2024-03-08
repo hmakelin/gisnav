@@ -212,3 +212,40 @@ stop:
 .PHONY: build
 build:
 	@docker compose -p $(PROJECT_NAME) build
+
+# Use this target to start supporting services when usin a local installation
+# of GISNav. The mapserver needs to be started first and the local /etc/hosts
+# file updated so that the gisnav-mapserver-1 hostname resolves to the mapserver
+# container ID on your local host.
+.PHONY: dev
+dev:
+	# Recreate containers
+	docker compose -p gisnav create mapserver px4 qgis gscam postgres
+	$(MAKE) expose-xhost
+
+	# Start the mapserver container
+	docker compose -p gisnav start mapserver postgres
+
+	# Extract the IP address of the mapserver and postgres containers
+	$(eval MAPSERVER_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1`)
+	@echo "Debug: MAPSERVER_IP is '$(MAPSERVER_IP)'"
+	$(eval POSTGRES_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-postgres-1`)
+	@echo "Debug: POSTGRES_IP is '$(POSTGRES_IP)'"
+
+	# Check if the entry already exists and update the /etc/hosts file
+	@if grep -q "gisnav-mapserver-1" /etc/hosts; then \
+		sudo sed -i'' -e "s/.*gisnav-mapserver-1/$(MAPSERVER_IP) gisnav-mapserver-1/" /etc/hosts; \
+	else \
+		echo "$(MAPSERVER_IP) gisnav-mapserver-1" | sudo tee -a /etc/hosts; \
+	fi
+	@echo "Updated /etc/hosts with IP $(MAPSERVER_IP) for gisnav-mapserver-1"
+
+	@if grep -q "gisnav-postgres-1" /etc/hosts; then \
+		sudo sed -i'' -e "s/.*gisnav-postgres-1/$(POSTGRES_IP) gisnav-postgres-1/" /etc/hosts; \
+	else \
+		echo "$(POSTGRES_IP) gisnav-postgres-1" | sudo tee -a /etc/hosts; \
+	fi
+	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
+
+	# Start the other development services
+	docker compose -p gisnav start px4 qgis gscam

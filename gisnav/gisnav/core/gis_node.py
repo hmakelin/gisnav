@@ -57,7 +57,6 @@ from .. import _messaging as messaging
 from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
-    DELAY_DEFAULT_MS,
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
@@ -399,15 +398,6 @@ class GISNode(Node):
         bounding_box.max_pt.longitude = longitude + delta_lon
 
         return bounding_box
-
-    @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        "/mavros/global_position/global",
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def nav_sat_fix(self) -> Optional[NavSatFix]:
-        """Vehicle GPS fix, or None if unknown or too old"""
 
     @property
     @ROS.subscribe(

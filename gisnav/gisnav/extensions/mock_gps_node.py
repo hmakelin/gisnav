@@ -183,11 +183,11 @@ class MockGPSNode(Node):
     def _publish(self) -> None:
         @narrow_types(self)
         def _publish_inner(
-            camera_to_reference: TransformStamped, geotransform: PointCloud2
+            base_link_to_reference: TransformStamped, geotransform: PointCloud2
         ) -> None:
             translation, rotation = (
-                camera_to_reference.transform.translation,
-                camera_to_reference.transform.rotation,
+                base_link_to_reference.transform.translation,
+                base_link_to_reference.transform.rotation,
             )
 
             # Unpack the geotransformation affine matrix
@@ -204,10 +204,10 @@ class MockGPSNode(Node):
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw
-            camera_yaw_degrees = messaging.extract_yaw(rotation)
-            camera_yaw_degrees = int(camera_yaw_degrees % 360)
+            vehicle_yaw_degrees = messaging.extract_yaw(rotation)
+            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink definition 0 := not available
-            camera_yaw_degrees = 360 if camera_yaw_degrees == 0 else camera_yaw_degrees
+            vehicle_yaw_degrees = 360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
 
             lat = int(translation_wgs84[1] * 1e7)
             lon = int(translation_wgs84[0] * 1e7)
@@ -223,7 +223,7 @@ class MockGPSNode(Node):
             else:
                 return None
 
-            timestamp = messaging.usec_from_header(camera_to_reference.header)
+            timestamp = messaging.usec_from_header(base_link_to_reference.header)
             satellites_visible = np.iinfo(np.uint8).max
             eph = 10.0
             epv = 1.0
@@ -234,7 +234,7 @@ class MockGPSNode(Node):
                     lon,
                     alt_ellipsoid,
                     alt_amsl,
-                    camera_yaw_degrees,
+                    vehicle_yaw_degrees,
                     self._device_id,
                     timestamp,
                     eph,
@@ -246,7 +246,7 @@ class MockGPSNode(Node):
                     lat,
                     lon,
                     alt_amsl,
-                    camera_yaw_degrees,
+                    vehicle_yaw_degrees,
                     timestamp,
                     eph,
                     epv,
@@ -267,16 +267,16 @@ class MockGPSNode(Node):
                     geotransform.header.stamp.sec, geotransform.header.stamp.nanosec
                 ),
             )
-            camera_to_reference = messaging.get_transform(
+            base_link_to_reference = messaging.get_transform(
                 self,
                 ref_frame,
-                "camera",
+                "camera",  # base_link  # todo use base_link, not camera
                 rclpy.time.Time(),
             )
         else:
-            camera_to_reference = None
+            base_link_to_reference = None
 
-        _publish_inner(camera_to_reference, geotransform)
+        _publish_inner(base_link_to_reference, geotransform)
 
     @narrow_types
     @ROS.publish(

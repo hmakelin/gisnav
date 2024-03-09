@@ -42,14 +42,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import (
-    CameraInfo,
-    Image,
-    NavSatFix,
-    PointCloud2,
-    PointField,
-    TimeReference,
-)
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField, TimeReference
 from shapely.geometry import box
 from std_msgs.msg import Header
 
@@ -734,7 +727,6 @@ class GISNode(Node):
 
         pixel_coords = np.float32(pixel_coords).squeeze()
         geo_coords = np.float32(geo_coords).squeeze()
-
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
         # Insert z dimensions and scale
@@ -742,6 +734,7 @@ class GISNode(Node):
         M = np.insert(M, 2, 0, axis=0)
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
+
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Flatten the matrix and repurpose a PointCloud2 message to transport it

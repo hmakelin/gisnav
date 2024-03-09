@@ -207,7 +207,9 @@ class MockGPSNode(Node):
             vehicle_yaw_degrees = messaging.extract_yaw(rotation)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink definition 0 := not available
-            vehicle_yaw_degrees = 360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            vehicle_yaw_degrees = (
+                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            )
 
             lat = int(translation_wgs84[1] * 1e7)
             lon = int(translation_wgs84[0] * 1e7)

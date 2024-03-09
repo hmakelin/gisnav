@@ -86,11 +86,11 @@ with fast dynamics with higher lags as long as the timestamps are accurate.
 
 FrameID = Literal[
     "reference",
-    "reference_{}_{}",
+    "reference_%i_%i",
     "base_link",
+    "gimbal",
     "camera",
     "camera_pinhole",
-    "gimbal",
     "map",
     "world",
 ]
@@ -107,7 +107,7 @@ The ``base_link`` frame is defined as the vehicle body :term:`FRD` frame.
 The ``reference`` frame is the :term:`reference` arrays coordinate frame
 where the origin is the bottom left (ROS convention, not numpy/cv2 top left
 convention). x axis is the width axis, y axis is height. The static
-``reference_{}_{}`` frame (in relation to :term:`WGS 84` coordinates)
+``reference_%i_%i`` frame (in relation to :term:`WGS 84` coordinates)
 is intended to be suffixed with the :term:`ROS` second and nanosecond
 integer timestamps to allow the tf2 transformation chain to be matched
 to the exact same reference frame that was used to for deriving the

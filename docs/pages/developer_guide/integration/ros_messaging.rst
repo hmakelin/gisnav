@@ -35,7 +35,7 @@ how the ROS messages flow through the application:
         gscam ---->|"Image"| TransformNode
 
         GISNode -->|"PointCloud2\nreference_%i_%i->WGS 84"| MockGPSNode
-        tf -->|"TransformStamped"| MockGPSNode
+        tf -->|"TransformStamped\nreference_%i_%i->base_link"| MockGPSNode
 
         PoseNode -->|"TransformStamped\ncamera->world"| tf
         PoseNode -->|"TransformStamped\ncamera_pnp->camera"| tf_static

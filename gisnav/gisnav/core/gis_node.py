@@ -668,7 +668,6 @@ class GISNode(Node):
         :return: :class:`sensor_msgs.msg.PointCloud2` message representing a
             3D affine transformation
         """
-
         def _boundingbox_to_geo_coords(
             bounding_box: BoundingBox,
         ) -> List[Tuple[float, float]]:
@@ -734,7 +733,6 @@ class GISNode(Node):
 
         pixel_coords = np.float32(pixel_coords).squeeze()
         geo_coords = np.float32(geo_coords).squeeze()
-
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
         # Insert z dimensions and scale
@@ -742,6 +740,10 @@ class GISNode(Node):
         M = np.insert(M, 2, 0, axis=0)
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
+
+        # TODO: Use ground resolution of map directly to get scaling. E.g. if USGS
+        #  NAIP has 1 meter per pixel resolution (ground sample distance, GSD), use
+        #  that instead of calculating it here
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Flatten the matrix and repurpose a PointCloud2 message to transport it

@@ -11,6 +11,7 @@ Take a look at the :term:`core` node ROS topography diagram to understand
 how the ROS messages flow through the application:
 
 .. mermaid::
+    :caption: Nodes and published topics
 
     graph TB
         MAVROS -->|"NavSatFix"| BBoxNode
@@ -22,15 +23,9 @@ how the ROS messages flow through the application:
             TransformNode -->|"Image"| PoseNode
         end
 
-        subgraph tf["tf topic"]
-            camera_pinhole_to_world["camera_pinhole --> world"]
-            reference_to_world["reference_[timestamp] --> world"]
-            camera_to_reference["camera --> reference_[timestamp]"]
-            map_to_camera["map --> camera"]
-        end
-
-        subgraph tf_static["tf_static topic"]
-            camera_to_camera_pinhole["camera --> camera_pinhole"]
+        subgraph tf2
+            tf["tf"]
+            tf_static["tf_static"]
         end
 
         subgraph extension["GISNav extension nodes"]
@@ -39,17 +34,50 @@ how the ROS messages flow through the application:
 
         gscam ---->|"Image"| TransformNode
 
-        GISNode -->|"PointCloud2\nreference_[timestamp] --> WGS 84"| MockGPSNode
-        camera_to_reference -->|"TransformStamped"| MockGPSNode
+        GISNode -->|"PointCloud2\nreference_%i_%i->WGS 84"| MockGPSNode
+        tf -->|"TransformStamped"| MockGPSNode
 
-        PoseNode -->|"TransformStamped"| camera_pinhole_to_world
-        PoseNode -->|"TransformStamped"| camera_to_camera_pinhole
-        TransformNode -->|"TransformStamped"| reference_to_world
-        BBoxNode -->|"TransformStamped"| map_to_camera
+        PoseNode -->|"TransformStamped\ncamera->world"| tf
+        PoseNode -->|"TransformStamped\ncamera_pnp->camera"| tf_static
+        TransformNode -->|"TransformStamped\nreference_%i_%i->world"| tf
 
         classDef tfClass fill:transparent,stroke-dasharray:5 5;
-        class tf,tf_static tfClass
+        class tf2 tfClass
 
+tf2 transformations tree
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The below diagram depicts how the frames specified in :class:`.FrameID` relate
+to each other:
+
+.. mermaid::
+    :caption: ROS frames
+
+    graph TB
+        subgraph rep["REP 105 (native units meters)"]
+            earth["earth\nnot used"]
+            odom["odom\nnot used"]
+            map1["map"] --> base_link
+        end
+
+        wgs["WGS 84"]
+
+        subgraph gisnav["GISNav (native units pixels but converted to meters)"]
+            camera_pinhole["camera_pnp"] -->|"PoseNode"| camera
+            camera -->|"PoseNode"| world
+            camera ------>|"Not Implemented"| base_link
+
+            world -->|"TransformNode"| reference
+            world -->|"TransformNode"| reference_ts
+
+            reference
+            reference_ts["reference_%i_%i"]
+            reference_ts -->|"MockGPSNode"| wgs
+            reference_ts ---->|"Not Implemented"| map1
+        end
+
+        classDef dotted fill:transparent,stroke-dasharray:5 5;
+        class rep,gisnav dotted
 
 .. note::
     * The reason for publishing the ``PointCloud2`` message separately is that

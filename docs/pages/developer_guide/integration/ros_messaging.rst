@@ -83,9 +83,13 @@ to each other:
     * The reason for publishing the ``PointCloud2`` message separately is that
       tf2 does not support non-rigid transforms (transform from reference frame
       to :term:`WGS 84` involves scaling). The timestamp in the
-      ``reference_[timestamp]`` frame is used to ensure that a transformation
+      ``reference_%i_%i`` frame is used to ensure that a transformation
       chain ending in that frame is coupled with the correct ``PointCloud2``
       message.
+    * The ``reference`` frame is published together with the latest
+      ``reference_%i_%i`` frame to make debugging e.g. in RViz more convenient.
+      This enables looking at the world to reference frame relative transformation
+      in isolation.
     * :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
       did not use on it and relied on custom topics for publishing transformations.
 

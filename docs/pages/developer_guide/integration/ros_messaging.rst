@@ -60,20 +60,17 @@ to each other:
             map1["map"] --> base_link
         end
 
-        wgs["WGS 84"]
-
         subgraph gisnav["GISNav (native units pixels but converted to meters)"]
             camera_pinhole["camera_pnp"] -->|"PoseNode"| camera
             camera -->|"PoseNode"| world
-            camera ------>|"Not Implemented"| base_link
+            camera -->|"Not Implemented"| base_link
 
             world -->|"TransformNode"| reference
             world -->|"TransformNode"| reference_ts
 
             reference
             reference_ts["reference_%i_%i"]
-            reference_ts -->|"MockGPSNode"| wgs
-            reference_ts ---->|"Not Implemented"| map1
+            reference_ts -->|"Not Implemented"| map1
         end
 
         classDef dotted fill:transparent,stroke-dasharray:5 5;
@@ -98,6 +95,8 @@ to each other:
     * From BBoxNode, publish map to ``base_link`` and ``base_link`` to ``camera``
       transformations separately to simplify implementation and reduce amount
       of maintained code.
+    * Link up the GISNav tf tree with the REP 105 tf tree, possibly via suggested
+      paths in diagram. Scale GISNav frames to meters.
     * Try not to mix REP 105 and OpenCV PnP problem frame names.
     * Replace ``PointCloud2`` message with JSON formatted ``String`` message?
       Choice of ``PointCloud2`` to represent an affine transform (3-by-3 matrix)

@@ -741,9 +741,6 @@ class GISNode(Node):
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
 
-        # TODO: Use ground resolution of map directly to get scaling. E.g. if USGS
-        #  NAIP has 1 meter per pixel resolution (ground sample distance, GSD), use
-        #  that instead of calculating it here
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         # Flatten the matrix and repurpose a PointCloud2 message to transport it

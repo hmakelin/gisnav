@@ -136,8 +136,6 @@ setup(
             "pytest",
             "python-dateutil>=2.8.2",
             "pyyaml",
-            "px4tools",
-            # "git+https://github.com/dronecrew/px4tools.git",
             "sphinx-copybutton",
             "sphinx-design",
             "Sphinx-Substitution-Extensions",

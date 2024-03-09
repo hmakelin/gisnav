@@ -21,8 +21,9 @@ docs/_build/
 # SITL test log output (but leave one sample flight log)
 gisnav/test/sitl/output/
 
-# Jupyter Notebook checkpoints
+# Jupyter Notebook checkpoints, notebooks
 gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
+gisnav/test/sitl/ulog_analysis/output
 
 .benchmarks/
 

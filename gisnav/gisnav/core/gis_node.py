@@ -42,14 +42,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import (
-    CameraInfo,
-    Image,
-    NavSatFix,
-    PointCloud2,
-    PointField,
-    TimeReference,
-)
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField, TimeReference
 from shapely.geometry import box
 from std_msgs.msg import Header
 
@@ -668,6 +661,7 @@ class GISNode(Node):
         :return: :class:`sensor_msgs.msg.PointCloud2` message representing a
             3D affine transformation
         """
+
         def _boundingbox_to_geo_coords(
             bounding_box: BoundingBox,
         ) -> List[Tuple[float, float]]:

@@ -19,8 +19,9 @@ how the ROS messages flow through the application:
 
         subgraph core["GISNav core nodes"]
             BBoxNode -->|"BoundingBox"| GISNode
-            GISNode -->|"Image"| TransformNode
-            TransformNode -->|"Image"| PoseNode
+            GISNode -->|"Image"| StereoNode
+            StereoNode -->|"Image (mono-VO)"| PoseNode
+            StereoNode -->|"Image (orthoimage stack)"| PoseNode
         end
 
         subgraph tf2
@@ -32,14 +33,14 @@ how the ROS messages flow through the application:
             MockGPSNode["MockGPSNode"]
         end
 
-        gscam ---->|"Image"| TransformNode
+        gscam ---->|"Image"| StereoNode
 
         GISNode -->|"PointCloud2\nreference_%i_%i->WGS 84"| MockGPSNode
         tf -->|"TransformStamped\nreference_%i_%i->base_link"| MockGPSNode
 
         PoseNode -->|"TransformStamped\ncamera->world"| tf
         PoseNode -->|"TransformStamped\ncamera_pnp->camera"| tf_static
-        TransformNode -->|"TransformStamped\nreference_%i_%i->world"| tf
+        StereoNode -->|"TransformStamped\nreference_%i_%i->world"| tf
 
         classDef tfClass fill:transparent,stroke-dasharray:5 5;
         class tf2 tfClass
@@ -65,8 +66,8 @@ to each other:
             camera -->|"PoseNode"| world
             camera -->|"Not Implemented"| base_link
 
-            world -->|"TransformNode"| reference
-            world -->|"TransformNode"| reference_ts
+            world -->|"StereoNode"| reference
+            world -->|"StereoNode"| reference_ts
 
             reference
             reference_ts["reference_%i_%i"]
@@ -114,7 +115,7 @@ nodes with remapped topic names:
     .. tab-item:: ros2 launch
         :selected:
 
-        The below diff is an example remapping for the camera topics for :class:`.TransformNode`:
+        The below diff is an example remapping for the camera topics for :class:`.StereoNode`:
 
         .. literalinclude:: ../../../../gisnav/launch/examples/base_camera_topic_remap.launch.py
             :diff: ../../../../gisnav/launch/base.launch.py
@@ -130,7 +131,7 @@ nodes with remapped topic names:
 
     .. tab-item:: ros2 run
 
-        The below command launches camera topics for :class:`.TransformNode`:
+        The below command launches camera topics for :class:`.StereoNode`:
 
         .. code-block:: bash
             :caption: Camera topic name remapping example using ``ros2 run``

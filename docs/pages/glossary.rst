@@ -631,6 +631,9 @@ ____________________________________________________
     VNC
         Virtual Network Computing
 
+    VO
+        Visual Odometry
+
     WGS
     WGS 84
         A World Geodetic System coordinate system: `en.wikipedia.org/wiki/World_Geodetic_System <https://en.wikipedia.org/wiki/World_Geodetic_System>`_

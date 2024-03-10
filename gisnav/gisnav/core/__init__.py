@@ -3,6 +3,6 @@
 from .bbox_node import BBoxNode
 from .gis_node import GISNode
 from .pose_node import PoseNode
-from .transform_node import TransformNode
+from .stereo_node import StereoNode
 
-__all__ = ["BBoxNode", "TransformNode", "PoseNode", "GISNode"]
+__all__ = ["BBoxNode", "StereoNode", "PoseNode", "GISNode"]

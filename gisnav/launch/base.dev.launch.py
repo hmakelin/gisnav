@@ -30,11 +30,11 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
-            name="transform_node",
+            name="stereo_node",
             namespace=_PACKAGE_NAME,
-            executable="transform_node",
+            executable="stereo_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/transform_node.yaml")
+                os.path.join(package_share_dir, "launch/params/stereo_node.yaml")
             ],
         )
     )

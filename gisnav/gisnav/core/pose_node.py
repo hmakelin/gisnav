@@ -25,7 +25,7 @@ reference images and then solving the resulting :term:`PnP` problem.
         pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
 from copy import deepcopy
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Literal
 
 import cv2
 import numpy as np
@@ -49,7 +49,8 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    TRANSFORM_NODE_NAME,
+    ROS_TOPIC_RELATIVE_STEREO_IMAGE,
+    STEREO_NODE_NAME,
 )
 
 
@@ -73,14 +74,21 @@ class PoseNode(Node):
         super().__init__(*args, **kwargs)
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Initialize DL model for map matching (global 3D position)
         self._model = LoFTR(pretrained="outdoor")
         self._model.to(self._device)
+
+        # Initialize ORB detector and brute force matcher for VO
+        # (relative position/velocity)
+        self._orb = cv2.ORB_create()
+        self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
         self._cv_bridge = CvBridge()
 
         # initialize subscription
         self.camera_info
         self.image
+        self.image_vo
         self.time_reference
 
         # Initialize the transform broadcaster
@@ -193,7 +201,7 @@ class PoseNode(Node):
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", TRANSFORM_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", STEREO_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_image_cb,
     )
@@ -213,9 +221,60 @@ class PoseNode(Node):
             rosdep index.
         """
 
+    def _image_vo_cb(self, msg: Image) -> None:
+        # TODO: use sift to match keypoints, then get pose just like for other image
+        """Callback for :attr:`.image` message"""
+        preprocessed = self.preprocess(msg, shallow_inference=True)
+        inferred = self.inference(preprocessed, shallow_inference=True)
+        pose_stamped = self.postprocess(inferred)
+
+        if pose_stamped is None:
+            return None
+
+        r, t = pose_stamped
+
+        raise NotImplementedError
+
+    @property
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_STEREO_IMAGE.replace("~", STEREO_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_image_vo_cb,
+    )
+    def image_vo(self) -> Optional[Image]:
+        """Image pair consisting of query image and reference image for :term:`VO` use.
+
+        .. note::
+            Images are set side by side - the first or left image is the current (query)
+            image, while the second or right image is the previous (reference) image.
+        """
+
+    @property
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", STEREO_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_image_cb,
+    )
+    def image(self) -> Optional[Image]:
+        """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
+        in a grayscale image. The query image is the first (left) image, and the reference
+        image is the second (right) image.
+
+        .. note::
+            The existing :class:`sensor_msgs.msg.Image` message is repurposed
+            to represent a stereo couple to avoid having to introduce custom messages
+            that would have to be distributed in a separate package. It will be easier to
+            package this later as a rosdebian if everything is already in the
+            rosdep index.
+        """
+
     @narrow_types
     def preprocess(
-        self, image_quad: Image
+        self, image_quad: Image, shallow_inference: bool = False,
     ) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
         """Converts incoming 4-channel image to torch tensors
 
@@ -223,43 +282,54 @@ class PoseNode(Node):
             :term:`query`, the second channel is the 8-bit
             :term:`elevation reference`, and the last two channels combined
             represent the 16-bit :term:`elevation reference`.
+        :param shallow_inference: If set to True, prepare for faster matching method
+            suitable for visual odometry (VO) instead of for deep learning model
         """
         # Convert the ROS Image message to an OpenCV image
         full_image_cv = self._cv_bridge.imgmsg_to_cv2(
             image_quad, desired_encoding="passthrough"
         )
 
-        # Check that the image has 4 channels
-        channels = full_image_cv.shape[2]
-        assert channels == 4, "The image must have 4 channels"
+        if not shallow_inference:
+            # Check that the image has 4 channels
+            channels = full_image_cv.shape[2]
+            assert channels == 4, "The image must have 4 channels"
 
-        # Extract individual channels
-        query_img = full_image_cv[:, :, 0]
-        reference_img = full_image_cv[:, :, 1]
-        elevation_16bit_high = full_image_cv[:, :, 2]
-        elevation_16bit_low = full_image_cv[:, :, 3]
+            # Extract individual channels
+            query_img = full_image_cv[:, :, 0]
+            reference_img = full_image_cv[:, :, 1]
+            elevation_16bit_high = full_image_cv[:, :, 2]
+            elevation_16bit_low = full_image_cv[:, :, 3]
 
-        # Reconstruct 16-bit elevation from the last two channels
-        reference_elevation = (
-            elevation_16bit_high.astype(np.uint16) << 8
-        ) | elevation_16bit_low.astype(np.uint16)
+            # Reconstruct 16-bit elevation from the last two channels
+            reference_elevation = (
+                elevation_16bit_high.astype(np.uint16) << 8
+            ) | elevation_16bit_low.astype(np.uint16)
 
-        # Optionally display images
-        # self._display_images("Query", query_img, "Reference", reference_img)
+            # Optionally display images
+            # self._display_images("Query", query_img, "Reference", reference_img)
 
-        if torch.cuda.is_available():
-            qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
-            ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
+            if torch.cuda.is_available():
+                qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
+                ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
+            else:
+                qry_tensor = torch.Tensor(query_img[None, None]) / 255.0
+                ref_tensor = torch.Tensor(reference_img[None, None]) / 255.0
+
+            return (
+                {"image0": qry_tensor, "image1": ref_tensor},
+                query_img,
+                reference_img,
+                reference_elevation,
+            )
         else:
-            qry_tensor = torch.Tensor(query_img[None, None]) / 255.0
-            ref_tensor = torch.Tensor(reference_img[None, None]) / 255.0
-
-        return (
-            {"image0": qry_tensor, "image1": ref_tensor},
-            query_img,
-            reference_img,
-            reference_elevation,
-        )
+            # TODO: Define a return type or make this method cleaner in some other way -
+            #  the VO/shallow branch of this method is like a completely different method!
+            h, w = full_image_cv.shape  # should only have 2 dimensions
+            half_w = int(w/2)
+            query_img = full_image_cv[:, :half_w]  # w should be divisible by 2
+            reference_img = full_image_cv[:, half_w:]
+            return query_img, reference_img
 
     @staticmethod
     def _display_images(*args):
@@ -268,11 +338,58 @@ class PoseNode(Node):
             cv2.imshow(args[i], args[i + 1])
         cv2.waitKey(1)
 
-    def inference(self, preprocessed_data):
+    def inference(self, preprocessed_data, shallow_inference: bool = False):
         """Do keypoint matching."""
-        with torch.no_grad():
-            results = self._model(preprocessed_data[0])
-        return results, *preprocessed_data[1:]
+        if not shallow_inference:
+            with torch.no_grad():
+                results = self._model(preprocessed_data[0])
+            return results, *preprocessed_data[1:]
+        else:
+            # find the keypoints and descriptors with ORB
+            qry, ref = preprocessed_data
+            cv2.imshow("qry", qry)
+            cv2.imshow("ref", ref)
+            cv2.waitKey(1)
+
+
+            kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
+            kp_ref, desc_ref = self._orb.detectAndCompute(ref, None)
+
+            self.get_logger().error(f"{desc_qry} {desc_ref}")
+
+            matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)
+
+            # Apply ratio test
+            good = []
+            for m, n in matches:
+                # TODO: have a separate confidence threshold for shallow and deep matching?
+                if m.distance < self.CONFIDENCE_THRESHOLD * n.distance:
+                    good.append(m)
+
+            # TODO define common match format (here we have cv2.DMatch) but deep version
+            # has tuples/lists?
+
+            # cv.drawMatchesKnn expects list of lists as matches.
+            #matches_img = cv2.drawMatches(qry, kp_qry, ref, kp_ref, good, None,
+            #                         flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            matches_img = cv2.drawMatches(
+                qry.copy(),
+                kp_qry,
+                ref.copy(),
+                kp_ref,
+                good,
+                None,
+                matchColor=(0, 255, 0),
+                flags=2,
+            )
+
+            cv2.imshow("VO matches", matches_img)
+            cv2.waitKey(1)
+
+            # TODO: convert results to same format as with deep matching
+            results = good
+            return results, *preprocessed_data[1:]
+
 
     def postprocess(self, inferred_data) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Filters matches based on confidence threshold and calculates :term:`pose`"""

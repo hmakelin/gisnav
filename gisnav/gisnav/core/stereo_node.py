@@ -1,19 +1,21 @@
-"""This module contains :class:`.TransformNode`, a :term:`ROS` node generating the
-:term:`query` and :term:`reference` image pair by rotating the reference
-image based on :term:`vehicle` heading, and then cropping it based on the
-:term:`camera` information.
+"""This module contains :class:`.StereoNode`, a :term:`ROS` node generating the
+:term:`query` and :term:`reference` stereo image pair by either rotating the reference
+image based on :term:`vehicle` heading and then cropping it based on the
+:term:`camera` information, or by coupling to successive image frames from the monocular
+onbaord camera.
 
 .. mermaid::
-    :caption: :class:`.PnPNode` computational graph
+    :caption: :class:`.StereoNode` computational graph
 
     graph LR
-        subgraph TransformNode
-            pnp_image[gisnav/transform_node/image]
+        subgraph StereoNode
+            image[gisnav/stereo_node/image]
+            image_vo[gisnav/stereo_node/image_vo]
         end
 
         subgraph gscam
             camera_info[camera/camera_info]
-            image[camera/image_raw]
+            pnp_image[camera/image_raw]
         end
 
         subgraph BBoxNode
@@ -24,11 +26,12 @@ image based on :term:`vehicle` heading, and then cropping it based on the
             orthoimage[gisnav/gis_node/image]
         end
 
-        image -->|sensor_msgs/Image| TransformNode
-        camera_info -->|sensor_msgs/CameraInfo| TransformNode
-        orthoimage -->|sensor_msgs/Image| TransformNode
-        camera_pose -->|geometry_msgs/PoseStamped| TransformNode
-        pnp_image -->|sensor_msgs/Image| PnPNode:::hidden
+        pnp_image -->|sensor_msgs/Image| StereoNode
+        camera_info -->|sensor_msgs/CameraInfo| StereoNode
+        orthoimage -->|sensor_msgs/Image| StereoNode
+        camera_pose -->|geometry_msgs/PoseStamped| StereoNode
+        image -->|sensor_msgs/Image| PoseNode
+        image_vo -->|sensor_msgs/Image| PoseNode
 """
 from copy import deepcopy
 from typing import Final, Optional, Tuple
@@ -55,24 +58,16 @@ from ..constants import (
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    ROS_TOPIC_RELATIVE_STEREO_IMAGE,
     FrameID,
 )
 
-
-class TransformNode(Node):
-    """Publishes :term:`query` and :term:`reference` image pair
-
-    Rotates the reference image based on :term:`vehicle` heading, and then
-    crops it based on :term:`camera` image resolution.
+class StereoNode(Node):
+    """Generates and publishes a synthetic :term:`query` and :term:`reference` stereo
+    image couple. Synthetic refers to the fact that no stereo camera is actually assumed
+    or required. The reference can be an older image from the same monocular camera, or
+    alternatively an aligned map raster from the GIS server.
     """
-
-    ROS_D_MISC_MIN_MATCH_ALTITUDE = 80
-    """Default minimum ground altitude in meters under which matches against
-    map will not be attempted"""
-
-    ROS_D_MISC_ATTITUDE_DEVIATION_THRESHOLD = 10
-    """Magnitude of allowed attitude deviation of estimate from expectation in
-    degrees"""
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
@@ -94,9 +89,13 @@ class TransformNode(Node):
         self.camera_info
         self.image
 
+        # TODO Declare as property?
+        self.previous_image: Optional[Image] = None
+
         # setup publisher to pass launch test without image callback being
         # triggered
         self.pnp_image
+        self.stereo_image
 
         # Initialize the transform broadcaster and listener
         self.broadcaster = TransformBroadcaster(self)
@@ -123,7 +122,12 @@ class TransformNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        self.pnp_image
+        self.pnp_image      # publish rotated and cropped orthoimage stack
+        self.stereo_image   # publish two subsequent images for VO
+
+        # TODO this is brittle - nothing is enforcing that this is assigned after
+        #  publishing stereo_image
+        self.previous_image = msg  # needed for VO - leave this for last in this callback
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
@@ -147,7 +151,7 @@ class TransformNode(Node):
     )
     def pnp_image(self) -> Optional[Image]:
         """Published :term:`stacked <stack>` image consisting of query image,
-        reference image, and reference elevation raster (:term:`DEM`).
+        reference image, and optional reference elevation raster (:term:`DEM`).
 
         .. note::
             Semantically not a single image, but a stack of two 8-bit grayscale
@@ -294,6 +298,8 @@ class TransformNode(Node):
 
         query_image, orthoimage = self.image, self.orthoimage
 
+        # Need gimbal (camera) orientation in an ENU frame ("map") to rotate
+        # the orthoimage stack
         transform = (
             messaging.get_transform(
                 self, "map", "gimbal", rclpy.time.Time()
@@ -307,6 +313,39 @@ class TransformNode(Node):
             orthoimage,
             transform,
         )
+
+    @property
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_STEREO_IMAGE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def stereo_image(self) -> Optional[Image]:
+        """Published stereo couple image consisting of query image and reference image
+         for :term:`VO` use.
+
+        .. note::
+            Images are set side by side - the first or left image is the current (query)
+            image, while the second or right image is the previous (reference) image.
+        """
+        @narrow_types(self)
+        def _stereo_image(qry: Image, ref: Image) -> Image:
+            qry = self._cv_bridge.imgmsg_to_cv2(qry, desired_encoding="mono8")
+            ref = self._cv_bridge.imgmsg_to_cv2(ref, desired_encoding="mono8")
+
+            #img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+            # place images side-by-side (dstack not good here since we would only
+            # have 2 channels)
+            stereo_image = np.hstack((qry, ref))
+            image_msg = self._cv_bridge.cv2_to_imgmsg(
+                stereo_image, encoding="passthrough"
+            )
+
+            return image_msg
+
+        query_image, ref_image = self.image, self.previous_image
+        return _stereo_image(query_image, ref_image)
+
 
     @staticmethod
     def _rotate_and_crop_center(

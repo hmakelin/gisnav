@@ -1,5 +1,0 @@
-gisnav:
-  transform_node:
-    ros__parameters:
-      max_pitch: 30
-      min_match_altitude: 50

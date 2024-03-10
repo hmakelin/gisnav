@@ -1,6 +1,6 @@
-TransformNode
+StereoNode
 ____________________________________________________
-.. automodule:: gisnav.core.transform_node
+.. automodule:: gisnav.core.stereo_node
    :autosummary:
    :members:
    :undoc-members:

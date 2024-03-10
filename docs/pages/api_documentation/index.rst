@@ -22,7 +22,7 @@ what you are looking for.
 
     public/bbox_node
     public/gis_node
-    public/transform_node
+    public/stereo_node
     public/pose_node
 
 .. toctree::

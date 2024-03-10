@@ -22,8 +22,8 @@ BBOX_NODE_NAME: Final = "bbox_node"
 POSE_NODE_NAME: Final = "pose_node"
 """Name of :class:`.PoseNode` from gisnav_gpu package."""
 
-TRANSFORM_NODE_NAME: Final = "transform_node"
-"""Name of :class:`.TransformNode` spun up by :func:`.run_transform_node`"""
+STEREO_NODE_NAME: Final = "stereo_node"
+"""Name of :class:`.StereoNode` spun up by :func:`.run_transform_node`"""
 
 MOCK_GPS_NODE_NAME: Final = "mock_gps_node"
 """Name of :class:`.MockGPSNode` spun up by :func:`.run_mock_gps_node`"""
@@ -49,9 +49,14 @@ ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 :attr:`.BBoxNode.fov_bounding_box`.
 """
 
-ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image"
-"""Relative :term:`topic` into which :class:`.TransformNode` publishes
-:attr:`.CVNode.pnp_image`.
+ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image_gis"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.pnp_image`.
+"""
+
+ROS_TOPIC_RELATIVE_STEREO_IMAGE: Final = "~/image_vo"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.stereo_image`.
 """
 
 ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera/estimated/pose"

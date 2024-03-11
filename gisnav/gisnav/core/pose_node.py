@@ -134,7 +134,7 @@ class PoseNode(Node):
         """Callback for :attr:`.image` message"""
         preprocessed = self.preprocess(msg)
         inferred = self.inference(preprocessed)
-        pose_stamped = self.postprocess(inferred)
+        pose_stamped = self.postprocess(inferred, "Deep match / global position (GIS)")
 
         if pose_stamped is None:
             return None
@@ -226,14 +226,15 @@ class PoseNode(Node):
         """Callback for :attr:`.image` message"""
         preprocessed = self.preprocess(msg, shallow_inference=True)
         inferred = self.inference(preprocessed, shallow_inference=True)
-        pose_stamped = self.postprocess(inferred)
+        pose_stamped = self.postprocess(inferred, "Shallow match / relative position (monocular VO)")
 
         if pose_stamped is None:
             return None
 
         r, t = pose_stamped
 
-        raise NotImplementedError
+        # TODO: Publish raw pose (camera frame) to tf, convert to map(?) frame,
+        #  and publish Odometry message in map frame
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -329,7 +330,7 @@ class PoseNode(Node):
             half_w = int(w/2)
             query_img = full_image_cv[:, :half_w]  # w should be divisible by 2
             reference_img = full_image_cv[:, half_w:]
-            return query_img, reference_img
+            return None, query_img, reference_img, np.zeros_like(reference_img)  # None for tensors - not used
 
     @staticmethod
     def _display_images(*args):
@@ -343,19 +344,19 @@ class PoseNode(Node):
         if not shallow_inference:
             with torch.no_grad():
                 results = self._model(preprocessed_data[0])
-            return results, *preprocessed_data[1:]
+
+            conf = results["confidence"].cpu().numpy()
+            good = conf > self.CONFIDENCE_THRESHOLD
+            mkp_qry = results["keypoints0"].cpu().numpy()[good, :]
+            mkp_ref = results["keypoints1"].cpu().numpy()[good, :]
+
+            return mkp_qry, mkp_ref, *preprocessed_data[1:]
         else:
             # find the keypoints and descriptors with ORB
-            qry, ref = preprocessed_data
-            cv2.imshow("qry", qry)
-            cv2.imshow("ref", ref)
-            cv2.waitKey(1)
-
+            _, qry, ref, elevation = preprocessed_data
 
             kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
             kp_ref, desc_ref = self._orb.detectAndCompute(ref, None)
-
-            self.get_logger().error(f"{desc_qry} {desc_ref}")
 
             matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)
 
@@ -369,41 +370,31 @@ class PoseNode(Node):
             # TODO define common match format (here we have cv2.DMatch) but deep version
             # has tuples/lists?
 
-            # cv.drawMatchesKnn expects list of lists as matches.
-            #matches_img = cv2.drawMatches(qry, kp_qry, ref, kp_ref, good, None,
-            #                         flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-            matches_img = cv2.drawMatches(
-                qry.copy(),
-                kp_qry,
-                ref.copy(),
-                kp_ref,
-                good,
-                None,
-                matchColor=(0, 255, 0),
-                flags=2,
+            mkps = list(
+                map(
+                    lambda dmatch: (
+                        tuple(kp_qry[dmatch.queryIdx].pt),
+                        tuple(kp_ref[dmatch.trainIdx].pt)
+                    ),
+                    good
+                )
             )
 
-            cv2.imshow("VO matches", matches_img)
-            cv2.waitKey(1)
+            mkp_qry, mkp_ref = zip(*mkps)
+            mkp_qry = np.array(mkp_qry)
+            mkp_ref = np.array(mkp_ref)
 
-            # TODO: convert results to same format as with deep matching
-            results = good
-            return results, *preprocessed_data[1:]
+            return mkp_qry, mkp_ref, qry, ref, elevation
 
 
-    def postprocess(self, inferred_data) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    def postprocess(self, inferred_data, label) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """Filters matches based on confidence threshold and calculates :term:`pose`"""
 
         @narrow_types(self)
         def _postprocess(
-            camera_info: CameraInfo, inferred_data
+            camera_info: CameraInfo, inferred_data, label: str
         ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-            results, query_img, reference_img, elevation = inferred_data
-
-            conf = results["confidence"].cpu().numpy()
-            valid = conf > self.CONFIDENCE_THRESHOLD
-            mkp_qry = results["keypoints0"].cpu().numpy()[valid, :]
-            mkp_ref = results["keypoints1"].cpu().numpy()[valid, :]
+            mkp_qry, mkp_ref, query_img, reference_img, elevation = inferred_data
 
             if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
                 return None
@@ -418,12 +409,12 @@ class PoseNode(Node):
             r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
 
             self._visualize_matches_and_pose(
-                query_img.copy(), reference_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t
+                query_img.copy(), reference_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t, label
             )
 
             return r, t
 
-        return _postprocess(self.camera_info, inferred_data)
+        return _postprocess(self.camera_info, inferred_data, label)
 
     @staticmethod
     def _compute_3d_points(mkp_ref, elevation):
@@ -450,7 +441,7 @@ class PoseNode(Node):
         r_matrix, _ = cv2.Rodrigues(r)
         return r_matrix, t
 
-    def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t):
+    def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t, label):
         """Visualizes matches and projected :term:`FOV`"""
 
         # We modify these from ROS to cv2 axes convention so we create copies
@@ -488,7 +479,7 @@ class PoseNode(Node):
             flags=2,
         )
 
-        cv2.imshow("Matches and field of view", match_img)
+        cv2.imshow(label, match_img)
         cv2.waitKey(1)
 
     @staticmethod

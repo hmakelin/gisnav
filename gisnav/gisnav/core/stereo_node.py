@@ -329,6 +329,7 @@ class StereoNode(Node):
         """
         @narrow_types(self)
         def _stereo_image(qry: Image, ref: Image) -> Image:
+            stamp = ref.header.stamp
             qry = self._cv_bridge.imgmsg_to_cv2(qry, desired_encoding="mono8")
             ref = self._cv_bridge.imgmsg_to_cv2(ref, desired_encoding="mono8")
 
@@ -340,6 +341,8 @@ class StereoNode(Node):
             image_msg = self._cv_bridge.cv2_to_imgmsg(
                 stereo_image, encoding="passthrough"
             )
+
+            image_msg.header.stamp = stamp
 
             return image_msg
 

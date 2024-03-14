@@ -185,8 +185,11 @@ expose-xhost:
 
 # shortcut for demo
 .PHONY: demo
-demo: up-offboard-sitl-dev-px4
-	@docker compose -p $(PROJECT_NAME) up gisnav
+demo:
+	@docker compose -p $(PROJECT_NAME) build gisnav qgc
+	@docker compsoe -p $(PROJECT_NAME) create gisnav qgc
+	$(MAKE) expose-xhost
+	@docker compose -p $(PROJECT_NAME) up -d gisnav qgc
 
 # shutdown any and all services (stop and remove containers)
 .PHONY: down

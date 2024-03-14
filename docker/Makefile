@@ -223,7 +223,7 @@ build:
 .PHONY: dev
 dev:
 	# Recreate containers
-	docker compose -p gisnav create mapserver px4 qgis gscam postgres
+	docker compose -p gisnav create mapserver px4 qgis gscam postgres rviz
 	$(MAKE) expose-xhost
 
 	# Start the mapserver container
@@ -251,4 +251,4 @@ dev:
 	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
 
 	# Start the other development services
-	docker compose -p gisnav start px4 qgis gscam
+	docker compose -p gisnav start px4 qgis gscam rviz

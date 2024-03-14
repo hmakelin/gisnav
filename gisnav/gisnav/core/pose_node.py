@@ -40,6 +40,8 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from tf2_ros.transform_broadcaster import TransformBroadcaster
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
 
 from .. import _messaging as messaging
 from .._decorators import ROS, narrow_types
@@ -113,6 +115,8 @@ class PoseNode(Node):
         )
         self.static_broadcaster.sendTransform([transform_camera])
 
+        self._previous_pose_previous_query: Optional[PoseStamped] = None
+
     @property
     @ROS.subscribe(
         MAVROS_TOPIC_TIME_REFERENCE,
@@ -134,7 +138,10 @@ class PoseNode(Node):
         """Callback for :attr:`.image` message"""
         preprocessed = self.preprocess(msg)
         inferred = self.inference(preprocessed)
-        pose_stamped = self.postprocess(inferred, "Deep match / global position (GIS)")
+        if inferred is not None:
+            pose_stamped = self.postprocess(inferred, "Deep match / global position (GIS)")
+        else:
+            return None
 
         if pose_stamped is None:
             return None
@@ -176,6 +183,11 @@ class PoseNode(Node):
         transform_camera = messaging.create_transform_msg(
             stamp, "world", "camera_pinhole", q, camera_pos
         )
+        pose_stamped = messaging.transform_to_pose(transform_camera, "world")
+
+        # TODO: implement this as a computed property, not a method
+        self.pose(pose_stamped)
+
         self.broadcaster.sendTransform([transform_camera])
 
         debug_msg = messaging.get_transform(
@@ -196,6 +208,34 @@ class PoseNode(Node):
                 self.camera_info.height,
                 "Camera position in world frame",
             )
+
+    @ROS.publish(
+        "~/camera/pose_stamped",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def pose(self, msg: PoseStamped) -> Optional[PoseStamped]:
+        """Camera pose in world frame"""
+        # TODO fix this implementation - make derived/computed property not method
+        return msg
+
+    @ROS.publish(
+        "~/camera/vo/odometry",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def odometry(self, msg: Odometry) -> Optional[Odometry]:
+        """Odometry in odom frame"""
+        # TODO convert odometry to a timestamped reference frame and fix scaling (meters) for odom frame
+        # TODO fix this implementation - make derived/computed property not method
+        return msg
+
+    @ROS.publish(
+        "~/camera/vo/pose_stamped",
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def pose_previous_query(self, msg: PoseStamped) -> Optional[PoseStamped]:
+        """Camera pose in previous_query frame"""
+        # TODO fix this implementation - make derived/computed property not method
+        return msg
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -233,8 +273,128 @@ class PoseNode(Node):
 
         r, t = pose_stamped
 
-        # TODO: Publish raw pose (camera frame) to tf, convert to map(?) frame,
-        #  and publish Odometry message in map frame
+        camera_pos = (-r.T @ t).squeeze()
+        #camera_pos[2] = -camera_pos[
+        #    2
+        #]  # todo: implement cleaner way of getting camera position right
+
+        rotation_4x4 = np.eye(4)
+        rotation_4x4[:3, :3] = r
+        try:
+            q = tf_transformations.quaternion_from_matrix(rotation_4x4)
+        except np.linalg.LinAlgError:
+            self.get_logger().warning(
+                "image_cb: Could not compute quaternion from estimated rotation. "
+                "Returning None."
+            )
+            return None
+        # TODO: implicit assumption that image message here has timestamp in system time
+        time_reference = self.time_reference
+        if time_reference is None:
+            self.get_logger().warning(
+                "Publishing world to camera_pinhole transformation without time "
+                "reference."
+            )
+            stamp = msg.header.stamp
+        else:
+            # TODO: make sure we do not get negative time here
+            stamp = (
+                    rclpy.time.Time.from_msg(msg.header.stamp)
+                    - (
+                            rclpy.time.Time.from_msg(time_reference.header.stamp)
+                            - rclpy.time.Time.from_msg(time_reference.time_ref)
+                    )
+            ).to_msg()
+
+        # TODO: should use previous query frame timestamp here, not current
+        frame_id_timestamped = (
+                f"query"
+                f"_{stamp.sec}"
+                f"_{stamp.nanosec}"
+            )
+        camera_pose = messaging.create_pose_msg(
+            stamp, frame_id_timestamped, q, camera_pos
+        )
+        self.pose_previous_query(camera_pose)
+        if self._previous_pose_previous_query is not None:
+            # Publish query_timestamp to query_timestamp transform
+            # publish pose
+            # publish odometry
+            # publish query_timestamp to camera_fru(pinhole) transform
+            transform = messaging.pose_to_transform(
+                camera_pose,
+                self._previous_pose_previous_query.header.frame_id,  # todo remove this input argument, should not edit header/frame_id
+                "camera_pinhole"  # camera_pinhole is the camera_rfu frame?
+            )
+            self.broadcaster.sendTransform([transform])  # query to camera_rfu
+
+            pose_diff = messaging.pose_stamped_diff(self._previous_pose_previous_query, camera_pose)
+            transform_diff = messaging.pose_to_transform(pose_diff, frame_id_timestamped, frame_id_timestamped)  # todo get previous query frame timestmap
+            self.broadcaster.sendTransform([transform_diff])
+
+            # Send also a timestamped version of previous_query frame
+            # Assume the image msg has the timestamp of the previous query frame not current
+            transform.header.frame_id = (
+                f"{transform.header.frame_id}"
+                f"_{transform.header.stamp.sec}"
+                f"_{transform.header.stamp.nanosec}"
+            )
+            self.broadcaster.sendTransform([transform])
+
+            # Todo: come up with an error model to estimate covariances, e.g. us
+            #  some simple empirical model based on number and confidence of matches,
+            #  or dynamically adjust at runtime using a filtering algorithm
+
+            # Todo 2: Convert to reference (ENU) frame and scale to meters. Fix the
+            #  first scaled reference_ts frame used for this as the "odom" frame. Reference
+            #  frames are ENU but need scaling to meters. Also save the M matrix used
+            #  to convert this to WGS 84. Eventually consider publishing a transform
+            #  to earth frame, and then separately an earth frame to WGS 84 transform
+            #  which is constant.
+
+            # Todo need to get pose in any one of the timestamped (earth fixed) reference frames
+            query_to_odom = messaging.get_transform(
+                self,
+                "odom",
+                "query",
+                rclpy.time.Time(),
+            )
+            assert query_to_odom is not None  # TODO this could be None?
+
+            # TODO this is a non rigid transform so cannot use tf here - cache the
+            #  query frame to reference frame transform in this node - match timestamps
+            #  on the query frame transform
+            pose_current = self.tf_buffer.transform(query_to_odom, "reference")
+            previous_query_to_odom = messaging.get_transform(
+                self,
+                "odom",
+                self._previous_pose_previous_query.header.frame_id,
+                rclpy.time.Time(),
+            )
+            pose_previous = self.tf_buffer.transform(previous_query_to_odom, "reference")
+            odometry_msg = messaging.pose_stamped_diff_to_odometry(pose_previous, pose_current)
+            self.odometry(odometry_msg)
+        self._previous_pose_previous_query = camera_pose  # TODO fix: should not be separated from publishing
+
+        # TODO: this is camera pose in previous_query frame, not a transform
+        #  between the two frames - needs fixing.
+        #transform = messaging.create_transform_msg(
+        #    stamp, "previous_query", "query", q, camera_pos
+        #)
+        #self.broadcaster.sendTransform([transform])
+
+
+        # Send also a timestamped version of previous_query frame
+        # Assume the image msg has the timestamp of the previous query frame not current
+        #transform.child_frame_id = (
+        #    f"{transform.child_frame_id}"
+        #    f"_{msg.header.stamp.sec}"
+        #    f"_{msg.header.stamp.nanosec}"
+        #)
+        #self.broadcaster.sendTransform([transform])
+
+        # TODO: send pose/odometry message (convert to a fixed ENU reference/odom frame
+        #  and scale to meters using GISNode published transform value at M[2, 2]
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -380,7 +540,10 @@ class PoseNode(Node):
                 )
             )
 
-            mkp_qry, mkp_ref = zip(*mkps)
+            if len(mkps) > 0:
+                mkp_qry, mkp_ref = zip(*mkps)
+            else:
+                return None
             mkp_qry = np.array(mkp_qry)
             mkp_ref = np.array(mkp_ref)
 
@@ -392,7 +555,7 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _postprocess(
-            camera_info: CameraInfo, inferred_data, label: str
+            camera_info: CameraInfo, inferred_data: Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray], label: str
         ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
             mkp_qry, mkp_ref, query_img, reference_img, elevation = inferred_data
 

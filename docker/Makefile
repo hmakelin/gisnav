@@ -187,7 +187,7 @@ expose-xhost:
 .PHONY: demo
 demo:
 	@docker compose -p $(PROJECT_NAME) build gisnav qgc
-	@docker compsoe -p $(PROJECT_NAME) create gisnav qgc
+	@docker compose -p $(PROJECT_NAME) create gisnav qgc
 	$(MAKE) expose-xhost
 	@docker compose -p $(PROJECT_NAME) up -d gisnav qgc
 

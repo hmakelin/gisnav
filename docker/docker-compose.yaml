@@ -154,6 +154,7 @@ services:
       - micro-ros-agent
       - gscam
       - mapserver
+      - postgres
     labels:
         - homepage.group=Core services
         - homepage.name=GISNav

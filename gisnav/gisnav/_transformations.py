@@ -204,26 +204,14 @@ def get_transform(
         return None
 
 
-def visualize_camera_position(transform, image, height, title):
-    """Shows transform translation x and y position on image
-
-    ..  note::
-        Moves y axis origin from bottom left to top left (``y = height - y``) to
-        alignt with how ``cv2`` defines image origin vs. how frame origins are defined
-        withing GISNav/ROS.
-    """
-    t = np.array(
-        (
-            transform.transform.translation.x,
-            transform.transform.translation.y,
-            transform.transform.translation.z,
-        )
-    )
+def visualize_camera_position(image, t, title):
+    """Shows transform translation x and y position on image"""
     # current image timestamp does not yet have the transform but this should
     # get the previous one
-    x, y = int(t[0]), int(
-        height - t[1]
-    )  # move height origin from bottom to top left for cv2
+    #x, y = int(t[0]), int(
+    #    height - t[1]
+    #)  # move height origin from bottom to top left for cv2
+    x, y = t[0:2].squeeze().tolist()
     image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
     cv2.imshow(title, image)
     cv2.waitKey(1)

@@ -46,7 +46,7 @@ from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField, TimeRefe
 from shapely.geometry import box
 from std_msgs.msg import Header
 
-from .. import _messaging as messaging
+from .. import _transformations as messaging
 from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,

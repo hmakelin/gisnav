@@ -1,6 +1,6 @@
 """Helper functions for ROS messaging"""
 from collections import namedtuple
-from typing import Optional
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -126,12 +126,11 @@ def create_transform_msg(
 def create_pose_msg(
     stamp,
     frame_id: FrameID,
-    q: tuple,
-    translation_vector: np.ndarray,
+    q: np.ndarray,
+    t: np.ndarray,
 ) -> PoseStamped:
     pose = PoseStamped()
 
-    # transform.header.stamp = self.get_clock().now().to_msg()
     pose.header.stamp = stamp
     pose.header.frame_id = frame_id
 
@@ -140,9 +139,9 @@ def create_pose_msg(
     pose.pose.orientation.z = q[2]
     pose.pose.orientation.w = q[3]
 
-    pose.pose.position.x = translation_vector[0]
-    pose.pose.position.y = translation_vector[1]
-    pose.pose.position.z = translation_vector[2]
+    pose.pose.position.x = t[0]
+    pose.pose.position.y = t[1]
+    pose.pose.position.z = t[2]
 
     return pose
 
@@ -205,7 +204,7 @@ def get_transform(
         return None
 
 
-def visualize_transform(transform, image, height, title):
+def visualize_camera_position(transform, image, height, title):
     """Shows transform translation x and y position on image
 
     ..  note::
@@ -339,3 +338,33 @@ def pose_stamped_diff(pose1: PoseStamped, pose2: PoseStamped) -> PoseStamped:
     pose_msg.pose.position.z =  pose2.pose.position.z - pose1.pose.position.z
 
     return pose_msg
+
+
+def pose_stamped_to_matrices(pose_stamped: PoseStamped) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # Extract the orientation quaternion from the PoseStamped message
+    quaternion = (
+        pose_stamped.pose.orientation.x,
+        pose_stamped.pose.orientation.y,
+        pose_stamped.pose.orientation.z,
+        pose_stamped.pose.orientation.w,
+    )
+
+    # Extract the position vector from the PoseStamped message
+    position = (
+        pose_stamped.pose.position.x,
+        pose_stamped.pose.position.y,
+        pose_stamped.pose.position.z,
+    )
+
+    # Convert the quaternion to a rotation matrix
+    rotation_matrix = tf_transformations.quaternion_matrix(quaternion)[:3, :3]
+
+    # The translation vector is already in the correct format, but let's make it a numpy array
+    translation_vector = np.array(position)
+
+    # 3D pose in homogenous form for convenience
+    H = np.eye(4)
+    H[:3, :3] = rotation_matrix
+    H[:3, 3] = translation_vector
+
+    return H, rotation_matrix, translation_vector

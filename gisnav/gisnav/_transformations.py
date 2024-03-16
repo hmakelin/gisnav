@@ -12,6 +12,8 @@ from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
+from builtin_interfaces.msg import Time
+
 from .constants import FrameID
 
 import tf_transformations
@@ -124,11 +126,17 @@ def create_transform_msg(
     return transform
 
 def create_pose_msg(
-    stamp,
+    stamp: Time,
     frame_id: FrameID,
-    q: np.ndarray,
+    r: np.ndarray,
     t: np.ndarray,
-) -> PoseStamped:
+) -> Optional[PoseStamped]:
+    try:
+        H = matrices_to_homogenous(r, t)
+        q = tf_transformations.quaternion_from_matrix(H)
+    except np.linalg.LinAlgError:
+        return None
+
     pose = PoseStamped()
 
     pose.header.stamp = stamp
@@ -350,9 +358,14 @@ def pose_stamped_to_matrices(pose_stamped: PoseStamped) -> Tuple[np.ndarray, np.
     # The translation vector is already in the correct format, but let's make it a numpy array
     translation_vector = np.array(position)
 
-    # 3D pose in homogenous form for convenience
-    H = np.eye(4)
-    H[:3, :3] = rotation_matrix
-    H[:3, 3] = translation_vector
+    H = matrices_to_homogenous(r, t)
 
     return H, rotation_matrix, translation_vector
+
+
+def matrices_to_homogenous(r, t) -> np.ndarray:
+    """3D pose in homogenous form for convenience"""
+    H = np.eye(4)
+    H[:3, :3] = r
+    H[:3, 3] = t
+    return H

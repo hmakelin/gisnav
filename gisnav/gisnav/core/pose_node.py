@@ -29,8 +29,8 @@ import cv2
 import numpy as np
 import rclpy
 import tf2_ros
-import tf_transformations
 import torch
+import tf_transformations
 
 from cv_bridge import CvBridge
 from kornia.feature import LoFTR
@@ -53,6 +53,7 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
     ROS_TOPIC_RELATIVE_STEREO_IMAGE,
     STEREO_NODE_NAME,
+    FrameID,
 )
 
 
@@ -103,12 +104,12 @@ class PoseNode(Node):
         # matrix consisting of inversion of both pose and camera intrinsics) as defined
         # in cv2.solvePnP assuming the REP 103 "camera_optical" frame corresponds to the
         # solvePnP "camera" frame.
-        self._camera_optical_pose_world: Optional[PoseStamped] = None
+        self.pose_camera_optical_in_previous_vo_world: Optional[PoseStamped] = None
 
-        # Cached camera pose in pnp_world_vo frame coordinates. "pnp_world_vo" is a
+        # Cached camera pose in gisnav_world frame coordinates. "pnp_world_vo" is a
         # translated image plane for the previous query image, using the cv2.solvePnP
         # terminology.
-        self._camera_optical_pose_world_vo: Optional[PoseStamped] = None
+        self._camera_optical_pose_gisnav_world: Optional[PoseStamped] = None
 
     def _initialize_tf(self):
         """Initializes the ``tf`` and ``tf_static`` topics and the listening buffer"""
@@ -158,7 +159,9 @@ class PoseNode(Node):
         """Callback for :attr:`.image` message"""
         qry, ref, dem = self._preprocess(msg)
         mkp_qry, mkp_ref = self.inference(qry, ref, dem)
-        pose_camera_optical_in_world = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Deep match / global position (GIS)")
+        r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Deep match / global position (GIS)")
+
+        pose_camera_optical_in_world = tf_.create_pose_msg(msg.header.stamp, "world", r, t)
 
         if pose_camera_optical_in_world is None:
             return None
@@ -167,43 +170,16 @@ class PoseNode(Node):
             #  linking up VO with world coordinates in the other callback. Matching by
             #  exact timestamp is important as the reference and therefore also world
             #  frame are discontinous relative to the VO image frames.
-            self._camera_optical_pose_world = pose_camera_optical_in_world
-
-        H, r, t = tf_.pose_stamped_to_matrices(pose_camera_optical_in_world)
-
-        #camera_pos = (-r.T @ t).squeeze()
-        #camera_pos[2] = -camera_pos[
-        #    2
-        #]  # todo: implement cleaner way of getting camera position right
-
-        # TODO: implicit assumption that image message here has timestamp in system time
-        #stamp = self._get_stamp(self.time_reference)
-
-        #try:
-        #    q = tf_transformations.quaternion_from_matrix(H)
-        #except np.linalg.LinAlgError:
-        #    self.get_logger().warning(
-        #        "image_cb: Could not compute quaternion from estimated rotation. "
-        #        "Returning None."
-        #    )
-        #    return None
+            self._camera_optical_pose_gisnav_world = pose_camera_optical_in_world
 
         transform_world_to_camera_optical = tf_.pose_to_transform(
             pose_camera_optical_in_world,"world", "camera_optical"
         )
-        #pose_stamped = tf_.transform_to_pose(transform_world_to_camera_optical, "world")
 
         # TODO: implement this as a computed property, not a method
         #self.pose(pose_stamped)
 
         self.broadcaster.sendTransform([transform_world_to_camera_optical])
-
-        #debug_msg = tf_.get_transform(
-        #    self, "world", "camera_optical", rclpy.time.Time()
-        #)
-        #debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
-        #    deepcopy(msg), desired_encoding="passthrough"
-        #)
 
         # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
         #  instead of 2D position only)
@@ -266,111 +242,123 @@ class PoseNode(Node):
         """
 
     def _image_vo_cb(self, msg: Image) -> None:
-        # TODO: use sift to match keypoints, then get pose just like for other image
         """Callback for :attr:`.image` message"""
         qry, ref, dem = self._preprocess(msg, shallow_inference=True)
         mkp_qry, mkp_ref = self.inference(qry, ref, shallow_inference=True)
-        pose_stamped = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Shallow match / relative position (monocular VO)")
+        r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Shallow match / relative position (monocular VO)")
 
-        if pose_stamped is None:
-            return None
-
-        r, t = pose_stamped
-
-        camera_pos = (-r.T @ t).squeeze()
-        #camera_pos[2] = -camera_pos[
-        #    2
-        #]  # todo: implement cleaner way of getting camera position right
-
-        rotation_4x4 = np.eye(4)
-        rotation_4x4[:3, :3] = r
-
-        pose_matrix = rotation_4x4.copy()
-        pose_matrix[:3, 3] = t
-
-        try:
-            q = tf_transformations.quaternion_from_matrix(rotation_4x4)
-        except np.linalg.LinAlgError:
-            self.get_logger().warning(
-                "image_cb: Could not compute quaternion from estimated rotation. "
-                "Returning None."
-            )
-            return None
-        # TODO: implicit assumption that image message here has timestamp in system time
-        time_reference = self.time_reference
-        if time_reference is None:
-            self.get_logger().warning(
-                "Publishing world to camera_pinhole transformation without time "
-                "reference."
-            )
-            stamp = msg.header.stamp
-        else:
-            # TODO: make sure we do not get negative time here
-            stamp = (
-                    rclpy.time.Time.from_msg(msg.header.stamp)
-                    - (
-                            rclpy.time.Time.from_msg(time_reference.header.stamp)
-                            - rclpy.time.Time.from_msg(time_reference.time_ref)
-                    )
-            ).to_msg()
-
-        # TODO: should use previous query frame timestamp here, not current
-        frame_id_timestamped = (
-                f"query"
-                f"_{stamp.sec}"
-                f"_{stamp.nanosec}"
-            )
-        camera_pose = tf_.create_pose_msg(
-            stamp, frame_id_timestamped, q, camera_pos
+        stamp = self._get_stamp(msg)  # TODO: should use previous query frame timestamp?
+        pnp_world_frame_id: FrameID = "pnp_world_%i_%i"
+        pnp_world_frame_id_timestamped = pnp_world_frame_id % (stamp.sec, stamp.nanosec)
+        pose_camera_optical_in_current_vo_world = (
+            tf_.create_pose_msg(msg.header.stamp, pnp_world_frame_id_timestamped, r, t)
         )
-        self.pose_previous_query(camera_pose)
-        if self._previous_pose_previous_query is not None:
+        if pose_camera_optical_in_current_vo_world is None:
+            # We could not obtain a good VO match
+            return None
+
+        #self.pose_previous_query(camera_pose)
+
+        if self._camera_optical_pose_in_previous_vo_world is not None:
+
+            # Publish VO frames relative transform to tf2
+            pose_diff = self._pose_diff(self.camera_info, pose_camera_optical_in_current_vo_world, self._camera_optical_pose_in_previous_vo_world)
+            previous_stamp = self._get_stamp(self._camera_optical_pose_in_previous_vo_world)
             transform = tf_.pose_to_transform(
-                camera_pose,
-                self._previous_pose_previous_query.header.frame_id,  # todo remove this input argument, should not edit header/frame_id
-                "camera_pinhole"  # camera_pinhole is the camera_rfu frame?
+                pose_diff,
+                pose_diff.header.frame_id, # refactor out frame_id input argument
+                "pnp_world_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec)
             )
             self.broadcaster.sendTransform([transform])  # query to camera_rfu
 
-            pose_diff = tf_.pose_stamped_diff(self._previous_pose_previous_query, camera_pose)
-            transform_diff = tf_.pose_to_transform(pose_diff, frame_id_timestamped, frame_id_timestamped)  # todo get previous query frame timestmap
-            self.broadcaster.sendTransform([transform_diff])
+            # TODO: get cached camera pose in
+            past_camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world
+            linking_stamp = self._get_stamp(past_camera_pose_in_gisnav_world)
+            target_frame_id = "pnp_world_%i_%i" % (linking_stamp.sec, linking_stamp.nanosec)
+            transform_to_linking_query_frame = tf_.get_transform(
+                self, target_frame_id, pose_diff.header.frame_id, rclpy.time.Time()
+            )
+            H, r, t = tf_.pose_stamped_to_matrices(
+                tf_.transform_to_pose(transform_to_linking_query_frame)
+            )
+            H_, r_, t_ = tf_.pose_stamped_to_matrices(self._camera_optical_pose_gisnav_world)
+            current_camera_pose_in_gisnav_world = H @ H_
 
-            # Send also a timestamped version of previous_query frame
-            # Assume the image msg has the timestamp of the previous query frame not current
-            transform.header.frame_id = (
-                f"{transform.header.frame_id}"
-                f"_{transform.header.stamp.sec}"
-                f"_{transform.header.stamp.nanosec}"
-            )
-            self.broadcaster.sendTransform([transform])
-            query_to_odom = tf_.get_transform(
-                self,
-                "odom",
-                "query",
-                rclpy.time.Time(),
-            )
-            assert query_to_odom is not None  # TODO this could be None?
-
-            # TODO this is a non rigid transform so cannot use tf here - cache the
-            #  query frame to reference frame transform in this node - match timestamps
-            #  on the query frame transform
-            query_to_reference = np.linalg.inv(self.camera_info.k.reshape((3, 3)) @ self._cached_pose)
-            pose_current_in_ref_frame = query_to_reference @ pose_matrix
-            pose_to_pose_ts = self.tf_buffer.transform(camera_pose, f"query_{transform.header.stamp.sec}_{transform.header.stamp.nanosec}")
-            previous_query_to_odom = tf_.get_transform(
-                self,
-                "odom",
-                self._previous_pose_previous_query.header.frame_id,
-                rclpy.time.Time(),
-            )
-            previous_query_to_pose_ts = query_to_reference @ pose_matrix @ transform_diff
-            pose_previous_to_pose_previous_ts = self.tf_buffer.transform(previous_query_to_pose_ts, f"query_{transform.header.stamp.sec}_{transform.header.stamp.nanosec}")
-            odometry_msg = tf_.pose_stamped_diff_to_odometry(pose_previous_to_pose_previous_ts, pose_to_pose_ts)
+            current_camera_pose_in_gisnav_world = tf_.create_pose_msg(pose_diff.header.stamp)
 
             # TODO scale values by M[2,2] - this is currently in reference frame units
-            self.odometry(odometry_msg)
-        self._previous_pose_previous_query = camera_pose  # TODO fix: should not be separated from publishing
+            #self.odometry(odometry_msg)
+
+        self._camera_optical_pose_in_previous_vo_world = pose_camera_optical_in_current_vo_world
+
+    def _pose_diff(self, current_pose: PoseStamped, previous_pose: PoseStamped) -> PoseStamped:
+        """Returns pose difference between two Poses assuming the current pose
+        frame_id has the same timestamp as the previous pose (assuming poses are
+        successive poses from VO
+
+        The visual odometry transformation chain goes like this:
+
+        .. mermaid::
+            graph TB
+                previous_camera_pose_in_previous_world_xy -->|"inv(previous_projection_matrix)"| previous_camera_pose_in_previous_plane_uv
+                previous_camera_pose_in_previous_plane_uv -->|"translation(center to top-left)"| previous_camera_pose_in_current_world_xy
+
+        .. note::
+            We do not use ``tf2`` here for transformations because these transforms
+            involve projection matrices and therefore cannot be assumed to be rigid
+            transformations.
+        """
+
+        @narrow_types(self)
+        def _pose_diff(camera_info: CameraInfo, current_pose: PoseStamped, previous_pose: PoseStamped) -> Optional[PoseStamped]:
+            # Transform from previous image plane to current world frame (translation
+            # of origin from center to top-left corner)
+            t_previous_plane_uv_to_current_world_xy = np.ndarray([-camera_info.width / 2, -camera_info.height / 2, 0])
+
+            k = self.camera_info.k.reshape((3, 3))
+            # H_current, _, _ = tf_.pose_stamped_to_matrices(current_pose)
+            H_previous, _, _ = tf_.pose_stamped_to_matrices(previous_pose)
+            # current_projection_matrix = k @ H_previous
+            previous_projection_matrix = k @ H_previous
+
+            try:
+                inv_previous_projection_matrix = np.linalg.inv(previous_projection_matrix)
+            except np.linalg.LinAlgError:
+                return None
+
+            previous_pose_in_previous_plane_uv = inv_previous_projection_matrix @ H_previous
+            previous_pose_in_current_world_xy = previous_pose_in_previous_plane_uv + t_previous_plane_uv_to_current_world_xy
+
+            pose_difference = current_pose
+            pose_difference.pose.position.x = current_pose.pose.position.x - previous_pose.pose.position.x
+            pose_difference.pose.position.y = current_pose.pose.position.y - previous_pose.pose.position.y
+            pose_difference.pose.position.z = current_pose.pose.position.z - previous_pose.pose.position.z
+
+            # Calculate orientation difference
+            current_quaternion = [
+                current_pose.pose.orientation.x,
+                current_pose.pose.orientation.y,
+                current_pose.pose.orientation.z,
+                current_pose.pose.orientation.w
+            ]
+
+            previous_quaternion = [
+                previous_pose.pose.orientation.x,
+                previous_pose.pose.orientation.y,
+                previous_pose.pose.orientation.z,
+                previous_pose.pose.orientation.w
+            ]
+
+            # Quaternion conjugate and multiplication to find relative rotation
+            quaternion_diff = tf_transformations.quaternion_conjugate(previous_quaternion)
+            orientation_difference = tf_transformations.quaternion_multiply(
+                quaternion_diff, current_quaternion)
+
+            current_pose.pose.orientation = orientation_difference
+
+            return pose_difference
+
+        return _pose_diff(self.camera_info, current_pose, previous_pose)
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -533,13 +521,67 @@ class PoseNode(Node):
 
             return mkp_qry, mkp_ref
 
-    def _postprocess(self, mkp_qry: np.ndarray, mkp_ref: np.ndarray, elevation: np.ndarray, qry_img: np.ndarray, ref_img: np.ndarray, label: str) -> Optional[PoseStamped]:
+    def _postprocess(self, mkp_qry: np.ndarray, mkp_ref: np.ndarray, elevation: np.ndarray, qry_img: np.ndarray, ref_img: np.ndarray, label: str, stamp: Time, frame_id: str) -> Optional[PoseStamped]:
         """Computes camera pose from keypoint matches"""
 
         @narrow_types(self)
-        def _postprocess(
+        def _visualize_matches_and_pose(camera_info, qry, ref, mkp_qry, mkp_ref,
+                                        k, r, t, label) -> None:
+            """Visualizes matches and projected :term:`FOV`"""
+
+            def _project_fov(img, h_matrix):
+                """Projects :term:`FOV` on :term:`reference` image"""
+                height, width = img.shape[0:2]
+                src_pts = np.float32(
+                    [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
+                ).reshape(-1, 1, 2)
+                try:
+                    return cv2.perspectiveTransform(src_pts, np.linalg.inv(h_matrix))
+                except np.linalg.LinAlgError:
+                    return src_pts
+
+            # We modify these from ROS to cv2 axes convention so we create copies
+            # mkp_qry = mkp_qry.copy()
+            # mkp_ref = mkp_ref.copy()
+
+            h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
+            projected_fov = _project_fov(qry, h_matrix)
+
+            # Invert the y-coordinate, considering the image height (input r and t
+            # are in ROS convention where origin is at bottom left of image, we
+            # want origin to be at top left for cv2
+            h = camera_info.height
+            mkp_ref[:, 1] = mkp_ref[:, 1]
+            mkp_qry[:, 1] = h - mkp_qry[:, 1]
+
+            projected_fov[:, :, 1] = h - projected_fov[:, :, 1]
+            img_with_fov = cv2.polylines(
+                ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
+            )
+
+            mkp_qry = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_qry]
+            mkp_ref = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_ref]
+
+            matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
+
+            match_img = cv2.drawMatches(
+                img_with_fov,
+                mkp_ref,
+                qry,
+                mkp_qry,
+                matches,
+                None,
+                matchColor=(0, 255, 0),
+                flags=2,
+            )
+
+            cv2.imshow(label, match_img)
+            cv2.waitKey(1)
+
+        @narrow_types(self)
+        def _compute_pose(
             camera_info: CameraInfo, mkp_qry: np.ndarray, mkp_ref: np.ndarray, elevation: np.ndarray, qry_img: np.ndarray, ref_img: np.ndarray, label: str
-        ) -> Optional[PoseStamped]:
+        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
             if len(mkp_qry) < self.MIN_MATCHES:
                 self.get_logger().debug("Not enough matches - returning None")
                 return None
@@ -567,78 +609,27 @@ class PoseNode(Node):
                 )
                 r_matrix, _ = cv2.Rodrigues(r)
                 t = np.ndarray(t)
+
                 return r_matrix, t
 
             k_matrix = camera_info.k.reshape((3, 3))
 
-            mkp2_3d = self._compute_3d_points(mkp_ref, elevation)
+            mkp2_3d = _compute_3d_points(mkp_ref, elevation)
 
             # Adjust y-axis for ROS convention (origin is bottom left, not top left),
             # elevation (z) coordinate remains unchanged
             #mkp2_3d[:, 1] = camera_info.height - mkp2_3d[:, 1]
             #mkp_qry[:, 1] = camera_info.height - mkp_qry[:, 1]
 
-            r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
+            r, t = _compute_pose(mkp2_3d, mkp_qry, k_matrix)
 
-            self._visualize_matches_and_pose(
+            _visualize_matches_and_pose(
                 qry_img.copy(), ref_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t, label
             )
 
             return r, t
 
-        return _postprocess(self.camera_info, mkp_qry, mkp_ref, elevation, qry_img, ref_img, label)
-
-    def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t, label) -> None:
-        """Visualizes matches and projected :term:`FOV`"""
-
-        def _project_fov(img, h_matrix):
-            """Projects :term:`FOV` on :term:`reference` image"""
-            height, width = img.shape[0:2]
-            src_pts = np.float32(
-                [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
-            ).reshape(-1, 1, 2)
-            try:
-                return cv2.perspectiveTransform(src_pts, np.linalg.inv(h_matrix))
-            except np.linalg.LinAlgError:
-                return src_pts
-
-        # We modify these from ROS to cv2 axes convention so we create copies
-        #mkp_qry = mkp_qry.copy()
-        #mkp_ref = mkp_ref.copy()
-
-        h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
-        projected_fov = _project_fov(qry, h_matrix)
-
-        # Invert the y-coordinate, considering the image height (input r and t
-        # are in ROS convention where origin is at bottom left of image, we
-        # want origin to be at top left for cv2
-        h = self.camera_info.height
-        mkp_ref[:, 1] = mkp_ref[:, 1]
-        mkp_qry[:, 1] = h - mkp_qry[:, 1]
-
-        projected_fov[:, :, 1] = h - projected_fov[:, :, 1]
-        img_with_fov = cv2.polylines(
-            ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
-        )
-
-        mkp_qry = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_qry]
-        mkp_ref = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_ref]
-
-        matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
-
-        match_img = cv2.drawMatches(
-            img_with_fov,
-            mkp_ref,
-            qry,
-            mkp_qry,
-            matches,
-            None,
-            matchColor=(0, 255, 0),
-            flags=2,
-        )
-
-        cv2.imshow(label, match_img)
-        cv2.waitKey(1)
+        return _compute_pose(self.camera_info, mkp_qry, mkp_ref, elevation, qry_img, ref_img, label)
 
     def _get_stamp(self, msg) -> Time:
         if self.time_reference is None:

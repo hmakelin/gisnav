@@ -93,30 +93,54 @@ FrameID = Literal[
     "reference",
     "reference_%i_%i",
     "base_link",
-    "gimbal",
     "camera",
-    "camera_pinhole",
+    "camera_optical",
     "map",
     "world",
+    "world_vo",
+    "image"
 ]
-"""Allowed ROS header frame_ids (used by :term:`tf2`)
+"""Allowed ROS header frame_ids.
 
-The ``camera_pinhole`` and ``world`` frames are coordinate systems in the cv2
-pinhole camera model. The ``camera`` frame follows the convention where the x
-axis points to the right from the body of the camera and z-axis forward along
-the optical axis, it is not the ``camera_optical`` frame where the x axis
-points in the direction of the optical axis.
+:term:`REP 103` and :term:`REP 105` defined frames:
 
-The ``base_link`` frame is defined as the vehicle body :term:`FRD` frame.
+* ``camera``
+* ``camera_optical``
+* ``map``
+* ``base_link``
+* ``odom`` and ``earth`` not used currently, but could be introduced in the future.
 
-The ``reference`` frame is the :term:`reference` arrays coordinate frame
-where the origin is the bottom left (ROS convention, not numpy/cv2 top left
-convention). x axis is the width axis, y axis is height. The static
-``reference_%i_%i`` frame (in relation to :term:`WGS 84` coordinates)
-is intended to be suffixed with the :term:`ROS` second and nanosecond
-integer timestamps to allow the tf2 transformation chain to be matched
-to the exact same reference frame that was used to for deriving the
-:term:`orthoimage`. This is needed because the reference frame is
-discontinuous (jumps around) and tf2 default interpolation cannot therefore
-be applied to it.
+:term:`OpenCV` ``cv2.solvePnP`` defined frames (not REP 103 compliant).
+
+* ``query_image``
+* ``query_world``
+* ``reference_world``
+
+The ``query_image`` frame is the image plane defined by the :term:`query image` 
+where the origin is at the top left corner of the image and the "height" or Y-axis is 
+therefore pointing down. 
+
+The ``reference_image`` frame is the image plane defined by the 
+:term:`bounding boxes <bounding box>`, where the origin is at the top left corner
+of the image and the "height" or Y-axis is therefore pointing down. 
+
+Introduced by GISNav (**currently** not REP 103 compliant):
+
+* ``reference``
+* ``reference_%i_%i``
+
+The ``reference`` frame is the REP 103 compliant version of ``reference_world`` where
+the origin is in the bottom-left corner instead of top-left, making it an :term:`ENU` 
+frame.
+
+``reference_%i_%i`` frame is a timestamped version of the ``reference`` frame 
+where the first integer is the seconds timestamp and the second integer is the 
+nanoseconds timestamp of the originating sensor_msgs/Image message containing
+ the orthoimage :term:`raster` from :term:`GISNode`. Timestamping is needed
+ because the ``reference`` frame is discontinuous, breaking `tf2` interpolation and
+ necessitating using timestamps to match poses to correct frames instead.
+ 
+ .. todo::
+    Scale ``reference`` and ``reference_%i_%i`` to SI units (meters) instead of 
+    the native pixels to be fully compliant with REP 103
 """

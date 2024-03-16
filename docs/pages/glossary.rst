@@ -199,7 +199,7 @@ correct alternative should be easily inferred from the context they are used in.
     Map
     map
         * A world-fixed ROS coordinate :term:`frame <Frame>` as defined in
-          `REP 105 <https://www.ros.org/reps/rep-0105.html>`_. In GISNav the
+          :term:`REP 105`. In GISNav the
           ``map`` frame is defined as declared by :term:`MAVROS`.
         * A :term:`raster` retrieved from a :term:`GIS` system. Generic
           term that could e.g. mean :term:`orthoimagery` or :term:`DEMs <DEM>`
@@ -208,6 +208,14 @@ correct alternative should be easily inferred from the context they are used in.
         .. todo::
             Define ``map`` frame independently of MAVROS - could use the
             bounding box ``reference`` frame here instead.
+
+    Match
+    Matching
+        Keypoint matching in the context of trying to estimate the camera
+        :term:`pose` between two images.
+
+        .. seealso::
+            :term:`PnP`.
 
     Message
         A :term:`ROS` message.
@@ -598,6 +606,14 @@ ____________________________________________________
 
     RDP
         Remote Desktop Protocol
+
+    REP
+    REP 103
+    REP 105
+        ROS Enhancement Proposal
+
+        * `REP 103 <https://www.ros.org/reps/rep-0103.html>`_
+        * `REP 105 <https://www.ros.org/reps/rep-0104.html>`_
 
     RPY
         Roll, pitch, yaw

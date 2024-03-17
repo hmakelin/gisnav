@@ -227,8 +227,15 @@ class PoseNode(Node):
                 "Camera position in world frame",
             )
 
-            if self._camera_optical_pose_in_previous_vo_world is not None:
-                stamp = self._get_stamp(self._camera_optical_pose_in_previous_vo_world)
+            # Use timestamp from previous image_vo message
+            if self._image_vo is not None:
+                stamp = self._get_stamp(self._image_vo)
+                sec, nanosec = msg.header.frame_id.split("_")[-2:]
+                if stamp.sec != sec or stamp.nanosec != nanosec:
+                    # The previous query image is not the same that is used as
+                    # reference in this image - the VO chain is broken
+                    return None
+
                 pnp_world_frame_id: FrameID = "pnp_world_%i_%i"
                 pnp_world_frame_id_timestamped = pnp_world_frame_id % (
                 stamp.sec, stamp.nanosec)
@@ -270,7 +277,9 @@ class PoseNode(Node):
         if camera_optical_pose_in_vo_world_frame is not None:
             # Cache pose
             self._camera_optical_pose_in_vo_world_frame = camera_optical_pose_in_vo_world_frame
+            self._image_vo = msg
         else:
+            self._image_vo = msg  # need to cache message for the timestamp
             return None
 
         if self._camera_optical_pose_in_previous_vo_world is not None:

@@ -62,6 +62,7 @@ from ..constants import (
     FrameID,
 )
 
+
 class StereoNode(Node):
     """Generates and publishes a synthetic :term:`query` and :term:`reference` stereo
     image couple. Synthetic refers to the fact that no stereo camera is actually assumed
@@ -122,12 +123,14 @@ class StereoNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        self.pnp_image      # publish rotated and cropped orthoimage stack
-        self.stereo_image   # publish two subsequent images for VO
+        self.pnp_image  # publish rotated and cropped orthoimage stack
+        self.stereo_image  # publish two subsequent images for VO
 
         # TODO this is brittle - nothing is enforcing that this is assigned after
         #  publishing stereo_image
-        self.previous_image = msg  # needed for VO - leave this for last in this callback
+        self.previous_image = (
+            msg  # needed for VO - leave this for last in this callback
+        )
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
@@ -302,7 +305,7 @@ class StereoNode(Node):
         # the orthoimage stack
         transform = (
             messaging.get_transform(
-                self, "map", "gimbal", rclpy.time.Time()
+                self, "map", "camera", rclpy.time.Time()
             )  # query_image.header.stamp)
             if self.image is not None
             else None
@@ -327,13 +330,14 @@ class StereoNode(Node):
             Images are set side by side - the first or left image is the current (query)
             image, while the second or right image is the previous (reference) image.
         """
+
         @narrow_types(self)
         def _stereo_image(qry: Image, ref: Image) -> Image:
             stamp = ref.header.stamp
             qry = self._cv_bridge.imgmsg_to_cv2(qry, desired_encoding="mono8")
             ref = self._cv_bridge.imgmsg_to_cv2(ref, desired_encoding="mono8")
 
-            #img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
             # place images side-by-side (dstack not good here since we would only
             # have 2 channels)
@@ -348,7 +352,6 @@ class StereoNode(Node):
 
         query_image, ref_image = self.image, self.previous_image
         return _stereo_image(query_image, ref_image)
-
 
     @staticmethod
     def _rotate_and_crop_center(

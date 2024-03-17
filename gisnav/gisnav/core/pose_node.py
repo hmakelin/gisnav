@@ -113,7 +113,7 @@ class PoseNode(Node):
 
     def _initialize_tf(self):
         """Initializes the ``tf`` and ``tf_static`` topics and the listening buffer"""
-        self.broadcaster = TransformBroadcaster(self)
+        self._tf_broadcaster = TransformBroadcaster(self)
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -157,65 +157,88 @@ class PoseNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        qry, ref, dem = self._preprocess(msg)
-        mkp_qry, mkp_ref = self.inference(qry, ref, dem)
-        r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Deep match / global position (GIS)")
-
-        pose_camera_optical_in_world = tf_.create_pose_msg(msg.header.stamp, "world", r, t)
-
-        if pose_camera_optical_in_world is None:
-            return None
-        else:
+        camera_optical_pose_in_world_frame = self.camera_optical_pose_in_world_frame
+        if camera_optical_pose_in_world_frame is not None:
             # Cache latest camera_optical frame pose in PnP world coordinates for
             #  linking up VO with world coordinates in the other callback. Matching by
             #  exact timestamp is important as the reference and therefore also world
             #  frame are discontinous relative to the VO image frames.
-            self._camera_optical_pose_gisnav_world = pose_camera_optical_in_world
+            self._camera_optical_pose_in_world_frame = camera_optical_pose_in_world_frame
 
-        transform_world_to_camera_optical = tf_.pose_to_transform(
-            pose_camera_optical_in_world,"world", "camera_optical"
-        )
-
-        # TODO: implement this as a computed property, not a method
-        #self.pose(pose_stamped)
-
-        self.broadcaster.sendTransform([transform_world_to_camera_optical])
-
-        # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
-        #  instead of 2D position only)
-        tf_.visualize_camera_position(
-            ref.copy(),
-            t,
-            "Camera position in world frame",
-        )
+        return None
 
     @ROS.publish(
         "~/camera/pose_stamped",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pose(self, msg: PoseStamped) -> Optional[PoseStamped]:
-        """Camera pose in world frame"""
-        # TODO fix this implementation - make derived/computed property not method
-        return msg
+    @ROS.transform(child_frame_id="camera_optical")
+    def camera_optical_pose_in_world_frame(self, msg: PoseStamped) -> Optional[PoseStamped]:
+        """Camera pose in orthoimage world frame"""
 
-    @ROS.publish(
-        "~/camera/vo/odometry",
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def odometry(self, msg: Odometry) -> Optional[Odometry]:
-        """Odometry in odom frame"""
-        # TODO convert odometry to a timestamped reference frame and fix scaling (meters) for odom frame
-        # TODO fix this implementation - make derived/computed property not method
-        return msg
+        @narrow_types(self)
+        def _camera_optical_pose_in_world_frame(msg: Image) -> Optional[PoseStamped]:
+            qry, ref, dem = self._preprocess(msg)
+            mkp_qry, mkp_ref = self.inference(qry, ref, dem)
+            r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref,
+                                     "Deep match / global position (GIS)")
+
+            # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
+            #  instead of 2D position only)
+            tf_.visualize_camera_position(
+                ref.copy(),
+                t,
+                "Camera position in world frame",
+            )
+
+            return tf_.create_pose_msg(msg.header.stamp, "world", r, t)
+
+        return _camera_optical_pose_in_world_frame(self.image)
+
+    #@ROS.publish(
+    #    "~/camera/vo/odometry",
+    #    QoSPresetProfiles.SENSOR_DATA.value,
+    #)
+    #def odometry(self, msg: Odometry) -> Optional[Odometry]:
+    #    """Odometry in odom frame"""
+    #    # TODO convert odometry to a timestamped reference frame and fix scaling (meters) for odom frame
+    #    # TODO fix this implementation - make derived/computed property not method
+    #    return msg
 
     @ROS.publish(
         "~/camera/vo/pose_stamped",
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pose_previous_query(self, msg: PoseStamped) -> Optional[PoseStamped]:
-        """Camera pose in previous_query frame"""
-        # TODO fix this implementation - make derived/computed property not method
-        return msg
+    @ROS.transform("camera_optical")
+    def camera_optical_pose_in_vo_world_frame(self, msg: PoseStamped) -> Optional[PoseStamped]:
+        """Camera pose in visual odometry world frame (i.e. previous frame)"""
+
+        @narrow_types(self)
+        def _camera_optical_pose_in_vo_world_frame(msg: Image) -> Optional[PoseStamped]:
+            qry, ref, dem = self._preprocess(msg)
+            mkp_qry, mkp_ref = self.inference(qry, ref, dem)
+            r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref,
+                                     "Deep match / global position (GIS)")
+
+            # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
+            #  instead of 2D position only)
+            tf_.visualize_camera_position(
+                ref.copy(),
+                t,
+                "Camera position in world frame",
+            )
+
+            if self._camera_optical_pose_in_previous_vo_world is not None:
+                stamp = self._get_stamp(self._camera_optical_pose_in_previous_vo_world)
+                pnp_world_frame_id: FrameID = "pnp_world_%i_%i"
+                pnp_world_frame_id_timestamped = pnp_world_frame_id % (
+                stamp.sec, stamp.nanosec)
+                return tf_.create_pose_msg(msg.header.stamp,
+                                           pnp_world_frame_id_timestamped, r, t)
+
+            else:
+                return None
+
+        return _camera_optical_pose_in_vo_world_frame(self.image)
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -243,24 +266,14 @@ class PoseNode(Node):
 
     def _image_vo_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        qry, ref, dem = self._preprocess(msg, shallow_inference=True)
-        mkp_qry, mkp_ref = self.inference(qry, ref, shallow_inference=True)
-        r, t = self._postprocess(qry, ref, dem, mkp_qry, mkp_ref, "Shallow match / relative position (monocular VO)")
-
-        stamp = self._get_stamp(msg)  # TODO: should use previous query frame timestamp?
-        pnp_world_frame_id: FrameID = "pnp_world_%i_%i"
-        pnp_world_frame_id_timestamped = pnp_world_frame_id % (stamp.sec, stamp.nanosec)
-        pose_camera_optical_in_current_vo_world = (
-            tf_.create_pose_msg(msg.header.stamp, pnp_world_frame_id_timestamped, r, t)
-        )
-        if pose_camera_optical_in_current_vo_world is None:
-            # We could not obtain a good VO match
+        camera_optical_pose_in_vo_world_frame = self._camera_optical_pose_in_world_frame
+        if camera_optical_pose_in_vo_world_frame is not None:
+            # Cache pose
+            self._camera_optical_pose_in_vo_world_frame = camera_optical_pose_in_vo_world_frame
+        else:
             return None
 
-        #self.pose_previous_query(camera_pose)
-
         if self._camera_optical_pose_in_previous_vo_world is not None:
-
             # Publish VO frames relative transform to tf2
             pose_diff = self._pose_diff(self.camera_info, pose_camera_optical_in_current_vo_world, self._camera_optical_pose_in_previous_vo_world)
             previous_stamp = self._get_stamp(self._camera_optical_pose_in_previous_vo_world)
@@ -269,7 +282,7 @@ class PoseNode(Node):
                 pose_diff.header.frame_id, # refactor out frame_id input argument
                 "pnp_world_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec)
             )
-            self.broadcaster.sendTransform([transform])  # query to camera_rfu
+            self._tf_broadcaster.sendTransform([transform])  # query to camera_rfu
 
             # TODO: get cached camera pose in
             past_camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world

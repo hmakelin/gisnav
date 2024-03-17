@@ -472,6 +472,9 @@ class ROS:
                         transform_stamped.header.frame_id
                         + "_%i_i" % (stamp.sec, stamp.nanosec)
                     )
+                    getattr(wrapper, cached_broadcaster_name).sendTransform(
+                        transform_stamped
+                    )
 
                 return pose_stamped
 

@@ -425,7 +425,7 @@ class ROS:
         return decorator_property
 
     @staticmethod
-    def transform(child_frame_id: str, add_timestamp: bool = False):
+    def transform(child_frame_id: Optional[str] = None, add_timestamp: bool = False):
         """
         A decorator to wrap a method that returns a PoseStamped or a
         TransformStamped message, converts it to a TransformStamped
@@ -450,7 +450,19 @@ class ROS:
                 """
                 obj = func(self, *args, **kwargs)
                 if isinstance(obj, PoseStamped):
-                    transform_stamped = tf_.pose_to_transform(obj, child_frame_id)
+                    if not isinstance(child_frame_id, str):
+                        raise ValueError(
+                            "child_frame_id must be provided"
+                            "for converting Pose to Transform."
+                        )
+                    transform_stamped = tf_.pose_to_transform(
+                        pose_stamped, child_frame_id
+                    )
+                elif isinstance(obj, TransformStamped) and child_frame_id is not None:
+                    raise ValueError(
+                        "child_frame_id should not be provided"
+                        "for Transform messages that already have it"
+                    )
                 elif not isinstance(obj, TransformStamped):
                     raise ValueError(
                         "The decorated method must return a PoseStamped or "

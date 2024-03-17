@@ -180,7 +180,7 @@ class PoseNode(Node):
         return None
 
     @property
-    @ROS.transform(child_frame_id="query", add_timestamp=True)
+    @ROS.transform(add_timestamp=True)
     def previous_query_to_query_transform(self) -> Optional[TransformStamped]:
         """Retrun transform from previous query image frame to current query
         image frame in VO context

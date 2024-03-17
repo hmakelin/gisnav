@@ -6,17 +6,16 @@ import cv2
 import numpy as np
 import rclpy.time
 import tf2_ros
+import tf_transformations
+from builtin_interfaces.msg import Time
 from geographic_msgs.msg import BoundingBox
-from geometry_msgs.msg import Quaternion, TransformStamped, PoseStamped
+from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
-from nav_msgs.msg import Odometry
-from builtin_interfaces.msg import Time
 
 from .constants import FrameID
-
-import tf_transformations
 
 BBox = namedtuple("BBox", "left bottom right top")
 
@@ -125,6 +124,7 @@ def create_transform_msg(
 
     return transform
 
+
 def create_pose_msg(
     stamp: Time,
     frame_id: FrameID,
@@ -153,6 +153,7 @@ def create_pose_msg(
 
     return pose
 
+
 def pose_to_transform(
     pose_stamped_msg, parent_frame_id: FrameID, child_frame_id: FrameID
 ):
@@ -175,7 +176,7 @@ def pose_to_transform(
     return transform_stamped
 
 
-def transform_to_pose(transform_stamped_msg, frame_id: str):
+def transform_to_pose(transform_stamped_msg):  # , frame_id: str):
     # Create a new PoseStamped message
     pose_stamped = PoseStamped()
 
@@ -183,7 +184,7 @@ def transform_to_pose(transform_stamped_msg, frame_id: str):
     pose_stamped.header = transform_stamped_msg.header
 
     # Set the specified frame_id
-    pose_stamped.header.frame_id = frame_id
+    # pose_stamped.header.frame_id = frame_id
 
     # Copy the transform information to the pose
     pose_stamped.pose.position.x = transform_stamped_msg.transform.translation.x
@@ -192,6 +193,7 @@ def transform_to_pose(transform_stamped_msg, frame_id: str):
     pose_stamped.pose.orientation = transform_stamped_msg.transform.rotation
 
     return pose_stamped
+
 
 def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp
@@ -216,9 +218,9 @@ def visualize_camera_position(image, t, title):
     """Shows transform translation x and y position on image"""
     # current image timestamp does not yet have the transform but this should
     # get the previous one
-    #x, y = int(t[0]), int(
+    # x, y = int(t[0]), int(
     #    height - t[1]
-    #)  # move height origin from bottom to top left for cv2
+    # )  # move height origin from bottom to top left for cv2
     x, y = t[0:2].squeeze().tolist()
     image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
     cv2.imshow(title, image)
@@ -260,13 +262,18 @@ def extract_roll(q: Quaternion) -> float:
 
     return roll_deg
 
-def pose_stamped_diff_to_odometry(pose1: PoseStamped, pose2: PoseStamped, child_frame_id: str = "camera") -> Odometry:
+
+def pose_stamped_diff_to_odometry(
+    pose1: PoseStamped, pose2: PoseStamped, child_frame_id: str = "camera"
+) -> Odometry:
     """Returns and Odometry message from the difference of two PoseStamped messages
 
     :param pose1: Older PoseStamped message
     :param pose2: Newer PoseStamped message
     """
-    assert pose1.header.frame_id == pose2.header.frame_id, f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
+    assert (
+        pose1.header.frame_id == pose2.header.frame_id
+    ), f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
 
     # Initialize an Odometry message
     odometry_msg = Odometry()
@@ -284,12 +291,21 @@ def pose_stamped_diff_to_odometry(pose1: PoseStamped, pose2: PoseStamped, child_
     dz = pose2.pose.position.z - pose1.pose.position.z
 
     # Calculate orientation difference using quaternions
-    q1 = [pose1.pose.orientation.x, pose1.pose.orientation.y, pose1.pose.orientation.z,
-          pose1.pose.orientation.w]
-    q2 = [pose2.pose.orientation.x, pose2.pose.orientation.y, pose2.pose.orientation.z,
-          pose2.pose.orientation.w]
+    q1 = [
+        pose1.pose.orientation.x,
+        pose1.pose.orientation.y,
+        pose1.pose.orientation.z,
+        pose1.pose.orientation.w,
+    ]
+    q2 = [
+        pose2.pose.orientation.x,
+        pose2.pose.orientation.y,
+        pose2.pose.orientation.z,
+        pose2.pose.orientation.w,
+    ]
     q_diff = tf_transformations.quaternion_multiply(
-        tf_transformations.quaternion_inverse(q1), q2)
+        tf_transformations.quaternion_inverse(q1), q2
+    )
 
     # Calculate angular velocity (this is a simplified approach; for more accuracy, consider time differences)
     # Note: Assuming small time difference between messages for simplicity. For more precise applications, use actual time difference.
@@ -320,23 +336,27 @@ def pose_stamped_diff(pose1: PoseStamped, pose2: PoseStamped) -> PoseStamped:
     :param pose1: Older PoseStamped message
     :param pose2: Newer PoseStamped message
     """
-    assert pose1.header.frame_id == pose2.header.frame_id, f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
+    assert (
+        pose1.header.frame_id == pose2.header.frame_id
+    ), f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
 
     # Initialize an Odometry message
     pose_msg = pose1
 
     # Calculate position difference
-    dx = pose2.pose.position.x - pose1.pose.position.x
-    dy = pose2.pose.position.y - pose1.pose.position.y
-    dz = pose2.pose.position.z - pose1.pose.position.z
-    pose_msg.pose.position.x =  pose2.pose.position.x - pose1.pose.position.x
-    pose_msg.pose.position.y =  pose2.pose.position.y - pose1.pose.position.y
-    pose_msg.pose.position.z =  pose2.pose.position.z - pose1.pose.position.z
+    pose2.pose.position.x - pose1.pose.position.x
+    pose2.pose.position.y - pose1.pose.position.y
+    pose2.pose.position.z - pose1.pose.position.z
+    pose_msg.pose.position.x = pose2.pose.position.x - pose1.pose.position.x
+    pose_msg.pose.position.y = pose2.pose.position.y - pose1.pose.position.y
+    pose_msg.pose.position.z = pose2.pose.position.z - pose1.pose.position.z
 
     return pose_msg
 
 
-def pose_stamped_to_matrices(pose_stamped: PoseStamped) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def pose_stamped_to_matrices(
+    pose_stamped: PoseStamped,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # Extract the orientation quaternion from the PoseStamped message
     quaternion = (
         pose_stamped.pose.orientation.x,
@@ -358,7 +378,7 @@ def pose_stamped_to_matrices(pose_stamped: PoseStamped) -> Tuple[np.ndarray, np.
     # The translation vector is already in the correct format, but let's make it a numpy array
     translation_vector = np.array(position)
 
-    H = matrices_to_homogenous(r, t)
+    H = matrices_to_homogenous(rotation_matrix, translation_vector)
 
     return H, rotation_matrix, translation_vector
 

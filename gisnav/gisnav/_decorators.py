@@ -15,8 +15,9 @@ from typing import (
     get_type_hints,
 )
 
+import _transformations as tf_
 import tf2_ros
-
+from geometry_msgs.msg import PoseStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.exceptions import (
     ParameterAlreadyDeclaredException,
@@ -25,9 +26,6 @@ from rclpy.exceptions import (
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
-from geometry_msgs.msg import PoseStamped
-
-import _transformations as tf_
 
 #: Original return type of the wrapped method
 T = TypeVar("T")
@@ -438,6 +436,7 @@ class ROS:
             integer is seconds and second integer is nanoseconds
         :return: A method that publishes its return value to the tf topic whenever called.
         """
+
         def decorator(func):
             @wraps(func)
             def wrapper(self, *args, **kwargs):
@@ -450,7 +449,8 @@ class ROS:
                 pose_stamped = func(self, *args, **kwargs)
                 if not isinstance(pose_stamped, PoseStamped):
                     raise ValueError(
-                        "The decorated method must return a PoseStamped object.")
+                        "The decorated method must return a PoseStamped object."
+                    )
 
                 # Convert PoseStamped to TransformStamped
                 transform_stamped = tf_.pose_to_transform(pose_stamped, child_frame_id)
@@ -463,11 +463,15 @@ class ROS:
 
                 # Publish the transform
                 getattr(wrapper, cached_broadcaster_name).sendTransform(
-                    transform_stamped)
+                    transform_stamped
+                )
 
                 if add_timestamp:
                     stamp = transform_stamped.header.stamp
-                    transform_stamped.header.frame_id = transform_stamped.header.frame_id + "_%i_i" % (stamp.sec, stamp.nanosec)
+                    transform_stamped.header.frame_id = (
+                        transform_stamped.header.frame_id
+                        + "_%i_i" % (stamp.sec, stamp.nanosec)
+                    )
 
                 return pose_stamped
 

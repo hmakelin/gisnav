@@ -92,13 +92,13 @@ with fast dynamics with higher lags as long as the timestamps are accurate.
 FrameID = Literal[
     "reference",
     "reference_%i_%i",
+    "query",
+    "query_%i_%i",
+    "world",
     "base_link",
     "camera",
     "camera_optical",
     "map",
-    "world",
-    "world_vo",
-    "image"
 ]
 """Allowed ROS header frame_ids.
 
@@ -112,35 +112,27 @@ FrameID = Literal[
 
 :term:`OpenCV` ``cv2.solvePnP`` defined frames (not REP 103 compliant).
 
-* ``query_image``
-* ``query_world``
-* ``reference_world``
-
-The ``query_image`` frame is the image plane defined by the :term:`query image` 
-where the origin is at the top left corner of the image and the "height" or Y-axis is 
-therefore pointing down. 
-
-The ``reference_image`` frame is the image plane defined by the 
-:term:`bounding boxes <bounding box>`, where the origin is at the top left corner
-of the image and the "height" or Y-axis is therefore pointing down. 
+* ?
 
 Introduced by GISNav (**currently** not REP 103 compliant):
 
 * ``reference``
 * ``reference_%i_%i``
+* ``query``
+* ``query_%i_%i``
 
 The ``reference`` frame is the REP 103 compliant version of ``reference_world`` where
-the origin is in the bottom-left corner instead of top-left, making it an :term:`ENU` 
+the origin is in the bottom-left corner instead of top-left, making it an :term:`ENU`
 frame.
 
-``reference_%i_%i`` frame is a timestamped version of the ``reference`` frame 
-where the first integer is the seconds timestamp and the second integer is the 
+``reference_%i_%i`` frame is a timestamped version of the ``reference`` frame
+where the first integer is the seconds timestamp and the second integer is the
 nanoseconds timestamp of the originating sensor_msgs/Image message containing
  the orthoimage :term:`raster` from :term:`GISNode`. Timestamping is needed
  because the ``reference`` frame is discontinuous, breaking `tf2` interpolation and
  necessitating using timestamps to match poses to correct frames instead.
- 
+
  .. todo::
-    Scale ``reference`` and ``reference_%i_%i`` to SI units (meters) instead of 
+    Scale ``reference`` and ``reference_%i_%i`` to SI units (meters) instead of
     the native pixels to be fully compliant with REP 103
 """

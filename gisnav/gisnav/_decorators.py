@@ -427,8 +427,9 @@ class ROS:
     @staticmethod
     def transform(child_frame_id: str, add_timestamp: bool = False):
         """
-        A decorator to wrap a method that returns a PoseStamped message, converts it
-        to a TransformStamped using pose_to_transform, and publishes it on the tf topic.
+        A decorator to wrap a method that returns a PoseStamped or a
+        TransformStamped message, converts it to a TransformStamped
+        if needed, and then publishes it on the tf topic.
 
         :param child_frame_id: Name of child frame
         :param add_timestamp: Set to true to publish an additional transform with the
@@ -444,16 +445,18 @@ class ROS:
                 Wrapper function for the method.
 
                 :param self: The instance of the class the method belongs to.
-                :return: The PoseStamped value of the method.
+                :return: The original return value of the method.
                 """
-                pose_stamped = func(self, *args, **kwargs)
-                if not isinstance(pose_stamped, PoseStamped):
-                    raise ValueError(
-                        "The decorated method must return a PoseStamped object."
+                obj = func(self, *args, **kwargs)
+                if isinstance(obj, PoseStamped):
+                    transform_stamped = tf_.pose_to_transform(
+                        pose_stamped, child_frame_id
                     )
-
-                # Convert PoseStamped to TransformStamped
-                transform_stamped = tf_.pose_to_transform(pose_stamped, child_frame_id)
+                elif not isinstance(obj, TransformStamped):
+                    raise ValueError(
+                        "The decorated method must return a PoseStamped or "
+                        "TransformStamped object."
+                    )
 
                 # Check if the broadcaster is already created and cached
                 cached_broadcaster_name = "_tf_broadcaster"
@@ -468,9 +471,9 @@ class ROS:
 
                 if add_timestamp:
                     stamp = transform_stamped.header.stamp
-                    transform_stamped.header.frame_id = (
-                        transform_stamped.header.frame_id
-                        + "_%i_i" % (stamp.sec, stamp.nanosec)
+                    transform_stamped.child_frame_id = child_frame_id + "_%i_i" % (
+                        stamp.sec,
+                        stamp.nanosec,
                     )
                     getattr(wrapper, cached_broadcaster_name).sendTransform(
                         transform_stamped

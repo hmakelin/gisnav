@@ -32,7 +32,7 @@ import tf_transformations
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from kornia.feature import LoFTR
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -170,6 +170,41 @@ class PoseNode(Node):
         return None
 
     @property
+    @ROS.transform(child_frame_id="query", add_timestamp=True)
+    def previous_query_to_query_transform(self) -> Optional[TransformStamped]:
+        """Retrun transform from previous query image frame to current query
+        image frame in VO context
+        """
+
+        @narrow_types(self)
+        def _previous_query_too_query_transform(
+            camera_info: CameraInfo,
+            previous_pose: PoseStamped,
+            current_pose: PoseStamped,
+        ) -> TransformStamped:
+            pose_diff = self._pose_diff(
+                camera_info,
+                current_pose,
+                previous_pose,
+            )
+            previous_stamp = self._get_stamp(previous_pose)
+            transform = tf_.pose_to_transform(
+                pose_diff,
+                pose_diff.header.frame_id,  # refactor out frame_id input argument
+                cast(
+                    FrameID,
+                    "query_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec),
+                ),
+            )
+            return transform
+
+        return _previous_query_too_query_transform(
+            self.camera_info,
+            self._camera_optical_pose_in_previous_vo_world,
+            self._camera_optical_pose_in_vo_world_frame,
+        )
+
+    @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -303,26 +338,9 @@ class PoseNode(Node):
             self._image_vo = msg  # need to cache message for the timestamp
             return None
 
-        if self._camera_optical_pose_in_previous_vo_world is not None:
-            # Publish VO frames relative transform to tf2
-            pose_diff = self._pose_diff(
-                self.camera_info,
-                camera_optical_pose_in_vo_world_frame,
-                self._camera_optical_pose_in_previous_vo_world,
-            )
-            previous_stamp = self._get_stamp(
-                self._camera_optical_pose_in_previous_vo_world
-            )
-            transform = tf_.pose_to_transform(
-                pose_diff,
-                pose_diff.header.frame_id,  # refactor out frame_id input argument
-                cast(
-                    FrameID,
-                    "query_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec),
-                ),
-            )
-            self._tf_broadcaster.sendTransform([transform])  # query to camera_rfu
+        pose_diff = self.previous_query_to_query_transform
 
+        if pose_diff is not None:
             # TODO: get cached camera pose in
             past_camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world
             linking_stamp = self._get_stamp(past_camera_pose_in_gisnav_world)

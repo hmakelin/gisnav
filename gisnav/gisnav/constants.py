@@ -59,7 +59,7 @@ ROS_TOPIC_RELATIVE_STEREO_IMAGE: Final = "~/image_vo"
 :attr:`.StereoNode.stereo_image`.
 """
 
-ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera/estimated/pose"
+ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera_optical/pose"
 """Relative :term:`topic` into which :class:`.PnPNode` publishes
 :attr:`.PnPNode.camera_estimated_pose`.
 """

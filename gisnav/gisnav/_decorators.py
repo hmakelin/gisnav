@@ -427,14 +427,15 @@ class ROS:
         return decorator_property
 
     @staticmethod
-    def transform(child_frame_id: str, parent_frame_id: Optional[str] = None):
+    def transform(child_frame_id: str, add_timestamp: bool = False):
         """
         A decorator to wrap a method that returns a PoseStamped message, converts it
         to a TransformStamped using pose_to_transform, and publishes it on the tf topic.
 
         :param child_frame_id: Name of child frame
-        :param parent_frame_id: Optional override of parent_frame_id in PoseStamped
-            message header
+        :param add_timestamp: Set to true to publish an additional transform with the
+            timestamp suffix ``_%i_%i`` of the PoseStamped message where the first
+            integer is seconds and second integer is nanoseconds
         :return: A method that publishes its return value to the tf topic whenever called.
         """
         def decorator(func):
@@ -452,8 +453,6 @@ class ROS:
                         "The decorated method must return a PoseStamped object.")
 
                 # Convert PoseStamped to TransformStamped
-                if parent_frame_id is not None:
-                    pose_stamped.header.frame_id = parent_frame_id
                 transform_stamped = tf_.pose_to_transform(pose_stamped, child_frame_id)
 
                 # Check if the broadcaster is already created and cached
@@ -465,6 +464,10 @@ class ROS:
                 # Publish the transform
                 getattr(wrapper, cached_broadcaster_name).sendTransform(
                     transform_stamped)
+
+                if add_timestamp:
+                    stamp = transform_stamped.header.stamp
+                    transform_stamped.header.frame_id = transform_stamped.header.frame_id + "_%i_i" % (stamp.sec, stamp.nanosec)
 
                 return pose_stamped
 

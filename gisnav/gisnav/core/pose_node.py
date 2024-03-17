@@ -51,6 +51,7 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
     ROS_TOPIC_RELATIVE_STEREO_IMAGE,
     STEREO_NODE_NAME,
     FrameID,
@@ -167,12 +168,13 @@ class PoseNode(Node):
 
         return None
 
+    @property
     @ROS.publish(
-        "~/camera/pose_stamped",
+        ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform(child_frame_id="camera_optical")
-    def camera_optical_pose_in_world_frame(self, msg: PoseStamped) -> Optional[PoseStamped]:
+    @ROS.transform(child_frame_id="camera_optical", add_timestamp=True)
+    def camera_optical_pose_in_world_frame(self) -> Optional[PoseStamped]:
         """Camera pose in orthoimage world frame"""
 
         @narrow_types(self)
@@ -204,12 +206,13 @@ class PoseNode(Node):
     #    # TODO fix this implementation - make derived/computed property not method
     #    return msg
 
+    @property
     @ROS.publish(
-        "~/camera/vo/pose_stamped",
+        ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform("camera_optical")
-    def camera_optical_pose_in_vo_world_frame(self, msg: PoseStamped) -> Optional[PoseStamped]:
+    @ROS.transform("camera_optical", add_timestamp=True)
+    def camera_optical_pose_in_vo_world_frame(self) -> Optional[PoseStamped]:
         """Camera pose in visual odometry world frame (i.e. previous frame)"""
 
         @narrow_types(self)

@@ -15,6 +15,8 @@ from typing import (
     get_type_hints,
 )
 
+import tf2_ros
+
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.exceptions import (
     ParameterAlreadyDeclaredException,
@@ -23,6 +25,9 @@ from rclpy.exceptions import (
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
+from geometry_msgs.msg import PoseStamped
+
+import _transformations as tf_
 
 #: Original return type of the wrapped method
 T = TypeVar("T")
@@ -420,6 +425,52 @@ class ROS:
             return wrapper
 
         return decorator_property
+
+    @staticmethod
+    def transform(child_frame_id: str, parent_frame_id: Optional[str] = None):
+        """
+        A decorator to wrap a method that returns a PoseStamped message, converts it
+        to a TransformStamped using pose_to_transform, and publishes it on the tf topic.
+
+        :param child_frame_id: Name of child frame
+        :param parent_frame_id: Optional override of parent_frame_id in PoseStamped
+            message header
+        :return: A method that publishes its return value to the tf topic whenever called.
+        """
+        def decorator(func):
+            @wraps(func)
+            def wrapper(self, *args, **kwargs):
+                """
+                Wrapper function for the method.
+
+                :param self: The instance of the class the method belongs to.
+                :return: The PoseStamped value of the method.
+                """
+                pose_stamped = func(self, *args, **kwargs)
+                if not isinstance(pose_stamped, PoseStamped):
+                    raise ValueError(
+                        "The decorated method must return a PoseStamped object.")
+
+                # Convert PoseStamped to TransformStamped
+                if parent_frame_id is not None:
+                    pose_stamped.header.frame_id = parent_frame_id
+                transform_stamped = tf_.pose_to_transform(pose_stamped, child_frame_id)
+
+                # Check if the broadcaster is already created and cached
+                cached_broadcaster_name = "_tf_broadcaster"
+                if not hasattr(self, cached_broadcaster_name):
+                    broadcaster = tf2_ros.TransformBroadcaster(self)
+                    setattr(self, cached_broadcaster_name, broadcaster)
+
+                # Publish the transform
+                getattr(wrapper, cached_broadcaster_name).sendTransform(
+                    transform_stamped)
+
+                return pose_stamped
+
+            return wrapper
+
+        return decorator
 
     @staticmethod
     def max_delay_ms(max_time_diff_ms: int):

@@ -15,9 +15,9 @@ from typing import (
     get_type_hints,
 )
 
-import _transformations as tf_
+from . import _transformations as tf_
 import tf2_ros
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.exceptions import (
     ParameterAlreadyDeclaredException,
@@ -435,7 +435,8 @@ class ROS:
         :param add_timestamp: Set to true to publish an additional transform with the
             timestamp suffix ``_%i_%i`` of the PoseStamped message where the first
             integer is seconds and second integer is nanoseconds
-        :return: A method that publishes its return value to the tf topic whenever called.
+        :return: A method that publishes its return value to the tf topic whenever
+            called.
         """
 
         def decorator(func):
@@ -449,9 +450,7 @@ class ROS:
                 """
                 obj = func(self, *args, **kwargs)
                 if isinstance(obj, PoseStamped):
-                    transform_stamped = tf_.pose_to_transform(
-                        pose_stamped, child_frame_id
-                    )
+                    transform_stamped = tf_.pose_to_transform(obj, child_frame_id)
                 elif not isinstance(obj, TransformStamped):
                     raise ValueError(
                         "The decorated method must return a PoseStamped or "
@@ -471,7 +470,7 @@ class ROS:
 
                 if add_timestamp:
                     stamp = transform_stamped.header.stamp
-                    transform_stamped.child_frame_id = child_frame_id + "_%i_i" % (
+                    transform_stamped.child_frame_id = child_frame_id + "_%i_%i" % (
                         stamp.sec,
                         stamp.nanosec,
                     )
@@ -479,7 +478,7 @@ class ROS:
                         transform_stamped
                     )
 
-                return pose_stamped
+                return obj
 
             return wrapper
 

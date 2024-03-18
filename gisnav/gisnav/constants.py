@@ -49,14 +49,9 @@ ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 :attr:`.BBoxNode.fov_bounding_box`.
 """
 
-ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image_gis"
+ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image"
 """Relative :term:`topic` into which :class:`.StereoNode` publishes
 :attr:`.StereoNode.pnp_image`.
-"""
-
-ROS_TOPIC_RELATIVE_STEREO_IMAGE: Final = "~/image_vo"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.stereo_image`.
 """
 
 ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera_optical/pose"

@@ -8,19 +8,15 @@ the camera (visual odometry for smooth relative position).
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting :term:`PnP` problem.
 
-``image`` frame is the image plane as defined in the OpenCV `PnP problem
+``query`` frame is the image plane as defined in the OpenCV `PnP problem
 <https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_. ``reference`` frame here
 refers exclusively to the orthoimage reference frame, not the visual odometry reference
 frame.
 
-We cache the ``image`` to reference frame transformation so that we can connect the
+We cache the ``query`` to reference frame transformation so that we can connect the
 poses from the visual odometry transformation chain to reference frame at every query
 frame. We also cache query frame timestamp (included in message Header) so that we can
 connect it to the correct reference frame.
-
-.. todo::
-    Come up with a distinct names for orthoimagery and visual odometry matching
-    reference frames (e.g. query and reference, and query and previous?)
 """
 from typing import Optional, Tuple, cast
 
@@ -34,7 +30,8 @@ from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from kornia.feature import LoFTR
-from nav_msgs.msg import Odometry
+
+# from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
@@ -50,7 +47,6 @@ from ..constants import (
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    ROS_TOPIC_RELATIVE_STEREO_IMAGE,
     STEREO_NODE_NAME,
     FrameID,
 )
@@ -89,13 +85,12 @@ class PoseNode(Node):
 
         # initialize subscriptions
         self.camera_info
-        self.image_ortho
-        self.image_vo
+        self.image
         self.time_reference
 
         self._initialize_tf()
-        self._publish_camera_to_camera_optical()
-        self._init_vo_cache()
+        self._publish_camera_optical_to_camera()
+        self._initialize_vo_cache()
 
     def _initialize_vo_cache(self):
         """Initialize cached attributes needed to make visual odometry work"""
@@ -117,9 +112,11 @@ class PoseNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
+    # TODO: use transform decorator to publish this
     def _publish_camera_optical_to_camera(self):
         """Camera_optical frame to camera frame transformation
-        as defined in `REP 103 <https://www.ros.org/reps/rep-0103.html#axis-orientation>`_
+        as defined in `REP 103
+        <https://www.ros.org/reps/rep-0103.html#axis-orientation>`_
 
         The camera_optical as defined by REP 103 is also the same one used by cv2
         for the camera frame in the `PnP problem
@@ -157,15 +154,28 @@ class PoseNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        camera_optical_pose_in_world_frame = self.camera_optical_pose_in_world_frame
-        if camera_optical_pose_in_world_frame is not None:
-            # Cache latest camera_optical frame pose in PnP world coordinates for
-            #  linking up VO with world coordinates in the other callback. Matching by
-            #  exact timestamp is important as the reference and therefore also world
-            #  frame are discontinous relative to the VO image frames.
-            self._camera_optical_pose_in_world_frame = (
-                camera_optical_pose_in_world_frame
-            )
+        if msg.header.frame_id.startswith("query"):
+            self._image_vo = msg  # need to cache message for the timestamp
+            # camera_optical_pose_in_query_frame = self.camera_optical_pose_in_query_frame
+            #    return None
+            # Publish camera Pose and transform in world frame again
+            camera_optical_pose_in_query_frame = self.camera_optical_pose_in_query_frame
+
+            if camera_optical_pose_in_query_frame is not None:
+                # Cache pose in VO for next iteration
+                self._camera_optical_pose_in_query_frame_previous = (
+                    camera_optical_pose_in_query_frame
+                )
+        else:
+            camera_optical_pose_in_world_frame = self.camera_optical_pose_in_world_frame
+            if camera_optical_pose_in_world_frame is not None:
+                # Cache latest camera_optical frame pose in PnP world coordinates for
+                #  linking up VO with world coordinates in the other callback. Matching by
+                #  exact timestamp is important as the reference and therefore also world
+                #  frame are discontinous relative to the VO image frames.
+                self._camera_optical_pose_in_world_frame = (
+                    camera_optical_pose_in_world_frame
+                )
 
         return None
 
@@ -177,7 +187,7 @@ class PoseNode(Node):
         """
 
         @narrow_types(self)
-        def _previous_query_too_query_transform(
+        def _previous_query_to_query_transform(
             camera_info: CameraInfo,
             previous_pose: PoseStamped,
             current_pose: PoseStamped,
@@ -198,7 +208,7 @@ class PoseNode(Node):
             )
             return transform
 
-        return _previous_query_too_query_transform(
+        return _previous_query_to_query_transform(
             self.camera_info,
             self._camera_optical_pose_in_previous_vo_world,
             self._camera_optical_pose_in_vo_world_frame,
@@ -214,7 +224,9 @@ class PoseNode(Node):
         """Camera pose in orthoimage world frame"""
 
         @narrow_types(self)
-        def _camera_optical_pose_in_world_frame(msg: Image) -> Optional[PoseStamped]:
+        def _camera_optical_pose_in_world_frame_via_gis_orthoimage(
+            msg: Image,
+        ) -> Optional[PoseStamped]:
             qry, ref, dem = self._preprocess(msg)
             mkp_qry, mkp_ref = self.inference(qry, ref, dem)
             pose = self._postprocess(
@@ -235,17 +247,55 @@ class PoseNode(Node):
 
             return tf_.create_pose_msg(msg.header.stamp, "world", r, t)
 
-        return _camera_optical_pose_in_world_frame(self.image)
+        @narrow_types(self)
+        def _camera_optical_pose_in_world_frame_via_vo(
+            msg: Image,
+        ) -> Optional[PoseStamped]:
+            pose_diff = self.previous_query_to_query_transform
 
-    # @ROS.publish(
-    #    "~/camera/vo/odometry",
-    #    QoSPresetProfiles.SENSOR_DATA.value,
-    # )
-    # def odometry(self, msg: Odometry) -> Optional[Odometry]:
-    #    """Odometry in odom frame"""
-    #    # TODO convert odometry to a timestamped reference frame and fix scaling (meters) for odom frame
-    #    # TODO fix this implementation - make derived/computed property not method
-    #    return msg
+            if pose_diff is not None:
+                camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world
+                linking_stamp = self._get_stamp(camera_pose_in_gisnav_world)
+                vo_target_frame_id: FrameID = cast(
+                    FrameID,
+                    "query_%i_%i"
+                    % (
+                        linking_stamp.sec,
+                        linking_stamp.nanosec,
+                    ),
+                )
+                transform_to_linking_query_frame = tf_.get_transform(
+                    self,
+                    FrameID,
+                    vo_target_frame_id,
+                    pose_diff.header.frame_id,
+                    rclpy.time.Time(),
+                )
+                H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
+                    tf_.transform_to_pose(transform_to_linking_query_frame)
+                )
+                H_world, r_world, t_world = tf_.pose_stamped_to_matrices(
+                    self._camera_optical_pose_gisnav_world
+                )
+                current_camera_pose_in_gisnav_world = H_world @ H_diff
+                current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
+                    pose_diff.header.stamp
+                )
+
+                return current_camera_pose_in_gisnav_world
+
+                # TODO scale values by M[2,2] - this is currently not in meters
+                # self.odometry(odometry_msg)
+
+        if self.image is not None:
+            if self.image.header.frame_id.startswith("world"):
+                return _camera_optical_pose_in_world_frame_via_gis_orthoimage(
+                    self.image
+                )
+            elif self.image.header.frame_id.startswith("query"):
+                return _camera_optical_pose_in_world_frame_via_vo(self.image)
+        else:
+            return None
 
     @property
     @ROS.publish(
@@ -253,11 +303,13 @@ class PoseNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     @ROS.transform("camera_optical", add_timestamp=True)
-    def camera_optical_pose_in_vo_world_frame(self) -> Optional[PoseStamped]:
-        """Camera pose in visual odometry world frame (i.e. previous frame)"""
+    def camera_optical_pose_in_query_frame(self) -> Optional[PoseStamped]:
+        """Camera pose in visual odometry world frame (i.e. previous query frame)"""
 
         @narrow_types(self)
-        def _camera_optical_pose_in_vo_world_frame(msg: Image) -> Optional[PoseStamped]:
+        def _camera_optical_pose_in_query_frame(
+            msg: Image, previous_msg: Image
+        ) -> Optional[PoseStamped]:
             qry, ref, dem = self._preprocess(msg)
             mkp_qry, mkp_ref = self.inference(qry, ref, dem)
             pose = self._postprocess(
@@ -272,34 +324,29 @@ class PoseNode(Node):
             tf_.visualize_camera_position(
                 ref.copy(),
                 t,
-                "Camera position in world frame",
+                "Camera position in query frame",
             )
 
             # Use timestamp from previous image_vo message
-            if self._image_vo is not None:
-                stamp = self._get_stamp(self._image_vo)
-                sec, nanosec = msg.header.frame_id.split("_")[-2:]
-                if stamp.sec != sec or stamp.nanosec != nanosec:
-                    # The previous query image is not the same that is used as
-                    # reference in this image - the VO chain is broken
-                    return None
-
-                pnp_world_frame_id: FrameID = "query_%i_%i"
-                pnp_world_frame_id_timestamped = pnp_world_frame_id % (
-                    stamp.sec,
-                    stamp.nanosec,
-                )
-                return tf_.create_pose_msg(
-                    msg.header.stamp,
-                    cast(FrameID, pnp_world_frame_id_timestamped),
-                    r,
-                    t,
-                )
-
-            else:
+            stamp = self._get_stamp(previous_msg)
+            sec, nanosec = msg.header.frame_id.split("_")[-2:]
+            if stamp.sec != sec or stamp.nanosec != nanosec:
+                # The previous query image is not the same that is used as
+                # reference in this image - the VO chain is broken
                 return None
+            query_frame_id = "query_%i_%i" % (
+                stamp.sec,
+                stamp.nanosec,
+            )
 
-        return _camera_optical_pose_in_vo_world_frame(self.image)
+            return tf_.create_pose_msg(
+                msg.header.stamp,
+                cast(FrameID, query_frame_id),
+                r,
+                t,
+            )
+
+        return _camera_optical_pose_in_query_frame(self.image, self._image_vo)
 
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -315,7 +362,6 @@ class PoseNode(Node):
         channel, the reference image is in the second, and the elevation reference
         is in the last two (sum them together to get a 16-bit elevation reference).
 
-
         .. note::
             The existing :class:`sensor_msgs.msg.Image` message is repurposed
             to represent a stereo couple with depth information (technically a
@@ -324,54 +370,6 @@ class PoseNode(Node):
             package this later as a rosdebian if everything is already in the
             rosdep index.
         """
-
-    def _image_vo_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image` message"""
-        camera_optical_pose_in_vo_world_frame = self._camera_optical_pose_in_world_frame
-        if camera_optical_pose_in_vo_world_frame is not None:
-            # Cache pose
-            self._camera_optical_pose_in_vo_world_frame = (
-                camera_optical_pose_in_vo_world_frame
-            )
-            self._image_vo = msg
-        else:
-            self._image_vo = msg  # need to cache message for the timestamp
-            return None
-
-        pose_diff = self.previous_query_to_query_transform
-
-        if pose_diff is not None:
-            # TODO: get cached camera pose in
-            past_camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world
-            linking_stamp = self._get_stamp(past_camera_pose_in_gisnav_world)
-            target_frame_id = "query_%i_%i" % (
-                linking_stamp.sec,
-                linking_stamp.nanosec,
-            )
-            transform_to_linking_query_frame = tf_.get_transform(
-                self,
-                cast(FrameID, target_frame_id),
-                pose_diff.header.frame_id,
-                rclpy.time.Time(),
-            )
-            H, r, t = tf_.pose_stamped_to_matrices(
-                tf_.transform_to_pose(transform_to_linking_query_frame)
-            )
-            H_, r_, t_ = tf_.pose_stamped_to_matrices(
-                self._camera_optical_pose_gisnav_world
-            )
-            current_camera_pose_in_gisnav_world = H @ H_
-
-            current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
-                pose_diff.header.stamp
-            )
-
-            # TODO scale values by M[2,2] - this is currently in reference frame units
-            # self.odometry(odometry_msg)
-
-        self._camera_optical_pose_in_previous_vo_world = (
-            pose_camera_optical_in_current_vo_world
-        )
 
     def _pose_diff(
         self, current_pose: PoseStamped, previous_pose: PoseStamped
@@ -391,7 +389,7 @@ class PoseNode(Node):
             We do not use ``tf2`` here for transformations because these transforms
             involve projection matrices and therefore cannot be assumed to be rigid
             transformations.
-        """
+        """  # noqa: E501
 
         @narrow_types(self)
         def _pose_diff(
@@ -428,13 +426,16 @@ class PoseNode(Node):
 
             pose_difference = current_pose
             pose_difference.pose.position.x = (
-                current_pose.pose.position.x - previous_pose.pose.position.x
+                current_pose.pose.position.x
+                - previous_pose_in_current_world_xy.pose.position.x
             )
             pose_difference.pose.position.y = (
-                current_pose.pose.position.y - previous_pose.pose.position.y
+                current_pose.pose.position.y
+                - previous_pose_in_current_world_xy.pose.position.y
             )
             pose_difference.pose.position.z = (
-                current_pose.pose.position.z - previous_pose.pose.position.z
+                current_pose.pose.position.z
+                - previous_pose_in_current_world_xy.pose.position.z
             )
 
             # Calculate orientation difference
@@ -446,10 +447,10 @@ class PoseNode(Node):
             ]
 
             previous_quaternion = [
-                previous_pose.pose.orientation.x,
-                previous_pose.pose.orientation.y,
-                previous_pose.pose.orientation.z,
-                previous_pose.pose.orientation.w,
+                previous_pose_in_current_world_xy.pose.orientation.x,
+                previous_pose_in_current_world_xy.pose.orientation.y,
+                previous_pose_in_current_world_xy.pose.orientation.z,
+                previous_pose_in_current_world_xy.pose.orientation.w,
             ]
 
             # Quaternion conjugate and multiplication to find relative rotation
@@ -465,43 +466,6 @@ class PoseNode(Node):
             return pose_difference
 
         return _pose_diff(self.camera_info, current_pose, previous_pose)
-
-    @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_STEREO_IMAGE.replace("~", STEREO_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_vo_cb,
-    )
-    def image_vo(self) -> Optional[Image]:
-        """Image pair consisting of query image and reference image for :term:`VO` use.
-
-        .. note::
-            Images are set side by side - the first or left image is the current (query)
-            image, while the second or right image is the previous (reference) image.
-        """
-
-    @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", STEREO_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_cb,
-    )
-    def image(self) -> Optional[Image]:
-        """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
-        in a grayscale image. The query image is the first (left) image, and the reference
-        image is the second (right) image.
-
-        .. note::
-            The existing :class:`sensor_msgs.msg.Image` message is repurposed
-            to represent a stereo couple to avoid having to introduce custom messages
-            that would have to be distributed in a separate package. It will be easier to
-            package this later as a rosdebian if everything is already in the
-            rosdep index.
-        """
 
     @narrow_types
     def _preprocess(
@@ -563,8 +527,8 @@ class PoseNode(Node):
 
             # this image should consist of two images placed side-by-side
             assert w % 2 == 0, (
-                f"The input image for shallow matching against previous image should "
-                f"consist of two images side by side making width divisible by two."
+                "The input image for shallow matching against previous image should "
+                "consist of two images side by side making width divisible by two."
             )
 
             half_w = int(w / 2)
@@ -764,10 +728,6 @@ class PoseNode(Node):
 
     def _get_stamp(self, msg) -> Time:
         if self.time_reference is None:
-            self.get_logger().warning(
-                "Publishing world to camera_pinhole transformation without time "
-                "reference."
-            )
             stamp = msg.header.stamp
         else:
             stamp = (

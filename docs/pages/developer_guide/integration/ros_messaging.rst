@@ -20,8 +20,7 @@ how the ROS messages flow through the application:
         subgraph core["GISNav core nodes"]
             BBoxNode -->|"BoundingBox"| GISNode
             GISNode -->|"Image"| StereoNode
-            StereoNode -->|"Image (mono-VO)"| PoseNode
-            StereoNode -->|"Image (orthoimage stack)"| PoseNode
+            StereoNode -->|"Image"| PoseNode
         end
 
         subgraph tf2
@@ -38,9 +37,10 @@ how the ROS messages flow through the application:
         GISNode -->|"PointCloud2\nreference_%i_%i->WGS 84"| MockGPSNode
         tf -->|"TransformStamped\nreference_%i_%i->base_link"| MockGPSNode
 
-        PoseNode -->|"TransformStamped\ncamera->world"| tf
-        PoseNode -->|"TransformStamped\ncamera_pnp->camera"| tf_static
+        PoseNode -->|"TransformStamped\ncamera_optical->world"| tf
+        PoseNode -->|"TransformStamped\ncamera_optical->camera"| tf_static
         StereoNode -->|"TransformStamped\nreference_%i_%i->world"| tf
+        StereoNode -->|"TransformStamped\nquery_%i_%i->query_%i_%i"| tf
 
         classDef tfClass fill:transparent,stroke-dasharray:5 5;
         class tf2 tfClass
@@ -49,33 +49,35 @@ tf2 transformations tree
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The below diagram depicts how the frames specified in :class:`.FrameID` relate
-to each other:
+to each other.
 
 .. mermaid::
     :caption: ROS frames
 
     graph TB
-        subgraph rep["REP 105 (native units meters)"]
+        subgraph rep["REP 103 & 105 (units in meters)"]
             earth["earth\nnot used"]
             odom["odom\nnot used"]
             map1["map"] --> base_link
+            camera
+            camera_optical
         end
 
-        subgraph gisnav["GISNav (native units pixels but converted to meters)"]
-            camera_pinhole["camera_pnp"] -->|"PoseNode"| camera
-            camera -->|"PoseNode"| world
-            camera -->|"Not Implemented"| base_link
-
-            world -->|"StereoNode"| reference
-            world -->|"StereoNode"| reference_ts
-
+        subgraph gisnav["GISNav (normalized image plane units, not compliant with REP 103)"]
+            world
             reference
-            reference_ts["reference_%i_%i"]
-            reference_ts -->|"Not Implemented"| map1
+            reference_ts -.->|"Not Implemented\n(this floats because reference frame\nscaling is not compliant with REP 103)"| map1
+            world -->|"StereoNode"| reference["reference"]
+            world -->|"StereoNode"| reference_ts["reference_%i_%i"]
+            query_ts["query_%i_%i"] -->|"PoseNode"| query_ts
+            query_ts -->|"PoseNode"| world
+            query -->|"PoseNode"| world
         end
 
-        classDef dotted fill:transparent,stroke-dasharray:5 5;
-        class rep,gisnav dotted
+        camera -->|"BBoxNode"| base_link
+        camera_optical -->|"PoseNode"| camera
+        camera_optical -->|"PoseNode"| world
+
 
 .. note::
     * The reason for publishing the ``PointCloud2`` message separately is that
@@ -89,7 +91,14 @@ to each other:
       This enables looking at the world to reference frame relative transformation
       in isolation.
     * :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
-      did not use on it and relied on custom topics for publishing transformations.
+      did not use on it and relied on custom topics for publishing
+      transformations.
+    * The ``query_%i_%i`` frames are chained up via successive iterations of
+      :term:`VO`. Link from the query frame to ``reference_%i_%i`` frame is
+      then found via a suitable timestamped query frame that also links to the
+      ``world`` frame.
+    * ``query`` and ``reference`` are aliases for the latest ``query_%i_%i``
+      and ``reference_%i_%i`` frames.
 
 .. todo::
 

@@ -196,7 +196,7 @@ def transform_to_pose(transform_stamped_msg):  # , frame_id: str):
 
 
 def get_transform(
-    node: Node, target_frame: FrameID, source_frame: FrameID, stamp
+    node: Node, target_frame: FrameID, source_frame: FrameID, stamp: Time
 ) -> TransformStamped:
     try:
         trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
@@ -271,16 +271,19 @@ def pose_stamped_diff_to_odometry(
     :param pose1: Older PoseStamped message
     :param pose2: Newer PoseStamped message
     """
-    assert (
-        pose1.header.frame_id == pose2.header.frame_id
-    ), f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
+    assert pose1.header.frame_id == pose2.header.frame_id, (
+        f"Frame IDs do not match: pose1 {pose1.header.frame_id} "
+        f"and pose2: {pose2.header.frame_id}"
+    )
 
     # Initialize an Odometry message
     odometry_msg = Odometry()
 
     # Set the frame_id and child_frame_id
     odometry_msg.header.frame_id = pose2.header.frame_id
-    odometry_msg.child_frame_id = child_frame_id  # TODO base_link to camera published elsewhere, assume this is camera
+
+    # TODO base_link to camera published elsewhere, assume this is camera
+    odometry_msg.child_frame_id = child_frame_id
 
     # Set the position from the newer PoseStamped message
     odometry_msg.pose.pose = pose2.pose
@@ -307,12 +310,15 @@ def pose_stamped_diff_to_odometry(
         tf_transformations.quaternion_inverse(q1), q2
     )
 
-    # Calculate angular velocity (this is a simplified approach; for more accuracy, consider time differences)
-    # Note: Assuming small time difference between messages for simplicity. For more precise applications, use actual time difference.
+    # Calculate angular velocity (this is a simplified approach; for more accuracy,
+    # consider time differences)
+    # Note: Assuming small time difference between messages for simplicity. For more
+    # precise applications, use actual time difference.
     angular_velocity = tf_transformations.euler_from_quaternion(q_diff)
 
     # Set the linear and angular velocities in the Odometry message
-    # Assuming the time delta between pose1 and pose2 is 1 second for simplicity. Replace with actual time difference if available.
+    # Assuming the time delta between pose1 and pose2 is 1 second for simplicity.
+    # Replace with actual time difference if available.
     time_delta = (pose2.header.stamp - pose1.header.stamp).to_sec()
     if time_delta > 0:
         odometry_msg.twist.twist.linear.x = dx / time_delta
@@ -336,9 +342,10 @@ def pose_stamped_diff(pose1: PoseStamped, pose2: PoseStamped) -> PoseStamped:
     :param pose1: Older PoseStamped message
     :param pose2: Newer PoseStamped message
     """
-    assert (
-        pose1.header.frame_id == pose2.header.frame_id
-    ), f"Frame IDs do not match: pose1 {pose1.header.frame_id} and pose2: {pose2.header.frame_id}"
+    assert pose1.header.frame_id == pose2.header.frame_id, (
+        f"Frame IDs do not match: pose1 {pose1.header.frame_id} "
+        f"and pose2: {pose2.header.frame_id}"
+    )
 
     # Initialize an Odometry message
     pose_msg = pose1
@@ -375,7 +382,8 @@ def pose_stamped_to_matrices(
     # Convert the quaternion to a rotation matrix
     rotation_matrix = tf_transformations.quaternion_matrix(quaternion)[:3, :3]
 
-    # The translation vector is already in the correct format, but let's make it a numpy array
+    # The translation vector is already in the correct format, but let's make it a
+    # numpy array
     translation_vector = np.array(position)
 
     H = matrices_to_homogenous(rotation_matrix, translation_vector)

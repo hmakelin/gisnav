@@ -58,7 +58,6 @@ from ..constants import (
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    ROS_TOPIC_RELATIVE_STEREO_IMAGE,
     FrameID,
 )
 
@@ -96,7 +95,6 @@ class StereoNode(Node):
         # setup publisher to pass launch test without image callback being
         # triggered
         self.pnp_image
-        self.stereo_image
 
         # Initialize the transform broadcaster and listener
         self.broadcaster = TransformBroadcaster(self)
@@ -319,7 +317,7 @@ class StereoNode(Node):
 
     @property
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_STEREO_IMAGE,
+        ROS_TOPIC_RELATIVE_PNP_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def stereo_image(self) -> Optional[Image]:

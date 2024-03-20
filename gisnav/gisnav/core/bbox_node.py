@@ -330,7 +330,7 @@ class BBoxNode(Node):
             messaging.get_transform(
                 self,
                 "map",
-                "gimbal",
+                "camera",
                 rclpy.time.Time(),  # self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
@@ -398,7 +398,7 @@ class BBoxNode(Node):
             # TODO publish relative transform with gimbaldeviceattitudestatus
             #  timestamp (this one now has vehicle pose timestamp)
             parent_frame_id: FrameID = "map"
-            child_frame_id: FrameID = "gimbal"
+            child_frame_id: FrameID = "camera"
 
             assert gimbal_device_attitude_status.flags == 12, (
                 "Currently GISNav only supports a two-axis gimbal that has "

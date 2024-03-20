@@ -436,7 +436,7 @@ class ROS:
             timestamp suffix ``_%i_%i`` of the PoseStamped message where the first
             integer is seconds and second integer is nanoseconds
         :return: A method that publishes its return value to the tf topic whenever
-            called.
+            called. The return value must be TransformStamped, PoseStamped, or None
         """
 
         def decorator(func):
@@ -449,25 +449,14 @@ class ROS:
                 :return: The original return value of the method.
                 """
                 obj = func(self, *args, **kwargs)
-                if isinstance(obj, PoseStamped):
-                    if not isinstance(child_frame_id, str):
-                        raise ValueError(
-                            "child_frame_id must be provided"
-                            "for converting Pose to Transform."
-                        )
-                    transform_stamped = tf_.pose_to_transform(
-                        pose_stamped, child_frame_id
-                    )
-                elif isinstance(obj, TransformStamped) and child_frame_id is not None:
-                    raise ValueError(
-                        "child_frame_id should not be provided"
-                        "for Transform messages that already have it"
-                    )
-                elif not isinstance(obj, TransformStamped):
-                    raise ValueError(
-                        "The decorated method must return a PoseStamped or "
-                        "TransformStamped object."
-                    )
+
+                type_hints = get_type_hints(func)
+                optional_type = type_hints["return"]
+                topic_type = get_args(optional_type)[
+                    0
+                ]
+                if topic_type not in (None, TransformStamped, PoseStamped):
+                    raise ValueError(f"Return type must be None, TransformStamped or PoseStamped - detected {topic_type}")
 
                 # Check if the broadcaster is already created and cached
                 cached_broadcaster_name = "_tf_broadcaster"
@@ -475,19 +464,24 @@ class ROS:
                     broadcaster = tf2_ros.TransformBroadcaster(self)
                     setattr(self, cached_broadcaster_name, broadcaster)
 
+                if obj is None:
+                    return None
+                elif isinstance(obj, PoseStamped):
+                    obj = tf_.pose_to_transform(obj, child_frame_id=child_frame_id)
+
                 # Publish the transform
                 getattr(wrapper, cached_broadcaster_name).sendTransform(
-                    transform_stamped
+                    obj
                 )
 
                 if add_timestamp:
-                    stamp = transform_stamped.header.stamp
-                    transform_stamped.child_frame_id = child_frame_id + "_%i_%i" % (
+                    stamp = obj.header.stamp
+                    obj.child_frame_id = child_frame_id + "_%i_%i" % (
                         stamp.sec,
                         stamp.nanosec,
                     )
                     getattr(wrapper, cached_broadcaster_name).sendTransform(
-                        transform_stamped
+                        obj
                     )
 
                 return obj

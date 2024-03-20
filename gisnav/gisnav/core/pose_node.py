@@ -609,7 +609,7 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _visualize_matches_and_pose(
-            camera_info, qry, ref, mkp_qry, mkp_ref, k, r, t, label
+            camera_info: CameraInfo, qry: np.ndarray, ref: np.ndarray, mkp_qry: np.ndarray, mkp_ref: np.ndarray, r: np.ndarray, t: np.ndarray, label: str
         ) -> None:
             """Visualizes matches and projected :term:`FOV`"""
 
@@ -628,6 +628,7 @@ class PoseNode(Node):
             # mkp_qry = mkp_qry.copy()
             # mkp_ref = mkp_ref.copy()
 
+            k = camera_info.k.reshape((3, 3))
             h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
             projected_fov = _project_fov(qry, h_matrix)
 
@@ -701,7 +702,8 @@ class PoseNode(Node):
                     iterationsCount=10,
                 )
                 r_matrix, _ = cv2.Rodrigues(r)
-                t = np.ndarray(t)
+                #self.get_logger().error(str(t))
+                #t = np.ndarray(t)
 
                 return r_matrix, t
 
@@ -717,7 +719,7 @@ class PoseNode(Node):
             r, t = _compute_pose(mkp2_3d, mkp_qry, k_matrix)
 
             _visualize_matches_and_pose(
-                qry_img.copy(), ref_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t, label
+                camera_info, qry_img.copy(), ref_img.copy(), mkp_qry, mkp_ref, r, t, label
             )
 
             return r, t

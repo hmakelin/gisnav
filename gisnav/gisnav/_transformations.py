@@ -222,6 +222,7 @@ def visualize_camera_position(image, t, title):
     #    height - t[1]
     # )  # move height origin from bottom to top left for cv2
     x, y = t[0:2].squeeze().tolist()
+    x, y = int(x), int(y)
     image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
     cv2.imshow(title, image)
     cv2.waitKey(1)

@@ -228,9 +228,9 @@ class PoseNode(Node):
             msg: Image,
         ) -> Optional[PoseStamped]:
             qry, ref, dem = self._preprocess(msg)
-            mkp_qry, mkp_ref = self.inference(qry, ref, dem)
+            mkp_qry, mkp_ref = self._process(qry, ref)
             pose = self._postprocess(
-                qry, ref, dem, mkp_qry, mkp_ref, "Deep match / global position (GIS)"
+                mkp_qry, mkp_ref, dem, qry, ref, "Deep match / global position (GIS)"
             )
             if pose is None:
                 return None
@@ -311,9 +311,9 @@ class PoseNode(Node):
             msg: Image, previous_msg: Image
         ) -> Optional[PoseStamped]:
             qry, ref, dem = self._preprocess(msg)
-            mkp_qry, mkp_ref = self.inference(qry, ref, dem)
+            mkp_qry, mkp_ref = self._process(qry, ref)
             pose = self._postprocess(
-                qry, ref, dem, mkp_qry, mkp_ref, "Deep match / global position (GIS)"
+                mkp_qry, mkp_ref, dem, qry, ref, "Deep match / global position (GIS)"
             )
             if pose is None:
                 return None

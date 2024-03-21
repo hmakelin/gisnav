@@ -636,14 +636,7 @@ class PoseNode(Node):
             h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
             projected_fov = _project_fov(qry, h_matrix)
 
-            # Invert the y-coordinate, considering the image height (input r and t
-            # are in ROS convention where origin is at bottom left of image, we
-            # want origin to be at top left for cv2
-            h = camera_info.height
-            mkp_ref[:, 1] = mkp_ref[:, 1]
-            mkp_qry[:, 1] = h - mkp_qry[:, 1]
-
-            projected_fov[:, :, 1] = h - projected_fov[:, :, 1]
+            projected_fov[:, :, 1] = projected_fov[:, :, 1]
             img_with_fov = cv2.polylines(
                 ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
             )

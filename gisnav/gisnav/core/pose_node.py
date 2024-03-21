@@ -208,7 +208,12 @@ class PoseNode(Node):
             qry, ref, dem = self._preprocess(msg, shallow_inference=False)
             mkp_qry, mkp_ref = self._process(qry, ref)
             pose = self._postprocess(
-                mkp_qry, mkp_ref, dem, qry, ref, "Deep match / global position (GIS)"
+                mkp_qry,
+                mkp_ref,
+                dem,
+                qry,
+                ref,
+                "Deep match / absolute global position (GIS)",
             )
             if pose is None:
                 return None
@@ -299,7 +304,12 @@ class PoseNode(Node):
             qry, ref, dem = self._preprocess(msg, shallow_inference=True)
             mkp_qry, mkp_ref = self._process(qry, ref)
             pose = self._postprocess(
-                mkp_qry, mkp_ref, dem, qry, ref, "Deep match / global position (GIS)"
+                mkp_qry,
+                mkp_ref,
+                dem,
+                qry,
+                ref,
+                "Shallow match / relative position (VO)",
             )
             if pose is None:
                 return None

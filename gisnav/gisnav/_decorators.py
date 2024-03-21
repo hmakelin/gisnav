@@ -15,7 +15,6 @@ from typing import (
     get_type_hints,
 )
 
-from . import _transformations as tf_
 import tf2_ros
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -26,6 +25,8 @@ from rclpy.exceptions import (
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
+
+from . import _transformations as tf_
 
 #: Original return type of the wrapped method
 T = TypeVar("T")
@@ -452,11 +453,12 @@ class ROS:
 
                 type_hints = get_type_hints(func)
                 optional_type = type_hints["return"]
-                topic_type = get_args(optional_type)[
-                    0
-                ]
+                topic_type = get_args(optional_type)[0]
                 if topic_type not in (None, TransformStamped, PoseStamped):
-                    raise ValueError(f"Return type must be None, TransformStamped or PoseStamped - detected {topic_type}")
+                    raise ValueError(
+                        f"Return type must be None, TransformStamped or PoseStamped. "
+                        f"Detected {topic_type}"
+                    )
 
                 # Check if the broadcaster is already created and cached
                 cached_broadcaster_name = "_tf_broadcaster"
@@ -467,24 +469,25 @@ class ROS:
                 if obj is None:
                     return None
                 elif isinstance(obj, PoseStamped):
-                    obj = tf_.pose_to_transform(obj, child_frame_id=child_frame_id)
+                    transform = tf_.pose_to_transform(
+                        obj, child_frame_id=child_frame_id
+                    )
+                else:
+                    assert isinstance(obj, TransformStamped)
+                    transform = obj
 
                 # Publish the transform
-                getattr(wrapper, cached_broadcaster_name).sendTransform(
-                    obj
-                )
+                getattr(self, cached_broadcaster_name).sendTransform(transform)
 
                 if add_timestamp:
-                    stamp = obj.header.stamp
-                    obj.child_frame_id = child_frame_id + "_%i_%i" % (
+                    stamp = transform.header.stamp
+                    transform.child_frame_id = child_frame_id + "_%i_%i" % (
                         stamp.sec,
                         stamp.nanosec,
                     )
-                    getattr(wrapper, cached_broadcaster_name).sendTransform(
-                        obj
-                    )
+                    getattr(self, cached_broadcaster_name).sendTransform(transform)
 
-                return obj
+                return obj  # return original object (could be Pose), not the Transform
 
             return wrapper
 

@@ -147,16 +147,14 @@ def create_pose_msg(
     pose.pose.orientation.z = q[2]
     pose.pose.orientation.w = q[3]
 
-    pose.pose.position.x = t[0]
-    pose.pose.position.y = t[1]
-    pose.pose.position.z = t[2]
+    pose.pose.position.x = float(t[0])
+    pose.pose.position.y = float(t[1])
+    pose.pose.position.z = float(t[2])
 
     return pose
 
 
-def pose_to_transform(
-    pose_stamped_msg, parent_frame_id: FrameID, child_frame_id: FrameID
-):
+def pose_to_transform(pose_stamped_msg, child_frame_id: FrameID):
     # Create a new TransformStamped message
     transform_stamped = TransformStamped()
 
@@ -171,7 +169,6 @@ def pose_to_transform(
 
     # Set the child and parent frame IDs
     transform_stamped.child_frame_id = child_frame_id
-    transform_stamped.header.frame_id = parent_frame_id
 
     return transform_stamped
 
@@ -396,5 +393,5 @@ def matrices_to_homogenous(r, t) -> np.ndarray:
     """3D pose in homogenous form for convenience"""
     H = np.eye(4)
     H[:3, :3] = r
-    H[:3, 3] = t
+    H[:3, 3] = t.squeeze()
     return H

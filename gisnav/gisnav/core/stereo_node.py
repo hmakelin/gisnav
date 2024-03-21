@@ -345,6 +345,7 @@ class StereoNode(Node):
             )
 
             image_msg.header.stamp = stamp
+            image_msg.header.frame_id = "query"
 
             return image_msg
 

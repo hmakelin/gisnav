@@ -114,7 +114,8 @@ class BBoxNode(Node):
         )
 
         # Publish local tangent plane (ENU) to vehicle FRD frame transformation
-        transform_base_link = messaging.pose_to_transform(msg, "map", "base_link")
+        assert msg.header.frame_id == "map"
+        transform_base_link = messaging.pose_to_transform(msg, "base_link")
         self.broadcaster.sendTransform([transform_base_link])
 
     @property

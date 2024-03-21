@@ -144,7 +144,6 @@ class PoseNode(Node):
         #    self.camera_optical_pose_in_query_frame
         # else:
         #    self.camera_optical_pose_in_world_frame
-
         # Publish camera Pose and transform in world frame again
         self.camera_optical_pose_in_world_frame
 
@@ -159,7 +158,6 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _previous_query_to_query_transform(
-            camera_info: CameraInfo,
             previous_pose: PoseStamped,
             current_pose: PoseStamped,
         ) -> TransformStamped:
@@ -167,24 +165,34 @@ class PoseNode(Node):
                 current_pose,
                 previous_pose,
             )
-            previous_stamp = self._get_stamp(previous_pose)
-            transform = tf_.pose_to_transform(
-                pose_diff,
-                cast(
-                    FrameID,
-                    "query_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec),
-                ),
-            )
-            return transform
+            if pose_diff is not None:
+                previous_stamp = self._get_stamp(previous_pose)
+                transform = tf_.pose_to_transform(
+                    pose_diff,
+                    cast(
+                        FrameID,
+                        "query_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec),
+                    ),
+                )
+                return transform
+            else:
+                return None
 
+        # TODO: uses cache_if decorator cached value, brittle
+        previous = (
+            self._camera_optical_pose_in_query_frame
+            if (hasattr(self, "_camera_optical_pose_in_query_frame"))
+            else None
+        )
         return _previous_query_to_query_transform(
-            self.camera_info,
-            self._camera_optical_pose_in_query_frame,
-            self.camera_optical_pose_in_query_frame,
+            previous, self.camera_optical_pose_in_query_frame
         )
 
+    def _should_recompute_and_cache_camera_optical_pose_in_world_frame(self):
+        return True
+
     @property
-    @cache_if
+    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_world_frame)
     @ROS.publish(
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -271,8 +279,11 @@ class PoseNode(Node):
 
         return None
 
+    def _should_recompute_and_cache_camera_optical_pose_in_query_frame(self):
+        return True
+
     @property
-    @cache_if
+    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_query_frame)
     @ROS.publish(
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -322,18 +333,12 @@ class PoseNode(Node):
                 t,
             )
 
-        return _camera_optical_pose_in_query_frame(self.image, self._image_vo)
-
-    @staticmethod
-    def _cache_query_image(msg: Image):
-        """Returns True if the frame ID is ``query``
-
-        Used as predicate for caching the query Image message in :attr:`.image`.
-        """
-        return msg.header.frame_id.startswith("query")
+        # TODO: this uses subscribe decorator internal API for cached value
+        #  - very brittle
+        previous = self._image if hasattr(self, "_image") else None
+        return _camera_optical_pose_in_query_frame(self.image, previous)
 
     @property
-    @cache_if(_cache_query_image)
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
@@ -384,15 +389,15 @@ class PoseNode(Node):
         ) -> Optional[PoseStamped]:
             # Transform from previous image plane to current world frame (translation
             # of origin from center to top-left corner)
-            t_previous_plane_uv_to_current_world_xy = np.ndarray(
-                [-camera_info.width / 2, -camera_info.height / 2, 0]
+            t_previous_plane_uv_to_current_world_xy = np.array(
+                [-camera_info.width // 2, -camera_info.height // 2, 0]
             )
 
             k = self.camera_info.k.reshape((3, 3))
             # H_current, _, _ = tf_.pose_stamped_to_matrices(current_pose)
             H_previous, _, _ = tf_.pose_stamped_to_matrices(previous_pose)
             # current_projection_matrix = k @ H_previous
-            previous_projection_matrix = k @ H_previous
+            previous_projection_matrix = k @ H_previous[:3, :]
 
             try:
                 inv_previous_projection_matrix = np.linalg.inv(
@@ -479,7 +484,6 @@ class PoseNode(Node):
 
         if not shallow_inference:
             # Check that the image has 4 channels
-            self.get_logger().error(f"image shape {full_image_cv.shape}")
             channels = full_image_cv.shape[2]
             assert channels == 4, (
                 f"The input image for deep matching against orthoimage is expected to "
@@ -692,8 +696,6 @@ class PoseNode(Node):
                     iterationsCount=10,
                 )
                 r_matrix, _ = cv2.Rodrigues(r)
-                # self.get_logger().error(str(t))
-                # t = np.ndarray(t)
 
                 return r_matrix, t
 

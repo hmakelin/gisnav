@@ -16,6 +16,24 @@ def generate_launch_description():
     ld = LaunchDescription()
     ld.add_action(
         Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "0.5",
+                "-0.5",
+                "-0.5",
+                "0.5",
+                "camera_optical",
+                "camera",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
             package=_PACKAGE_NAME,
             name="gis_node",
             namespace=_PACKAGE_NAME,

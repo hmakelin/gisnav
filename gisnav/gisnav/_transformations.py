@@ -101,7 +101,7 @@ def bounding_box_to_bbox(msg: BoundingBox) -> BBox:
 
 def create_transform_msg(
     stamp,
-    parent_frame: FrameID,
+    parent_frame: FrameID,  # TODO: remove this arg - it should be in the stamp
     child_frame: FrameID,
     q: tuple,
     translation_vector: np.ndarray,

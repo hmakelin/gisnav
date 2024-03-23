@@ -18,7 +18,7 @@ poses from the visual odometry transformation chain to reference frame at every 
 frame. We also cache query frame timestamp (included in message Header) so that we can
 connect it to the correct reference frame.
 """
-from typing import Optional, Tuple, cast
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -28,7 +28,7 @@ import tf_transformations
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
 from kornia.feature import LoFTR
 
 # from nav_msgs.msg import Odometry
@@ -110,9 +110,9 @@ class PoseNode(Node):
             self.static_broadcaster is not None
         ), "Please initialize the static transform broadcaster first"
 
-        q = (0.5, 0.5, -0.5, -0.5)
+        q = (0.5, -0.5, -0.5, 0.5)
         header = tf_.create_header(
-            self, "", self.time_reference
+            self, "camera_optical", self.time_reference
         )  # time reference is not important here
         transform_camera = tf_.create_transform_msg(
             header.stamp, "camera_optical", "camera", q, np.zeros(3)
@@ -149,45 +149,6 @@ class PoseNode(Node):
 
         return None
 
-    @property
-    @ROS.transform(add_timestamp=True)
-    def previous_query_to_query_transform(self) -> Optional[TransformStamped]:
-        """Retrun transform from previous query image frame to current query
-        image frame in VO context
-        """
-
-        @narrow_types(self)
-        def _previous_query_to_query_transform(
-            previous_pose: PoseStamped,
-            current_pose: PoseStamped,
-        ) -> TransformStamped:
-            pose_diff = self._pose_diff(
-                current_pose,
-                previous_pose,
-            )
-            if pose_diff is not None:
-                previous_stamp = self._get_stamp(previous_pose)
-                transform = tf_.pose_to_transform(
-                    pose_diff,
-                    cast(
-                        FrameID,
-                        "query_%i_%i" % (previous_stamp.sec, previous_stamp.nanosec),
-                    ),
-                )
-                return transform
-            else:
-                return None
-
-        # TODO: uses cache_if decorator cached value, brittle
-        previous = (
-            self._camera_optical_pose_in_query_frame
-            if (hasattr(self, "_camera_optical_pose_in_query_frame"))
-            else None
-        )
-        return _previous_query_to_query_transform(
-            previous, self.camera_optical_pose_in_query_frame
-        )
-
     def _should_recompute_and_cache_camera_optical_pose_in_world_frame(self):
         return True
 
@@ -197,7 +158,7 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform(child_frame_id="camera_optical", add_timestamp=True)
+    # @ROS.transform(child_frame_id="camera_optical")  #, add_timestamp=True)
     def camera_optical_pose_in_world_frame(self) -> Optional[PoseStamped]:
         """Camera pose in orthoimage world frame"""
 
@@ -234,30 +195,47 @@ class PoseNode(Node):
         def _camera_optical_pose_in_world_frame_via_vo(
             msg: Image,
         ) -> Optional[PoseStamped]:
-            pose_diff = self.previous_query_to_query_transform
+            pose_diff = self._query_frame_pose_diff
 
+            # TODO: refactor out this if statement and rely on narrow_types instead
             if pose_diff is not None:
-                camera_pose_in_gisnav_world = self._camera_optical_pose_gisnav_world
-                linking_stamp = self._get_stamp(camera_pose_in_gisnav_world)
-                vo_target_frame_id: FrameID = cast(
-                    FrameID,
-                    "query_%i_%i"
-                    % (
-                        linking_stamp.sec,
-                        linking_stamp.nanosec,
-                    ),
+                # Getting the cached value will not trigger recomputation
+                # The cached pose can be based on a pure deep match, or a combination
+                # of an earlier deep match + visual odometry chain
+                cached_camera_optical_pose_in_world_frame = (
+                    self._camera_optical_pose_in_world_frame
                 )
+                if cached_camera_optical_pose_in_world_frame is None:
+                    return None
+                # linking_stamp = self._get_stamp(
+                #    cached_camera_optical_pose_in_world_frame
+                # )
+                vo_target_frame_id: FrameID = "query"  # cast(
+                #    FrameID,
+                #    "query_%i_%i"
+                #    % (
+                #        linking_stamp.sec,
+                #        linking_stamp.nanosec,
+                #    ),
+                # )
                 transform_to_linking_query_frame = tf_.get_transform(
                     self,
-                    vo_target_frame_id,
-                    pose_diff.header.frame_id,
+                    "query",
+                    "query_previous",
                     rclpy.time.Time(),
                 )
+                if transform_to_linking_query_frame is None:
+                    self.get_logger().warning(
+                        f"Could not find transform from {vo_target_frame_id} to "
+                        f"{pose_diff.header.frame_id}"
+                    )
+                    return None
+
                 H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
                     tf_.transform_to_pose(transform_to_linking_query_frame)
                 )
                 H_world, r_world, t_world = tf_.pose_stamped_to_matrices(
-                    self._camera_optical_pose_gisnav_world
+                    cached_camera_optical_pose_in_world_frame
                 )
                 current_camera_pose_in_gisnav_world = H_world @ H_diff
                 current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
@@ -293,7 +271,7 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform("camera_optical", add_timestamp=True)
+    # @ROS.transform("camera_optical")
     def camera_optical_pose_in_query_frame(self) -> Optional[PoseStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
 
@@ -320,25 +298,16 @@ class PoseNode(Node):
             tf_.visualize_camera_position(
                 ref.copy(),
                 t,
-                "Camera position in query frame",
+                "Camera position in (previous) query frame",
             )
 
             # Use timestamp from previous image_vo message
-            stamp = self._get_stamp(previous_msg)
+            # stamp = self._get_stamp(previous_msg)
             # TODO: try to check that the VO chain is not broken
-            # sec, nanosec = msg.header.frame_id.split("_")[-2:]
-            # if stamp.sec != sec or stamp.nanosec != nanosec:
-            #    # The previous query image is not the same that is used as
-            #    # reference in this image - the VO chain is broken
-            #    return None
-            query_frame_id = "query_%i_%i" % (
-                stamp.sec,
-                stamp.nanosec,
-            )
 
             return tf_.create_pose_msg(
                 msg.header.stamp,
-                cast(FrameID, query_frame_id),
+                "query_previous",
                 r,
                 t,
             )
@@ -371,12 +340,12 @@ class PoseNode(Node):
             rosdep index.
         """
 
-    def _pose_diff(
-        self, current_pose: PoseStamped, previous_pose: PoseStamped
-    ) -> PoseStamped:
-        """Returns pose difference between two Poses assuming the current pose
-        frame_id has the same timestamp as the previous pose (assuming poses are
-        successive poses from VO
+    @property
+    @ROS.transform(child_frame_id="query_previous")
+    @narrow_types
+    def _query_frame_pose_diff(self) -> Optional[TransformStamped]:
+        """Returns difference between two Poses assuming poses are successive
+        poses from the same monocular camera
 
         The visual odometry transformation chain goes like this:
 
@@ -385,10 +354,7 @@ class PoseNode(Node):
                 previous_camera_pose_in_previous_world_xy -->|"inv(previous_projection_matrix)"| previous_camera_pose_in_previous_plane_uv
                 previous_camera_pose_in_previous_plane_uv -->|"translation(center to top-left)"| previous_camera_pose_in_current_world_xy
 
-        .. note::
-            We do not use ``tf2`` here for transformations because these transforms
-            involve projection matrices and therefore cannot be assumed to be rigid
-            transformations.
+        Assumes the pinhole camera model used by OpenCV in ``cv2.solvePnP``.
         """  # noqa: E501
 
         @narrow_types(self)
@@ -398,30 +364,44 @@ class PoseNode(Node):
             previous_pose: PoseStamped,
         ) -> Optional[PoseStamped]:
             # Transform from previous image plane to current world frame (translation
-            # of origin from center to top-left corner)
+            # of origin from center to top-left corner). Image plane uv coordinates
+            # are defined with origin at center of image, not at top left corner.
             t_previous_plane_uv_to_current_world_xy = np.array(
                 [-camera_info.width // 2, -camera_info.height // 2, 0]
             )
 
             k = self.camera_info.k.reshape((3, 3))
+
             # H_current, _, _ = tf_.pose_stamped_to_matrices(current_pose)
-            H_previous, _, _ = tf_.pose_stamped_to_matrices(previous_pose)
             # current_projection_matrix = k @ H_previous
+
+            H_previous, _, _ = tf_.pose_stamped_to_matrices(previous_pose)
             previous_projection_matrix = k @ H_previous[:3, :]
+            previous_projection_matrix = np.vstack(
+                (previous_projection_matrix, np.array([0, 0, 0, 1]))
+            )
 
             try:
                 inv_previous_projection_matrix = np.linalg.inv(
                     previous_projection_matrix
                 )
-            except np.linalg.LinAlgError:
+            except np.linalg.LinAlgError as e:
+                self.get_logger().error(f"Could not invert {e}")
                 return None
 
             previous_pose_in_previous_plane_uv = (
                 inv_previous_projection_matrix @ H_previous
             )
+
             previous_pose_in_current_world_xy = (
                 previous_pose_in_previous_plane_uv
-                + t_previous_plane_uv_to_current_world_xy
+                + np.append(t_previous_plane_uv_to_current_world_xy, 0)
+            )
+            previous_pose_in_current_world_xy = tf_.create_pose_msg(
+                previous_pose.header.stamp,
+                previous_pose.header.frame_id,
+                previous_pose_in_current_world_xy[:3, :3],
+                previous_pose_in_current_world_xy[:3, 3],
             )
 
             pose_difference = current_pose
@@ -461,11 +441,29 @@ class PoseNode(Node):
                 quaternion_diff, current_quaternion
             )
 
-            current_pose.pose.orientation = orientation_difference
+            current_pose.pose.orientation = Quaternion(
+                x=orientation_difference[0],
+                y=orientation_difference[1],
+                z=orientation_difference[2],
+                w=orientation_difference[3],
+            )
 
-            return pose_difference
+            pose_difference.header.frame_id = "query"  # overwrite query_previous
 
-        return _pose_diff(self.camera_info, current_pose, previous_pose)
+            transform = tf_.pose_to_transform(
+                pose_difference, child_frame_id="query_previous"
+            )
+            return transform
+
+        previous_pose = (
+            self._camera_optical_pose_in_query_frame
+            if (hasattr(self, "_camera_optical_pose_in_query_frame"))
+            else None
+        )
+
+        return _pose_diff(
+            self.camera_info, self.camera_optical_pose_in_query_frame, previous_pose
+        )
 
     @narrow_types
     def _preprocess(

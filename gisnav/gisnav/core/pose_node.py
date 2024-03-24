@@ -23,7 +23,6 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 import rclpy
-import tf2_ros
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
@@ -84,12 +83,9 @@ class PoseNode(Node):
         self.image
         self.time_reference
 
-        self._initialize_tf()
-
-    def _initialize_tf(self):
-        """Initializes the ``tf`` and ``tf_static`` topics and the listening buffer"""
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        # Init tf2
+        # self._tf_buffer = tf2_ros.Buffer()
+        # self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     @property
     @ROS.subscribe(
@@ -158,21 +154,31 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _camera_optical_pose_in_world_frame_via_vo(
-            msg: Image,
+            camera_info: CameraInfo,
             cached_pose_in_world_frame: PoseStamped,
             pose_in_query_frame: PoseStamped,
         ) -> Optional[PoseStamped]:
-            transform_to_linking_query_frame = tf_.pose_to_transform(
-                cached_pose_in_world_frame, "query_previous"
+            from_current_query_frame_to_previous = tf_.pose_to_transform(
+                pose_in_query_frame, "query_previous"
             )
 
+            # Adjust for origin at center of image
+            # Sign of translation is negative so we add instead of subtract the center
+            cx, cy = camera_info.width // 2, camera_info.height // 2
+
+            # TODO Assumes fx == fy?
+            fx = camera_info.k.reshape((3, 3))[0, 0]
+            from_current_query_frame_to_previous.transform.translation.x += cx
+            from_current_query_frame_to_previous.transform.translation.y += cy
+            from_current_query_frame_to_previous.transform.translation.z -= fx
+
             H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
-                tf_.transform_to_pose(transform_to_linking_query_frame)
+                tf_.transform_to_pose(from_current_query_frame_to_previous)
             )
-            H_world, r_world, t_world = tf_.pose_stamped_to_matrices(
+            H_cached, r_cached, t_cached = tf_.pose_stamped_to_matrices(
                 cached_pose_in_world_frame
             )
-            current_camera_pose_in_gisnav_world = H_world @ H_diff
+            current_camera_pose_in_gisnav_world = H_cached @ H_diff
             current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
                 pose_in_query_frame.header.stamp,
                 "world",
@@ -194,7 +200,7 @@ class PoseNode(Node):
                 self, "_camera_optical_pose_in_world_frame"
             ):
                 return _camera_optical_pose_in_world_frame_via_vo(
-                    self.image,
+                    self.camera_info,
                     self._camera_optical_pose_in_world_frame,
                     self.camera_optical_pose_in_query_frame,
                 )
@@ -237,7 +243,7 @@ class PoseNode(Node):
             tf_.visualize_camera_position(
                 ref.copy(),
                 -r.T @ t,
-                "Camera position in (previous) query frame",
+                "Camera position in previous query frame",
             )
 
             # Use timestamp from previous image_vo message

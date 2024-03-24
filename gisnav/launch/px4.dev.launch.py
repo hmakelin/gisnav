@@ -19,9 +19,7 @@ def generate_launch_description():
     ld = LaunchDescription(
         [
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    [ThisLaunchFileDir(), "/base.dev.launch.py"]
-                )
+                PythonLaunchDescriptionSource([ThisLaunchFileDir(), "/base.launch.py"])
             ),
         ]
     )

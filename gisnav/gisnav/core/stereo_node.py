@@ -270,7 +270,9 @@ class StereoNode(Node):
             # The child frame is the 'world' frame of the PnP problem as
             # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
             child_frame_id: FrameID = "world"
-            pnp_image_msg.header.stamp = image.header.stamp
+            pnp_image_msg.header.stamp = (
+                orthoimage.header.stamp
+            )  # Use orthoimage timestamp
             pnp_image_msg.header.frame_id = child_frame_id
 
             # Publish transformation

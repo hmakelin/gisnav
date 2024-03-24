@@ -37,7 +37,6 @@ from sensor_msgs.msg import CameraInfo, Image, TimeReference
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
-    DELAY_DEFAULT_MS,
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
@@ -262,8 +261,11 @@ class PoseNode(Node):
         previous = self._image if hasattr(self, "_image") else None
         return _camera_optical_pose_in_query_frame(self.image, previous)
 
+    # TODO: have another image topic for VO image which can have a max delay,
+    #  orthoimage cannot have a max delay since it can be very old if we fly in the
+    #  same area
     @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", STEREO_NODE_NAME)}',

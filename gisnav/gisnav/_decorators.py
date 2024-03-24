@@ -426,13 +426,18 @@ class ROS:
         return decorator_property
 
     @staticmethod
-    def transform(child_frame_id: Optional[str] = None, add_timestamp: bool = False):
+    def transform(
+        child_frame_id: Optional[str] = None,
+        invert: bool = True,
+        add_timestamp: bool = False,
+    ):
         """
         A decorator to wrap a method that returns a PoseStamped or a
         TransformStamped message, converts it to a TransformStamped
         if needed, and then publishes it on the tf topic.
 
         :param child_frame_id: Name of child frame
+        :param invert: Set to False to not invert the transform relative to the pose
         :param add_timestamp: Set to true to publish an additional transform with the
             timestamp suffix ``_%i_%i`` of the PoseStamped message where the first
             integer is seconds and second integer is nanoseconds
@@ -476,12 +481,29 @@ class ROS:
                     assert isinstance(obj, TransformStamped)
                     transform = obj
 
+                if invert:
+                    transform.transform.translation.x = (
+                        -transform.transform.translation.x
+                    )
+                    transform.transform.translation.y = (
+                        -transform.transform.translation.y
+                    )
+                    transform.transform.translation.z = (
+                        -transform.transform.translation.z
+                    )
+                    transform.transform.rotation.x = -transform.transform.rotation.x
+                    transform.transform.rotation.y = -transform.transform.rotation.y
+                    transform.transform.rotation.z = -transform.transform.rotation.z
+                    # Leave rotation.w unchanged
+                    transform.child_frame_id = transform.header.frame_id
+                    transform.header.frame_id = child_frame_id
+
                 # Publish the transform
                 getattr(self, cached_broadcaster_name).sendTransform(transform)
 
                 if add_timestamp:
                     stamp = transform.header.stamp
-                    transform.child_frame_id = child_frame_id + "_%i_%i" % (
+                    transform.child_frame_id = transform.child_frame_id + "_%i_%i" % (
                         stamp.sec,
                         stamp.nanosec,
                     )

@@ -119,7 +119,7 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    # @ROS.transform(child_frame_id="camera_optical")  #, add_timestamp=True)
+    @ROS.transform(child_frame_id="camera_optical")
     def camera_optical_pose_in_world_frame(self) -> Optional[PoseStamped]:
         """Camera pose in orthoimage world frame"""
 
@@ -216,7 +216,7 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    # @ROS.transform("camera_optical")
+    @ROS.transform("camera_optical")
     def camera_optical_pose_in_query_frame(self) -> Optional[PoseStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
 

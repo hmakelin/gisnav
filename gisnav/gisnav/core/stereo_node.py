@@ -33,7 +33,6 @@ onbaord camera.
         image -->|sensor_msgs/Image| PoseNode
         image_vo -->|sensor_msgs/Image| PoseNode
 """
-from copy import deepcopy
 from typing import Final, Optional, Tuple
 
 import cv2
@@ -41,15 +40,15 @@ import numpy as np
 import rclpy
 import tf2_ros
 import tf_transformations
+from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
-from tf2_ros.transform_broadcaster import TransformBroadcaster
 
-from .. import _transformations as messaging
+from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
     GIS_NODE_NAME,
@@ -97,7 +96,7 @@ class StereoNode(Node):
         self.pnp_image
 
         # Initialize the transform broadcaster and listener
-        self.broadcaster = TransformBroadcaster(self)
+        # self.broadcaster = TransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -145,6 +144,72 @@ class StereoNode(Node):
         """Determine the UTM zone for a given longitude."""
         return int((longitude + 180) / 6) + 1
 
+    @ROS.transform("reference", invert=False, add_timestamp=True)
+    def _world_to_reference_transform(
+        self,
+        ref_shape: Tuple[int, int],
+        crop_shape: Tuple[int, int],
+        rotation: float,
+        stamp: Time,
+    ) -> Optional[TransformStamped]:
+        @narrow_types(self)
+        def _transform(
+            ref_shape: tuple, crop_shape: Tuple[int, int], rotation: float, stamp: Time
+        ) -> Optional[TransformStamped]:
+            cx, cy = ref_shape[0] // 2, ref_shape[1] // 2
+            dx = cx - crop_shape[1] / 2
+            dy = cy - crop_shape[0] / 2
+
+            # Compute transformation (rotation around center + crop)
+            theta = np.radians(rotation)
+
+            # Translation to origin
+            T1 = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]])
+
+            # Rotation
+            R = np.array(
+                [
+                    [np.cos(theta), -np.sin(theta), 0],
+                    [np.sin(theta), np.cos(theta), 0],
+                    [0, 0, 1],
+                ]
+            )
+
+            # Translation back from origin
+            T2 = np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]])
+
+            # Center-crop translation
+            T3 = np.array([[1, 0, -dx], [0, 1, -dy], [0, 0, 1]])
+
+            # Combined affine matrix: reference coordinate to world coordinate
+            affine_2d = T3 @ T2 @ R @ T1
+
+            # Convert to 4x4 matrix
+            affine_3d = np.eye(4)
+            affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
+            affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
+
+            t = affine_3d[:3, 3]
+
+            try:
+                q = tf_transformations.quaternion_from_matrix(affine_3d)
+            except np.linalg.LinAlgError:
+                self.get_logger().warning(
+                    "_pnp_image: Could not compute quaternion from estimated rotation. "
+                    "Returning None."
+                )
+                return None
+
+            return tf_.create_transform_msg(
+                stamp,
+                "world",
+                "reference",
+                q,
+                t,
+            )
+
+        return _transform(ref_shape, crop_shape, rotation, stamp)
+
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_PNP_IMAGE,
@@ -187,8 +252,8 @@ class StereoNode(Node):
 
             # Rotate and crop orthoimage stack
             # TODO: implement this part better
-            camera_yaw_degrees = messaging.extract_yaw(transform.rotation)
-            camera_roll_degrees = messaging.extract_roll(transform.rotation)
+            camera_yaw_degrees = tf_.extract_yaw(transform.rotation)
+            camera_roll_degrees = tf_.extract_roll(transform.rotation)
             rotation = camera_yaw_degrees + camera_roll_degrees
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
             orthoimage_rotated_stack = self._rotate_and_crop_center(
@@ -208,92 +273,13 @@ class StereoNode(Node):
             pnp_image_msg.header.stamp = image.header.stamp
             pnp_image_msg.header.frame_id = child_frame_id
 
-            center = (orthoimage_stack.shape[0] // 2, orthoimage_stack.shape[1] // 2)
-
-            cx, cy = center[0], center[1]
-            dx = cx - crop_shape[1] / 2
-            dy = cy - crop_shape[0] / 2
-
-            # Compute transformation (rotation around center + crop)
-            theta = np.radians(rotation)
-
-            # Translation to origin
-            T1 = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]])
-
-            # Rotation
-            R = np.array(
-                [
-                    [np.cos(theta), -np.sin(theta), 0],
-                    [np.sin(theta), np.cos(theta), 0],
-                    [0, 0, 1],
-                ]
-            )
-
-            # Translation back from origin
-            T2 = np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]])
-
-            # Center-crop translation
-            T3 = np.array([[1, 0, -dx], [0, 1, -dy], [0, 0, 1]])
-
-            # Combined affine matrix: reference coordinate to world coordinate
-            affine_2d = T3 @ T2 @ R @ T1
-
-            # Convert to 4x4 matrix
-            affine_3d = np.eye(4)
-            affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
-            affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
-
-            translation = affine_3d[:3, 3]
-
-            try:
-                q = tf_transformations.quaternion_from_matrix(affine_3d)
-            except np.linalg.LinAlgError:
-                self.get_logger().warning(
-                    "_pnp_image: Could not compute quaternion from estimated rotation. "
-                    "Returning None."
-                )
-                return None
-
-            transform_camera = messaging.create_transform_msg(
+            # Publish transformation
+            self._world_to_reference_transform(
+                orthoimage_stack.shape,
+                query_img.shape,
+                rotation,
                 pnp_image_msg.header.stamp,
-                child_frame_id,
-                parent_frame_id,
-                q,
-                translation,
             )
-            # We also publish a reference_{timestamp} frame so that we will be able
-            # to trace the transform chain back to the exact timestamp (to match
-            # with the geotransform message). This is needed because interpolation will
-            # often produce very inaccurate results with the discontinous reference
-            # frame. The orthoimage timestamp which we use here is used as a proxy
-            # for the geotransform timestamp (i.e. they must be published with
-            # the same timestamps).
-            # TODO: remove this assumption or make the design less brittle in some
-            #  other way
-            transform_camera_stamped = deepcopy(transform_camera)
-            transform_camera_stamped.child_frame_id = (
-                f"{transform_camera.child_frame_id}"
-                f"_{orthoimage.header.stamp.sec}"
-                f"_{orthoimage.header.stamp.nanosec}"
-            )
-            self.broadcaster.sendTransform([transform_camera, transform_camera_stamped])
-
-            # if orthoimage is not None:
-            #    ref = deepcopy(orthoimage_stack[:, :, 0])
-            #    camera_pose_transform = messaging.get_transform(
-            #        self,
-            #        "reference",
-            #        "camera_pinhole",
-            #        image.header.stamp
-            #    )
-            #    if camera_pose_transform is not None:
-            #        h = orthoimage_stack.shape[0]
-            #        messaging.visualize_transform(
-            #            camera_pose_transform,
-            #            ref,
-            #            h,
-            #            "Camera position in ref frame"
-            #        )
 
             return pnp_image_msg
 
@@ -302,7 +288,7 @@ class StereoNode(Node):
         # Need gimbal (camera) orientation in an ENU frame ("map") to rotate
         # the orthoimage stack
         transform = (
-            messaging.get_transform(
+            tf_.get_transform(
                 self, "map", "camera", rclpy.time.Time()
             )  # query_image.header.stamp)
             if self.image is not None

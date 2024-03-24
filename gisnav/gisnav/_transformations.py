@@ -154,7 +154,9 @@ def create_pose_msg(
     return pose
 
 
-def pose_to_transform(pose_stamped_msg, child_frame_id: FrameID):
+def pose_to_transform(
+    pose_stamped_msg: TransformStamped, child_frame_id: FrameID
+) -> TransformStamped:
     # Create a new TransformStamped message
     transform_stamped = TransformStamped()
 

@@ -24,18 +24,16 @@ import cv2
 import numpy as np
 import rclpy
 import tf2_ros
-import tf_transformations
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
+from geometry_msgs.msg import PoseStamped
 from kornia.feature import LoFTR
 
 # from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
@@ -47,7 +45,6 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
     STEREO_NODE_NAME,
-    FrameID,
 )
 
 
@@ -88,36 +85,11 @@ class PoseNode(Node):
         self.time_reference
 
         self._initialize_tf()
-        self._publish_camera_optical_to_camera()
 
     def _initialize_tf(self):
         """Initializes the ``tf`` and ``tf_static`` topics and the listening buffer"""
-        self.static_broadcaster = StaticTransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
-    # TODO: use transform decorator to publish this
-    def _publish_camera_optical_to_camera(self):
-        """Camera_optical frame to camera frame transformation
-        as defined in `REP 103
-        <https://www.ros.org/reps/rep-0103.html#axis-orientation>`_
-
-        The camera_optical as defined by REP 103 is also the same one used by cv2
-        for the camera frame in the `PnP problem
-        <https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_.
-        """
-        assert (
-            self.static_broadcaster is not None
-        ), "Please initialize the static transform broadcaster first"
-
-        q = (0.5, -0.5, -0.5, 0.5)
-        header = tf_.create_header(
-            self, "camera_optical", self.time_reference
-        )  # time reference is not important here
-        transform_camera = tf_.create_transform_msg(
-            header.stamp, "camera_optical", "camera", q, np.zeros(3)
-        )
-        self.static_broadcaster.sendTransform([transform_camera])
 
     @property
     @ROS.subscribe(
@@ -138,13 +110,6 @@ class PoseNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        # if msg.header.frame_id.startswith("query"):
-        #    # Publish camera Pose and transform in world frame again
-        #    # TODO: publish in world frame, not just query frame
-        #    self.camera_optical_pose_in_query_frame
-        # else:
-        #    self.camera_optical_pose_in_world_frame
-        # Publish camera Pose and transform in world frame again
         self.camera_optical_pose_in_world_frame
 
         return None
@@ -185,7 +150,7 @@ class PoseNode(Node):
             #  instead of 2D position only)
             tf_.visualize_camera_position(
                 ref.copy(),
-                t,
+                -r.T @ t,
                 "Camera position in world frame",
             )
 
@@ -194,71 +159,45 @@ class PoseNode(Node):
         @narrow_types(self)
         def _camera_optical_pose_in_world_frame_via_vo(
             msg: Image,
+            cached_pose_in_world_frame: PoseStamped,
+            pose_in_query_frame: PoseStamped,
         ) -> Optional[PoseStamped]:
-            pose_diff = self._query_frame_pose_diff
+            transform_to_linking_query_frame = tf_.pose_to_transform(
+                cached_pose_in_world_frame, "query_previous"
+            )
 
-            # TODO: refactor out this if statement and rely on narrow_types instead
-            if pose_diff is not None:
-                # Getting the cached value will not trigger recomputation
-                # The cached pose can be based on a pure deep match, or a combination
-                # of an earlier deep match + visual odometry chain
-                cached_camera_optical_pose_in_world_frame = (
-                    self._camera_optical_pose_in_world_frame
-                )
-                if cached_camera_optical_pose_in_world_frame is None:
-                    return None
-                # linking_stamp = self._get_stamp(
-                #    cached_camera_optical_pose_in_world_frame
-                # )
-                vo_target_frame_id: FrameID = "query"  # cast(
-                #    FrameID,
-                #    "query_%i_%i"
-                #    % (
-                #        linking_stamp.sec,
-                #        linking_stamp.nanosec,
-                #    ),
-                # )
-                transform_to_linking_query_frame = tf_.get_transform(
-                    self,
-                    "query",
-                    "query_previous",
-                    rclpy.time.Time(),
-                )
-                if transform_to_linking_query_frame is None:
-                    self.get_logger().warning(
-                        f"Could not find transform from {vo_target_frame_id} to "
-                        f"{pose_diff.header.frame_id}"
-                    )
-                    return None
+            H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
+                tf_.transform_to_pose(transform_to_linking_query_frame)
+            )
+            H_world, r_world, t_world = tf_.pose_stamped_to_matrices(
+                cached_pose_in_world_frame
+            )
+            current_camera_pose_in_gisnav_world = H_world @ H_diff
+            current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
+                pose_in_query_frame.header.stamp,
+                "world",
+                current_camera_pose_in_gisnav_world[:3, :3],
+                current_camera_pose_in_gisnav_world[:3, 3],
+            )
 
-                H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
-                    tf_.transform_to_pose(transform_to_linking_query_frame)
-                )
-                H_world, r_world, t_world = tf_.pose_stamped_to_matrices(
-                    cached_camera_optical_pose_in_world_frame
-                )
-                current_camera_pose_in_gisnav_world = H_world @ H_diff
-                current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
-                    pose_diff.header.stamp,
-                    "world",
-                    current_camera_pose_in_gisnav_world[:3, :3],
-                    current_camera_pose_in_gisnav_world[:3, 3],
-                )
+            return current_camera_pose_in_gisnav_world
 
-                return current_camera_pose_in_gisnav_world
-            else:
-                return None
-
-                # TODO scale values by M[2,2] - this is currently not in meters
-                # self.odometry(odometry_msg)
+            # TODO scale values by M[2,2] - this is currently not in meters
+            # self.odometry(odometry_msg)
 
         if self.image is not None:
             if self.image.header.frame_id.startswith("world"):
                 return _camera_optical_pose_in_world_frame_via_gis_orthoimage(
                     self.image
                 )
-            elif self.image.header.frame_id.startswith("query"):
-                return _camera_optical_pose_in_world_frame_via_vo(self.image)
+            elif self.image.header.frame_id.startswith("query") and hasattr(
+                self, "_camera_optical_pose_in_world_frame"
+            ):
+                return _camera_optical_pose_in_world_frame_via_vo(
+                    self.image,
+                    self._camera_optical_pose_in_world_frame,
+                    self.camera_optical_pose_in_query_frame,
+                )
 
         return None
 
@@ -297,7 +236,7 @@ class PoseNode(Node):
             #  instead of 2D position only)
             tf_.visualize_camera_position(
                 ref.copy(),
-                t,
+                -r.T @ t,
                 "Camera position in (previous) query frame",
             )
 
@@ -339,131 +278,6 @@ class PoseNode(Node):
             package this later as a rosdebian if everything is already in the
             rosdep index.
         """
-
-    @property
-    @ROS.transform(child_frame_id="query_previous")
-    @narrow_types
-    def _query_frame_pose_diff(self) -> Optional[TransformStamped]:
-        """Returns difference between two Poses assuming poses are successive
-        poses from the same monocular camera
-
-        The visual odometry transformation chain goes like this:
-
-        .. mermaid::
-            graph TB
-                previous_camera_pose_in_previous_world_xy -->|"inv(previous_projection_matrix)"| previous_camera_pose_in_previous_plane_uv
-                previous_camera_pose_in_previous_plane_uv -->|"translation(center to top-left)"| previous_camera_pose_in_current_world_xy
-
-        Assumes the pinhole camera model used by OpenCV in ``cv2.solvePnP``.
-        """  # noqa: E501
-
-        @narrow_types(self)
-        def _pose_diff(
-            camera_info: CameraInfo,
-            current_pose: PoseStamped,
-            previous_pose: PoseStamped,
-        ) -> Optional[PoseStamped]:
-            # Transform from previous image plane to current world frame (translation
-            # of origin from center to top-left corner). Image plane uv coordinates
-            # are defined with origin at center of image, not at top left corner.
-            t_previous_plane_uv_to_current_world_xy = np.array(
-                [-camera_info.width // 2, -camera_info.height // 2, 0]
-            )
-
-            k = self.camera_info.k.reshape((3, 3))
-
-            # H_current, _, _ = tf_.pose_stamped_to_matrices(current_pose)
-            # current_projection_matrix = k @ H_previous
-
-            H_previous, _, _ = tf_.pose_stamped_to_matrices(previous_pose)
-            previous_projection_matrix = k @ H_previous[:3, :]
-            previous_projection_matrix = np.vstack(
-                (previous_projection_matrix, np.array([0, 0, 0, 1]))
-            )
-
-            try:
-                inv_previous_projection_matrix = np.linalg.inv(
-                    previous_projection_matrix
-                )
-            except np.linalg.LinAlgError as e:
-                self.get_logger().error(f"Could not invert {e}")
-                return None
-
-            previous_pose_in_previous_plane_uv = (
-                inv_previous_projection_matrix @ H_previous
-            )
-
-            previous_pose_in_current_world_xy = (
-                previous_pose_in_previous_plane_uv
-                + np.append(t_previous_plane_uv_to_current_world_xy, 0)
-            )
-            previous_pose_in_current_world_xy = tf_.create_pose_msg(
-                previous_pose.header.stamp,
-                previous_pose.header.frame_id,
-                previous_pose_in_current_world_xy[:3, :3],
-                previous_pose_in_current_world_xy[:3, 3],
-            )
-
-            pose_difference = current_pose
-            pose_difference.pose.position.x = (
-                current_pose.pose.position.x
-                - previous_pose_in_current_world_xy.pose.position.x
-            )
-            pose_difference.pose.position.y = (
-                current_pose.pose.position.y
-                - previous_pose_in_current_world_xy.pose.position.y
-            )
-            pose_difference.pose.position.z = (
-                current_pose.pose.position.z
-                - previous_pose_in_current_world_xy.pose.position.z
-            )
-
-            # Calculate orientation difference
-            current_quaternion = [
-                current_pose.pose.orientation.x,
-                current_pose.pose.orientation.y,
-                current_pose.pose.orientation.z,
-                current_pose.pose.orientation.w,
-            ]
-
-            previous_quaternion = [
-                previous_pose_in_current_world_xy.pose.orientation.x,
-                previous_pose_in_current_world_xy.pose.orientation.y,
-                previous_pose_in_current_world_xy.pose.orientation.z,
-                previous_pose_in_current_world_xy.pose.orientation.w,
-            ]
-
-            # Quaternion conjugate and multiplication to find relative rotation
-            quaternion_diff = tf_transformations.quaternion_conjugate(
-                previous_quaternion
-            )
-            orientation_difference = tf_transformations.quaternion_multiply(
-                quaternion_diff, current_quaternion
-            )
-
-            current_pose.pose.orientation = Quaternion(
-                x=orientation_difference[0],
-                y=orientation_difference[1],
-                z=orientation_difference[2],
-                w=orientation_difference[3],
-            )
-
-            pose_difference.header.frame_id = "query"  # overwrite query_previous
-
-            transform = tf_.pose_to_transform(
-                pose_difference, child_frame_id="query_previous"
-            )
-            return transform
-
-        previous_pose = (
-            self._camera_optical_pose_in_query_frame
-            if (hasattr(self, "_camera_optical_pose_in_query_frame"))
-            else None
-        )
-
-        return _pose_diff(
-            self.camera_info, self.camera_optical_pose_in_query_frame, previous_pose
-        )
 
     @narrow_types
     def _preprocess(

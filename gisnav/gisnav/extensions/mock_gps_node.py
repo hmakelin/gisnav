@@ -272,7 +272,7 @@ class MockGPSNode(Node):
             base_link_to_reference = messaging.get_transform(
                 self,
                 ref_frame,
-                "camera",  # base_link  # todo use base_link, not camera
+                "base_link",
                 rclpy.time.Time(),
             )
         else:

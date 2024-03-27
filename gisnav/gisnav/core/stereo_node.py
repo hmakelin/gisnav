@@ -33,7 +33,7 @@ onbaord camera.
         image -->|sensor_msgs/Image| PoseNode
         image_vo -->|sensor_msgs/Image| PoseNode
 """
-from typing import Final, Optional, Tuple
+from typing import Final, Optional, Tuple, cast
 
 import cv2
 import numpy as np
@@ -144,17 +144,24 @@ class StereoNode(Node):
         """Determine the UTM zone for a given longitude."""
         return int((longitude + 180) / 6) + 1
 
-    @ROS.transform("reference", invert=False, add_timestamp=True)
+    @ROS.transform(
+        "reference", invert=False
+    )  # , add_timestamp=True) timestamp added manually
     def _world_to_reference_transform(
         self,
         ref_shape: Tuple[int, int],
         crop_shape: Tuple[int, int],
         rotation: float,
-        stamp: Time,
+        stamp_msg: Time,
+        stamp_reference: Time,
     ) -> Optional[TransformStamped]:
         @narrow_types(self)
         def _transform(
-            ref_shape: tuple, crop_shape: Tuple[int, int], rotation: float, stamp: Time
+            ref_shape: tuple,
+            crop_shape: Tuple[int, int],
+            rotation: float,
+            stamp_msg: Time,
+            stamp_reference: Time,
         ) -> Optional[TransformStamped]:
             cx, cy = ref_shape[0] // 2, ref_shape[1] // 2
             dx = cx - crop_shape[1] / 2
@@ -201,14 +208,17 @@ class StereoNode(Node):
                 return None
 
             return tf_.create_transform_msg(
-                stamp,
+                stamp_msg,
                 "world",
-                "reference",
+                cast(
+                    FrameID,
+                    "reference_%i_%i" % (stamp_reference.sec, stamp_reference.nanosec),
+                ),
                 q,
                 t,
             )
 
-        return _transform(ref_shape, crop_shape, rotation, stamp)
+        return _transform(ref_shape, crop_shape, rotation, stamp_msg, stamp_reference)
 
     @property
     @ROS.publish(
@@ -270,9 +280,9 @@ class StereoNode(Node):
             # The child frame is the 'world' frame of the PnP problem as
             # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
             child_frame_id: FrameID = "world"
-            pnp_image_msg.header.stamp = (
-                orthoimage.header.stamp
-            )  # Use orthoimage timestamp
+            # Use orthoimage timestamp in frame but not in message
+            # (otherwise transform message gets too old
+            pnp_image_msg.header.stamp = image.header.stamp
             pnp_image_msg.header.frame_id = child_frame_id
 
             # Publish transformation
@@ -281,6 +291,7 @@ class StereoNode(Node):
                 query_img.shape,
                 rotation,
                 pnp_image_msg.header.stamp,
+                orthoimage.header.stamp,
             )
 
             return pnp_image_msg

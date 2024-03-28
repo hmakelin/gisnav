@@ -47,6 +47,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import Header
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -145,23 +146,23 @@ class StereoNode(Node):
         return int((longitude + 180) / 6) + 1
 
     @ROS.transform(
-        "reference", invert=False
+        invert=False
     )  # , add_timestamp=True) timestamp added manually
     def _world_to_reference_transform(
         self,
         ref_shape: Tuple[int, int],
         crop_shape: Tuple[int, int],
         rotation: float,
-        stamp_msg: Time,
-        stamp_reference: Time,
+        header_msg: Header,
+        header_reference: Header,
     ) -> Optional[TransformStamped]:
         @narrow_types(self)
         def _transform(
             ref_shape: tuple,
             crop_shape: Tuple[int, int],
             rotation: float,
-            stamp_msg: Time,
-            stamp_reference: Time,
+            header_msg: Header,
+            header_reference: Header,
         ) -> Optional[TransformStamped]:
             cx, cy = ref_shape[0] // 2, ref_shape[1] // 2
             dx = cx - crop_shape[1] / 2
@@ -207,18 +208,23 @@ class StereoNode(Node):
                 )
                 return None
 
-            return tf_.create_transform_msg(
-                stamp_msg,
-                "world",
-                cast(
-                    FrameID,
-                    "reference_%i_%i" % (stamp_reference.sec, stamp_reference.nanosec),
-                ),
+            transform_msg = tf_.create_transform_msg(
+                header_msg.stamp,
+                header_msg.frame_id,
+                header_reference.frame_id,
                 q,
                 t,
             )
 
-        return _transform(ref_shape, crop_shape, rotation, stamp_msg, stamp_reference)
+            # TODO clean this up
+            H, r, t = tf_.pose_stamped_to_matrices(tf_.transform_to_pose(transform_msg))
+            M = tf_.proj_to_affine(header_reference.frame_id)
+            compound_transform = M @ H
+            proj_str = tf_.affine_to_proj(compound_transform)
+            transform_msg.header.frame_id = proj_str
+            return transform_msg
+
+        return _transform(ref_shape, crop_shape, rotation, header_msg, header_reference)
 
     @property
     @ROS.publish(
@@ -244,9 +250,6 @@ class StereoNode(Node):
         ) -> Optional[Image]:
             """Rotate and crop and orthoimage stack to align with query image"""
             transform = transform.transform
-
-            parent_frame_id: FrameID = orthoimage.header.frame_id
-            assert parent_frame_id == "reference"
 
             query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
 
@@ -277,28 +280,26 @@ class StereoNode(Node):
                 pnp_image_stack, encoding="passthrough"
             )
 
-            # The child frame is the 'world' frame of the PnP problem as
-            # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
-            child_frame_id: FrameID = "world"
             # Use orthoimage timestamp in frame but not in message
             # (otherwise transform message gets too old
             pnp_image_msg.header.stamp = image.header.stamp
-            pnp_image_msg.header.frame_id = child_frame_id
 
             # Publish transformation
-            self._world_to_reference_transform(
+            transform = self._world_to_reference_transform(
                 orthoimage_stack.shape,
                 query_img.shape,
                 rotation,
-                pnp_image_msg.header.stamp,
-                orthoimage.header.stamp,
+                pnp_image_msg.header,
+                orthoimage.header,
             )
+
+            pnp_image_msg.header.frame_id = transform.header.frame_id
 
             return pnp_image_msg
 
         query_image, orthoimage = self.image, self.orthoimage
 
-        # Need gimbal (camera) orientation in an ENU frame ("map") to rotate
+        # Need camera orientation in an ENU frame ("map") to rotate
         # the orthoimage stack
         transform = (
             tf_.get_transform(

@@ -7,7 +7,7 @@ from typing import Final, Optional, Tuple, cast
 import numpy as np
 import rclpy
 import tf2_ros
-from geometry_msgs.msg import TransformStamped
+from geometry_msgs.msg import TransformStamped, PoseStamped
 from gps_time import GPSTime
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -17,12 +17,12 @@ from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 from sensor_msgs.msg import PointCloud2
 
-from .. import _transformations as messaging
+from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
-    GIS_NODE_NAME,
+    POSE_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_GEOTRANSFORM,
+    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
     ROS_TOPIC_SENSOR_GPS,
     FrameID,
 )
@@ -89,6 +89,10 @@ class MockGPSNode(Node):
     :attr:`.sensor_gps`
     """
 
+    # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
+    _EPSG_WGS84 = 4326
+    _EPSG_MSL = 5773  # Example: EGM96
+
     def __init__(self, *args, **kwargs):
         """Class initializer
 
@@ -111,12 +115,16 @@ class MockGPSNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        publish_rate = self.publish_rate
-        assert publish_rate is not None
-        self._publish_timer: Optional[Timer] = self._create_publish_timer(publish_rate)
+        # Create transformers
+        self._transformer_to_wgs84 = Transformer.from_crs(
+            f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_WGS84}", always_xy=True
+        )
+        self._transformer_to_msl = Transformer.from_crs(
+            f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_MSL}", always_xy=True
+        )
 
-        # Subscribe to geotransform
-        self.geotransform
+        # Subscribe
+        self.pose
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -166,21 +174,30 @@ class MockGPSNode(Node):
         timer = self.create_timer(1 / publish_rate, self._publish)
         return timer
 
+    def _pose_cb(self, msg: PoseStamped) -> None:
+        if msg.header.frame_id.startswith("+proj"):
+            M = tf_.proj_to_affine(msg.header.frame_id)
+            H, r, t = tf_.pose_stamped_to_matrices(msg)
+
+            # M has translations in the 4th column so we add 1 to the translation vector
+            assert t.shape == (3, )
+            pos = M @ np.append(t, 1)
+
+            self.get_logger().info(f"pose in earth fixed frame: {pos}")
+
+            #self._publish(msg)
+
     @property
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_GEOTRANSFORM.replace("~", GIS_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_pose_cb
     )
-    def geotransform(self) -> Optional[PointCloud2]:
-        """Subscribed :term:`reference` frame to :term:`WGS 84` frame
-        affine transformation matrix (3, 3), or None if not available
+    def pose(self) -> Optional[PoseStamped]:
+        """Camera estimated pose"""
 
-        .. seealso::
-            :attr:`.GISNode.geotransform`
-        """
-
-    def _publish(self) -> None:
+    def _publish(self, msg: PoseStamped) -> None:
         @narrow_types(self)
         def _publish_inner(
             base_link_to_reference: TransformStamped, geotransform: PointCloud2
@@ -204,7 +221,7 @@ class MockGPSNode(Node):
 
             # TODO: check yaw sign (NED or ENU?)
             # TODO: get vehicle yaw (heading) not camera yaw
-            vehicle_yaw_degrees = messaging.extract_yaw(rotation)
+            vehicle_yaw_degrees = tf_.extract_yaw(rotation)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink definition 0 := not available
             vehicle_yaw_degrees = (
@@ -225,7 +242,7 @@ class MockGPSNode(Node):
             else:
                 return None
 
-            timestamp = messaging.usec_from_header(base_link_to_reference.header)
+            timestamp = tf_.usec_from_header(base_link_to_reference.header)
             satellites_visible = np.iinfo(np.uint8).max
             eph = 10.0
             epv = 1.0
@@ -269,7 +286,7 @@ class MockGPSNode(Node):
                     geotransform.header.stamp.sec, geotransform.header.stamp.nanosec
                 ),
             )
-            base_link_to_reference = messaging.get_transform(
+            base_link_to_reference = tf_.get_transform(
                 self,
                 ref_frame,
                 "base_link",
@@ -426,20 +443,7 @@ class MockGPSNode(Node):
         :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
             :term:`AMSL`.
         """
-        # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
-        epsg_wgs84 = 4326
-        epsg_msl = 5773  # Example: EGM96
-
-        # Create transformers
-        transformer_to_wgs84 = Transformer.from_crs(
-            f"EPSG:{epsg_code}", f"EPSG:{epsg_wgs84}", always_xy=True
-        )
-        transformer_to_msl = Transformer.from_crs(
-            f"EPSG:{epsg_code}", f"EPSG:{epsg_msl}", always_xy=True
-        )
-
-        # Perform the transformations
-        _, _, wgs84_elevation = transformer_to_wgs84.transform(lon, lat, elevation)
-        _, _, msl_elevation = transformer_to_msl.transform(lon, lat, elevation)
+        _, _, wgs84_elevation = self._transformer_to_wgs84.transform(lon, lat, elevation)
+        _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
 
         return wgs84_elevation, msl_elevation

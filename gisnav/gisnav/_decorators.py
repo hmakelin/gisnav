@@ -1,6 +1,7 @@
 """Common assertions for convenience"""
 import inspect
 from functools import wraps
+from copy import deepcopy
 from typing import (
     Any,
     Callable,
@@ -429,7 +430,6 @@ class ROS:
     def transform(
         child_frame_id: Optional[str] = None,
         invert: bool = True,
-        add_timestamp: bool = False,
     ):
         """
         A decorator to wrap a method that returns a PoseStamped or a
@@ -438,9 +438,6 @@ class ROS:
 
         :param child_frame_id: Name of child frame
         :param invert: Set to False to not invert the transform relative to the pose
-        :param add_timestamp: Set to true to publish an additional transform with the
-            timestamp suffix ``_%i_%i`` of the PoseStamped message where the first
-            integer is seconds and second integer is nanoseconds
         :return: A method that publishes its return value to the tf topic whenever
             called. The return value must be TransformStamped, PoseStamped, or None
         """
@@ -475,7 +472,7 @@ class ROS:
                     return None
                 elif isinstance(obj, PoseStamped):
                     transform = tf_.pose_to_transform(
-                        obj, child_frame_id=child_frame_id
+                        deepcopy(obj), child_frame_id=child_frame_id
                     )
                 else:
                     assert isinstance(obj, TransformStamped)
@@ -500,14 +497,6 @@ class ROS:
 
                 # Publish the transform
                 getattr(self, cached_broadcaster_name).sendTransform(transform)
-
-                if add_timestamp:
-                    stamp = transform.header.stamp
-                    transform.child_frame_id = transform.child_frame_id + "_%i_%i" % (
-                        stamp.sec,
-                        stamp.nanosec,
-                    )
-                    getattr(self, cached_broadcaster_name).sendTransform(transform)
 
                 return obj  # return original object (could be Pose), not the Transform
 

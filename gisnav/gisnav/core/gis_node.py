@@ -46,7 +46,7 @@ from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField, TimeRefe
 from shapely.geometry import box
 from std_msgs.msg import Header
 
-from .. import _transformations as messaging
+from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
@@ -54,7 +54,6 @@ from ..constants import (
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-    ROS_TOPIC_RELATIVE_GEOTRANSFORM,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
 )
 
@@ -477,7 +476,7 @@ class GISNode(Node):
         assert len(styles) == len(layers)
         assert len(dem_styles) == len(dem_layers)
 
-        bbox = messaging.bounding_box_to_bbox(bounding_box)
+        bbox = tf_.bounding_box_to_bbox(bounding_box)
 
         self.get_logger().info("Requesting new orthoimage")
         img: np.ndarray = self._get_map(
@@ -535,8 +534,8 @@ class GISNode(Node):
             old_bounding_box: BoundingBox,
             min_map_overlap_update_threshold: float,
         ) -> bool:
-            bbox = messaging.bounding_box_to_bbox(new_bounding_box)
-            bbox_previous = messaging.bounding_box_to_bbox(old_bounding_box)
+            bbox = tf_.bounding_box_to_bbox(new_bounding_box)
+            bbox_previous = tf_.bounding_box_to_bbox(old_bounding_box)
             bbox1, bbox2 = box(*bbox), box(*bbox_previous)
             ratio1 = bbox1.intersection(bbox2).area / bbox1.area
             ratio2 = bbox2.intersection(bbox1).area / bbox2.area
@@ -613,24 +612,21 @@ class GISNode(Node):
                 self.get_logger().warning(
                     "Publishing orthoimage without FCU time reference."
                 )
-            image_msg.header = messaging.create_header(
+            image_msg.header = tf_.create_header(
                 self, "reference", time_reference=self.time_reference
             )
             height, width = img.shape[0:2]
-            self.geotransform(
+            gt_message = self.geotransform(
                 height,
                 width,
                 bounding_box,
                 image_msg.header,  # use same header as for orthoimage message
             )
+            image_msg.header.frame_id = gt_message.header.frame_id  # proj string
             return image_msg
         else:
             return None
 
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_GEOTRANSFORM,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
     def geotransform(
         self, height: int, width: int, bbox: BoundingBox, header: Header
     ) -> Optional[PointCloud2]:
@@ -755,6 +751,7 @@ class GISNode(Node):
         ]
         matrix_msg.data = byte_array
 
+        matrix_msg.header.frame_id = tf_.affine_to_proj(M)
         return matrix_msg
 
     def _get_map(

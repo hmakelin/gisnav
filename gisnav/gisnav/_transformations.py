@@ -397,3 +397,57 @@ def matrices_to_homogenous(r, t) -> np.ndarray:
     H[:3, :3] = r
     H[:3, 3] = t.squeeze()
     return H
+
+
+
+def affine_to_proj(M: np.ndarray) -> str:
+    """Returns a PROJ string describing a CRS that is defined by converting the image
+    pixel coordinates (x, y) to WGS 84 coordinates (lon, lat) using the provided
+    affine transformation.
+
+    :returns: PROJ string representing the affine transformation
+    """
+    assert M.shape == (3, 4) or M.shape == (4, 4)
+
+    # Build the PROJ string
+    # Assume only translation and rotation in x and y plane, scaling in any plane -
+    # this makes the proj string shorter
+    proj_str = (
+        f"+proj=affine "
+        f"+xoff={M[0, 3]} +yoff={M[1, 3]} +zoff={M[2, 3]} "
+        f"+s11={M[0, 0]} +s12={M[0, 1]} +s13={M[0, 2]} "
+        f"+s21={M[1, 0]} +s22={M[1, 1]} +s23={M[1, 2]} "
+        f"+s31={M[2, 0]} +s32={M[2, 1]} +s33={M[2, 2]} "
+        f"+no_defs +type=crs +datum=WGS84"
+    )
+
+    return proj_str
+
+
+def proj_to_affine(proj_str: str) -> np.ndarray:
+    """Returns the affine transformation matrix M that corresponds to the provided
+    PROJ string. The PROJ string should be in the format used by the `affine_to_proj`
+    function.
+
+    :param proj_str: PROJ string representing an affine transformation
+    :returns: 3x3 affine transformation matrix M
+    """
+    # Extract the coefficients from the PROJ string
+    tokens = proj_str.replace("=", " ").split()
+    xoff = float(tokens[tokens.index("+xoff") + 1])
+    yoff = float(tokens[tokens.index("+yoff") + 1])
+    zoff = float(tokens[tokens.index("+zoff") + 1])
+    s11 = float(tokens[tokens.index("+s11") + 1])
+    s12 = float(tokens[tokens.index("+s12") + 1])
+    s13 = float(tokens[tokens.index("+s13") + 1])
+    s21 = float(tokens[tokens.index("+s21") + 1])
+    s22 = float(tokens[tokens.index("+s22") + 1])
+    s23 = float(tokens[tokens.index("+s23") + 1])
+    s31 = float(tokens[tokens.index("+s31") + 1])
+    s32 = float(tokens[tokens.index("+s32") + 1])
+    s33 = float(tokens[tokens.index("+s33") + 1])
+
+    # Build the affine transformation matrix M
+    M = np.array([[s11, s12, s13, xoff], [s21, s22, s23, yoff],  [s31, s32, s33, zoff]])
+
+    return M

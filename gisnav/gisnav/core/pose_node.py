@@ -19,7 +19,7 @@ frame. We also cache query frame timestamp (included in message Header) so that 
 connect it to the correct reference frame.
 """
 from typing import Optional, Tuple
-
+from copy import deepcopy
 import cv2
 import numpy as np
 import rclpy
@@ -107,8 +107,6 @@ class PoseNode(Node):
         """Callback for :attr:`.image` message"""
         self.camera_optical_pose_in_world_frame
 
-        return None
-
     def _should_recompute_and_cache_camera_optical_pose_in_world_frame(self):
         return True
 
@@ -149,7 +147,7 @@ class PoseNode(Node):
                 "Camera position in world frame",
             )
 
-            return tf_.create_pose_msg(msg.header.stamp, "world", r, t)
+            return tf_.create_pose_msg(msg.header.stamp, msg.header.frame_id, r, t)
 
         @narrow_types(self)
         def _camera_optical_pose_in_world_frame_via_vo(
@@ -177,10 +175,11 @@ class PoseNode(Node):
             H_cached, r_cached, t_cached = tf_.pose_stamped_to_matrices(
                 cached_pose_in_world_frame
             )
+
             current_camera_pose_in_gisnav_world = H_cached @ H_diff
             current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
                 pose_in_query_frame.header.stamp,
-                "world",
+                cached_pose_in_world_frame.header.frame_id,
                 current_camera_pose_in_gisnav_world[:3, :3],
                 current_camera_pose_in_gisnav_world[:3, 3],
             )
@@ -191,16 +190,17 @@ class PoseNode(Node):
             # self.odometry(odometry_msg)
 
         if self.image is not None:
-            if self.image.header.frame_id.startswith("world"):
+            if self.image.header.frame_id.startswith("+proj"):
                 return _camera_optical_pose_in_world_frame_via_gis_orthoimage(
                     self.image
                 )
             elif self.image.header.frame_id.startswith("query") and hasattr(
                 self, "_camera_optical_pose_in_world_frame"
             ):
+                cached = deepcopy(self._camera_optical_pose_in_world_frame)
                 return _camera_optical_pose_in_world_frame_via_vo(
                     self.camera_info,
-                    self._camera_optical_pose_in_world_frame,
+                    cached,
                     self.camera_optical_pose_in_query_frame,
                 )
 

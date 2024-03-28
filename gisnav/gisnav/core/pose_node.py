@@ -18,8 +18,9 @@ poses from the visual odometry transformation chain to reference frame at every 
 frame. We also cache query frame timestamp (included in message Header) so that we can
 connect it to the correct reference frame.
 """
-from typing import Optional, Tuple
 from copy import deepcopy
+from typing import Optional, Tuple
+
 import cv2
 import numpy as np
 import rclpy
@@ -221,7 +222,7 @@ class PoseNode(Node):
 
         @narrow_types(self)
         def _camera_optical_pose_in_query_frame(
-            msg: Image, previous_msg: Image
+            msg: Image,
         ) -> Optional[PoseStamped]:
             qry, ref, dem = self._preprocess(msg, shallow_inference=True)
             mkp_qry, mkp_ref = self._process(qry, ref)
@@ -245,10 +246,6 @@ class PoseNode(Node):
                 "Camera position in previous query frame",
             )
 
-            # Use timestamp from previous image_vo message
-            # stamp = self._get_stamp(previous_msg)
-            # TODO: try to check that the VO chain is not broken
-
             return tf_.create_pose_msg(
                 msg.header.stamp,
                 "query_previous",
@@ -256,10 +253,7 @@ class PoseNode(Node):
                 t,
             )
 
-        # TODO: this uses subscribe decorator internal API for cached value
-        #  - very brittle
-        previous = self._image if hasattr(self, "_image") else None
-        return _camera_optical_pose_in_query_frame(self.image, previous)
+        return _camera_optical_pose_in_query_frame(self.image)
 
     # TODO: have another image topic for VO image which can have a max delay,
     #  orthoimage cannot have a max delay since it can be very old if we fly in the

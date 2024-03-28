@@ -622,7 +622,8 @@ class GISNode(Node):
                 bounding_box,
                 image_msg.header,  # use same header as for orthoimage message
             )
-            image_msg.header.frame_id = gt_message.header.frame_id  # proj string
+            if gt_message is not None:
+                image_msg.header.frame_id = gt_message.header.frame_id  # proj string
             return image_msg
         else:
             return None

@@ -48,3 +48,8 @@ repos:
         args:
           - "--max-line-length=88"
           - "--extend-ignore=E203"
+
+  - repo: https://github.com/jendrikseipp/vulture
+    rev: "v2.3"
+    hooks:
+      - id: vulture

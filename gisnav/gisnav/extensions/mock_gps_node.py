@@ -7,7 +7,7 @@ from typing import Final, Optional, Tuple, cast
 import numpy as np
 import rclpy
 import tf2_ros
-from geometry_msgs.msg import TransformStamped, PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from gps_time import GPSTime
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -117,7 +117,9 @@ class MockGPSNode(Node):
 
         # Create transformers
         self._transformer_to_wgs84 = Transformer.from_crs(
-            f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_WGS84}", always_xy=True
+            f"EPSG:{self.dem_vertical_datum}",
+            f"EPSG:{self._EPSG_WGS84}",
+            always_xy=True,
         )
         self._transformer_to_msl = Transformer.from_crs(
             f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_MSL}", always_xy=True
@@ -180,19 +182,19 @@ class MockGPSNode(Node):
             H, r, t = tf_.pose_stamped_to_matrices(msg)
 
             # M has translations in the 4th column so we add 1 to the translation vector
-            assert t.shape == (3, )
+            assert t.shape == (3,)
             pos = M @ np.append(t, 1)
 
             self.get_logger().info(f"pose in earth fixed frame: {pos}")
 
-            #self._publish(msg)
+            # self._publish(msg)
 
     @property
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_pose_cb
+        callback=_pose_cb,
     )
     def pose(self) -> Optional[PoseStamped]:
         """Camera estimated pose"""
@@ -235,7 +237,6 @@ class MockGPSNode(Node):
                 translation_wgs84[1],
                 translation_wgs84[0],
                 translation_wgs84[2],
-                self.dem_vertical_datum,
             )
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
@@ -430,7 +431,7 @@ class MockGPSNode(Node):
 
     @narrow_types
     def _convert_to_wgs84(
-        self, lat: float, lon: float, elevation: float, epsg_code: int
+        self, lat: float, lon: float, elevation: float
     ) -> Optional[Tuple[float, float]]:
         """
         Convert :term:`elevation` or :term:`altitude` from a specified vertical
@@ -439,11 +440,12 @@ class MockGPSNode(Node):
         :param lat: Latitude in decimal degrees.
         :param lon: Longitude in decimal degrees.
         :param elevation: Elevation in the specified datum.
-        :param epsg_code: EPSG code of the vertical datum.
         :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
             :term:`AMSL`.
         """
-        _, _, wgs84_elevation = self._transformer_to_wgs84.transform(lon, lat, elevation)
+        _, _, wgs84_elevation = self._transformer_to_wgs84.transform(
+            lon, lat, elevation
+        )
         _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
 
         return wgs84_elevation, msl_elevation

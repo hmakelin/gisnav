@@ -399,7 +399,6 @@ def matrices_to_homogenous(r, t) -> np.ndarray:
     return H
 
 
-
 def affine_to_proj(M: np.ndarray) -> str:
     """Returns a PROJ string describing a CRS that is defined by converting the image
     pixel coordinates (x, y) to WGS 84 coordinates (lon, lat) using the provided
@@ -448,6 +447,6 @@ def proj_to_affine(proj_str: str) -> np.ndarray:
     s33 = float(tokens[tokens.index("+s33") + 1])
 
     # Build the affine transformation matrix M
-    M = np.array([[s11, s12, s13, xoff], [s21, s22, s23, yoff],  [s31, s32, s33, zoff]])
+    M = np.array([[s11, s12, s13, xoff], [s21, s22, s23, yoff], [s31, s32, s33, zoff]])
 
     return M

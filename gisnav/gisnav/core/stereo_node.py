@@ -2,45 +2,15 @@
 :term:`query` and :term:`reference` stereo image pair by either rotating the reference
 image based on :term:`vehicle` heading and then cropping it based on the
 :term:`camera` information, or by coupling to successive image frames from the monocular
-onbaord camera.
-
-.. mermaid::
-    :caption: :class:`.StereoNode` computational graph
-
-    graph LR
-        subgraph StereoNode
-            image[gisnav/stereo_node/image]
-            image_vo[gisnav/stereo_node/image_vo]
-        end
-
-        subgraph gscam
-            camera_info[camera/camera_info]
-            pnp_image[camera/image_raw]
-        end
-
-        subgraph BBoxNode
-            camera_pose[gisnav/bbox_node/camera/geopose]
-        end
-
-        subgraph GISNode
-            orthoimage[gisnav/gis_node/image]
-        end
-
-        pnp_image -->|sensor_msgs/Image| StereoNode
-        camera_info -->|sensor_msgs/CameraInfo| StereoNode
-        orthoimage -->|sensor_msgs/Image| StereoNode
-        camera_pose -->|geometry_msgs/PoseStamped| StereoNode
-        image -->|sensor_msgs/Image| PoseNode
-        image_vo -->|sensor_msgs/Image| PoseNode
+onboard camera.
 """
-from typing import Final, Optional, Tuple, cast
+from typing import Final, Optional, Tuple
 
 import cv2
 import numpy as np
 import rclpy
 import tf2_ros
 import tf_transformations
-from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
@@ -58,7 +28,6 @@ from ..constants import (
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    FrameID,
 )
 
 
@@ -97,7 +66,6 @@ class StereoNode(Node):
         self.pnp_image
 
         # Initialize the transform broadcaster and listener
-        # self.broadcaster = TransformBroadcaster(self)
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -140,14 +108,7 @@ class StereoNode(Node):
     def image(self) -> Optional[Image]:
         """Raw image data from vehicle camera for pose estimation"""
 
-    @staticmethod
-    def _determine_utm_zone(longitude):
-        """Determine the UTM zone for a given longitude."""
-        return int((longitude + 180) / 6) + 1
-
-    @ROS.transform(
-        invert=False
-    )  # , add_timestamp=True) timestamp added manually
+    @ROS.transform(invert=False)  # , add_timestamp=True) timestamp added manually
     def _world_to_reference_transform(
         self,
         ref_shape: Tuple[int, int],

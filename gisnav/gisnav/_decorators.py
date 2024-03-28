@@ -1,7 +1,7 @@
 """Common assertions for convenience"""
 import inspect
-from functools import wraps
 from copy import deepcopy
+from functools import wraps
 from typing import (
     Any,
     Callable,

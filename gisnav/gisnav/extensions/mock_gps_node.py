@@ -1,21 +1,21 @@
-"""GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages"""
+"""This module contains the :class:`.MockGPSNode` :term:`extension` :term:`node`
+that publishes mock GPS (GNSS) messages to autopilot middleware
+"""
 import json
 import socket
 from datetime import datetime
-from typing import Final, Optional, Tuple, cast
+from typing import Final, Optional, Tuple
 
 import numpy as np
 import rclpy
 import tf2_ros
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped
 from gps_time import GPSTime
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from rclpy.timer import Timer
-from sensor_msgs.msg import PointCloud2
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -32,32 +32,7 @@ _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 
 
 class MockGPSNode(Node):
-    """A node that publishes a mock GPS message over the microRTPS bridge
-
-    .. mermaid::
-
-        graph LR
-            tf[tf]
-
-            subgraph MAVROS
-                navsatfix[mavros/global_position/global]
-            end
-
-            subgraph GISNode
-                geotransform[gisnav/gis_node/geotransform]
-            end
-
-            subgraph MockGPSNode
-                sensor_gps[fmu/in/sensor_gps]
-                gps_input
-            end
-
-            tf -->|'geometry_msgs/TransformStamped camera->wgs84_unscaled'| MockGPSNode
-            geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
-            sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
-            gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
-
-    """
+    """A node that publishes a mock GPS message to autopilot middleware"""
 
     ROS_D_USE_SENSOR_GPS: Final = True
     """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for
@@ -84,11 +59,6 @@ class MockGPSNode(Node):
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default :term:`DEM` vertical datum"""
 
-    ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-    """Absolute :term:`topic` into which this :term:`node` publishes
-    :attr:`.sensor_gps`
-    """
-
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
     _EPSG_MSL = 5773  # Example: EGM96
@@ -112,8 +82,8 @@ class MockGPSNode(Node):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._mock_gps_pub = None
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         # Create transformers
         self._transformer_to_wgs84 = Transformer.from_crs(
@@ -147,47 +117,42 @@ class MockGPSNode(Node):
         """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
     @property
-    @ROS.parameter(ROS_D_PUBLISH_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def publish_rate(self) -> Optional[float]:
-        """Mock :term:`GPS` :term:`message` publish rate in Hz"""
-
-    @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def dem_vertical_datum(self) -> Optional[int]:
         """:term:`DEM` vertical datum (must match DEM that is published in
         :attr:`.GISNode.orthoimage`)
         """
 
-    @narrow_types
-    def _create_publish_timer(self, publish_rate: float) -> Timer:
-        """Returns a timer that publishes the output mock :term:`GPS`
-        :term:`message` at regular intervals
-
-        :param publish_rate: Publish rate in Hz, see (:attr:`.publish_rate`)
-        :return: The :class:`.Timer` instance
-        """
-        if publish_rate <= 0:
-            error_msg = (
-                f"Mock GPS publish rate rate must be positive ({publish_rate} "
-                f"Hz provided)."
-            )
-            self.get_logger().error(error_msg)
-            raise ValueError(error_msg)
-        timer = self.create_timer(1 / publish_rate, self._publish)
-        return timer
-
     def _pose_cb(self, msg: PoseStamped) -> None:
-        if msg.header.frame_id.startswith("+proj"):
-            M = tf_.proj_to_affine(msg.header.frame_id)
-            H, r, t = tf_.pose_stamped_to_matrices(msg)
+        frame_id: FrameID = msg.header.frame_id
 
-            # M has translations in the 4th column so we add 1 to the translation vector
-            assert t.shape == (3,)
-            pos = M @ np.append(t, 1)
+        if frame_id.startswith("+proj"):
+            # This pose as a proj string so we know it's an earth-fixed frame and we
+            # can create a mock GPS message out of it. The query frames used in VO
+            # are not suitable since they do not contain a georeference like a proj
+            # string.
 
-            self.get_logger().info(f"pose in earth fixed frame: {pos}")
+            # we do not use msg.header.stamp because we want to interpolation
+            # up to the reference frame. The reference frame itself is discontinous,
+            # but the rotated and cropped frame leading to it is not, so interpolation
+            # should work.
+            stamp = rclpy.time.Time()
 
-            # self._publish(msg)
+            # For the mock GPS message we are interested in base_link, not
+            # camera_optical pose. So we get that transform instead.
+            transform_stamped = tf_.get_transform(
+                self,
+                "base_link",
+                frame_id,
+                stamp,
+            )
+
+            # TODO: transform_stamped should not be None, figure out why it sometimes is
+
+            if transform_stamped is not None:
+                pose_stamped = tf_.transform_to_pose(transform_stamped)
+                pose_stamped.header.frame_id = frame_id  # TODO: fix this
+                self._publish(pose_stamped)
 
     @property
     @ROS.subscribe(
@@ -199,51 +164,42 @@ class MockGPSNode(Node):
     def pose(self) -> Optional[PoseStamped]:
         """Camera estimated pose"""
 
-    def _publish(self, msg: PoseStamped) -> None:
+    def _publish(self, pose_stamped: PoseStamped) -> None:
         @narrow_types(self)
-        def _publish_inner(
-            base_link_to_reference: TransformStamped, geotransform: PointCloud2
-        ) -> None:
-            translation, rotation = (
-                base_link_to_reference.transform.translation,
-                base_link_to_reference.transform.rotation,
-            )
+        def _publish_inner(pose_stamped: PoseStamped) -> None:
+            # Convert to WGS 84 coordinates (altitude in meters AGL)
+            frame_id: FrameID = pose_stamped.header.frame_id
 
-            # Unpack the geotransformation affine matrix
-            M = np.frombuffer(geotransform.data, dtype=np.float64).reshape(4, 4)
+            self.get_logger().error(str(frame_id))
+            M = tf_.proj_to_affine(frame_id)
+            H, r, t = tf_.pose_stamped_to_matrices(pose_stamped)
 
-            # Geotransform uses numpy convention: origin is top left corner and
-            # first axis is height -> need to swap x and y axis here and invert
-            # the first axis
-            # todo: do not hard code 735 - do this coordinate system transformation
-            #  in GISNode._create_src_corners instead
-            translation_wgs84 = M @ np.array(
-                [735 - translation.y, translation.x, translation.z, 1]
-            )
+            # M has translations in the 4th column so we add 1 to the translation vector
+            assert t.shape == (3,)
+            t = M @ np.append(t, 1)
 
-            # TODO: check yaw sign (NED or ENU?)
-            # TODO: get vehicle yaw (heading) not camera yaw
-            vehicle_yaw_degrees = tf_.extract_yaw(rotation)
+            timestamp = tf_.usec_from_header(pose_stamped.header)
+
+            vehicle_yaw_degrees = tf_.extract_yaw(pose_stamped.pose.orientation)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
-            # MAVLink definition 0 := not available
+            # MAVLink yaw definition 0 := not available
             vehicle_yaw_degrees = (
                 360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
             )
 
-            lat = int(translation_wgs84[1] * 1e7)
-            lon = int(translation_wgs84[0] * 1e7)
+            lat = int(t[1] * 1e7)
+            lon = int(t[0] * 1e7)
 
             altitudes = self._convert_to_wgs84(
-                translation_wgs84[1],
-                translation_wgs84[0],
-                translation_wgs84[2],
+                t[1],
+                t[0],
+                t[2],
             )
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
                 return None
 
-            timestamp = tf_.usec_from_header(base_link_to_reference.header)
             satellites_visible = np.iinfo(np.uint8).max
             eph = 10.0
             epv = 1.0
@@ -273,30 +229,7 @@ class MockGPSNode(Node):
                     satellites_visible,
                 )
 
-        # Must match transformation chain to correct reference frame using
-        # geotransform timestamp. The geotransform timestamp is a proxy for the
-        # orthoimage timestamp, which is also added to the frame_id of the
-        # reference frame. The reference frame is discontinous so it is not and
-        # should not be interpolated using tf2 to prevent jumps in estimation
-        # error whenever the reference frame is updated.
-        geotransform = self.geotransform
-        if self.geotransform is not None:
-            ref_frame: FrameID = cast(
-                FrameID,
-                "reference_{}_{}".format(
-                    geotransform.header.stamp.sec, geotransform.header.stamp.nanosec
-                ),
-            )
-            base_link_to_reference = tf_.get_transform(
-                self,
-                ref_frame,
-                "base_link",
-                rclpy.time.Time(),
-            )
-        else:
-            base_link_to_reference = None
-
-        _publish_inner(base_link_to_reference, geotransform)
+        _publish_inner(pose_stamped)
 
     @narrow_types
     @ROS.publish(

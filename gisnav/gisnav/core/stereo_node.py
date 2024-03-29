@@ -66,8 +66,8 @@ class StereoNode(Node):
         self.pnp_image
 
         # Initialize the transform broadcaster and listener
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     @property
     @ROS.subscribe(

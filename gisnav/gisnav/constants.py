@@ -4,7 +4,7 @@ and node and topic names
 Using this module nodes that talk to each other can refer to a single source
 of truth
 
-.. note::
+.. warning::
     This module should not import anything from the gisnav package namespace
     to prevent circular imports.
 """
@@ -80,17 +80,15 @@ with fast dynamics with higher lags as long as the timestamps are accurate.
 """
 
 FrameID = Literal[
-    "reference",
-    "reference_%i_%i",
     "query",
     "query_previous",
-    "world",
     "base_link",
     "camera",
     "camera_optical",
     "map",
+    "+proj=affine +xoff=%f +yoff=%f +zoff=%f +s11=%f +s12=%f +s13=%f +s21=%f +s22=%f +s23=%f +s31=%f +s32=%f +s33=%f +no_defs +type=crs +datum=WGS84",  # noqa: 501
 ]
-"""Allowed ROS header frame_ids.
+"""Allowed ROS message header ``frame_id``s:
 
 :term:`REP 103` and :term:`REP 105` defined frames:
 
@@ -100,29 +98,17 @@ FrameID = Literal[
 * ``base_link``
 * ``odom`` and ``earth`` not used currently, but could be introduced in the future.
 
-:term:`OpenCV` ``cv2.solvePnP`` defined frames (not REP 103 compliant).
+GISNavi introduced ``frame_id``s:
 
-* ?
-
-Introduced by GISNav (**currently** not REP 103 compliant):
-
-* ``reference``
-* ``reference_%i_%i``
+* ``+proj=affine ...``
 * ``query``
-* ``query_%i_%i``
+* ``query_previous``
 
-The ``reference`` frame is the REP 103 compliant version of ``reference_world`` where
-the origin is in the bottom-left corner instead of top-left, making it an :term:`ENU`
-frame.
-
-``reference_%i_%i`` frame is a timestamped version of the ``reference`` frame
-where the first integer is the seconds timestamp and the second integer is the
-nanoseconds timestamp of the originating sensor_msgs/Image message containing
- the orthoimage :term:`raster` from :term:`GISNode`. Timestamping is needed
- because the ``reference`` frame is discontinuous, breaking `tf2` interpolation and
- necessitating using timestamps to match poses to correct frames instead.
-
- .. todo::
-    Scale ``reference`` and ``reference_%i_%i`` to SI units (meters) instead of
-    the native pixels to be fully compliant with REP 103
+PROJ strings as frame IDs representing are used to define the CRS of the image plane
+(**currently** not REP 103 compliant as the scale is not in meters, and the x and y
+axis might not be compliant with :term:`ENU` axis order). These transformations should
+only include translation, rotation and scaling but no shear/perspective, so an affine
+transformation should be sufficient to represent them. The :term:`reference` frame
+is discontinous so interpolation to an single georeferenced earth-fixed frame is not
+possible, each reference must carry their own georeferencing info.
 """

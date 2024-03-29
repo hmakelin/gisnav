@@ -1,6 +1,6 @@
 """Helper functions for ROS messaging"""
 from collections import namedtuple
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 
 import cv2
 import numpy as np
@@ -198,7 +198,7 @@ def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp: Time
 ) -> TransformStamped:
     try:
-        trans = node.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
+        trans = node._tf_buffer.lookup_transform(target_frame, source_frame, stamp)
         return trans
     except (
         tf2_ros.LookupException,
@@ -399,7 +399,7 @@ def matrices_to_homogenous(r, t) -> np.ndarray:
     return H
 
 
-def affine_to_proj(M: np.ndarray) -> str:
+def affine_to_proj(M: np.ndarray) -> FrameID:
     """Returns a PROJ string describing a CRS that is defined by converting the image
     pixel coordinates (x, y) to WGS 84 coordinates (lon, lat) using the provided
     affine transformation.
@@ -411,19 +411,22 @@ def affine_to_proj(M: np.ndarray) -> str:
     # Build the PROJ string
     # Assume only translation and rotation in x and y plane, scaling in any plane -
     # this makes the proj string shorter
-    proj_str = (
-        f"+proj=affine "
-        f"+xoff={M[0, 3]} +yoff={M[1, 3]} +zoff={M[2, 3]} "
-        f"+s11={M[0, 0]} +s12={M[0, 1]} +s13={M[0, 2]} "
-        f"+s21={M[1, 0]} +s22={M[1, 1]} +s23={M[1, 2]} "
-        f"+s31={M[2, 0]} +s32={M[2, 1]} +s33={M[2, 2]} "
-        f"+no_defs +type=crs +datum=WGS84"
+    proj_str: FrameID = cast(
+        FrameID,
+        (
+            f"+proj=affine "
+            f"+xoff={M[0, 3]} +yoff={M[1, 3]} +zoff={M[2, 3]} "
+            f"+s11={M[0, 0]} +s12={M[0, 1]} +s13={M[0, 2]} "
+            f"+s21={M[1, 0]} +s22={M[1, 1]} +s23={M[1, 2]} "
+            f"+s31={M[2, 0]} +s32={M[2, 1]} +s33={M[2, 2]} "
+            f"+no_defs +type=crs +datum=WGS84"
+        ),
     )
 
     return proj_str
 
 
-def proj_to_affine(proj_str: str) -> np.ndarray:
+def proj_to_affine(proj_str: FrameID) -> np.ndarray:
     """Returns the affine transformation matrix M that corresponds to the provided
     PROJ string. The PROJ string should be in the format used by the `affine_to_proj`
     function.

@@ -81,8 +81,8 @@ class BBoxNode(Node):
         # Needed for updating tf2 with camera to vehicle relative pose
         # and vehicle to wgs84 relative
         self.broadcaster = TransformBroadcaster(self)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the :term:`global position` message from the

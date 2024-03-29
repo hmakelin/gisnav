@@ -42,9 +42,8 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField, TimeReference
+from sensor_msgs.msg import CameraInfo, Image, TimeReference
 from shapely.geometry import box
-from std_msgs.msg import Header
 
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
@@ -55,6 +54,7 @@ from ..constants import (
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
+    FrameID,
 )
 
 
@@ -466,8 +466,8 @@ class GISNode(Node):
 
         Assumes zero raster as DEM if no DEM layer is available.
 
-        TODO: Currently no support for separate arguments for imagery and height
-        layers. Assumes height layer is available at same CRS as imagery layer.
+        TODO: Currently no support for separate arguments for imagery and elevation
+         layers. Assumes elevation layer is available at same CRS as imagery layer.
 
         :param bounding_box: BoundingBox to request the orthoimage for
         :param size: Orthoimage resolution (height, width)
@@ -563,10 +563,7 @@ class GISNode(Node):
         First channel is 8-bit grayscale orthoimage, 2nd and 3rd channels are
         16-bit elevation reference (:term:`DEM`)
         """
-        # TODO: if FOV projection is large, this BoundingBox can be too large
-        # and the WMS server will choke? Should get a BoundingBox for center
-        # of this BoundingBox instead, with limited width and height (in meters)
-        bounding_box = deepcopy(self.bounding_box)  # TODO copy necessary here?
+        bounding_box = deepcopy(self.bounding_box)
         map = self._request_orthoimage_for_bounding_box(
             bounding_box,
             self._orthoimage_size,
@@ -590,73 +587,45 @@ class GISNode(Node):
             assert dem.dtype == np.uint8  # todo get 16 bit dems?
 
             # Convert image to grayscale (color not needed)
-            # TODO: check BGR or RGB
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            # add 8-bit zero array of padding for future support of 16 bit dems
             orthoimage_stack = np.dstack((img, np.zeros_like(dem), dem))
             image_msg = self._cv_bridge.cv2_to_imgmsg(
                 orthoimage_stack, encoding="passthrough"
             )
 
-            # new orthoimage stack, set old bounding box
-            # TODO: this is brittle (old bounding box needs to always be set
-            #  before the new image_msg is returned), information should be
-            #  extracted from cached orthoimage directly like in earlier versions
-            #  with _orthoimage cached attirbute to avoid having to manually
-            #  manage these two interdependent attributes
+            # Set old bounding box
             self.old_bounding_box = bounding_box
 
-            # Publish geotransform associated with the image msg, and the image
-            # message right after
             if self.time_reference is None:
                 self.get_logger().warning(
                     "Publishing orthoimage without FCU time reference."
                 )
-            image_msg.header = tf_.create_header(
-                self, "reference", time_reference=self.time_reference
-            )
             height, width = img.shape[0:2]
-            gt_message = self.geotransform(
-                height,
-                width,
-                bounding_box,
-                image_msg.header,  # use same header as for orthoimage message
+            M = self._calculate_affine_transformation_matrix(
+                height, width, bounding_box
             )
-            if gt_message is not None:
-                image_msg.header.frame_id = gt_message.header.frame_id  # proj string
+            if M is not None:
+                frame_id: FrameID = tf_.affine_to_proj(M)
+                image_msg.header = tf_.create_header(
+                    self, frame_id, time_reference=self.time_reference
+                )
+
             return image_msg
         else:
             return None
 
-    def geotransform(
-        self, height: int, width: int, bbox: BoundingBox, header: Header
-    ) -> Optional[PointCloud2]:
-        """3x3 Affine transformation that transforms orthoimage frame pixel
-        coordinates to WGS84 lon, lat coordinates
-
-        A :class:`sensor_msgs.msg.PointCloud2` message is repurposed to carry
-        the 3-by-3 affine transformation matrix since it has a header and is
-        flexible enough to carry this kind of data in a byte array. The data
-        is stored in a PointField called `affine_matrix`.
-
-        .. note::
-            The reference frame is discontinous so we use timestamps in the
-            frame_id to couple it with the correct tf2 transformation chain.
-            This is to prevent significant interpolation errors whenever the
-            reference frame is updated and "jumps". The geotransform must be
-            published with the exact same timestamp as the orthoimage because
-            the orthoimage timestamp will be used as a proxy for the geotransform
-            timestamp downstream in the processing chain.
+    @narrow_types
+    def _calculate_affine_transformation_matrix(
+        self, height: int, width: int, bbox: BoundingBox
+    ) -> Optional[np.ndarray]:
+        """Calculate the 3x3 affine transformation matrix that transforms orthoimage
+        frame pixel coordinates to WGS84 lon, lat coordinates.
 
         :param height: Height in pixels of the :term:`reference` image
         :param width: Width in pixels of the :term:`reference` image (most
             likely same as height)
         :param bbox: :term:`WGS 84` :term:`bounding box` of the reference image
-        :param header: :term:`ROS` header for the outgoing message. Must be same
-            as used for orthoimage message (with same timestamp) in order to
-            enable matching tf2 transformations to correct geotransforms.
-        :return: :class:`sensor_msgs.msg.PointCloud2` message representing a
-            3D affine transformation
+        :return: 3x3 affine transformation matrix
         """
 
         def _boundingbox_to_geo_coords(
@@ -667,9 +636,6 @@ class GISNode(Node):
 
             Returns corners in order: top-left, bottom-left, bottom-right,
             top-right.
-
-            Cached because it is assumed the same OrthoImage3D BoundingBox will
-            be used for multiple matches.
 
             :param bbox: (geographic_msgs/BoundingBox): The bounding box.
             :return: The geo coordinates as a list of (longitude, latitude)
@@ -734,26 +700,7 @@ class GISNode(Node):
 
         M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
 
-        # Flatten the matrix and repurpose a PointCloud2 message to transport it
-        array_len = 16
-        byte_array = M.tobytes()
-        matrix_msg = PointCloud2()
-        matrix_msg.header = header
-        matrix_msg.height = 1
-        matrix_msg.width = array_len
-        matrix_msg.is_dense = False
-        matrix_msg.fields = [
-            PointField(
-                name="affine_matrix",
-                offset=0,
-                datatype=PointField.FLOAT64,
-                count=array_len,
-            )
-        ]
-        matrix_msg.data = byte_array
-
-        matrix_msg.header.frame_id = tf_.affine_to_proj(M)
-        return matrix_msg
+        return M
 
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False

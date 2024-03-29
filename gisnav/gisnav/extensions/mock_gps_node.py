@@ -170,13 +170,14 @@ class MockGPSNode(Node):
             # Convert to WGS 84 coordinates (altitude in meters AGL)
             frame_id: FrameID = pose_stamped.header.frame_id
 
-            self.get_logger().error(str(frame_id))
             M = tf_.proj_to_affine(frame_id)
             H, r, t = tf_.pose_stamped_to_matrices(pose_stamped)
 
             # M has translations in the 4th column so we add 1 to the translation vector
             assert t.shape == (3,)
             t = M @ np.append(t, 1)
+
+            self.get_logger().info(f"position {str(t)}")
 
             timestamp = tf_.usec_from_header(pose_stamped.header)
 

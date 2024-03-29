@@ -98,7 +98,7 @@ FrameID = Literal[
 * ``base_link``
 * ``odom`` and ``earth`` not used currently, but could be introduced in the future.
 
-GISNavi introduced ``frame_id``s:
+GISNav introduced ``frame_id``s:
 
 * ``+proj=affine ...``
 * ``query``

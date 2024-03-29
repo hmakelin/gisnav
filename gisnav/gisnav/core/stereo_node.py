@@ -130,7 +130,9 @@ class StereoNode(Node):
             dy = cy - crop_shape[0] / 2
 
             # Compute transformation (rotation around center + crop)
-            theta = np.radians(rotation)
+            # We do world to inverse so we invert the sign (stereo node roatates
+            # reference to world)
+            theta = np.radians(-rotation)
 
             # Translation to origin
             T1 = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]])

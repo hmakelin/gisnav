@@ -698,7 +698,9 @@ class GISNode(Node):
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
 
-        M[2, 2] = bounding_box_perimeter_meters / bounding_box_perimeter_native
+        # The reference raster image plane defined by the bounding box is "
+        # East-South-Down", while WGS 84 is ENU, so we invert the z coordinate sign
+        M[2, 2] = -bounding_box_perimeter_meters / bounding_box_perimeter_native
 
         return M
 

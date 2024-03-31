@@ -111,59 +111,25 @@ class StereoNode(Node):
     @ROS.transform(invert=False)  # , add_timestamp=True) timestamp added manually
     def _world_to_reference_transform(
         self,
-        ref_shape: Tuple[int, int],
-        crop_shape: Tuple[int, int],
-        rotation: float,
+        M: np.ndarray,
         header_msg: Header,
         header_reference: Header,
     ) -> Optional[TransformStamped]:
         @narrow_types(self)
         def _transform(
-            ref_shape: tuple,
-            crop_shape: Tuple[int, int],
-            rotation: float,
+            M: np.ndarray,
             header_msg: Header,
             header_reference: Header,
         ) -> Optional[TransformStamped]:
-            cx, cy = ref_shape[0] // 2, ref_shape[1] // 2
-            dx = cx - crop_shape[1] / 2
-            dy = cy - crop_shape[0] / 2
+            # 3D version of the inverse rotation and cropping transform
+            M_3d = np.eye(4)
+            M_3d[:2, :2] = M[:2, :2]
+            M_3d[:2, 3] = M[:2, 2]
 
-            # Compute transformation (rotation around center + crop)
-            # We do world to inverse so we invert the sign (stereo node roatates
-            # reference to world)
-            theta = np.radians(-rotation)
-
-            # Translation to origin
-            T1 = np.array([[1, 0, -cx], [0, 1, -cy], [0, 0, 1]])
-
-            # Rotation
-            R = np.array(
-                [
-                    [np.cos(theta), -np.sin(theta), 0],
-                    [np.sin(theta), np.cos(theta), 0],
-                    [0, 0, 1],
-                ]
-            )
-
-            # Translation back from origin
-            T2 = np.array([[1, 0, cx], [0, 1, cy], [0, 0, 1]])
-
-            # Center-crop translation
-            T3 = np.array([[1, 0, -dx], [0, 1, -dy], [0, 0, 1]])
-
-            # Combined affine matrix: reference coordinate to world coordinate
-            affine_2d = T3 @ T2 @ R @ T1
-
-            # Convert to 4x4 matrix
-            affine_3d = np.eye(4)
-            affine_3d[0:2, 0:2] = affine_2d[0:2, 0:2]  # Copy rotation
-            affine_3d[0:2, 3] = affine_2d[0:2, 2]  # Copy translation
-
-            t = affine_3d[:3, 3]
+            t = M_3d[:3, 3]
 
             try:
-                q = tf_transformations.quaternion_from_matrix(affine_3d)
+                q = tf_transformations.quaternion_from_matrix(M_3d)
             except np.linalg.LinAlgError:
                 self.get_logger().warning(
                     "_pnp_image: Could not compute quaternion from estimated rotation. "
@@ -180,14 +146,14 @@ class StereoNode(Node):
             )
 
             # TODO clean this up
-            H, r, t = tf_.pose_stamped_to_matrices(tf_.transform_to_pose(transform_msg))
             M = tf_.proj_to_affine(header_reference.frame_id)
-            compound_transform = M @ H
+            compound_transform = M @ M_3d
             proj_str = tf_.affine_to_proj(compound_transform)
             transform_msg.header.frame_id = proj_str
+
             return transform_msg
 
-        return _transform(ref_shape, crop_shape, rotation, header_msg, header_reference)
+        return _transform(M, header_msg, header_reference)
 
     @property
     @ROS.publish(
@@ -230,9 +196,17 @@ class StereoNode(Node):
             # TODO: implement this part better
             camera_yaw_degrees = tf_.extract_yaw(transform.rotation)
             camera_roll_degrees = tf_.extract_roll(transform.rotation)
-            rotation = camera_yaw_degrees + camera_roll_degrees
+
+            # This is assumed to be positive clockwise when looking down nadir
+            # (z axis up in an ENU frame), z is aligned with zenith so in that sense
+            # this is positive in the counter-clockwise direction. E.g. east aligned
+            # rotation is positive 90 degrees.
+            rotation = (camera_yaw_degrees + camera_roll_degrees) % 360
+
             crop_shape: Tuple[int, int] = query_img.shape[0:2]
-            orthoimage_rotated_stack = self._rotate_and_crop_center(
+
+            # here positive rotation is counter-clockwise, so we invert
+            orthoimage_rotated_stack, M = self._rotate_and_crop_center(
                 orthoimage_stack, rotation, crop_shape
             )
 
@@ -249,9 +223,7 @@ class StereoNode(Node):
 
             # Publish transformation
             transform = self._world_to_reference_transform(
-                orthoimage_stack.shape,
-                query_img.shape,
-                rotation,
+                np.linalg.inv(M),
                 pnp_image_msg.header,
                 orthoimage.header,
             )
@@ -315,10 +287,10 @@ class StereoNode(Node):
         query_image, ref_image = self.image, self.previous_image
         return _stereo_image(query_image, ref_image)
 
-    @staticmethod
+    # @staticmethod
     def _rotate_and_crop_center(
-        image: np.ndarray, angle_degrees: float, shape: Tuple[int, int]
-    ):
+        self, image: np.ndarray, angle_degrees: float, shape: Tuple[int, int]
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Rotates an image around its center axis and then crops it to the
         specified shape.
 
@@ -326,7 +298,9 @@ class StereoNode(Node):
         :param angle: Rotation angle in degrees.
         :param shape: Tuple (height, width) representing the desired shape
             after cropping.
-        :return: Cropped and rotated image.
+        :return: Tuple of 1. Cropped and rotated image, and 2. matrix that can be
+            used to convert points in rotated and cropped frame back into original
+            frame
         """
         # Image dimensions
         h, w = image.shape[:2]
@@ -341,10 +315,30 @@ class StereoNode(Node):
         rotated_image = cv2.warpAffine(image, rotation_matrix, (w, h))
 
         # Calculate the cropping coordinates
-        x = center[0] - shape[1] // 2
-        y = center[1] - shape[0] // 2
+        dx = center[0] - shape[1] // 2
+        dy = center[1] - shape[0] // 2
 
         # Perform the cropping
-        cropped_image = rotated_image[y : y + shape[0], x : x + shape[1]]
+        cropped_image = rotated_image[dy : dy + shape[0], dx : dx + shape[1]]
 
-        return cropped_image
+        # Invert the matrix
+        extended_matrix = np.vstack([rotation_matrix, [0, 0, 1]])
+        inverse_matrix = np.linalg.inv(extended_matrix)
+
+        # Center-crop inverse translation
+        T = np.array([[1, 0, dx], [0, 1, dy], [0, 0, 1]])
+
+        inverse_matrix = inverse_matrix @ T
+
+        refimg = self._cv_bridge.imgmsg_to_cv2(
+            self.orthoimage, desired_encoding="passthrough"
+        ).copy()
+        br = inverse_matrix @ np.array([640, 360, 1])
+        self.get_logger().error(f"{br}")
+        tf_.visualize_camera_corners(
+            refimg,
+            [inverse_matrix @ np.array([0, 0, 1]), br],
+            "World frame origin/top-left position in reference frame",
+        )
+
+        return cropped_image, inverse_matrix

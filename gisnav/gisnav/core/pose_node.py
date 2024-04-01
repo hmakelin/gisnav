@@ -140,15 +140,24 @@ class PoseNode(Node):
 
             r, t = pose
 
+            r_inv = r.T
+            camera_optical_position_in_world = -r_inv @ t
+
             # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
             #  instead of 2D position only)
             tf_.visualize_camera_position(
                 ref.copy(),
-                -r.T @ t,
+                camera_optical_position_in_world,
                 "Camera position in world frame",
             )
 
-            return tf_.create_pose_msg(msg.header.stamp, msg.header.frame_id, r, t)
+            pose = tf_.create_pose_msg(
+                msg.header.stamp,
+                msg.header.frame_id,
+                r_inv,
+                camera_optical_position_in_world,
+            )
+            return pose
 
         @narrow_types(self)
         def _camera_optical_pose_in_world_frame_via_vo(

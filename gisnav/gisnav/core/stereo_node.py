@@ -223,7 +223,7 @@ class StereoNode(Node):
 
             # Publish transformation
             transform = self._world_to_reference_transform(
-                np.linalg.inv(M),
+                np.linalg.inv(M),  # TODO: try-except
                 pnp_image_msg.header,
                 orthoimage.header,
             )

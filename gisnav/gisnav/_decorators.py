@@ -479,18 +479,18 @@ class ROS:
                     transform = obj
 
                 if invert:
-                    # transform.transform.translation.x = (
-                    #    -transform.transform.translation.x
-                    # )
-                    # transform.transform.translation.y = (
-                    #    -transform.transform.translation.y
-                    # )
-                    # transform.transform.translation.z = (
-                    #    -transform.transform.translation.z
-                    # )
-                    # transform.transform.rotation.x = -transform.transform.rotation.x
-                    # transform.transform.rotation.y = -transform.transform.rotation.y
-                    # transform.transform.rotation.z = -transform.transform.rotation.z
+                    transform.transform.translation.x = (
+                        -transform.transform.translation.x
+                    )
+                    transform.transform.translation.y = (
+                        -transform.transform.translation.y
+                    )
+                    transform.transform.translation.z = (
+                        -transform.transform.translation.z
+                    )
+                    transform.transform.rotation.x = -transform.transform.rotation.x
+                    transform.transform.rotation.y = -transform.transform.rotation.y
+                    transform.transform.rotation.z = -transform.transform.rotation.z
                     # Leave rotation.w unchanged
                     transform.child_frame_id = transform.header.frame_id
                     transform.header.frame_id = child_frame_id

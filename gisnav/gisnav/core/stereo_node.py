@@ -147,7 +147,9 @@ class StereoNode(Node):
 
             # TODO clean this up
             M = tf_.proj_to_affine(header_reference.frame_id)
-            compound_transform = M @ M_3d
+            # Flip x and y in between to make this transformation chain work
+            T = np.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+            compound_transform = M @ T @ np.linalg.inv(M_3d)
             proj_str = tf_.affine_to_proj(compound_transform)
             transform_msg.header.frame_id = proj_str
 
@@ -334,7 +336,6 @@ class StereoNode(Node):
             self.orthoimage, desired_encoding="passthrough"
         ).copy()
         br = inverse_matrix @ np.array([640, 360, 1])
-        self.get_logger().error(f"{br}")
         tf_.visualize_camera_corners(
             refimg,
             [inverse_matrix @ np.array([0, 0, 1]), br],

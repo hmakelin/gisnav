@@ -201,9 +201,10 @@ class PoseNode(Node):
 
         if self.image is not None:
             if self.image.header.frame_id.startswith("+proj"):
-                return _camera_optical_pose_in_world_frame_via_gis_orthoimage(
+                pose = _camera_optical_pose_in_world_frame_via_gis_orthoimage(
                     self.image
                 )
+                return pose
             elif self.image.header.frame_id.startswith("query") and hasattr(
                 self, "_camera_optical_pose_in_world_frame"
             ):

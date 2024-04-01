@@ -693,16 +693,19 @@ class GISNode(Node):
         M = cv2.getPerspectiveTransform(pixel_coords, geo_coords)
 
         # Insert z dimensions and scale
-        M = np.insert(M, 2, 0, axis=1)
-        M = np.insert(M, 2, 0, axis=0)
+        aff = np.eye(4)
+        aff[:2, :2] = M[:2, :2]
+        aff[:2, 3] = M[:2, 2]
+
+        # TODO: extract scaling from M - do not calculate it separately
         bounding_box_perimeter_native = 2 * height + 2 * width
         bounding_box_perimeter_meters = _bounding_box_perimeter_meters(bbox)
 
         # The reference raster image plane defined by the bounding box is "
         # East-South-Down", while WGS 84 is ENU, so we invert the z coordinate sign
-        M[2, 2] = -bounding_box_perimeter_meters / bounding_box_perimeter_native
+        aff[2, 2] = -bounding_box_perimeter_meters / bounding_box_perimeter_native
 
-        return M
+        return aff
 
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
@@ -782,6 +785,6 @@ class GISNode(Node):
         assert (
             h > 0 and w > 0
         ), f"Height {h} and width {w} are both expected to be positive."
-        return np.float32([[0, 0], [h - 1, 0], [h - 1, w - 1], [0, w - 1]]).reshape(
+        return np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]]).reshape(
             -1, 1, 2
         )

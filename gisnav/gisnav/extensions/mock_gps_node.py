@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Final, Optional, Tuple
 
 import numpy as np
-import rclpy
 import tf2_ros
 from geometry_msgs.msg import PoseStamped
 from gps_time import GPSTime
@@ -131,28 +130,7 @@ class MockGPSNode(Node):
             # can create a mock GPS message out of it. The query frames used in VO
             # are not suitable since they do not contain a georeference like a proj
             # string.
-
-            # we do not use msg.header.stamp because we want to interpolation
-            # up to the reference frame. The reference frame itself is discontinous,
-            # but the rotated and cropped frame leading to it is not, so interpolation
-            # should work.
-            stamp = rclpy.time.Time()
-
-            # For the mock GPS message we are interested in base_link, not
-            # camera_optical pose. So we get that transform instead.
-            transform_stamped = tf_.get_transform(
-                self,
-                "base_link",
-                frame_id,
-                stamp,
-            )
-
-            # TODO: transform_stamped should not be None, figure out why it sometimes is
-
-            if transform_stamped is not None:
-                pose_stamped = tf_.transform_to_pose(transform_stamped)
-                pose_stamped.header.frame_id = frame_id  # TODO: fix this
-                self._publish(pose_stamped)
+            self._publish(msg)
 
     @property
     @ROS.subscribe(
@@ -171,13 +149,33 @@ class MockGPSNode(Node):
             frame_id: FrameID = pose_stamped.header.frame_id
 
             M = tf_.proj_to_affine(frame_id)
+            self.get_logger().error(f"M at mock GPS end {M}")
             H, r, t = tf_.pose_stamped_to_matrices(pose_stamped)
+
+            # TODO: make this a computed property
+            #  We only need the relative rotation from base_link to camera_optical
+            # For the mock GPS message we are interested in base_link, not
+            # camera_optical pose.
+            # stamp = rclpy.time.Time()
+            transform_stamped = tf_.get_transform(
+                self,
+                "camera_optical",
+                "base_link",
+                pose_stamped.header.stamp,  # stamp,
+            )
+            if transform_stamped is None:
+                self.get_logger().error("TF stamped is NONE")
+                return
+            H_, r_, t_ = tf_.pose_stamped_to_matrices(
+                tf_.transform_to_pose(transform_stamped)
+            )
+
+            r = r_ @ r
+            # t should be the same
 
             # M has translations in the 4th column so we add 1 to the translation vector
             assert t.shape == (3,)
             t = M @ np.append(t, 1)
-
-            self.get_logger().info(f"position {str(t)}")
 
             timestamp = tf_.usec_from_header(pose_stamped.header)
 

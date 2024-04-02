@@ -149,7 +149,6 @@ class MockGPSNode(Node):
             frame_id: FrameID = pose_stamped.header.frame_id
 
             M = tf_.proj_to_affine(frame_id)
-            self.get_logger().error(f"M at mock GPS end {M}")
             H, r, t = tf_.pose_stamped_to_matrices(pose_stamped)
 
             # TODO: make this a computed property

@@ -52,8 +52,17 @@ class PoseNode(Node):
     solution to ROS
     """
 
-    CONFIDENCE_THRESHOLD = 0.7
-    """Confidence threshold for filtering out bad keypoint matches"""
+    CONFIDENCE_THRESHOLD_SHALLOW_MATCH = 0.9
+    """Confidence threshold for filtering out bad keypoint matches for shallow matching
+
+    .. note:
+        Stricter threshold for shallow matching because mistakes accumulate in VO
+    """
+
+    CONFIDENCE_THRESHOLD_DEEP_MATCH = 0.7
+    """Confidence threshold for filtering out bad keypoint matches for
+    deep matching
+    """
 
     MIN_MATCHES = 20
     """Minimum number of keypoint matches before attempting pose estimation"""
@@ -132,14 +141,12 @@ class PoseNode(Node):
             )
 
             # Adjust for origin at center of image
-            # Sign of translation is negative so we add instead of subtract the center
             cx, cy = camera_info.width // 2, camera_info.height // 2
-
             # TODO Assumes fx == fy?
             fx = camera_info.k.reshape((3, 3))[0, 0]
-            from_current_query_frame_to_previous.transform.translation.x += cx
-            from_current_query_frame_to_previous.transform.translation.y += cy
-            from_current_query_frame_to_previous.transform.translation.z -= fx
+            from_current_query_frame_to_previous.transform.translation.x -= cx
+            from_current_query_frame_to_previous.transform.translation.y -= cy
+            from_current_query_frame_to_previous.transform.translation.z += fx
 
             H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
                 tf_.transform_to_pose(from_current_query_frame_to_previous)
@@ -189,7 +196,9 @@ class PoseNode(Node):
             dem,
             qry,
             ref,
-            "Shallow match / relative position (VO)" if shallow_inference else "Deep match / absolute global position (GIS)",
+            "Shallow match / relative position (VO)"
+            if shallow_inference
+            else "Deep match / absolute global position (GIS)",
         )
         if pose is None:
             return None
@@ -203,7 +212,8 @@ class PoseNode(Node):
         tf_.visualize_camera_position(
             ref.copy(),
             camera_optical_position_in_world,
-            f"Camera position in world frame, {'shallow' if shallow_inference else 'deep'} inference",
+            f"Camera position in world frame, "
+            f"{'shallow' if shallow_inference else 'deep'} inference",
         )
 
         pose = tf_.create_pose_msg(
@@ -341,7 +351,7 @@ class PoseNode(Node):
                 results = self._model({"image0": qry_tensor, "image1": ref_tensor})
 
             conf = results["confidence"].cpu().numpy()
-            good = conf > self.CONFIDENCE_THRESHOLD
+            good = conf > self.CONFIDENCE_THRESHOLD_DEEP_MATCH
             mkp_qry = results["keypoints0"].cpu().numpy()[good, :]
             mkp_ref = results["keypoints1"].cpu().numpy()[good, :]
 
@@ -358,7 +368,7 @@ class PoseNode(Node):
             for m, n in matches:
                 # TODO: have a separate confidence threshold for shallow and deep
                 #  keypoint matching?
-                if m.distance < self.CONFIDENCE_THRESHOLD * n.distance:
+                if m.distance < self.CONFIDENCE_THRESHOLD_SHALLOW_MATCH * n.distance:
                     good.append(m)
 
             mkps = list(

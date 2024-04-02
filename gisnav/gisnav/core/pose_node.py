@@ -122,44 +122,6 @@ class PoseNode(Node):
         """Camera pose in orthoimage world frame"""
 
         @narrow_types(self)
-        def _camera_optical_pose_in_world_frame_via_gis_orthoimage(
-            msg: Image,
-        ) -> Optional[PoseStamped]:
-            qry, ref, dem = self._preprocess(msg, shallow_inference=False)
-            mkp_qry, mkp_ref = self._process(qry, ref)
-            pose = self._postprocess(
-                mkp_qry,
-                mkp_ref,
-                dem,
-                qry,
-                ref,
-                "Deep match / absolute global position (GIS)",
-            )
-            if pose is None:
-                return None
-
-            r, t = pose
-
-            r_inv = r.T
-            camera_optical_position_in_world = -r_inv @ t
-
-            # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
-            #  instead of 2D position only)
-            tf_.visualize_camera_position(
-                ref.copy(),
-                camera_optical_position_in_world,
-                "Camera position in world frame",
-            )
-
-            pose = tf_.create_pose_msg(
-                msg.header.stamp,
-                msg.header.frame_id,
-                r_inv,
-                camera_optical_position_in_world,
-            )
-            return pose
-
-        @narrow_types(self)
         def _camera_optical_pose_in_world_frame_via_vo(
             camera_info: CameraInfo,
             cached_pose_in_world_frame: PoseStamped,
@@ -201,10 +163,7 @@ class PoseNode(Node):
 
         if self.image is not None:
             if self.image.header.frame_id.startswith("+proj"):
-                pose = _camera_optical_pose_in_world_frame_via_gis_orthoimage(
-                    self.image
-                )
-                return pose
+                return self._get_pose(self.image, False)
             elif self.image.header.frame_id.startswith("query") and hasattr(
                 self, "_camera_optical_pose_in_world_frame"
             ):
@@ -220,6 +179,41 @@ class PoseNode(Node):
     def _should_recompute_and_cache_camera_optical_pose_in_query_frame(self):
         return True
 
+    @narrow_types
+    def _get_pose(self, msg: Image, shallow_inference: bool) -> Optional[PoseStamped]:
+        qry, ref, dem = self._preprocess(msg, shallow_inference=shallow_inference)
+        mkp_qry, mkp_ref = self._process(qry, ref)
+        pose = self._postprocess(
+            mkp_qry,
+            mkp_ref,
+            dem,
+            qry,
+            ref,
+            "Shallow match / relative position (VO)" if shallow_inference else "Deep match / absolute global position (GIS)",
+        )
+        if pose is None:
+            return None
+        r, t = pose
+
+        r_inv = r.T
+        camera_optical_position_in_world = -r_inv @ t
+
+        # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
+        #  instead of 2D position only)
+        tf_.visualize_camera_position(
+            ref.copy(),
+            camera_optical_position_in_world,
+            f"Camera position in world frame, {'shallow' if shallow_inference else 'deep'} inference",
+        )
+
+        pose = tf_.create_pose_msg(
+            msg.header.stamp,
+            msg.header.frame_id,
+            r_inv,
+            camera_optical_position_in_world,
+        )
+        return pose
+
     @property
     @cache_if(_should_recompute_and_cache_camera_optical_pose_in_query_frame)
     @ROS.publish(
@@ -229,41 +223,7 @@ class PoseNode(Node):
     @ROS.transform("camera_optical")
     def camera_optical_pose_in_query_frame(self) -> Optional[PoseStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
-
-        @narrow_types(self)
-        def _camera_optical_pose_in_query_frame(
-            msg: Image,
-        ) -> Optional[PoseStamped]:
-            qry, ref, dem = self._preprocess(msg, shallow_inference=True)
-            mkp_qry, mkp_ref = self._process(qry, ref)
-            pose = self._postprocess(
-                mkp_qry,
-                mkp_ref,
-                dem,
-                qry,
-                ref,
-                "Shallow match / relative position (VO)",
-            )
-            if pose is None:
-                return None
-            r, t = pose
-
-            # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
-            #  instead of 2D position only)
-            tf_.visualize_camera_position(
-                ref.copy(),
-                -r.T @ t,
-                "Camera position in previous query frame",
-            )
-
-            return tf_.create_pose_msg(
-                msg.header.stamp,
-                "query_previous",
-                r,
-                t,
-            )
-
-        return _camera_optical_pose_in_query_frame(self.image)
+        return self._get_pose(self.image, True)
 
     # TODO: have another image topic for VO image which can have a max delay,
     #  orthoimage cannot have a max delay since it can be very old if we fly in the

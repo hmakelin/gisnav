@@ -1,6 +1,6 @@
 """Helper functions for ROS messaging"""
 from collections import namedtuple
-from typing import Optional, Tuple, cast
+from typing import Optional, Tuple, Union, cast
 
 import cv2
 import numpy as np
@@ -9,7 +9,14 @@ import tf2_ros
 import tf_transformations
 from builtin_interfaces.msg import Time
 from geographic_msgs.msg import BoundingBox
-from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
+from geometry_msgs.msg import (
+    Pose,
+    PoseStamped,
+    PoseWithCovarianceStamped,
+    Quaternion,
+    TransformStamped,
+    Twist,
+)
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
@@ -155,7 +162,8 @@ def create_pose_msg(
 
 
 def pose_to_transform(
-    pose_stamped_msg: TransformStamped, child_frame_id: FrameID
+    pose_stamped_msg: Union[PoseStamped, PoseWithCovarianceStamped],
+    child_frame_id: FrameID,
 ) -> TransformStamped:
     # Create a new TransformStamped message
     transform_stamped = TransformStamped()
@@ -164,10 +172,15 @@ def pose_to_transform(
     transform_stamped.header = pose_stamped_msg.header
 
     # Copy the pose information to the transform
-    transform_stamped.transform.translation.x = pose_stamped_msg.pose.position.x
-    transform_stamped.transform.translation.y = pose_stamped_msg.pose.position.y
-    transform_stamped.transform.translation.z = pose_stamped_msg.pose.position.z
-    transform_stamped.transform.rotation = pose_stamped_msg.pose.orientation
+    pose = (
+        pose_stamped_msg.pose
+        if isinstance(pose_stamped_msg, PoseStamped)
+        else pose_stamped_msg.pose.pose
+    )
+    transform_stamped.transform.translation.x = pose.position.x
+    transform_stamped.transform.translation.y = pose.position.y
+    transform_stamped.transform.translation.z = pose.position.z
+    transform_stamped.transform.rotation = pose.orientation
 
     # Set the child and parent frame IDs
     transform_stamped.child_frame_id = child_frame_id
@@ -388,21 +401,27 @@ def pose_stamped_diff(pose1: PoseStamped, pose2: PoseStamped) -> PoseStamped:
 
 
 def pose_stamped_to_matrices(
-    pose_stamped: PoseStamped,
+    pose_stamped: Union[PoseStamped, PoseWithCovarianceStamped],
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # Extract the orientation quaternion from the PoseStamped message
+    # todo clean up implementation
+    pose = (
+        pose_stamped.pose
+        if isinstance(pose_stamped, PoseStamped)
+        else pose_stamped.pose.pose
+    )
     quaternion = (
-        pose_stamped.pose.orientation.x,
-        pose_stamped.pose.orientation.y,
-        pose_stamped.pose.orientation.z,
-        pose_stamped.pose.orientation.w,
+        pose.orientation.x,
+        pose.orientation.y,
+        pose.orientation.z,
+        pose.orientation.w,
     )
 
     # Extract the position vector from the PoseStamped message
     position = (
-        pose_stamped.pose.position.x,
-        pose_stamped.pose.position.y,
-        pose_stamped.pose.position.z,
+        pose.position.x,
+        pose.position.y,
+        pose.position.z,
     )
 
     # Convert the quaternion to a rotation matrix
@@ -479,3 +498,26 @@ def proj_to_affine(proj_str: FrameID) -> np.ndarray:
     M = np.array([[s11, s12, s13, xoff], [s21, s22, s23, yoff], [s31, s32, s33, zoff]])
 
     return M
+
+
+def pose_to_twist(pose: Pose, time_diff_sec: int) -> Twist:
+    # Initialize the Twist message
+    twist = Twist()
+
+    # Assuming pose.position and pose.orientation are populated
+    # Calculate linear velocities
+    twist.linear.x = pose.position.x / time_diff_sec
+    twist.linear.y = pose.position.y / time_diff_sec
+    twist.linear.z = pose.position.z / time_diff_sec
+
+    # Convert quaternion to Euler angles for easier angular velocity calculation
+    euler = tf_transformations.euler_from_quaternion(
+        [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+    )
+
+    # Assuming the change in orientation is small enough to treat as linear
+    twist.angular.x = euler[0] / time_diff_sec
+    twist.angular.y = euler[1] / time_diff_sec
+    twist.angular.z = euler[2] / time_diff_sec
+
+    return twist

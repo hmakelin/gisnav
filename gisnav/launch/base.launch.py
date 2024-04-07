@@ -33,6 +33,15 @@ def generate_launch_description():
     )
     ld.add_action(
         Node(
+            package="robot_localization",
+            name="ekf_node",
+            namespace="robot_localization",
+            executable="ekf_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/ekf_node.yaml")],
+        )
+    )
+    ld.add_action(
+        Node(
             package=_PACKAGE_NAME,
             name="gis_node",
             namespace=_PACKAGE_NAME,

@@ -19,6 +19,8 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Header
 
+from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
+
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
@@ -27,7 +29,8 @@ from ..constants import (
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
-    ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    ROS_TOPIC_RELATIVE_POSE_IMAGE,
+    ROS_TOPIC_RELATIVE_TWIST_IMAGE,
 )
 
 
@@ -63,7 +66,8 @@ class StereoNode(Node):
 
         # setup publisher to pass launch test without image callback being
         # triggered
-        self.pnp_image
+        self.pose_image
+        self.twist_image
 
         # Initialize the transform broadcaster and listener
         self._tf_buffer = tf2_ros.Buffer()
@@ -89,8 +93,8 @@ class StereoNode(Node):
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
-        self.pnp_image  # publish rotated and cropped orthoimage stack
-        self.stereo_image  # publish two subsequent images for VO
+        self.pose_image  # publish rotated and cropped orthoimage stack
+        self.twist_image  # publish two subsequent images for VO
 
         # TODO this is brittle - nothing is enforcing that this is assigned after
         #  publishing stereo_image
@@ -159,10 +163,10 @@ class StereoNode(Node):
 
     @property
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_PNP_IMAGE,
+        ROS_TOPIC_RELATIVE_POSE_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pnp_image(self) -> Optional[Image]:
+    def pose_image(self) -> Optional[Image]:
         """Published :term:`stacked <stack>` image consisting of query image,
         reference image, and optional reference elevation raster (:term:`DEM`).
 
@@ -254,40 +258,19 @@ class StereoNode(Node):
 
     @property
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_PNP_IMAGE,
+        ROS_TOPIC_RELATIVE_TWIST_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def stereo_image(self) -> Optional[Image]:
+    def twist_image(self) -> Optional[MonocularStereoImage]:
         """Published stereo couple image consisting of query image and reference image
-         for :term:`VO` use.
-
-        .. note::
-            Images are set side by side - the first or left image is the current (query)
-            image, while the second or right image is the previous (reference) image.
+        for :term:`VO` use.
         """
 
         @narrow_types(self)
-        def _stereo_image(qry: Image, ref: Image) -> Image:
-            stamp = ref.header.stamp
-            qry = self._cv_bridge.imgmsg_to_cv2(qry, desired_encoding="mono8")
-            ref = self._cv_bridge.imgmsg_to_cv2(ref, desired_encoding="mono8")
+        def _stereo_image(qry: Image, ref: Image) -> Optional[MonocularStereoImage]:
+            return MonocularStereoImage(query=qry, reference=ref)
 
-            # img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-            # place images side-by-side (dstack not good here since we would only
-            # have 2 channels)
-            stereo_image = np.hstack((qry, ref))
-            image_msg = self._cv_bridge.cv2_to_imgmsg(
-                stereo_image, encoding="passthrough"
-            )
-
-            image_msg.header.stamp = stamp
-            image_msg.header.frame_id = "query"
-
-            return image_msg
-
-        query_image, ref_image = self.image, self.previous_image
-        return _stereo_image(query_image, ref_image)
+        return _stereo_image(qry=self.image, ref=self.previous_image)
 
     # @staticmethod
     def _rotate_and_crop_center(

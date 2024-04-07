@@ -20,7 +20,7 @@ from ..constants import (
     DELAY_DEFAULT_MS,
     POSE_NODE_NAME,
     ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
+    ROS_TOPIC_RELATIVE_POSE,
 )
 
 
@@ -103,8 +103,7 @@ class RVizNode(Node):
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
+        f"/{ROS_NAMESPACE}" f'/{ROS_TOPIC_RELATIVE_POSE.replace("~", POSE_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_append_camera_estimated_pose_to_queue,
     )

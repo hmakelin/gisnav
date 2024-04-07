@@ -1,5 +1,5 @@
-"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating
-:term:`camera` relative pose between a :term:`query` and :term:`reference` image.
+"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating the
+:term:`camera` absolute :term:`pose` and relative :term:`twist`.
 
 The reference image can be either a orthoimagery :term:`raster` from the onboard GIS
 server (deep map matching for noisy global position), or a previous image frame form
@@ -12,14 +12,8 @@ reference images and then solving the resulting :term:`PnP` problem.
 <https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_. ``reference`` frame here
 refers exclusively to the orthoimage reference frame, not the visual odometry reference
 frame.
-
-We cache the ``query`` to reference frame transformation so that we can connect the
-poses from the visual odometry transformation chain to reference frame at every query
-frame. We also cache query frame timestamp (included in message Header) so that we can
-connect it to the correct reference frame.
 """
-from copy import deepcopy
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -27,13 +21,19 @@ import rclpy
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import (
+    PoseWithCovariance,
+    PoseWithCovarianceStamped,
+    TwistWithCovariance,
+    TwistWithCovarianceStamped,
+)
 from kornia.feature import LoFTR
-
-# from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from robot_localization.srv import SetPose
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
+
+from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
 
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
@@ -41,10 +41,19 @@ from ..constants import (
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
-    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
-    ROS_TOPIC_RELATIVE_PNP_IMAGE,
+    ROS_TOPIC_RELATIVE_POSE,
+    ROS_TOPIC_RELATIVE_POSE_IMAGE,
+    ROS_TOPIC_RELATIVE_QUERY_POSE,
+    ROS_TOPIC_RELATIVE_TWIST,
+    ROS_TOPIC_RELATIVE_TWIST_IMAGE,
     STEREO_NODE_NAME,
 )
+
+# TODO: make error model and generate covariance matrix dynamically
+# Create dummy covariance matrix
+_covariance_matrix = np.zeros((6, 6))
+np.fill_diagonal(_covariance_matrix, 25)
+_COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
 
 
 class PoseNode(Node):
@@ -89,12 +98,24 @@ class PoseNode(Node):
 
         # initialize subscriptions
         self.camera_info
-        self.image
+        self.pose_image
+        self.twist_image
         self.time_reference
 
-        # Init tf2
-        # self._tf_buffer = tf2_ros.Buffer()
-        # self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+        self._set_pose_client = self.create_client(
+            SetPose, "/robot_localization/set_pose"
+        )
+        while not self._set_pose_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for EKF node set_pose service...")
+        self._set_pose_request = SetPose.Request()
+        self._future = None
+        self._pose_sent: bool = False
+
+    def _set_initial_pose(self, pose):
+        if not self._pose_sent:
+            self._set_pose_request.pose = pose
+            self._future = self._set_pose_client.call_async(self._set_pose_request)
+            self._pose_sent = True
 
     @property
     @ROS.subscribe(
@@ -113,81 +134,111 @@ class PoseNode(Node):
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info message including the camera intrinsics matrix"""
 
-    def _image_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image` message"""
-        self.camera_optical_pose_in_world_frame
+    def _pose_image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.pose_image` message"""
+        pose = self.pose
+        if pose is not None and not self._pose_sent:
+            # Send initial pose to EKF node if not yet sent
+            self.get_logger().info(f"Initializing EKF with pose {pose}")
+            self._set_initial_pose(pose)
+
+    def _twist_image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.twist_image` message"""
+        self.twist
 
     def _should_recompute_and_cache_camera_optical_pose_in_world_frame(self):
         return True
 
     @property
-    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_world_frame)
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
+        ROS_TOPIC_RELATIVE_TWIST,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform(child_frame_id="camera_optical")
-    def camera_optical_pose_in_world_frame(self) -> Optional[PoseStamped]:
-        """Camera pose in orthoimage world frame"""
+    def twist(self) -> Optional[TwistWithCovarianceStamped]:
+        """:term:`Camera` twist in :term:`REP 103` compliant ``camera_optical`` frame
+
+        This represents both the linear (or translational) and angular velocity of
+        the ``camera_optical`` frame in its own reference frame. This is obtained via
+        :term:`VO` and is a smooth estimate of velocity. It is intended to be fused with
+        and complement the discontinous pose estimate obtained via deep matching against
+        the GIS rasters.
+        """
 
         @narrow_types(self)
-        def _camera_optical_pose_in_world_frame_via_vo(
+        def _twist(
             camera_info: CameraInfo,
-            cached_pose_in_world_frame: PoseStamped,
-            pose_in_query_frame: PoseStamped,
-        ) -> Optional[PoseStamped]:
-            from_current_query_frame_to_previous = tf_.pose_to_transform(
-                pose_in_query_frame, "query_previous"
-            )
+            pose_in_query_frame: PoseWithCovarianceStamped,
+            stereo_image: MonocularStereoImage,
+        ) -> Optional[PoseWithCovarianceStamped]:
+            # differential_pose = pose_in_query_frame.copy()
 
             # Adjust for origin at center of image
             cx, cy = camera_info.width // 2, camera_info.height // 2
             # TODO Assumes fx == fy?
             fx = camera_info.k.reshape((3, 3))[0, 0]
-            from_current_query_frame_to_previous.transform.translation.x -= cx
-            from_current_query_frame_to_previous.transform.translation.y -= cy
-            from_current_query_frame_to_previous.transform.translation.z += fx
+            pose = pose_in_query_frame.pose.pose
+            pose.position.x -= cx
+            pose.position.y -= cy
+            pose.position.z += fx
 
-            H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(
-                tf_.transform_to_pose(from_current_query_frame_to_previous)
+            H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(pose_in_query_frame)
+
+            dt: int = (
+                rclpy.time.Time.from_msg(stereo_image.query.header.stamp)
+                - rclpy.time.Time.from_msg(stereo_image.reference.header.stamp)
+            ).nanoseconds / 1e9
+
+            # TODO: scale to meters
+            twist = tf_.pose_to_twist(pose_in_query_frame.pose.pose, dt)
+
+            # the directions are in camrea
+            header = tf_.create_header(
+                self, "camera_optical"  # , pose_in_query_frame.header.stamp
             )
-            H_cached, r_cached, t_cached = tf_.pose_stamped_to_matrices(
-                cached_pose_in_world_frame
+            header.stamp = pose_in_query_frame.header.stamp
+
+            # TODO: add covariance estimates
+            twist_with_covariance = TwistWithCovariance(
+                twist=twist, covariance=_COVARIANCE_LIST
             )
 
-            current_camera_pose_in_gisnav_world = H_cached @ H_diff
-            current_camera_pose_in_gisnav_world = tf_.create_pose_msg(
-                pose_in_query_frame.header.stamp,
-                cached_pose_in_world_frame.header.frame_id,
-                current_camera_pose_in_gisnav_world[:3, :3],
-                current_camera_pose_in_gisnav_world[:3, 3],
+            return TwistWithCovarianceStamped(
+                header=header, twist=twist_with_covariance
             )
 
-            return current_camera_pose_in_gisnav_world
+        stereo_image = self.twist_image
+        return _twist(
+            self.camera_info,
+            self.camera_optical_pose_in_query_frame(stereo_image),
+            stereo_image,
+        )
 
-            # TODO scale values by M[2,2] - this is currently not in meters
-            # self.odometry(odometry_msg)
+    @property
+    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_world_frame)
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_POSE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    @ROS.transform(child_frame_id="camera_optical")
+    def pose(self) -> Optional[PoseWithCovarianceStamped]:
+        """Camera pose in :term:`REP 105` ``map`` frame
 
-        if self.image is not None:
-            if self.image.header.frame_id.startswith("+proj"):
-                return self._get_pose(self.image, False)
-            elif self.image.header.frame_id.startswith("query") and hasattr(
-                self, "_camera_optical_pose_in_world_frame"
-            ):
-                cached = deepcopy(self._camera_optical_pose_in_world_frame)
-                return _camera_optical_pose_in_world_frame_via_vo(
-                    self.camera_info,
-                    cached,
-                    self.camera_optical_pose_in_query_frame,
-                )
-
-        return None
+        This represents the global 3D poseition and orienation of the ``camera_optical``
+        frame in the earth-fixed ``map`` frame. This is obtained via :term:`deep
+        matching` and is a discontinuous estimate of pose. It is intended to be fused
+        with and complement the continous or smooth twist estimate obtained via
+        :term:`shallow matching or visual odometry <VO>` subsequent images from
+        the onboard camera.
+        """
+        return self._get_pose(self.pose_image, False)
 
     def _should_recompute_and_cache_camera_optical_pose_in_query_frame(self):
         return True
 
     @narrow_types
-    def _get_pose(self, msg: Image, shallow_inference: bool) -> Optional[PoseStamped]:
+    def _get_pose(
+        self, msg: Union[Image, MonocularStereoImage], shallow_inference: bool
+    ) -> Optional[PoseWithCovarianceStamped]:
         qry, ref, dem = self._preprocess(msg, shallow_inference=shallow_inference)
         mkp_qry, mkp_ref = self._process(qry, ref)
         pose = self._postprocess(
@@ -216,37 +267,47 @@ class PoseNode(Node):
             f"{'shallow' if shallow_inference else 'deep'} inference",
         )
 
+        header = msg.header if not shallow_inference else msg.query.header
+
         pose = tf_.create_pose_msg(
-            msg.header.stamp,
-            msg.header.frame_id,
+            header.stamp,
+            header.frame_id,
             r_inv,
             camera_optical_position_in_world,
         )
-        return pose
 
-    @property
+        # TODO: add covariance estimates to pose
+        pose_with_covariance = PoseWithCovariance(
+            pose=pose.pose, covariance=_COVARIANCE_LIST
+        )
+
+        pose_with_covariance = PoseWithCovarianceStamped(
+            header=pose.header, pose=pose_with_covariance
+        )
+
+        return pose_with_covariance
+
     @cache_if(_should_recompute_and_cache_camera_optical_pose_in_query_frame)
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
+        ROS_TOPIC_RELATIVE_QUERY_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     @ROS.transform("camera_optical")
-    def camera_optical_pose_in_query_frame(self) -> Optional[PoseStamped]:
+    def camera_optical_pose_in_query_frame(
+        self, msg: MonocularStereoImage
+    ) -> Optional[PoseWithCovarianceStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
-        return self._get_pose(self.image, True)
+        return self._get_pose(msg, True)
 
-    # TODO: have another image topic for VO image which can have a max delay,
-    #  orthoimage cannot have a max delay since it can be very old if we fly in the
-    #  same area
     @property
     # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", STEREO_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_POSE_IMAGE.replace("~", STEREO_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_cb,
+        callback=_pose_image_cb,
     )
-    def image(self) -> Optional[Image]:
+    def pose_image(self) -> Optional[Image]:
         """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
         in a single 4-channel :term:`stack`. The query image is in the first
         channel, the reference image is in the second, and the elevation reference
@@ -261,10 +322,21 @@ class PoseNode(Node):
             rosdep index.
         """
 
+    @property
+    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_TWIST_IMAGE.replace("~", STEREO_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_twist_image_cb,
+    )
+    def twist_image(self) -> Optional[MonocularStereoImage]:
+        """:term:`Query <query>`, :term:`reference image couple for :term:`VO`"""
+
     @narrow_types
     def _preprocess(
         self,
-        stereo_image: Image,
+        stereo_image: Union[Image, MonocularStereoImage],
         shallow_inference: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Converts sensor_msgs/Image message to numpy arrays
@@ -282,11 +354,10 @@ class PoseNode(Node):
         :return: A 3-tuple/triplet of query image, reference image, and DEM rasters
         """
         # Convert the ROS Image message to an OpenCV image
-        full_image_cv = self._cv_bridge.imgmsg_to_cv2(
-            stereo_image, desired_encoding="passthrough"
-        )
-
         if not shallow_inference:
+            full_image_cv = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image, desired_encoding="passthrough"
+            )
             # Check that the image has 4 channels
             channels = full_image_cv.shape[2]
             assert channels == 4, (
@@ -311,23 +382,16 @@ class PoseNode(Node):
                 reference_elevation,
             )
         else:
-            ndim = full_image_cv.ndim
-            assert ndim == 2, (
-                f"The input image for shallow matching against previous image is "
-                f"expected to have 2 dimensions - {ndim} received instead."
+            # TODO: clean up these different matching tracks, e.g. have custom
+            #  message type for orthoimage raster + query frame too
+            assert isinstance(stereo_image, MonocularStereoImage)
+            query_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.query, desired_encoding="mono8"
+            )
+            reference_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.reference, desired_encoding="mono8"
             )
 
-            h, w = full_image_cv.shape
-
-            # this image should consist of two images placed side-by-side
-            assert w % 2 == 0, (
-                "The input image for shallow matching against previous image should "
-                "consist of two images side by side making width divisible by two."
-            )
-
-            half_w = int(w / 2)
-            query_img = full_image_cv[:, :half_w]
-            reference_img = full_image_cv[:, half_w:]
             return query_img, reference_img, np.zeros_like(reference_img)
 
     def _process(
@@ -395,7 +459,7 @@ class PoseNode(Node):
         qry_img: np.ndarray,
         ref_img: np.ndarray,
         label: str,
-    ) -> Optional[PoseStamped]:
+    ) -> Optional[PoseWithCovarianceStamped]:
         """Computes camera pose from keypoint matches"""
 
         @narrow_types(self)

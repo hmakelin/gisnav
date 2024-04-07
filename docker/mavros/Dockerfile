@@ -91,7 +91,7 @@ RUN cd gisnav && \
     cd /opt/colcon_ws && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
     source install/setup.bash && \
-    colcon build --packages-select gisnav
+    colcon build --packages-select gisnav gisnav_msgs
 
 COPY docker/mavros/gisnav/entrypoint.sh /
 

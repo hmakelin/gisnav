@@ -18,13 +18,7 @@ from rclpy.qos import QoSPresetProfiles
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import (
-    POSE_NODE_NAME,
-    ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE,
-    ROS_TOPIC_SENSOR_GPS,
-    FrameID,
-)
+from ..constants import ROS_TOPIC_SENSOR_GPS, FrameID
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
@@ -95,7 +89,7 @@ class MockGPSNode(Node):
         )
 
         # Subscribe
-        self.pose
+        # TODO: subscribe to odometry from EKF
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -121,26 +115,6 @@ class MockGPSNode(Node):
         """:term:`DEM` vertical datum (must match DEM that is published in
         :attr:`.GISNode.orthoimage`)
         """
-
-    def _pose_cb(self, msg: PoseStamped) -> None:
-        frame_id: FrameID = msg.header.frame_id
-
-        if frame_id.startswith("+proj"):
-            # This pose as a proj string so we know it's an earth-fixed frame and we
-            # can create a mock GPS message out of it. The query frames used in VO
-            # are not suitable since they do not contain a georeference like a proj
-            # string.
-            self._publish(msg)
-
-    @property
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE.replace("~", POSE_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_pose_cb,
-    )
-    def pose(self) -> Optional[PoseStamped]:
-        """Camera estimated pose"""
 
     def _publish(self, pose_stamped: PoseStamped) -> None:
         @narrow_types(self)

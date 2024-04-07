@@ -17,7 +17,7 @@ from typing import (
 )
 
 import tf2_ros
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.exceptions import (
     ParameterAlreadyDeclaredException,
@@ -456,10 +456,15 @@ class ROS:
                 type_hints = get_type_hints(func)
                 optional_type = type_hints["return"]
                 topic_type = get_args(optional_type)[0]
-                if topic_type not in (None, TransformStamped, PoseStamped):
+                if topic_type not in (
+                    None,
+                    TransformStamped,
+                    PoseStamped,
+                    PoseWithCovarianceStamped,
+                ):
                     raise ValueError(
-                        f"Return type must be None, TransformStamped or PoseStamped. "
-                        f"Detected {topic_type}"
+                        f"Return type must be None, TransformStamped, PoseStamped "
+                        f"or PoseWithCovarianceStamped. Detected {topic_type}"
                     )
 
                 # Check if the broadcaster is already created and cached
@@ -470,7 +475,9 @@ class ROS:
 
                 if obj is None:
                     return None
-                elif isinstance(obj, PoseStamped):
+                elif isinstance(obj, PoseStamped) or isinstance(
+                    obj, PoseWithCovarianceStamped
+                ):
                     transform = tf_.pose_to_transform(
                         deepcopy(obj), child_frame_id=child_frame_id
                     )

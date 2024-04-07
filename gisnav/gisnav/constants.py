@@ -44,14 +44,29 @@ ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 :attr:`.BBoxNode.fov_bounding_box`.
 """
 
-ROS_TOPIC_RELATIVE_PNP_IMAGE: Final = "~/image"
+ROS_TOPIC_RELATIVE_POSE_IMAGE: Final = "~/pose_image"
 """Relative :term:`topic` into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.pnp_image`.
+:attr:`.StereoNode.pose_image`.
 """
 
-ROS_TOPIC_RELATIVE_CAMERA_ESTIMATED_POSE: Final = "~/camera_optical/pose"
-"""Relative :term:`topic` into which :class:`.PnPNode` publishes
-:attr:`.PnPNode.camera_estimated_pose`.
+ROS_TOPIC_RELATIVE_TWIST_IMAGE: Final = "~/twist_image"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.twist_image`.
+"""
+
+ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.pose`.
+
+"""
+ROS_TOPIC_RELATIVE_QUERY_POSE: Final = "~/vo/pose"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.camera_optical_pose_in_query_frame`.
+"""
+
+ROS_TOPIC_RELATIVE_TWIST: Final = "~/twist"
+"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+:attr:`.StereoNode.twist`.
 """
 
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"

@@ -30,13 +30,12 @@ from geometry_msgs.msg import (
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from robot_localization.srv import SetPose
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
 
 from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
 
 from .. import _transformations as tf_
-from .._decorators import ROS, cache_if, narrow_types
+from .._decorators import ROS, narrow_types
 from ..constants import (
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
@@ -44,7 +43,6 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_POSE,
     ROS_TOPIC_RELATIVE_POSE_IMAGE,
     ROS_TOPIC_RELATIVE_QUERY_POSE,
-    ROS_TOPIC_RELATIVE_TWIST,
     ROS_TOPIC_RELATIVE_TWIST_IMAGE,
     STEREO_NODE_NAME,
 )
@@ -102,15 +100,6 @@ class PoseNode(Node):
         self.twist_image
         self.time_reference
 
-        self._set_pose_client = self.create_client(
-            SetPose, "/robot_localization/set_pose"
-        )
-        while not self._set_pose_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for EKF node set_pose service...")
-        self._set_pose_request = SetPose.Request()
-        self._future = None
-        self._pose_sent: bool = False
-
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
             self._set_pose_request.pose = pose
@@ -136,85 +125,13 @@ class PoseNode(Node):
 
     def _pose_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.pose_image` message"""
-        pose = self.pose
-        if pose is not None and not self._pose_sent:
-            # Send initial pose to EKF node if not yet sent
-            self.get_logger().info(f"Initializing EKF with pose {pose}")
-            self._set_initial_pose(pose)
+        self.pose
 
     def _twist_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.twist_image` message"""
-        self.twist
-
-    def _should_recompute_and_cache_camera_optical_pose_in_world_frame(self):
-        return True
+        self.camera_optical_pose_in_query_frame(self.twist_image)
 
     @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_TWIST,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def twist(self) -> Optional[TwistWithCovarianceStamped]:
-        """:term:`Camera` twist in :term:`REP 103` compliant ``camera_optical`` frame
-
-        This represents both the linear (or translational) and angular velocity of
-        the ``camera_optical`` frame in its own reference frame. This is obtained via
-        :term:`VO` and is a smooth estimate of velocity. It is intended to be fused with
-        and complement the discontinous pose estimate obtained via deep matching against
-        the GIS rasters.
-        """
-
-        @narrow_types(self)
-        def _twist(
-            camera_info: CameraInfo,
-            pose_in_query_frame: PoseWithCovarianceStamped,
-            stereo_image: MonocularStereoImage,
-        ) -> Optional[PoseWithCovarianceStamped]:
-            # differential_pose = pose_in_query_frame.copy()
-
-            # Adjust for origin at center of image
-            cx, cy = camera_info.width // 2, camera_info.height // 2
-            # TODO Assumes fx == fy?
-            fx = camera_info.k.reshape((3, 3))[0, 0]
-            pose = pose_in_query_frame.pose.pose
-            pose.position.x -= cx
-            pose.position.y -= cy
-            pose.position.z += fx
-
-            H_diff, r_diff, t_diff = tf_.pose_stamped_to_matrices(pose_in_query_frame)
-
-            dt: int = (
-                rclpy.time.Time.from_msg(stereo_image.query.header.stamp)
-                - rclpy.time.Time.from_msg(stereo_image.reference.header.stamp)
-            ).nanoseconds / 1e9
-
-            # TODO: scale to meters
-            twist = tf_.pose_to_twist(pose_in_query_frame.pose.pose, dt)
-
-            # the directions are in camrea
-            header = tf_.create_header(
-                self, "camera_optical"  # , pose_in_query_frame.header.stamp
-            )
-            header.stamp = pose_in_query_frame.header.stamp
-
-            # TODO: add covariance estimates
-            twist_with_covariance = TwistWithCovariance(
-                twist=twist, covariance=_COVARIANCE_LIST
-            )
-
-            return TwistWithCovarianceStamped(
-                header=header, twist=twist_with_covariance
-            )
-
-        stereo_image = self.twist_image
-        return _twist(
-            self.camera_info,
-            self.camera_optical_pose_in_query_frame(stereo_image),
-            stereo_image,
-        )
-
-    @property
-    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_world_frame)
     @ROS.publish(
         ROS_TOPIC_RELATIVE_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -231,9 +148,6 @@ class PoseNode(Node):
         the onboard camera.
         """
         return self._get_pose(self.pose_image, False)
-
-    def _should_recompute_and_cache_camera_optical_pose_in_query_frame(self):
-        return True
 
     @narrow_types
     def _get_pose(
@@ -287,12 +201,12 @@ class PoseNode(Node):
 
         return pose_with_covariance
 
-    @cache_if(_should_recompute_and_cache_camera_optical_pose_in_query_frame)
     @ROS.publish(
         ROS_TOPIC_RELATIVE_QUERY_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     @ROS.transform("camera_optical")
+    @narrow_types
     def camera_optical_pose_in_query_frame(
         self, msg: MonocularStereoImage
     ) -> Optional[PoseWithCovarianceStamped]:

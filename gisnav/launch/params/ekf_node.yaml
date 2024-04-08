@@ -18,6 +18,7 @@ robot_localization:
       #history_length: 10.0
       #print_diagnostics: true
 
+      # Fuse absolute pose estimated from map rasters
       pose0: "/gisnav/pose_node/pose"
       pose0_config: [true, true, true,     # Position XYZ
                      true, true, true,     # Orientation (roll, pitch, yaw)
@@ -25,9 +26,11 @@ robot_localization:
                      false, false, false,  # Angular rates XYZ
                      false, false, false]  # Accelerations XYZ
 
-      twist0: "/gisnav/pose_node/twist"
-      twist0_config: [false, false, false, # Position XYZ
-                      false, false, false, # Orientation (roll, pitch, yaw)
-                      true, true, true,    # Velocity XYZ
-                      true, true, true,    # Angular rates XYZ
-                      false, false, false] # Accelerations XYZ
+      # Fuse smooth relative pose estimated via VO differentially as velocity
+      pose1: "/gisnav/pose_node/vo/pose"
+      pose1_differential: true
+      pose1_config: [false, false, false,  # Position XYZ
+                     false, false, false,  # Orientation (roll, pitch, yaw)
+                     true, true, true,     # Velocity XYZ
+                     true, true, true,     # Angular rates XYZ
+                     false, false, false]  # Accelerations XYZ

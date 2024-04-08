@@ -64,11 +64,6 @@ ROS_TOPIC_RELATIVE_QUERY_POSE: Final = "~/vo/pose"
 :attr:`.StereoNode.camera_optical_pose_in_query_frame`.
 """
 
-ROS_TOPIC_RELATIVE_TWIST: Final = "~/twist"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.twist`.
-"""
-
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
 """The :term:`MAVROS` time reference topic that has the difference between
 the local system time and the foreign :term:`FCU` time

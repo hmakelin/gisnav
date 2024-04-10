@@ -8,8 +8,8 @@ from typing import Final, Optional, Tuple
 
 import numpy as np
 import tf2_ros
-from geometry_msgs.msg import PoseStamped
 from gps_time import GPSTime
+from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
@@ -89,7 +89,7 @@ class MockGPSNode(Node):
         )
 
         # Subscribe
-        # TODO: subscribe to odometry from EKF
+        self.odometry
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -116,14 +116,32 @@ class MockGPSNode(Node):
         :attr:`.GISNode.orthoimage`)
         """
 
-    def _publish(self, pose_stamped: PoseStamped) -> None:
-        @narrow_types(self)
-        def _publish_inner(pose_stamped: PoseStamped) -> None:
-            # Convert to WGS 84 coordinates (altitude in meters AGL)
-            frame_id: FrameID = pose_stamped.header.frame_id
+    def _odometry_cb(self, msg: Odometry) -> None:
+        """Callback for :attr:`.odometry`"""
+        # self._publish(msg)  # TODO enable
 
+    @property
+    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
+    @ROS.subscribe(
+        "/robot_localization/filtered/odometry",
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_odometry_cb,
+    )
+    def odometry(self) -> Optional[Odometry]:
+        """Camera info message including the camera intrinsics matrix"""
+
+    def _publish(self, odometry: Odometry) -> None:
+        @narrow_types(self)
+        def _publish_inner(odometry: Odometry) -> None:
+            # Convert to WGS 84 coordinates (altitude in meters AGL)
+            frame_id: FrameID = odometry.header.frame_id
+
+            pose = odometry.pose
+
+            # TODO: get map to WGS 84 transform - the frame_Id is no longer a proj
+            #  string with Odometry messages
             M = tf_.proj_to_affine(frame_id)
-            H, r, t = tf_.pose_stamped_to_matrices(pose_stamped)
+            H, r, t = tf_.pose_stamped_to_matrices(pose)
 
             # TODO: make this a computed property
             #  We only need the relative rotation from base_link to camera_optical
@@ -134,7 +152,7 @@ class MockGPSNode(Node):
                 self,
                 "camera_optical",
                 "base_link",
-                pose_stamped.header.stamp,  # stamp,
+                odometry.header.stamp,  # stamp,
             )
             if transform_stamped is None:
                 self.get_logger().error("TF stamped is NONE")
@@ -150,9 +168,9 @@ class MockGPSNode(Node):
             assert t.shape == (3,)
             t = M @ np.append(t, 1)
 
-            timestamp = tf_.usec_from_header(pose_stamped.header)
+            timestamp = tf_.usec_from_header(odometry.header)
 
-            vehicle_yaw_degrees = tf_.extract_yaw(pose_stamped.pose.orientation)
+            vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available
             vehicle_yaw_degrees = (
@@ -173,8 +191,19 @@ class MockGPSNode(Node):
                 return None
 
             satellites_visible = np.iinfo(np.uint8).max
-            eph = 10.0
-            epv = 1.0
+
+            cov_matrix = odometry.pose.covariances.reshape((6, 6))
+            std_dev_x = np.sqrt(cov_matrix[0, 0])
+            std_dev_y = np.sqrt(cov_matrix[1, 1])
+            std_dev_z = np.sqrt(cov_matrix[2, 2])
+            eph = np.sqrt(std_dev_x**2 + std_dev_y**2)
+            epv = std_dev_z
+
+            # Twist in ENU (map) frame
+            twist = odometry.twist
+            vel_n_m_s = twist.linear.y
+            vel_e_m_s = twist.linear.x
+            vel_d_m_s = -twist.linear.z
 
             if self.use_sensor_gps:
                 self.sensor_gps(
@@ -183,6 +212,9 @@ class MockGPSNode(Node):
                     alt_ellipsoid,
                     alt_amsl,
                     vehicle_yaw_degrees,
+                    vel_n_m_s,
+                    vel_e_m_s,
+                    vel_d_m_s,
                     self._device_id,
                     timestamp,
                     eph,
@@ -201,7 +233,7 @@ class MockGPSNode(Node):
                     satellites_visible,
                 )
 
-        _publish_inner(pose_stamped)
+        _publish_inner(odometry)
 
     @narrow_types
     @ROS.publish(
@@ -215,6 +247,9 @@ class MockGPSNode(Node):
         altitude_ellipsoid: float,
         altitude_amsl: float,
         yaw_degrees: int,
+        vel_n_m_s: float,
+        vel_e_m_s: float,
+        vel_d_m_s: float,
         device_id: int,
         timestamp: int,
         eph: float,
@@ -249,18 +284,18 @@ class MockGPSNode(Node):
         msg.automatic_gain_control = 0
         msg.jamming_state = 0
         msg.jamming_indicator = 0
-        msg.vel_m_s = 0.0
-        msg.vel_n_m_s = 0.0
-        msg.vel_e_m_s = 0.0
-        msg.vel_d_m_s = 0.0
-        msg.cog_rad = np.nan
+        msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
+        msg.vel_n_m_s = vel_n_m_s
+        msg.vel_e_m_s = vel_e_m_s
+        msg.vel_d_m_s = vel_d_m_s
+        msg.cog_rad = np.arctan(vel_n_m_s / vel_e_m_s)
         msg.vel_ned_valid = True
         msg.timestamp_time_relative = 0
         msg.satellites_used = satellites_visible
         msg.time_utc_usec = msg.timestamp
         msg.heading = float(yaw_rad)
-        msg.heading_offset = 0.0
-        msg.heading_accuracy = 0.0
+        msg.heading_offset = 0.0  # assume map frame is an ENU frame
+        msg.heading_accuracy = 0.3  # todo get from odometry covariance matrix
 
         return msg
 

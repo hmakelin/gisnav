@@ -18,6 +18,7 @@ from geometry_msgs.msg import (
     Twist,
 )
 from nav_msgs.msg import Odometry
+from pyproj import Transformer
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
@@ -521,3 +522,63 @@ def pose_to_twist(pose: Pose, time_diff_sec: int) -> Twist:
     twist.angular.z = euler[2] / time_diff_sec
 
     return twist
+
+
+def lonlat_to_easting_northing(
+    longitude: float, latitude: float
+) -> Tuple[float, float]:
+    """Converts WGS 84 longitude and latitude to meters from WGS 84 origin"""
+    # Determine the UTM zone
+    utm_zone = int((longitude + 180) / 6) + 1
+
+    # Create a transformer to convert from latitude/longitude to UTM
+    transformer = Transformer.from_crs(
+        "epsg:4326", f"epsg:326{utm_zone:02d}", always_xy=True
+    )
+
+    # Convert the latitude and longitude to UTM
+    easting, northing = transformer.transform(longitude, latitude)
+
+    # TODO: consider passing proj_strings around
+    # Adjust the easting to make it global (relative to the prime meridian) because
+    # we do not want to be passing proj strings around: we want to have only one
+    # "map_gisnav" map frame.
+
+    # Calculate the central meridian of the UTM zone
+    prime_meridian = (utm_zone - 1) * 6 - 180 + 3
+    # Calculate the offset in meters from the prime meridian
+    offset = (prime_meridian + 180) / 6 * 1000000 - 500000
+    # Adjust the easting value
+    global_easting = easting + offset
+
+    return global_easting, northing
+
+
+def easting_northing_to_lonlat(
+    global_easting: float, northing: float
+) -> Tuple[float, float]:
+    """Converts easting and northing in meters from WGS 84 origin to longitude and
+    latitude in degrees
+    """
+    # Estimate the approximate central meridian from the global easting
+    approximate_central_meridian = ((global_easting + 500000) / 1000000) * 6 - 180
+
+    # Estimate the UTM zone from the central meridian
+    utm_zone = int((approximate_central_meridian + 180) / 6) + 1
+
+    # Calculate the offset in meters from the prime meridian
+    prime_meridian = (utm_zone - 1) * 6 - 180 + 3
+    offset = (prime_meridian + 180) / 6 * 1000000 - 500000
+
+    # Reverse the adjustment to the easting value to get the original easting
+    original_easting = global_easting - offset
+
+    # Create a transformer to convert from UTM to latitude/longitude
+    transformer = Transformer.from_crs(
+        f"epsg:326{utm_zone:02d}", "epsg:4326", always_xy=True
+    )
+
+    # Convert the original easting and northing to latitude and longitude
+    longitude, latitude = transformer.transform(original_easting, northing)
+
+    return longitude, latitude

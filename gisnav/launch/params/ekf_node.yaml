@@ -3,10 +3,10 @@ robot_localization:
     ros__parameters:
       odom_frame: "odom"
       base_link_frame: "base_link"
-      world_frame: "map"
-      map_frame: "map"
+      world_frame: "map_gisnav"
+      map_frame: "map_gisnav"
 
-      publish_tf: true
+      #publish_tf: true
 
       frequency: 1.0
       sensor_timeout: 10.0
@@ -27,10 +27,21 @@ robot_localization:
                      false, false, false]  # Accelerations XYZ
 
       # Fuse smooth relative pose estimated via VO differentially as velocity
-      pose1: "/gisnav/pose_node/vo/pose"
-      pose1_differential: true
-      pose1_config: [false, false, false,  # Position XYZ
-                     false, false, false,  # Orientation (roll, pitch, yaw)
-                     true, true, true,     # Velocity XYZ
-                     true, true, true,     # Angular rates XYZ
-                     false, false, false]  # Accelerations XYZ
+      #pose1: "/gisnav/pose_node/vo/pose"
+      #pose1_differential: true
+      #pose1_config: [true, true, true,     # Position XYZ
+      #               true, true, true,     # Orientation (roll, pitch, yaw)
+      #               false, false, false,  # Velocity XYZ
+      #               false, false, false,  # Angular rates XYZ
+      #               false, false, false]  # Accelerations XYZ
+
+      #pose1: "/gisnav/pose_node/vo/pose"
+      #pose1_differential: true
+      #pose1_config: [false, false, false,  # Position XYZ
+      #               false, false, false,  # Orientation (roll, pitch, yaw)
+      #               true, true, true,     # Velocity XYZ
+      #               true, true, true,     # Angular rates XYZ
+      #               false, false, false]  # Accelerations XYZ
+
+      #debug: true
+      #debug_out_file: "/home/hmakelin/robot_localization_debug.txt"

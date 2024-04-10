@@ -13,23 +13,20 @@ reference images and then solving the resulting :term:`PnP` problem.
 refers exclusively to the orthoimage reference frame, not the visual odometry reference
 frame.
 """
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, cast
 
 import cv2
 import numpy as np
 import rclpy
+import tf2_ros
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import (
-    PoseWithCovariance,
-    PoseWithCovarianceStamped,
-    TwistWithCovariance,
-    TwistWithCovarianceStamped,
-)
+from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from robot_localization.srv import SetPose
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
 
 from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
@@ -45,12 +42,13 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_QUERY_POSE,
     ROS_TOPIC_RELATIVE_TWIST_IMAGE,
     STEREO_NODE_NAME,
+    FrameID,
 )
 
 # TODO: make error model and generate covariance matrix dynamically
 # Create dummy covariance matrix
 _covariance_matrix = np.zeros((6, 6))
-np.fill_diagonal(_covariance_matrix, 25)
+np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
 _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
 
 
@@ -100,6 +98,17 @@ class PoseNode(Node):
         self.twist_image
         self.time_reference
 
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+
+        self._set_pose_client = self.create_client(
+            SetPose, "/robot_localization/set_pose"
+        )
+        while not self._set_pose_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for EKF node set_pose service...")
+        self._set_pose_request = SetPose.Request()
+        self._pose_sent = False
+
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
             self._set_pose_request.pose = pose
@@ -125,7 +134,11 @@ class PoseNode(Node):
 
     def _pose_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.pose_image` message"""
-        self.pose
+        pose = self.pose
+        if pose is not None:
+            # TODO: need to set via FCU EKF since VO might already be publishing to
+            #  EKF node
+            self._set_initial_pose(pose)
 
     def _twist_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.twist_image` message"""
@@ -177,20 +190,28 @@ class PoseNode(Node):
         tf_.visualize_camera_position(
             ref.copy(),
             camera_optical_position_in_world,
-            f"Camera position in world frame, "
-            f"{'shallow' if shallow_inference else 'deep'} inference",
+            f"Camera {'principal point' if shallow_inference else 'position'} "
+            f"in world frame, {'shallow' if shallow_inference else 'deep'} inference",
         )
 
         header = msg.header if not shallow_inference else msg.query.header
 
         pose = tf_.create_pose_msg(
             header.stamp,
-            header.frame_id,
+            cast(FrameID, "map_gisnav"),
             r_inv,
             camera_optical_position_in_world,
         )
 
-        # TODO: add covariance estimates to pose
+        if header.frame_id.startswith("+proj"):
+            affine = tf_.proj_to_affine(header.frame_id)
+            t_wgs84 = affine @ np.append(camera_optical_position_in_world, 1)
+            x, y = tf_.lonlat_to_easting_northing(t_wgs84[0], t_wgs84[1])
+            z = t_wgs84[2]
+            pose.pose.position.x = x
+            pose.pose.position.y = y
+            pose.pose.position.z = z
+
         pose_with_covariance = PoseWithCovariance(
             pose=pose.pose, covariance=_COVARIANCE_LIST
         )
@@ -205,7 +226,7 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_QUERY_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform("camera_optical")
+    # @ROS.transform("camera_optical")  # TODO: enable after scaling to meters
     @narrow_types
     def camera_optical_pose_in_query_frame(
         self, msg: MonocularStereoImage

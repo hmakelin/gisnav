@@ -16,7 +16,9 @@ from typing import (
     get_type_hints,
 )
 
+import numpy as np
 import tf2_ros
+import tf_transformations
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.exceptions import (
@@ -437,7 +439,10 @@ class ROS:
         if needed, and then publishes it on the tf topic.
 
         :param child_frame_id: Name of child frame
-        :param invert: Set to False to not invert the transform relative to the pose
+        :param invert: Set to False to not invert the transform relative to the pose.
+            Inverting the pose is useful if the frame_id of the pose needs to be the
+            child_frame_id in the tf transformation tree (e.g. in a situation where the
+            input child_frame_id already has a parent in the tf tree).
         :return: A method that publishes its return value to the tf topic whenever
             called. The return value must be TransformStamped, PoseStamped, or None
         """
@@ -486,19 +491,41 @@ class ROS:
                     transform = obj
 
                 if invert:
-                    transform.transform.translation.x = (
-                        -transform.transform.translation.x
+                    # Convert quaternion to rotation matrix
+                    quaternion = [
+                        transform.transform.rotation.x,
+                        transform.transform.rotation.y,
+                        transform.transform.rotation.z,
+                        transform.transform.rotation.w,
+                    ]
+                    rotation_matrix = tf_transformations.quaternion_matrix(quaternion)
+                    # Invert the translation and apply the rotation
+                    translation_vector = np.array(
+                        [
+                            -transform.transform.translation.x,
+                            -transform.transform.translation.y,
+                            -transform.transform.translation.z,
+                        ]
                     )
-                    transform.transform.translation.y = (
-                        -transform.transform.translation.y
+                    inverted_translation = rotation_matrix.T.dot(
+                        np.append(translation_vector, 1)
                     )
-                    transform.transform.translation.z = (
-                        -transform.transform.translation.z
+
+                    # Update the transform with the inverted translation
+                    transform.transform.translation.x = inverted_translation[0]
+                    transform.transform.translation.y = inverted_translation[1]
+                    transform.transform.translation.z = inverted_translation[2]
+
+                    # Invert the rotation as well
+                    inverted_rotation = tf_transformations.quaternion_from_matrix(
+                        rotation_matrix.T
                     )
-                    transform.transform.rotation.x = -transform.transform.rotation.x
-                    transform.transform.rotation.y = -transform.transform.rotation.y
-                    transform.transform.rotation.z = -transform.transform.rotation.z
-                    # Leave rotation.w unchanged
+                    transform.transform.rotation.x = inverted_rotation[0]
+                    transform.transform.rotation.y = inverted_rotation[1]
+                    transform.transform.rotation.z = inverted_rotation[2]
+                    transform.transform.rotation.w = inverted_rotation[3]
+
+                    # Update frame IDs as per your original logic
                     transform.child_frame_id = transform.header.frame_id
                     transform.header.frame_id = child_frame_id
 

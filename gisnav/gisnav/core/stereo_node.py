@@ -199,7 +199,8 @@ class StereoNode(Node):
             )
 
             # Rotate and crop orthoimage stack
-            # TODO: implement this part better
+            # TODO: implement this part better e.g. use
+            #  tf_transformations.euler_from_quaternion
             camera_yaw_degrees = tf_.extract_yaw(transform.rotation)
             camera_roll_degrees = tf_.extract_roll(transform.rotation)
 

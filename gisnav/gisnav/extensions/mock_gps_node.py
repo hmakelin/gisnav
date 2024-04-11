@@ -8,6 +8,7 @@ from typing import Final, Optional, Tuple
 
 import numpy as np
 import tf2_ros
+import tf_transformations
 from gps_time import GPSTime
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
@@ -18,7 +19,7 @@ from rclpy.qos import QoSPresetProfiles
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import ROS_TOPIC_SENSOR_GPS, FrameID
+from ..constants import ROS_TOPIC_SENSOR_GPS
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
@@ -118,12 +119,12 @@ class MockGPSNode(Node):
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
-        # self._publish(msg)  # TODO enable
+        self._publish(msg)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
-        "/robot_localization/filtered/odometry",
+        "/robot_localization/odometry/filtered",
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_odometry_cb,
     )
@@ -133,88 +134,156 @@ class MockGPSNode(Node):
     def _publish(self, odometry: Odometry) -> None:
         @narrow_types(self)
         def _publish_inner(odometry: Odometry) -> None:
-            # Convert to WGS 84 coordinates (altitude in meters AGL)
-            frame_id: FrameID = odometry.header.frame_id
+            pose = odometry.pose.pose
 
-            pose = odometry.pose
-
-            # TODO: get map to WGS 84 transform - the frame_Id is no longer a proj
-            #  string with Odometry messages
-            M = tf_.proj_to_affine(frame_id)
-            H, r, t = tf_.pose_stamped_to_matrices(pose)
-
-            # TODO: make this a computed property
-            #  We only need the relative rotation from base_link to camera_optical
-            # For the mock GPS message we are interested in base_link, not
-            # camera_optical pose.
-            # stamp = rclpy.time.Time()
-            transform_stamped = tf_.get_transform(
-                self,
-                "camera_optical",
-                "base_link",
-                odometry.header.stamp,  # stamp,
-            )
-            if transform_stamped is None:
-                self.get_logger().error("TF stamped is NONE")
-                return
-            H_, r_, t_ = tf_.pose_stamped_to_matrices(
-                tf_.transform_to_pose(transform_stamped)
-            )
-
-            r = r_ @ r
-            # t should be the same
-
-            # M has translations in the 4th column so we add 1 to the translation vector
-            assert t.shape == (3,)
-            t = M @ np.append(t, 1)
+            # WGS 84 longitude and latitude, and AGL altitude in meters
+            lon, lat = tf_.easting_northing_to_lonlat(pose.position.x, pose.position.y)
+            alt_agl = pose.position.z
 
             timestamp = tf_.usec_from_header(odometry.header)
 
-            vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            # Heading
+            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            vehicle_yaw_degrees = np.degrees(
+                tf_transformations.euler_from_quaternion(
+                    tf_.as_np_quaternion(pose.orientation).tolist()
+                )[2]
+            )
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available
             vehicle_yaw_degrees = (
                 360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
             )
 
-            lat = int(t[1] * 1e7)
-            lon = int(t[0] * 1e7)
+            # Heading (yaw := z axis rotation) variance, assume no covariances
+            pose_cov = odometry.pose.covariance.reshape((6, 6))
+            std_dev_c_z = pose_cov[5, 5]
+            h_variance_rad = std_dev_c_z**2
 
+            # WGS 84 ellipsoid and AMSL altitudes
             altitudes = self._convert_to_wgs84(
-                t[1],
-                t[0],
-                t[2],
+                lat,
+                lon,
+                alt_agl,
             )
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
                 return None
 
+            # Make satellites_visible value unrealistic but technically valid to make
+            # GISNav generated mock GPS messages easy to identify. Do not make this
+            # zero because the messages might then get rejected because of too low
+            # satellite count.
             satellites_visible = np.iinfo(np.uint8).max
 
-            cov_matrix = odometry.pose.covariances.reshape((6, 6))
-            std_dev_x = np.sqrt(cov_matrix[0, 0])
-            std_dev_y = np.sqrt(cov_matrix[1, 1])
-            std_dev_z = np.sqrt(cov_matrix[2, 2])
-            eph = np.sqrt(std_dev_x**2 + std_dev_y**2)
-            epv = std_dev_z
+            # Pose variance: eph (horizontal error SD) and epv (vertical error SD),
+            # assume no covariances
+            x_var = pose_cov[0, 0]
+            y_var = pose_cov[1, 1]
+            eph = np.sqrt(x_var + y_var)
+            z_var = pose_cov[2, 2]
+            epv = np.sqrt(z_var)
 
-            # Twist in ENU (map) frame
-            twist = odometry.twist
+            # 3D velocity
+            # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
+            # z axis
+            twist = odometry.twist.twist
             vel_n_m_s = twist.linear.y
             vel_e_m_s = twist.linear.x
             vel_d_m_s = -twist.linear.z
 
+            # Speed variance, assume no covariances
+            twist_cov = odometry.twist.covariance.reshape((6, 6))
+            # Twist in ENU -> remap to NED here by swapping x and y axes, z axis
+            # inversion should not affect variance
+            vel_n_m_s_var = twist_cov[1, 1]
+            vel_e_m_s_var = twist_cov[0, 0]
+            vel_d_m_s_var = twist_cov[2, 2]
+            s_variance_m_s = vel_n_m_s_var + vel_e_m_s_var + vel_d_m_s_var
+
+            # Course over ground and its variance
+            def _calculate_cog_variance(
+                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
+            ) -> float:
+                numerator = (vel_e_m_s_var * vel_n_m_s**2) + (
+                    vel_n_m_s_var * vel_e_m_s**2
+                )
+                denominator = (vel_e_m_s**2 + vel_n_m_s**2) ** 2
+
+                # Calculate the variance of the CoG in radians
+                cog_var = numerator / denominator
+
+                # TODO handle possible exceptions arising from variance exploding at 0
+                #  velocity (as it should)
+                return float(cog_var)
+
+            def _calculate_course_over_ground(
+                east_velocity: float, north_velocity: float
+            ) -> float:
+                """
+                Calculate the course over ground from east and north velocities.
+
+                :param east_velocity: The velocity towards the east in meters per
+                    second.
+                :param north_velocity: The velocity towards the north in meters per
+                    second.
+                :return: The course over ground in degrees from the north, in the range
+                    [0, 2 * pi).
+
+                The course over ground is calculated using the arctangent of the east
+                and north velocities. The result is adjusted to ensure it is within
+                the [0, 2 * pi) range.
+                """
+                magnitude = np.sqrt(east_velocity**2 + north_velocity**2)
+
+                if east_velocity >= 0 and north_velocity >= 0:
+                    # top-right quadrant
+                    course_over_ground_radians = np.arcsin(east_velocity / magnitude)
+                elif east_velocity >= 0 and north_velocity < 0:
+                    # bottom-right quadrant
+                    course_over_ground_radians = 0.5 * np.pi + np.arcsin(
+                        -north_velocity / magnitude
+                    )
+                elif east_velocity < 0 and north_velocity < 0:
+                    # bottom-left quadrant
+                    course_over_ground_radians = np.pi + np.arcsin(
+                        -east_velocity / magnitude
+                    )
+                elif east_velocity < 0 and north_velocity >= 0:
+                    # top-left quadrant
+                    course_over_ground_radians = 1.5 * np.pi + np.arcsin(
+                        north_velocity / magnitude
+                    )
+                else:
+                    # todo: this is unreachable?
+                    course_over_ground_radians = 0.0
+
+                return course_over_ground_radians
+
+            # Compute course over ground - pay attention to sine only being
+            # defined for 0<=theta<=90
+            cog = _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
+
+            # Compute course over ground variance
+            cog_variance_rad = _calculate_cog_variance(
+                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
+            )
+
             if self.use_sensor_gps:
                 self.sensor_gps(
-                    lat,
-                    lon,
+                    int(lat * 1e7),
+                    int(lon * 1e7),
                     alt_ellipsoid,
                     alt_amsl,
                     vehicle_yaw_degrees,
+                    h_variance_rad,
                     vel_n_m_s,
                     vel_e_m_s,
                     vel_d_m_s,
+                    cog,
+                    cog_variance_rad,
+                    s_variance_m_s,
                     self._device_id,
                     timestamp,
                     eph,
@@ -242,14 +311,18 @@ class MockGPSNode(Node):
     )
     def sensor_gps(
         self,
-        lat: int,
-        lon: int,
+        lat: int,  # todo update to new message definition with degrees, not 1e7 degrees
+        lon: int,  # todo update to new message definition with degrees, not 1e7 degrees
         altitude_ellipsoid: float,
         altitude_amsl: float,
         yaw_degrees: int,
+        h_variance_rad: float,
         vel_n_m_s: float,
         vel_e_m_s: float,
         vel_d_m_s: float,
+        cog: float,
+        cog_variance_rad: float,
+        s_variance_m_s: float,
         device_id: int,
         timestamp: int,
         eph: float,
@@ -270,8 +343,8 @@ class MockGPSNode(Node):
         msg.device_id = device_id
         # msg.device_id = 0
         msg.fix_type = 3
-        msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
-        msg.c_variance_rad = np.nan
+        msg.s_variance_m_s = s_variance_m_s
+        msg.c_variance_rad = cog_variance_rad
         msg.lat = lat
         msg.lon = lon
         msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
@@ -282,22 +355,25 @@ class MockGPSNode(Node):
         msg.vdop = 0.0
         msg.noise_per_ms = 0
         msg.automatic_gain_control = 0
-        msg.jamming_state = 0
+        msg.jamming_state = 0  # 1 := OK, 0 := UNKNOWN
         msg.jamming_indicator = 0
+        msg.spoofing_state = 0  # 1 := OK, 0 := UNKNOWN
         msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
         msg.vel_n_m_s = vel_n_m_s
         msg.vel_e_m_s = vel_e_m_s
         msg.vel_d_m_s = vel_d_m_s
-        msg.cog_rad = np.arctan(vel_n_m_s / vel_e_m_s)
+        msg.cog_rad = cog
         msg.vel_ned_valid = True
         msg.timestamp_time_relative = 0
         msg.satellites_used = satellites_visible
         msg.time_utc_usec = msg.timestamp
         msg.heading = float(yaw_rad)
         msg.heading_offset = 0.0  # assume map frame is an ENU frame
-        msg.heading_accuracy = 0.3  # todo get from odometry covariance matrix
+        msg.heading_accuracy = h_variance_rad
 
-        return msg
+        self.get_logger().error(f"{msg}")
+        return None  # todo disable this line
+        # return msg
 
     @narrow_types
     # @ROS.publish(

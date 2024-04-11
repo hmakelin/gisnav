@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import rclpy
 import tf2_ros
+import tf_transformations
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
@@ -191,7 +192,8 @@ class PoseNode(Node):
             ref.copy(),
             camera_optical_position_in_world,
             f"Camera {'principal point' if shallow_inference else 'position'} "
-            f"in world frame, {'shallow' if shallow_inference else 'deep'} inference",
+            f"in {'previous' if shallow_inference else 'world'} frame, "
+            f"{'shallow' if shallow_inference else 'deep'} inference",
         )
 
         header = msg.header if not shallow_inference else msg.query.header
@@ -211,6 +213,32 @@ class PoseNode(Node):
             pose.pose.position.x = x
             pose.pose.position.y = y
             pose.pose.position.z = z
+
+            # TODO: get rotation from affine, and apply it around the z axis (zenith)
+            #  for camera_optical pose in map_gisnav frame
+            orientation = pose.pose.orientation
+            R = affine[:3, :3]
+            # normalize rotation matrix (the affine matrix includes scaling)
+            norms = np.linalg.norm(R, axis=0)
+            R_norm = R / norms
+
+            euler = tf_transformations.euler_from_matrix(R_norm)
+            self.get_logger().error(f"euler {euler}")
+
+            # the rotation matrix at this point should be yaw + inversion of z axis
+
+            q = [orientation.x, orientation.y, orientation.z, orientation.w]
+            r = tf_transformations.quaternion_matrix(q)
+            R_norm_temp = np.eye(4)
+            R_norm_temp[:3, :3] = R_norm
+
+            r = R_norm_temp @ r
+            euler2 = tf_transformations.euler_from_matrix(r)
+            self.get_logger().error(f"euler compound rotation {euler2}")
+
+            # here we have ENU frame yaw, from -pi to pi
+            q = tf_transformations.quaternion_from_matrix(r)
+            pose.pose.orientation = tf_.as_ros_quaternion(np.array(q))
 
         pose_with_covariance = PoseWithCovariance(
             pose=pose.pose, covariance=_COVARIANCE_LIST

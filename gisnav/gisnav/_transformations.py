@@ -267,6 +267,7 @@ def visualize_camera_corners(image, corners, title):
     cv2.waitKey(1)
 
 
+# TODO: refactor out this function
 def extract_yaw(q: Quaternion) -> float:
     """Calculate the yaw angle from a quaternion in the ENU frame.
 
@@ -287,6 +288,7 @@ def extract_yaw(q: Quaternion) -> float:
     return heading
 
 
+# TODO: refactor out this function
 def extract_roll(q: Quaternion) -> float:
     """Calculate the roll angle from a quaternion
 
@@ -564,7 +566,7 @@ def easting_northing_to_lonlat(
     approximate_central_meridian = ((global_easting + 500000) / 1000000) * 6 - 180
 
     # Estimate the UTM zone from the central meridian
-    utm_zone = int((approximate_central_meridian + 180) / 6) + 1
+    utm_zone = int((approximate_central_meridian + 180) / 6)
 
     # Calculate the offset in meters from the prime meridian
     prime_meridian = (utm_zone - 1) * 6 - 180 + 3

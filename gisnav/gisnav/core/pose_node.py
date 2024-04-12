@@ -214,30 +214,25 @@ class PoseNode(Node):
             pose.pose.position.y = y
             pose.pose.position.z = z
 
-            # TODO: get rotation from affine, and apply it around the z axis (zenith)
-            #  for camera_optical pose in map_gisnav frame
-            orientation = pose.pose.orientation
+            # Get rotation matrix from world frame to ENU map_gisnav frame - this
+            # should only be a rotation around the yaw (and a flip of z axis and sign
+            # of rotation, since map_gisnav is ENU while world frame is right-down-
+            # forward which projected to ground means ESD)
             R = affine[:3, :3]
-            # normalize rotation matrix (the affine matrix includes scaling)
-            norms = np.linalg.norm(R, axis=0)
-            R_norm = R / norms
+            R = R / np.linalg.norm(R, axis=0)
+            euler = tf_transformations.euler_from_matrix(R)
 
-            euler = tf_transformations.euler_from_matrix(R_norm)
-            self.get_logger().error(f"euler {euler}")
+            def _add_rotation_around_z(pose_quaternion, angle_radians):
+                z_rotation = tf_transformations.quaternion_about_axis(
+                    angle_radians, (0, 0, 1)
+                )
+                new_quaternion = tf_transformations.quaternion_multiply(
+                    z_rotation, pose_quaternion
+                )
+                return new_quaternion
 
-            # the rotation matrix at this point should be yaw + inversion of z axis
-
-            q = [orientation.x, orientation.y, orientation.z, orientation.w]
-            r = tf_transformations.quaternion_matrix(q)
-            R_norm_temp = np.eye(4)
-            R_norm_temp[:3, :3] = R_norm
-
-            r = R_norm_temp @ r
-            euler2 = tf_transformations.euler_from_matrix(r)
-            self.get_logger().error(f"euler compound rotation {euler2}")
-
-            # here we have ENU frame yaw, from -pi to pi
-            q = tf_transformations.quaternion_from_matrix(r)
+            q = pose.pose.orientation
+            q = _add_rotation_around_z([q.x, q.y, q.z, q.w], euler[2])
             pose.pose.orientation = tf_.as_ros_quaternion(np.array(q))
 
         pose_with_covariance = PoseWithCovariance(

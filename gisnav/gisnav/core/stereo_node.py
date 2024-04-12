@@ -203,7 +203,6 @@ class StereoNode(Node):
             #  tf_transformations.euler_from_quaternion
             camera_yaw_degrees = tf_.extract_yaw(transform.rotation)
             camera_roll_degrees = tf_.extract_roll(transform.rotation)
-
             # This is assumed to be positive clockwise when looking down nadir
             # (z axis up in an ENU frame), z is aligned with zenith so in that sense
             # this is positive in the counter-clockwise direction. E.g. east aligned

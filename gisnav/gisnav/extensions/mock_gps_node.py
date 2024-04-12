@@ -7,8 +7,10 @@ from datetime import datetime
 from typing import Final, Optional, Tuple
 
 import numpy as np
+import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
+from geometry_msgs.msg import Vector3Stamped
 from gps_time import GPSTime
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
@@ -144,16 +146,23 @@ class MockGPSNode(Node):
 
             # Heading
             # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
-            vehicle_yaw_degrees = np.degrees(
-                tf_transformations.euler_from_quaternion(
-                    tf_.as_np_quaternion(pose.orientation).tolist()
-                )[2]
+            euler = tf_transformations.euler_from_quaternion(
+                tf_.as_np_quaternion(pose.orientation).tolist()
             )
+            yaw_rad = euler[2]  # ENU frame
+            yaw_rad = -yaw_rad  # NED frame ("heading")
+
+            if yaw_rad < 0:
+                yaw_rad = 2 * np.pi + yaw_rad
+
+            # move yaw range to [0, 2*pi) (it should be at [-pi, pi)
+            vehicle_yaw_degrees = np.degrees(yaw_rad)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available
             vehicle_yaw_degrees = (
                 360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
             )
+            # TODO: yaw is in ENU frame but need it in NED frame -> flip sign
 
             # Heading (yaw := z axis rotation) variance, assume no covariances
             pose_cov = odometry.pose.covariance.reshape((6, 6))
@@ -189,6 +198,24 @@ class MockGPSNode(Node):
             # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
             # z axis
             twist = odometry.twist.twist
+            transform = tf_.get_transform(
+                self, "map_gisnav", "base_link", odometry.header.stamp
+            )
+
+            # Need to convert linear twist vector to stamped version becase
+            # do_transform_vector3 expects stamped
+            vector_stamped = Vector3Stamped(header=odometry.header, vector=twist.linear)
+            vector_stamped.header.frame_id = odometry.child_frame_id
+            if transform is None:
+                # TODO: do this better
+                return None
+            linear_enu = tf2_geometry_msgs.do_transform_vector3(
+                vector_stamped, transform
+            )
+            linear_enu = linear_enu.vector
+            # vel_n_m_s = linear_enu.y  # twist.linear.y
+            # vel_e_m_s = linear_enu.x  # twist.linear.x
+            # vel_d_m_s = -linear_enu.z # -twist.linear.z
             vel_n_m_s = twist.linear.y
             vel_e_m_s = twist.linear.x
             vel_d_m_s = -twist.linear.z
@@ -372,8 +399,7 @@ class MockGPSNode(Node):
         msg.heading_accuracy = h_variance_rad
 
         self.get_logger().error(f"{msg}")
-        return None  # todo disable this line
-        # return msg
+        return msg
 
     @narrow_types
     # @ROS.publish(

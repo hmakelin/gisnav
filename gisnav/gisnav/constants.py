@@ -82,13 +82,6 @@ ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
 DELAY_DEFAULT_MS: Final = 2000
 """Max acceptable delay for things like global position"""
 
-DELAY_FAST_MS: Final = 500
-"""Max acceptable delay for messages with fast dynamics that go "stale"
-quickly, e.g.local position and attitude. The delay can be a bit higher
-than is intuitive because the vehicle EKF should be able to fuse things
-with fast dynamics with higher lags as long as the timestamps are accurate.
-"""
-
 FrameID = Literal[
     "base_link",
     "camera",

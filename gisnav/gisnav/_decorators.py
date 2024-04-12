@@ -7,7 +7,6 @@ from typing import (
     Callable,
     List,
     Optional,
-    Tuple,
     TypeVar,
     Union,
     cast,
@@ -21,10 +20,7 @@ import tf2_ros
 import tf_transformations
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.exceptions import (
-    ParameterAlreadyDeclaredException,
-    ParameterNotDeclaredException,
-)
+from rclpy.exceptions import ParameterNotDeclaredException
 from rclpy.node import Node
 from std_msgs.msg import Header
 from typing_extensions import ParamSpec
@@ -169,70 +165,6 @@ def narrow_types(
         return inner_decorator(method)
 
     # Wrapping static or class method
-    return inner_decorator
-
-
-def validate(
-    condition: Callable[[], bool],
-    logger_callable: Optional[Callable[[str], Any]] = None,
-    custom_msg: Optional[str] = None,
-):
-    """
-    A decorator to check an arbitrary condition before executing the wrapped function.
-
-    If the condition is not met, the decorator optinally logs a warning message
-    using the provided logger_callable, and then returns `None`. If the
-    condition is met, the wrapped function is executed as normal.
-
-    .. warning::
-        * If the decorated method can also return None after execution you will
-          not be able to tell from the return value whether the method executed
-          or the validation failed. # TODO: the decorator should log a warning
-          or perhaps even raise an error if the decorated function includes a
-          None return type.
-
-    :param condition: A callable with no arguments that returns a boolean value.
-        The wrapped function will be executed if this condition evaluates to True.
-    :param logger_callable: An optional callable that takes a single string
-        argument, which will be called to log a warning message when the
-        condition fails.
-    :param custom_msg: Optional custom message to prefix to the logging message
-    :return: The inner decorator function that wraps the target function.
-
-    Example usage:
-
-    .. code-block:: python
-
-        import logging
-
-        logging.basicConfig(level=logging.WARNING)
-        logger = logging.getLogger(__name__)
-
-        def my_condition():
-            return False
-
-        @validate(my_condition, logger.warning)
-        def my_function():
-            return "Success"
-
-        result = my_function()
-        print("Function result:", result)
-    """
-
-    def inner_decorator(func: Callable[P, T]):
-        @wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
-            if not condition():
-                if logger_callable:
-                    logger_callable(
-                        f"{custom_msg}: Validation failed for function "
-                        f"'{func.__name__}'. Returning 'None'."
-                    )
-                return None
-            return func(*args, **kwargs)
-
-        return wrapper
-
     return inner_decorator
 
 
@@ -613,81 +545,6 @@ class ROS:
 
         return decorator
 
-    @staticmethod
-    def setup_node(params: List[Tuple[str, Any, bool]]):
-        """
-        A decorator that declares ROS parameters for a given class. The parent
-        Node initialization is handled inside this decorator, so the child node
-        should not call the parent initializer.
-
-        .. warning::
-            The parameters declared by this decorator will not be available
-            until after class instantiation. Do not try to use them in the
-            __init__ method.
-
-        :param params: A list of tuples containing ROS parameter name,
-            default value, and optional read-only flag.
-        :type params: List[Tuple[str, Union[int, float, str, bool, List[str]], bool]]
-
-        Example usage:
-
-        .. code-block:: python
-
-            class MyClass(Node):
-
-                @ROS.setup_node([
-                    ("param1", 1, True),
-                    ("param2", 2),
-                    ("param3", "default_value"),
-                ])
-                def __init__(self):
-                    # Handled by decorator - do not call parent constructor here
-                    # super().__init__("my_node")
-                    pass
-
-        """
-
-        def decorator(initializer):
-            @wraps(initializer)
-            def wrapped_function(node_instance, *args, **kwargs):
-                # TODO: assumes name is first arg, brittle, make into kwarg?
-
-                # Call rclpy Node constructor
-                Node.__init__(
-                    node_instance,
-                    node_name=args[0],
-                    *args[1:],
-                    **kwargs,
-                    allow_undeclared_parameters=True,
-                    automatically_declare_parameters_from_overrides=True,
-                )
-                for param_tuple in params:
-                    param, default_value, *extras = param_tuple
-                    read_only = extras[0] if extras else False
-                    descriptor = ParameterDescriptor(read_only=read_only)
-
-                    try:
-                        node_instance.declare_parameter(
-                            param, default_value, descriptor
-                        )
-                        node_instance.get_logger().info(
-                            f'Using default value "{default_value}" for ROS '
-                            f'parameter "{param}".'
-                        )
-                    except ParameterAlreadyDeclaredException:
-                        value = node_instance.get_parameter(param).value
-                        node_instance.get_logger().info(
-                            f'ROS parameter "{param}" already declared with '
-                            f'value "{value}".'
-                        )
-
-                # Call child constructor after declaring params
-                initializer(node_instance, *args, **kwargs)
-
-            return wrapped_function
-
-        return decorator
-
     # List of types supported by ROS2
     SUPPORTED_ROS_TYPES = (
         str,
@@ -780,55 +637,3 @@ class ROS:
             return wrapper
 
         return decorator
-
-    @staticmethod
-    def retain_oldest_header(func: Callable[..., Any]) -> Callable[..., Any]:
-        """Decorator to ensure that the output :term:`ROS` message's timestamp
-        inherits the oldest timestamp from the input ROS messages.
-
-        The decorated function is expected to process input in the form of ROS
-        messages and produce an output, which is another ROS message.
-
-        This decorator assumes:
-        1. Any input argument with a `header` attribute also has a `stamp`
-           attribute within the header.
-        2. The output of the decorated function has a `header` attribute with a
-           `stamp` attribute.
-
-        :param func: The function to be decorated.
-        :returns: The wrapped function.
-        """
-
-        # TODO: it would be better to just retain oldest timestamp, and leave
-        #  header creation explicit (e.g. frame_id might not be same as in
-        #  input messages)
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Optional[Any]:
-            # Get all ROS message headers from the inputs
-            headers = [arg.header for arg in args if hasattr(arg, "header")]
-
-            # If there are headers, find the one with oldest timestamp
-            # Use timestamp seconds, ignore nanoseconds
-            if headers:  # empty list evaluates to False
-                oldest_header = min(
-                    headers,
-                    key=lambda header: header.stamp.sec,
-                    default=None,
-                )
-            else:
-                oldest_header = None
-
-            # Call the original function
-            result = func(*args, **kwargs)
-
-            # If result is not None and we found a timestamp, set it in the result
-            if (
-                result is not None
-                and oldest_header is not None
-                and hasattr(result, "header")
-            ):
-                result.header = oldest_header
-
-            return result
-
-        return wrapper

@@ -155,7 +155,7 @@ class MockGPSNode(Node):
             if yaw_rad < 0:
                 yaw_rad = 2 * np.pi + yaw_rad
 
-            # move yaw range to [0, 2*pi) (it should be at [-pi, pi)
+            # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
             vehicle_yaw_degrees = np.degrees(yaw_rad)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available

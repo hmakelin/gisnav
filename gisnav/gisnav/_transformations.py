@@ -10,14 +10,11 @@ import tf_transformations
 from builtin_interfaces.msg import Time
 from geographic_msgs.msg import BoundingBox
 from geometry_msgs.msg import (
-    Pose,
     PoseStamped,
     PoseWithCovarianceStamped,
     Quaternion,
     TransformStamped,
-    Twist,
 )
-from nav_msgs.msg import Odometry
 from pyproj import Transformer
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
@@ -189,25 +186,6 @@ def pose_to_transform(
     return transform_stamped
 
 
-def transform_to_pose(transform_stamped_msg):  # , frame_id: str):
-    # Create a new PoseStamped message
-    pose_stamped = PoseStamped()
-
-    # Copy the header
-    pose_stamped.header = transform_stamped_msg.header
-
-    # Set the specified frame_id
-    # pose_stamped.header.frame_id = frame_id
-
-    # Copy the transform information to the pose
-    pose_stamped.pose.position.x = transform_stamped_msg.transform.translation.x
-    pose_stamped.pose.position.y = transform_stamped_msg.transform.translation.y
-    pose_stamped.pose.position.z = transform_stamped_msg.transform.translation.z
-    pose_stamped.pose.orientation = transform_stamped_msg.transform.rotation
-
-    return pose_stamped
-
-
 def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp: Time
 ) -> TransformStamped:
@@ -305,140 +283,6 @@ def extract_roll(q: Quaternion) -> float:
     return roll_deg
 
 
-def pose_stamped_diff_to_odometry(
-    pose1: PoseStamped, pose2: PoseStamped, child_frame_id: str = "camera"
-) -> Odometry:
-    """Returns and Odometry message from the difference of two PoseStamped messages
-
-    :param pose1: Older PoseStamped message
-    :param pose2: Newer PoseStamped message
-    """
-    assert pose1.header.frame_id == pose2.header.frame_id, (
-        f"Frame IDs do not match: pose1 {pose1.header.frame_id} "
-        f"and pose2: {pose2.header.frame_id}"
-    )
-
-    # Initialize an Odometry message
-    odometry_msg = Odometry()
-
-    # Set the frame_id and child_frame_id
-    odometry_msg.header.frame_id = pose2.header.frame_id
-
-    # TODO base_link to camera published elsewhere, assume this is camera
-    odometry_msg.child_frame_id = child_frame_id
-
-    # Set the position from the newer PoseStamped message
-    odometry_msg.pose.pose = pose2.pose
-
-    # Calculate position difference
-    dx = pose2.pose.position.x - pose1.pose.position.x
-    dy = pose2.pose.position.y - pose1.pose.position.y
-    dz = pose2.pose.position.z - pose1.pose.position.z
-
-    # Calculate orientation difference using quaternions
-    q1 = [
-        pose1.pose.orientation.x,
-        pose1.pose.orientation.y,
-        pose1.pose.orientation.z,
-        pose1.pose.orientation.w,
-    ]
-    q2 = [
-        pose2.pose.orientation.x,
-        pose2.pose.orientation.y,
-        pose2.pose.orientation.z,
-        pose2.pose.orientation.w,
-    ]
-    q_diff = tf_transformations.quaternion_multiply(
-        tf_transformations.quaternion_inverse(q1), q2
-    )
-
-    # Calculate angular velocity (this is a simplified approach; for more accuracy,
-    # consider time differences)
-    # Note: Assuming small time difference between messages for simplicity. For more
-    # precise applications, use actual time difference.
-    angular_velocity = tf_transformations.euler_from_quaternion(q_diff)
-
-    # Set the linear and angular velocities in the Odometry message
-    # Assuming the time delta between pose1 and pose2 is 1 second for simplicity.
-    # Replace with actual time difference if available.
-    time_delta = (pose2.header.stamp - pose1.header.stamp).to_sec()
-    if time_delta > 0:
-        odometry_msg.twist.twist.linear.x = dx / time_delta
-        odometry_msg.twist.twist.linear.y = dy / time_delta
-        odometry_msg.twist.twist.linear.z = dz / time_delta
-
-        odometry_msg.twist.twist.angular.x = angular_velocity[0] / time_delta
-        odometry_msg.twist.twist.angular.y = angular_velocity[1] / time_delta
-        odometry_msg.twist.twist.angular.z = angular_velocity[2] / time_delta
-    else:
-        # Handle zero or negative time delta if necessary
-        pass
-
-    return odometry_msg
-
-
-# TODO: use this in the odometry function?
-def pose_stamped_diff(pose1: PoseStamped, pose2: PoseStamped) -> PoseStamped:
-    """Returns a Transform that is the diff between the Pose messages
-
-    :param pose1: Older PoseStamped message
-    :param pose2: Newer PoseStamped message
-    """
-    assert pose1.header.frame_id == pose2.header.frame_id, (
-        f"Frame IDs do not match: pose1 {pose1.header.frame_id} "
-        f"and pose2: {pose2.header.frame_id}"
-    )
-
-    # Initialize an Odometry message
-    pose_msg = pose1
-
-    # Calculate position difference
-    pose2.pose.position.x - pose1.pose.position.x
-    pose2.pose.position.y - pose1.pose.position.y
-    pose2.pose.position.z - pose1.pose.position.z
-    pose_msg.pose.position.x = pose2.pose.position.x - pose1.pose.position.x
-    pose_msg.pose.position.y = pose2.pose.position.y - pose1.pose.position.y
-    pose_msg.pose.position.z = pose2.pose.position.z - pose1.pose.position.z
-
-    return pose_msg
-
-
-def pose_stamped_to_matrices(
-    pose_stamped: Union[PoseStamped, PoseWithCovarianceStamped],
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    # Extract the orientation quaternion from the PoseStamped message
-    # todo clean up implementation
-    pose = (
-        pose_stamped.pose
-        if isinstance(pose_stamped, PoseStamped)
-        else pose_stamped.pose.pose
-    )
-    quaternion = (
-        pose.orientation.x,
-        pose.orientation.y,
-        pose.orientation.z,
-        pose.orientation.w,
-    )
-
-    # Extract the position vector from the PoseStamped message
-    position = (
-        pose.position.x,
-        pose.position.y,
-        pose.position.z,
-    )
-
-    # Convert the quaternion to a rotation matrix
-    rotation_matrix = tf_transformations.quaternion_matrix(quaternion)[:3, :3]
-
-    # The translation vector is already in the correct format, but let's make it a
-    # numpy array
-    translation_vector = np.array(position)
-
-    H = matrices_to_homogenous(rotation_matrix, translation_vector)
-
-    return H, rotation_matrix, translation_vector
-
-
 def matrices_to_homogenous(r, t) -> np.ndarray:
     """3D pose in homogenous form for convenience"""
     H = np.eye(4)
@@ -501,29 +345,6 @@ def proj_to_affine(proj_str: FrameID) -> np.ndarray:
     M = np.array([[s11, s12, s13, xoff], [s21, s22, s23, yoff], [s31, s32, s33, zoff]])
 
     return M
-
-
-def pose_to_twist(pose: Pose, time_diff_sec: int) -> Twist:
-    # Initialize the Twist message
-    twist = Twist()
-
-    # Assuming pose.position and pose.orientation are populated
-    # Calculate linear velocities
-    twist.linear.x = pose.position.x / time_diff_sec
-    twist.linear.y = pose.position.y / time_diff_sec
-    twist.linear.z = pose.position.z / time_diff_sec
-
-    # Convert quaternion to Euler angles for easier angular velocity calculation
-    euler = tf_transformations.euler_from_quaternion(
-        [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
-    )
-
-    # Assuming the change in orientation is small enough to treat as linear
-    twist.angular.x = euler[0] / time_diff_sec
-    twist.angular.y = euler[1] / time_diff_sec
-    twist.angular.z = euler[2] / time_diff_sec
-
-    return twist
 
 
 def lonlat_to_easting_northing(

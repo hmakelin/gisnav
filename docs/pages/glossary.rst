@@ -31,8 +31,8 @@ correct alternative should be easily inferred from the context they are used in.
     Extension
     Extended functionality
         * Functionality beyond GISNav :term:`core` functionality. For example,
-          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
-          or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS`
+          substitute or complement.
         * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
     Autopilot
@@ -118,16 +118,6 @@ correct alternative should be easily inferred from the context they are used in.
         * A spatial coordinate reference frame, especially as defined in
           :term:`ROS`
         * An :term:`image` frame (i.e. a single frame from a video stream)
-
-    Geopose
-        A :term:`pose` containing a :term:`global position` and :term:`orientation`.
-        More specifically, a ``geographic_msgs/GeoPose`` or
-        ``geographic_msgs/GeoPoseStamped`` type :term:`ROS` :term:`message` .
-
-        .. todo::
-            No longer used since GISNav v0.65.0. :class:`RVizNode` has not
-            yet been updated and might use this term so it is kept in the
-            glossary.
 
     GetFeatureInfo
         A :term:`WMS` operation for requesting non-:term:`raster` features from

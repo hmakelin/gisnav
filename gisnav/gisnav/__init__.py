@@ -28,7 +28,6 @@ from .constants import (
     POSE_NODE_NAME,
     QGIS_NODE_NAME,
     ROS_NAMESPACE,
-    RVIZ_NODE_NAME,
     STEREO_NODE_NAME,
 )
 from .core import BBoxNode, GISNode, PoseNode, StereoNode
@@ -52,16 +51,6 @@ try:
 
 except ModuleNotFoundError as e:
     print(f"Could not import MockGPSNode because a module was not found: {e}")
-
-try:
-    from .extensions.rviz_node import RVizNode
-
-    def run_rviz_node():
-        """Spins up a :class:`.RVizNode`"""
-        _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
-
-except ModuleNotFoundError as e:
-    print(f"Could not import RVizNode because a module was not found: {e}")
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):

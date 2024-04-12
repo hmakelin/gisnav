@@ -153,7 +153,6 @@ setup(
             "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",
             "bbox_node = gisnav:run_bbox_node",
-            "rviz_node = gisnav:run_rviz_node",
             "qgis_node = gisnav:run_qgis_node",
         ],
     },

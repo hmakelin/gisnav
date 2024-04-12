@@ -28,9 +28,6 @@ STEREO_NODE_NAME: Final = "stereo_node"
 MOCK_GPS_NODE_NAME: Final = "mock_gps_node"
 """Name of :class:`.MockGPSNode` spun up by :func:`.run_mock_gps_node`"""
 
-RVIZ_NODE_NAME: Final = "rviz_node"
-"""Name of :class:`.RVizNode` spun up by :func:`.run_rviz_node`"""
-
 QGIS_NODE_NAME: Final = "qgis_node"
 """Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
 

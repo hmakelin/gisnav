@@ -29,7 +29,6 @@ what you are looking for.
     :caption: Extension nodes
 
     public/mock_gps_node
-    public/rviz_node
     public/qgis_node
 
 .. toctree::

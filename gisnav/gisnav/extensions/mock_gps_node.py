@@ -139,8 +139,10 @@ class MockGPSNode(Node):
             pose = odometry.pose.pose
 
             # WGS 84 longitude and latitude, and AGL altitude in meters
-            lon, lat = tf_.easting_northing_to_lonlat(pose.position.x, pose.position.y)
-            alt_agl = pose.position.z
+            # TODO: this is alt above ellipsoid, not agl
+            lon, lat, alt_agl = tf_.ecef_to_wgs84(
+                pose.position.x, pose.position.y, pose.position.z
+            )
 
             timestamp = tf_.usec_from_header(odometry.header)
 
@@ -199,7 +201,7 @@ class MockGPSNode(Node):
             # z axis
             twist = odometry.twist.twist
             transform = tf_.get_transform(
-                self, "map_gisnav", "base_link", odometry.header.stamp
+                self, "earth", "base_link", odometry.header.stamp
             )
 
             # Need to convert linear twist vector to stamped version becase

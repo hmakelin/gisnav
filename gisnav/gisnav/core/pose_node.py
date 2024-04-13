@@ -200,7 +200,7 @@ class PoseNode(Node):
 
         pose = tf_.create_pose_msg(
             header.stamp,
-            cast(FrameID, "map_gisnav"),
+            cast(FrameID, "earth"),
             r_inv,
             camera_optical_position_in_world,
         )
@@ -208,8 +208,7 @@ class PoseNode(Node):
         if header.frame_id.startswith("+proj"):
             affine = tf_.proj_to_affine(header.frame_id)
             t_wgs84 = affine @ np.append(camera_optical_position_in_world, 1)
-            x, y = tf_.lonlat_to_easting_northing(t_wgs84[0], t_wgs84[1])
-            z = t_wgs84[2]
+            x, y, z = tf_.wgs84_to_ecef(*t_wgs84.tolist())
             pose.pose.position.x = x
             pose.pose.position.y = y
             pose.pose.position.z = z

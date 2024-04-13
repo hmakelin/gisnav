@@ -84,13 +84,9 @@ FrameID = Literal[
     "camera",
     "camera_optical",
     "map",
-    "map_gisnav",
+    "earth",
 ]
-"""Allowed ROS message header ``frame_id``s
-
-``map_gisnav`` is a :term:`REP 103` compliant :term:`ENU` map frame that has its
-easting and northing origin set at (0, 0) in :term:`WGS 84` coordinates.
-:term:`Altitude` or z-axis value is :term:`AGL` altitude as estimated by GISNav.
-
-Other frames as defined in :term:`REP 103` and :term:`REP 105`.
+"""Allowed ROS message header ``frame_id``s as specified in :term:`REP 103` and
+:term:`REP 105`. The ``odom`` frame is not used by GISNav but may be published e.g. by
+:term:`MAVROS`.
 """

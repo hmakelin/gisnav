@@ -15,7 +15,7 @@ from geometry_msgs.msg import (
     Quaternion,
     TransformStamped,
 )
-from pyproj import Transformer
+from pyproj import Proj, transform
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
@@ -347,61 +347,40 @@ def proj_to_affine(proj_str: FrameID) -> np.ndarray:
     return M
 
 
-def lonlat_to_easting_northing(
-    longitude: float, latitude: float
-) -> Tuple[float, float]:
-    """Converts WGS 84 longitude and latitude to meters from WGS 84 origin"""
-    # Determine the UTM zone
-    utm_zone = int((longitude + 180) / 6) + 1
+def wgs84_to_ecef(lon: float, lat: float, alt: float) -> Tuple[float, float, float]:
+    """Convert :term:`WGS 84` geodetic coordinates to ECEF (Earth-Centered, Earth-Fixed)
+    coordinates.
 
-    # Create a transformer to convert from latitude/longitude to UTM
-    transformer = Transformer.from_crs(
-        "epsg:4326", f"epsg:326{utm_zone:02d}", always_xy=True
-    )
+    :param lon: Longitude in decimal degrees.
+    :param lat: Latitude in decimal degrees.
+    :param alt: Altitude above the WGS84 ellipsoid in meters.
+    :return: A tuple (x, y, z) representing ECEF coordinates in meters.
 
-    # Convert the latitude and longitude to UTM
-    easting, northing = transformer.transform(longitude, latitude)
-
-    # TODO: consider passing proj_strings around
-    # Adjust the easting to make it global (relative to the prime meridian) because
-    # we do not want to be passing proj strings around: we want to have only one
-    # "map_gisnav" map frame.
-
-    # Calculate the central meridian of the UTM zone
-    prime_meridian = (utm_zone - 1) * 6 - 180 + 3
-    # Calculate the offset in meters from the prime meridian
-    offset = (prime_meridian + 180) / 6 * 1000000 - 500000
-    # Adjust the easting value
-    global_easting = easting + offset
-
-    return global_easting, northing
-
-
-def easting_northing_to_lonlat(
-    global_easting: float, northing: float
-) -> Tuple[float, float]:
-    """Converts easting and northing in meters from WGS 84 origin to longitude and
-    latitude in degrees
+    Uses the Proj4 library to transform from geographic (latitude, longitude, altitude)
+    coordinates to Cartesian coordinates (x, y, z) in the ECEF system (``earth`` frame
+    in :term:`REP 105`).
     """
-    # Estimate the approximate central meridian from the global easting
-    approximate_central_meridian = ((global_easting + 500000) / 1000000) * 6 - 180
+    proj_wgs84 = Proj(proj="latlong", datum="WGS84")
+    proj_ecef = Proj(proj="geocent", datum="WGS84")
+    x, y, z = transform(proj_wgs84, proj_ecef, lon, lat, alt, radians=False)
+    return x, y, z
 
-    # Estimate the UTM zone from the central meridian
-    utm_zone = int((approximate_central_meridian + 180) / 6)
 
-    # Calculate the offset in meters from the prime meridian
-    prime_meridian = (utm_zone - 1) * 6 - 180 + 3
-    offset = (prime_meridian + 180) / 6 * 1000000 - 500000
+def ecef_to_wgs84(x: float, y: float, z: float) -> Tuple[float, float, float]:
+    """Convert ECEF (Earth-Centered, Earth-Fixed) coordinates to :term:`WGS 84`
+    geodetic coordinates.
 
-    # Reverse the adjustment to the easting value to get the original easting
-    original_easting = global_easting - offset
+    :param x: ECEF x-coordinate in meters.
+    :param y: ECEF y-coordinate in meters.
+    :param z: ECEF z-coordinate in meters.
+    :return: A tuple (lon, lat, alt) representing longitude, latitude, and altitude
+        in the WGS84 coordinate system.
 
-    # Create a transformer to convert from UTM to latitude/longitude
-    transformer = Transformer.from_crs(
-        f"epsg:326{utm_zone:02d}", "epsg:4326", always_xy=True
-    )
-
-    # Convert the original easting and northing to latitude and longitude
-    longitude, latitude = transformer.transform(original_easting, northing)
-
-    return longitude, latitude
+    Uses the Proj4 library to transform from Cartesian coordinates (x, y, z) in the
+    ECEF system (``earth`` frame in :term:`REP 105`) to geographic (latitude,
+    longitude, altitude) coordinates.
+    """
+    proj_wgs84 = Proj(proj="latlong", datum="WGS84")
+    proj_ecef = Proj(proj="geocent", datum="WGS84")
+    lon, lat, alt = transform(proj_ecef, proj_wgs84, x, y, z, radians=False)
+    return lon, lat, alt

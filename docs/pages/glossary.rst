@@ -496,6 +496,9 @@ ____________________________________________________
         Domain Name System: `en.wikipedia.org/wiki/Domain_Name_System
         <https://en.wikipedia.org/wiki/Domain_Name_System>`_
 
+    ECEF
+        Earth-Centered, Earth-Fixed (coordinate frame)
+
     EKF
         Extended Kalman Filter
 

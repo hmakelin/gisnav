@@ -219,19 +219,14 @@ class PoseNode(Node):
             # forward which projected to ground means ESD)
             R = affine[:3, :3]
             R = R / np.linalg.norm(R, axis=0)
-            euler = tf_transformations.euler_from_matrix(R)
 
-            def _add_rotation_around_z(pose_quaternion, angle_radians):
-                z_rotation = tf_transformations.quaternion_about_axis(
-                    angle_radians, (0, 0, 1)
-                )
-                new_quaternion = tf_transformations.quaternion_multiply(
-                    z_rotation, pose_quaternion
-                )
-                return new_quaternion
+            camera_optical_rotation_in_enu = R @ r_inv
 
-            q = pose.pose.orientation
-            q = _add_rotation_around_z([q.x, q.y, q.z, q.w], euler[2])
+            r_ecef = np.eye(4)
+            r_ecef[:3, :3] = tf_.enu_to_ecef_matrix(t_wgs84[0], t_wgs84[1])
+            r_ecef[:3, :3] = r_ecef[:3, :3] @ camera_optical_rotation_in_enu
+
+            q = tf_transformations.quaternion_from_matrix(r_ecef)
             pose.pose.orientation = tf_.as_ros_quaternion(np.array(q))
 
         pose_with_covariance = PoseWithCovariance(

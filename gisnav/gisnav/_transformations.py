@@ -384,3 +384,30 @@ def ecef_to_wgs84(x: float, y: float, z: float) -> Tuple[float, float, float]:
     proj_ecef = Proj(proj="geocent", datum="WGS84")
     lon, lat, alt = transform(proj_ecef, proj_wgs84, x, y, z, radians=False)
     return lon, lat, alt
+
+
+def enu_to_ecef_matrix(lon: float, lat: float) -> np.ndarray:
+    """Generate the rotation matrix for converting ENU coordinates at a given
+    longitude (lon) and latitude (lat) to ECEF coordinates.
+
+    :param lon: Longitude in decimal degrees.
+    :param lat: Latitude in decimal degrees.
+    :return: Rotation matrix (3x3) for the transformation.
+    """
+    lon, lat = np.radians(lon), np.radians(lat)
+
+    slat, clat = np.sin(lat), np.cos(lat)
+    slon, clon = np.sin(lon), np.cos(lon)
+
+    R = np.array(
+        [
+            [
+                -slon,
+                -slat * clon,
+                clat * clon,
+            ],  # ECEF x-axis expressed in ENU coordinates
+            [clon, -slat * slon, clat * slon],  # ECEF y-axis
+            [0, clat, slat],  # ECEF z-axis
+        ]
+    )
+    return R

@@ -2,7 +2,7 @@ robot_localization:
   ekf_node:
     ros__parameters:
       odom_frame: "odom"
-      base_link_frame: "base_link"
+      base_link_frame: "camera_optical"
       world_frame: "earth"
       map_frame: "earth"
 

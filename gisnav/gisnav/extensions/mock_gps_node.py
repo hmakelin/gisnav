@@ -137,7 +137,6 @@ class MockGPSNode(Node):
         @narrow_types(self)
         def _publish_inner(odometry: Odometry) -> None:
             pose = odometry.pose.pose
-
             # WGS 84 longitude and latitude, and AGL altitude in meters
             # TODO: this is alt above ellipsoid, not agl
             lon, lat, alt_agl = tf_.ecef_to_wgs84(
@@ -145,26 +144,6 @@ class MockGPSNode(Node):
             )
 
             timestamp = tf_.usec_from_header(odometry.header)
-
-            # Heading
-            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
-            euler = tf_transformations.euler_from_quaternion(
-                tf_.as_np_quaternion(pose.orientation).tolist()
-            )
-            yaw_rad = euler[2]  # ENU frame
-            yaw_rad = -yaw_rad  # NED frame ("heading")
-
-            if yaw_rad < 0:
-                yaw_rad = 2 * np.pi + yaw_rad
-
-            # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
-            vehicle_yaw_degrees = np.degrees(yaw_rad)
-            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
-            # MAVLink yaw definition 0 := not available
-            vehicle_yaw_degrees = (
-                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-            )
-            # TODO: yaw is in ENU frame but need it in NED frame -> flip sign
 
             # Heading (yaw := z axis rotation) variance, assume no covariances
             pose_cov = odometry.pose.covariance.reshape((6, 6))
@@ -199,9 +178,11 @@ class MockGPSNode(Node):
             # 3D velocity
             # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
             # z axis
+            # TODO: map is not published by GISNav - should use an ENU map frame
+            #  published by gisnav instead
             twist = odometry.twist.twist
             transform = tf_.get_transform(
-                self, "earth", "base_link", odometry.header.stamp
+                self, "map", "camera_optical", odometry.header.stamp
             )
 
             # Need to convert linear twist vector to stamped version becase
@@ -215,12 +196,33 @@ class MockGPSNode(Node):
                 vector_stamped, transform
             )
             linear_enu = linear_enu.vector
-            # vel_n_m_s = linear_enu.y  # twist.linear.y
-            # vel_e_m_s = linear_enu.x  # twist.linear.x
-            # vel_d_m_s = -linear_enu.z # -twist.linear.z
-            vel_n_m_s = twist.linear.y
-            vel_e_m_s = twist.linear.x
-            vel_d_m_s = -twist.linear.z
+            vel_n_m_s = linear_enu.y
+            vel_e_m_s = linear_enu.x
+            vel_d_m_s = -linear_enu.z
+
+            # Heading
+            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            transform_earth_to_map = tf_.get_transform(
+                self, "map", "earth", odometry.header.stamp
+            )
+
+            pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
+            euler = tf_transformations.euler_from_quaternion(
+                tf_.as_np_quaternion(pose_map.orientation).tolist()
+            )
+            yaw_rad = euler[2]  # ENU frame
+            yaw_rad = -yaw_rad  # NED frame ("heading")
+
+            if yaw_rad < 0:
+                yaw_rad = 2 * np.pi + yaw_rad
+
+            # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
+            vehicle_yaw_degrees = np.degrees(yaw_rad)
+            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
+            # MAVLink yaw definition 0 := not available
+            vehicle_yaw_degrees = (
+                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            )
 
             # Speed variance, assume no covariances
             twist_cov = odometry.twist.covariance.reshape((6, 6))

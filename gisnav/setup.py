@@ -116,7 +116,7 @@ setup(
         "OWSLib>=0.25.0",
         "torch>=2.1.0",
         "kornia==0.6.10",
-        "transforms3d",
+        "transforms3d",  # tf_transformations needs this
     ],
     tests_require=["pytest"],
     extras_require={

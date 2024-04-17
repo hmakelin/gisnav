@@ -50,7 +50,7 @@ from ..constants import (
 # Create dummy covariance matrix
 _covariance_matrix = np.zeros((6, 6))
 np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
-_covariance_matrix[3, 3] = np.radians(10) ** 2
+_covariance_matrix[3, 3] = np.radians(5) ** 2  # angle error should be set quite small
 _covariance_matrix[4, 5] = _covariance_matrix[3, 3]
 _covariance_matrix[4, 5] = _covariance_matrix[3, 3]
 _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()

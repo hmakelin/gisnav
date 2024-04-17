@@ -402,7 +402,6 @@ class MockGPSNode(Node):
         msg.heading_offset = 0.0  # assume map frame is an ENU frame
         msg.heading_accuracy = h_variance_rad
 
-        self.get_logger().error(f"{msg}")
         return msg
 
     @narrow_types

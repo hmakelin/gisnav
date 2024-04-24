@@ -363,8 +363,8 @@ class MockGPSNode(Node):
         yaw_rad = np.radians(yaw_degrees)
 
         msg = SensorGps()
-        msg.timestamp = int(timestamp) + 1500000  # todo fix timestamp
-        msg.timestamp_sample = int(timestamp) + 1500000  # todo fix timestamp
+        msg.timestamp = 0
+        msg.timestamp_sample = int(timestamp)
         msg.device_id = 0
         msg.fix_type = 3
         msg.s_variance_m_s = s_variance_m_s
@@ -390,7 +390,7 @@ class MockGPSNode(Node):
         msg.vel_ned_valid = True
         msg.timestamp_time_relative = 0
         msg.satellites_used = satellites_visible
-        msg.time_utc_usec = msg.timestamp
+        msg.time_utc_usec = msg.timestamp_sample
         msg.heading = float(yaw_rad)
         msg.heading_offset = 0.0  # assume map frame is an ENU frame
         msg.heading_accuracy = h_variance_rad

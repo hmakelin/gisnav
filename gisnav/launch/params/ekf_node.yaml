@@ -8,14 +8,16 @@ robot_localization:
 
       #publish_tf: true
 
-      frequency: 1.0
+      frequency: 10.0
       sensor_timeout: 10.0
+      pose0_queue_size: 20
+      pose0_rejection_threshold: 3.0
 
       use_sim_time: false
       two_d_mode: false
 
-      #smooth_lagged_data: true
-      #history_length: 10.0
+      smooth_lagged_data: true
+      history_length: 10.0
       #print_diagnostics: true
 
       # Fuse absolute pose estimated from map rasters

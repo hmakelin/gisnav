@@ -313,14 +313,14 @@ class StereoNode(Node):
 
         inverse_matrix = inverse_matrix @ T
 
-        refimg = self._cv_bridge.imgmsg_to_cv2(
-            self.orthoimage, desired_encoding="passthrough"
-        ).copy()
-        br = inverse_matrix @ np.array([640, 360, 1])
-        tf_.visualize_camera_corners(
-            refimg,
-            [inverse_matrix @ np.array([0, 0, 1]), br],
-            "World frame origin/top-left position in reference frame",
-        )
+        # refimg = self._cv_bridge.imgmsg_to_cv2(
+        #    self.orthoimage, desired_encoding="passthrough"
+        # ).copy()
+        # br = inverse_matrix @ np.array([640, 360, 1])
+        # tf_.visualize_camera_corners(
+        #    refimg,
+        #    [inverse_matrix @ np.array([0, 0, 1]), br],
+        #    "World frame origin/top-left position in reference frame",
+        # )
 
         return cropped_image, inverse_matrix

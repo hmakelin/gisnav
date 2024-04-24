@@ -49,10 +49,10 @@ from ..constants import (
 # TODO: make error model and generate covariance matrix dynamically
 # Create dummy covariance matrix
 _covariance_matrix = np.zeros((6, 6))
-np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
-_covariance_matrix[3, 3] = np.radians(5) ** 2  # angle error should be set quite small
-_covariance_matrix[4, 5] = _covariance_matrix[3, 3]
-_covariance_matrix[4, 5] = _covariance_matrix[3, 3]
+np.fill_diagonal(_covariance_matrix, 36)  # 3 meter SD = 9 variance
+_covariance_matrix[3, 3] = np.radians(15**2)  # angle error should be set quite small
+_covariance_matrix[4, 4] = _covariance_matrix[3, 3]
+_covariance_matrix[5, 5] = _covariance_matrix[3, 3]
 _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
 
 
@@ -73,7 +73,7 @@ class PoseNode(Node):
     deep matching
     """
 
-    MIN_MATCHES = 20
+    MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):

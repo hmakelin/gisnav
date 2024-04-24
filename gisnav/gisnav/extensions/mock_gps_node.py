@@ -315,7 +315,6 @@ class MockGPSNode(Node):
                     cog,
                     cog_variance_rad,
                     s_variance_m_s,
-                    self._device_id,
                     timestamp,
                     eph,
                     epv,
@@ -336,10 +335,7 @@ class MockGPSNode(Node):
         _publish_inner(odometry)
 
     @narrow_types
-    @ROS.publish(
-        ROS_TOPIC_SENSOR_GPS,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
+    @ROS.publish(ROS_TOPIC_SENSOR_GPS, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def sensor_gps(
         self,
         lat: int,  # todo update to new message definition with degrees, not 1e7 degrees
@@ -354,7 +350,6 @@ class MockGPSNode(Node):
         cog: float,
         cog_variance_rad: float,
         s_variance_m_s: float,
-        device_id: int,
         timestamp: int,
         eph: float,
         epv: float,
@@ -365,14 +360,12 @@ class MockGPSNode(Node):
 
         Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
         """
-
         yaw_rad = np.radians(yaw_degrees)
 
         msg = SensorGps()
-        msg.timestamp = int(timestamp)
-        msg.timestamp_sample = int(timestamp)
-        msg.device_id = device_id
-        # msg.device_id = 0
+        msg.timestamp = int(timestamp) + 1500000  # todo fix timestamp
+        msg.timestamp_sample = int(timestamp) + 1500000  # todo fix timestamp
+        msg.device_id = 0
         msg.fix_type = 3
         msg.s_variance_m_s = s_variance_m_s
         msg.c_variance_rad = cog_variance_rad

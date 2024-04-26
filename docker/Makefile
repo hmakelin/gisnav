@@ -183,14 +183,6 @@ expose-xhost:
 		fi; \
 	done
 
-# shortcut for demo
-.PHONY: demo
-demo:
-	@docker compose -p $(PROJECT_NAME) build gisnav qgc
-	@docker compose -p $(PROJECT_NAME) create gisnav qgc
-	$(MAKE) expose-xhost
-	@docker compose -p $(PROJECT_NAME) up -d gisnav qgc
-
 # shutdown any and all services (stop and remove containers)
 .PHONY: down
 down:
@@ -252,3 +244,10 @@ dev:
 
 	# Start the other development services
 	docker compose -p gisnav start px4 qgis gscam rviz
+
+# shortcut for demo
+.PHONY: demo
+demo:
+	docker compose -p gisnav create gisnav
+	$(MAKE) expose-xhost
+	docker compose -p gisnav up gisnav

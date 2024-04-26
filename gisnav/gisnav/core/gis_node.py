@@ -42,8 +42,11 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, Image, TimeReference
+from sensor_msgs.msg import CameraInfo, TimeReference
 from shapely.geometry import box
+from std_msgs.msg import String
+
+from gisnav_msgs.msg import OrthoImage  # type: ignore[attr-defined]
 
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
@@ -557,7 +560,7 @@ class GISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     @cache_if(_should_request_orthoimage)
-    def orthoimage(self) -> Optional[Image]:
+    def orthoimage(self) -> Optional[OrthoImage]:
         """Outgoing orthoimage and elevation raster :term:`stack`
 
         First channel is 8-bit grayscale orthoimage, 2nd and 3rd channels are
@@ -587,11 +590,9 @@ class GISNode(Node):
             assert dem.dtype == np.uint8  # todo get 16 bit dems?
 
             # Convert image to grayscale (color not needed)
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            orthoimage_stack = np.dstack((img, np.zeros_like(dem), dem))
-            image_msg = self._cv_bridge.cv2_to_imgmsg(
-                orthoimage_stack, encoding="passthrough"
-            )
+            dem_msg = self._cv_bridge.cv2_to_imgmsg(dem, encoding="mono8")
+            img_msg = self._cv_bridge.cv2_to_imgmsg(img, encoding="passthrough")
+            orthoimage_msg = OrthoImage(image=img_msg, dem=dem_msg)
 
             # Set old bounding box
             self.old_bounding_box = bounding_box
@@ -600,17 +601,17 @@ class GISNode(Node):
                 self.get_logger().warning(
                     "Publishing orthoimage without FCU time reference."
                 )
-            height, width = img.shape[0:2]
+
+            height, width = img.shape[:2]
             M = self._calculate_affine_transformation_matrix(
                 height, width, bounding_box
             )
             if M is not None:
-                frame_id: FrameID = tf_.affine_to_proj(M)
-                image_msg.header = tf_.create_header(
-                    self, frame_id, time_reference=self.time_reference
-                )
+                proj_str: FrameID = tf_.affine_to_proj(M)
 
-            return image_msg
+            orthoimage_msg.crs = String(data=proj_str)
+
+            return orthoimage_msg
         else:
             return None
 

@@ -318,7 +318,7 @@ def affine_to_proj(M: np.ndarray) -> FrameID:
     return proj_str
 
 
-def proj_to_affine(proj_str: FrameID) -> np.ndarray:
+def proj_to_affine(proj_str: str) -> np.ndarray:
     """Returns the affine transformation matrix M that corresponds to the provided
     PROJ string. The PROJ string should be in the format used by the `affine_to_proj`
     function.

@@ -30,7 +30,10 @@ from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
 
-from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
+from gisnav_msgs.msg import (  # type: ignore[attr-defined]
+    MonocularStereoImage,
+    OrthoStereoImage,
+)
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -164,14 +167,15 @@ class PoseNode(Node):
         :term:`shallow matching or visual odometry <VO>` subsequent images from
         the onboard camera.
         """
-        return self._get_pose(self.pose_image, False)
+        return self._get_pose(self.pose_image)
 
     @narrow_types
     def _get_pose(
-        self, msg: Union[Image, MonocularStereoImage], shallow_inference: bool
+        self, msg: Union[OrthoStereoImage, MonocularStereoImage]
     ) -> Optional[PoseWithCovarianceStamped]:
-        qry, ref, dem = self._preprocess(msg, shallow_inference=shallow_inference)
+        qry, ref, dem = self._preprocess(msg)
         mkp_qry, mkp_ref = self._process(qry, ref)
+        shallow_inference = isinstance(msg, MonocularStereoImage)
         pose = self._postprocess(
             mkp_qry,
             mkp_ref,
@@ -189,8 +193,6 @@ class PoseNode(Node):
         r_inv = r.T
         camera_optical_position_in_world = -r_inv @ t
 
-        # TODO: migrate debug visualizations to rviz (easier to do entire 3D pose
-        #  instead of 2D position only)
         tf_.visualize_camera_position(
             ref.copy(),
             camera_optical_position_in_world,
@@ -199,7 +201,7 @@ class PoseNode(Node):
             f"{'shallow' if shallow_inference else 'deep'} inference",
         )
 
-        header = msg.header if not shallow_inference else msg.query.header
+        header = msg.query.header
 
         pose = tf_.create_pose_msg(
             header.stamp,
@@ -208,8 +210,8 @@ class PoseNode(Node):
             camera_optical_position_in_world,
         )
 
-        if header.frame_id.startswith("+proj"):
-            affine = tf_.proj_to_affine(header.frame_id)
+        if isinstance(msg, OrthoStereoImage):
+            affine = tf_.proj_to_affine(msg.crs.data)
             t_wgs84 = affine @ np.append(camera_optical_position_in_world, 1)
             x, y, z = tf_.wgs84_to_ecef(*t_wgs84.tolist())
             pose.pose.position.x = x
@@ -252,7 +254,7 @@ class PoseNode(Node):
         self, msg: MonocularStereoImage
     ) -> Optional[PoseWithCovarianceStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
-        return self._get_pose(msg, True)
+        return self._get_pose(msg)
 
     @property
     # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
@@ -262,7 +264,7 @@ class PoseNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_pose_image_cb,
     )
-    def pose_image(self) -> Optional[Image]:
+    def pose_image(self) -> Optional[OrthoStereoImage]:
         """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
         in a single 4-channel :term:`stack`. The query image is in the first
         channel, the reference image is in the second, and the elevation reference
@@ -291,8 +293,7 @@ class PoseNode(Node):
     @narrow_types
     def _preprocess(
         self,
-        stereo_image: Union[Image, MonocularStereoImage],
-        shallow_inference: bool = False,
+        stereo_image: Union[OrthoStereoImage, MonocularStereoImage],
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Converts sensor_msgs/Image message to numpy arrays
 
@@ -303,33 +304,25 @@ class PoseNode(Node):
             global position), or a 1-channel image where the left side is the query
             image, and the right side is the reference image (for VO/shallow matching/
             relative position)
-        :param shallow_inference: If set to True, prepare for faster matching method
-            suitable for visual odometry (VO) instead of for deep learning model
 
         :return: A 3-tuple/triplet of query image, reference image, and DEM rasters
         """
         # Convert the ROS Image message to an OpenCV image
-        if not shallow_inference:
-            full_image_cv = self._cv_bridge.imgmsg_to_cv2(
-                stereo_image, desired_encoding="passthrough"
-            )
-            # Check that the image has 4 channels
-            channels = full_image_cv.shape[2]
-            assert channels == 4, (
-                f"The input image for deep matching against orthoimage is expected to "
-                f"have 4 channels - {channels} received instead."
-            )
-
+        if isinstance(stereo_image, OrthoStereoImage):
             # Extract individual channels
-            query_img = full_image_cv[:, :, 0]
-            reference_img = full_image_cv[:, :, 1]
-            elevation_16bit_high = full_image_cv[:, :, 2]
-            elevation_16bit_low = full_image_cv[:, :, 3]
-
+            query_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.query, desired_encoding="passthrough"
+            )
+            query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2GRAY)
+            reference_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.reference, desired_encoding="mono8"
+            )
+            assert reference_img.ndim == 2 or reference_img.shape[2] == 1
+            # reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2GRAY)
             # Reconstruct 16-bit elevation from the last two channels
-            reference_elevation = (
-                elevation_16bit_high.astype(np.uint16) << 8
-            ) | elevation_16bit_low.astype(np.uint16)
+            reference_elevation = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.dem, desired_encoding="mono8"
+            )
 
             return (
                 query_img,
@@ -337,8 +330,6 @@ class PoseNode(Node):
                 reference_elevation,
             )
         else:
-            # TODO: clean up these different matching tracks, e.g. have custom
-            #  message type for orthoimage raster + query frame too
             assert isinstance(stereo_image, MonocularStereoImage)
             query_img = self._cv_bridge.imgmsg_to_cv2(
                 stereo_image.query, desired_encoding="mono8"

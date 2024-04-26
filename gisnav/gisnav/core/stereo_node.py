@@ -17,9 +17,13 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image
-from std_msgs.msg import Header
+from std_msgs.msg import String
 
-from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
+from gisnav_msgs.msg import (  # type: ignore[attr-defined]
+    MonocularStereoImage,
+    OrthoImage,
+    OrthoStereoImage,
+)
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -79,7 +83,7 @@ class StereoNode(Node):
         f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def orthoimage(self) -> Optional[Image]:
+    def orthoimage(self) -> Optional[OrthoImage]:
         """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
 
     @property
@@ -112,28 +116,23 @@ class StereoNode(Node):
     def image(self) -> Optional[Image]:
         """Raw image data from vehicle camera for pose estimation"""
 
-    @ROS.transform(invert=False)  # , add_timestamp=True) timestamp added manually
-    def _world_to_reference_transform(
+    def _world_to_reference_proj_str(
         self,
         M: np.ndarray,
-        header_msg: Header,
-        header_reference: Header,
-    ) -> Optional[TransformStamped]:
+        crs: str,
+    ) -> Optional[str]:
         @narrow_types(self)
         def _transform(
             M: np.ndarray,
-            header_msg: Header,
-            header_reference: Header,
+            crs: str,
         ) -> Optional[TransformStamped]:
             # 3D version of the inverse rotation and cropping transform
             M_3d = np.eye(4)
             M_3d[:2, :2] = M[:2, :2]
             M_3d[:2, 3] = M[:2, 2]
 
-            t = M_3d[:3, 3]
-
             try:
-                q = tf_transformations.quaternion_from_matrix(M_3d)
+                tf_transformations.quaternion_from_matrix(M_3d)
             except np.linalg.LinAlgError:
                 self.get_logger().warning(
                     "_pnp_image: Could not compute quaternion from estimated rotation. "
@@ -141,32 +140,23 @@ class StereoNode(Node):
                 )
                 return None
 
-            transform_msg = tf_.create_transform_msg(
-                header_msg.stamp,
-                header_msg.frame_id,
-                header_reference.frame_id,
-                q,
-                t,
-            )
-
             # TODO clean this up
-            M = tf_.proj_to_affine(header_reference.frame_id)
+            M = tf_.proj_to_affine(crs)
             # Flip x and y in between to make this transformation chain work
             T = np.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
             compound_transform = M @ T @ np.linalg.inv(M_3d)
             proj_str = tf_.affine_to_proj(compound_transform)
-            transform_msg.header.frame_id = proj_str
 
-            return transform_msg
+            return proj_str
 
-        return _transform(M, header_msg, header_reference)
+        return _transform(M, crs)
 
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_POSE_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pose_image(self) -> Optional[Image]:
+    def pose_image(self) -> Optional[OrthoStereoImage]:
         """Published :term:`stacked <stack>` image consisting of query image,
         reference image, and optional reference elevation raster (:term:`DEM`).
 
@@ -180,22 +170,26 @@ class StereoNode(Node):
         @narrow_types(self)
         def _pnp_image(
             image: Image,
-            orthoimage: Image,
+            orthoimage: OrthoImage,
             transform: TransformStamped,
-        ) -> Optional[Image]:
+        ) -> Optional[OrthoStereoImage]:
             """Rotate and crop and orthoimage stack to align with query image"""
             transform = transform.transform
 
-            query_img = self._cv_bridge.imgmsg_to_cv2(image, desired_encoding="mono8")
-
-            orthoimage_stack = self._cv_bridge.imgmsg_to_cv2(
-                orthoimage, desired_encoding="passthrough"
+            orthoimage_arr = self._cv_bridge.imgmsg_to_cv2(
+                orthoimage.image, desired_encoding="passthrough"
             )
+            dem_arr = self._cv_bridge.imgmsg_to_cv2(
+                orthoimage.dem, desired_encoding="mono8"
+            )
+            orthoimage_arr = cv2.cvtColor(orthoimage_arr, cv2.COLOR_BGR2GRAY)
+            orthoimage_stack = np.dstack((orthoimage_arr, dem_arr))
 
-            assert orthoimage_stack.shape[2] == 3, (
+            # TODO: make dem 16 bit
+            assert orthoimage_stack.shape[2] == 2, (
                 f"Orthoimage stack channel count was {orthoimage_stack.shape[2]} "
-                f"when 3 was expected (one channel for 8-bit grayscale reference "
-                f"image and two 8-bit channels for 16-bit elevation reference)"
+                f"when 2 was expected (one channel for 8-bit grayscale reference "
+                f"image and one 8-bit channel for 8-bit elevation reference)"
             )
 
             # Rotate and crop orthoimage stack
@@ -209,34 +203,37 @@ class StereoNode(Node):
             # rotation is positive 90 degrees.
             rotation = (camera_yaw_degrees + camera_roll_degrees) % 360
 
-            crop_shape: Tuple[int, int] = query_img.shape[0:2]
+            crop_shape: Tuple[int, int] = image.height, image.width
 
             # here positive rotation is counter-clockwise, so we invert
             orthoimage_rotated_stack, M = self._rotate_and_crop_center(
                 orthoimage_stack, rotation, crop_shape
             )
 
-            # Add query image on top to complete full image stack
-            pnp_image_stack = np.dstack((query_img, orthoimage_rotated_stack))
-
-            pnp_image_msg = self._cv_bridge.cv2_to_imgmsg(
-                pnp_image_stack, encoding="passthrough"
+            reference_image_msg = self._cv_bridge.cv2_to_imgmsg(
+                orthoimage_rotated_stack[:, :, 0], encoding="mono8"
             )
 
-            # Use orthoimage timestamp in frame but not in message
-            # (otherwise transform message gets too old
-            pnp_image_msg.header.stamp = image.header.stamp
+            # TODO: 16 bit DEM
+            dem_msg = self._cv_bridge.cv2_to_imgmsg(
+                orthoimage_rotated_stack[:, :, 1], encoding="mono8"
+            )
+            reference_image_msg.header.stamp = image.header.stamp
+            dem_msg.header.stamp = image.header.stamp
+
+            ortho_stereo_image_msg = OrthoStereoImage(
+                query=image, reference=reference_image_msg, dem=dem_msg
+            )
 
             # Publish transformation
-            transform = self._world_to_reference_transform(
+            proj_str = self._world_to_reference_proj_str(
                 np.linalg.inv(M),  # TODO: try-except
-                pnp_image_msg.header,
-                orthoimage.header,
+                orthoimage.crs.data,
             )
 
-            pnp_image_msg.header.frame_id = transform.header.frame_id
+            ortho_stereo_image_msg.crs = String(data=proj_str)
 
-            return pnp_image_msg
+            return ortho_stereo_image_msg
 
         query_image, orthoimage = self.image, self.orthoimage
 

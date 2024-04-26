@@ -1,5 +1,5 @@
 """This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating the
-:term:`camera` absolute :term:`pose` and relative :term:`twist`.
+:term:`camera` :term:`pose` in given frames of reference.
 
 The reference image can be either a orthoimagery :term:`raster` from the onboard GIS
 server (deep map matching for noisy global position), or a previous image frame form
@@ -7,11 +7,6 @@ the camera (visual odometry for smooth relative position).
 
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting :term:`PnP` problem.
-
-``query`` frame is the image plane as defined in the OpenCV `PnP problem
-<https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html>`_. ``reference`` frame here
-refers exclusively to the orthoimage reference frame, not the visual odometry reference
-frame.
 """
 from typing import Optional, Tuple, Union, cast
 
@@ -104,6 +99,11 @@ class PoseNode(Node):
         self.pose_image
         self.twist_image
         self.time_reference
+
+        # initialize publishers (for launch tests)
+        self.pose
+        # TODO method does not support none input
+        self.camera_optical_pose_in_query_frame(None)
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)

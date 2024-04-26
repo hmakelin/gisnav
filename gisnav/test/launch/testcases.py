@@ -14,13 +14,16 @@ class TestTopographyCase(unittest.TestCase):
 
     EXPECTED_NODES = (
         "gis_node",
-        "transform_node",
+        "stereo_node",
         "bbox_node",
         "pose_node",
         "mock_gps_node",
         "test_node",
     )
-    """Names of nodes that should be found when running the launch configuration"""
+    """Names of nodes that should be found when running the launch configuration
+
+    `test_node` is created by the test case.
+    """
 
     EXPECTED_NAMESPACES = ("/gisnav", "/gisnav", "/gisnav", "/gisnav", "/gisnav", "/")
     """Expected namespaces of :py:data:`~EXPECTED_NODES` in corresponding order"""
@@ -30,14 +33,15 @@ class TestTopographyCase(unittest.TestCase):
         "/camera/image_raw",
         "/fmu/in/sensor_gps",
         "/gisnav/bbox_node/fov/bounding_box",
-        "/gisnav/gis_node/geotransform",
         "/gisnav/gis_node/orthoimage",
-        "/gisnav/transform_node/image",
+        "/gisnav/stereo_node/pose_image",
+        "/gisnav/stereo_node/twist_image",
+        "/gisnav/pose_node/pose",
+        "/gisnav/pose_node/vo/pose",
         "/mavros/gimbal_control/device/attitude_status",
         "/mavros/global_position/global",
         "/mavros/local_position/pose",
         "/mavros/time_reference",
-        "/parameter_events",
         "/rosout",
         "/tf",
         "/tf_static",
@@ -49,14 +53,15 @@ class TestTopographyCase(unittest.TestCase):
         "sensor_msgs/msg/Image",
         "px4_msgs/msg/SensorGps",
         "geographic_msgs/msg/BoundingBox",
-        "sensor_msgs/msg/PointCloud2",
-        "sensor_msgs/msg/Image",
-        "sensor_msgs/msg/Image",
+        "gisnav_msgs/msg/OrthoImage",
+        "gisnav_msgs/msg/OrthoStereoImage",
+        "gisnav_msgs/msg/MonocularStereoImage",
+        "geometry_msgs/msg/PoseWithCovarianceStamped",
+        "geometry_msgs/msg/PoseWithCovarianceStamped",
         "mavros_msgs/msg/GimbalDeviceAttitudeStatus",
         "sensor_msgs/msg/NavSatFix",
         "geometry_msgs/msg/PoseStamped",
         "sensor_msgs/msg/TimeReference",
-        "rcl_interfaces/msg/ParameterEvent",
         "rcl_interfaces/msg/Log",
         "tf2_msgs/msg/TFMessage",
         "tf2_msgs/msg/TFMessage",
@@ -180,14 +185,15 @@ class TestTopographyArduPilotCase(TestTopographyCase):
         "/camera/camera_info",
         "/camera/image_raw",
         "/gisnav/bbox_node/fov/bounding_box",
-        "/gisnav/gis_node/geotransform",
         "/gisnav/gis_node/orthoimage",
-        "/gisnav/transform_node/image",
+        "/gisnav/stereo_node/pose_image",
+        "/gisnav/stereo_node/twist_image",
+        "/gisnav/pose_node/pose",
+        "/gisnav/pose_node/vo/pose",
         "/mavros/gimbal_control/device/attitude_status",
         "/mavros/global_position/global",
         "/mavros/local_position/pose",
         "/mavros/time_reference",
-        "/parameter_events",
         "/rosout",
         "/tf",
         "/tf_static",
@@ -195,20 +201,21 @@ class TestTopographyArduPilotCase(TestTopographyCase):
     )
     """Names of topics that should be found when running the launch configuration"""
 
-    # Add ""s as placeholders to keep tuple same size as tuple being
+    # Add blank ""s as placeholders to keep tuple same size as tuple being
     # overridden. Otherwise mypy will complain.
     EXPECTED_TYPES = (
         "sensor_msgs/msg/CameraInfo",
         "sensor_msgs/msg/Image",
         "geographic_msgs/msg/BoundingBox",
-        "sensor_msgs/msg/PointCloud2",
-        "sensor_msgs/msg/Image",
-        "sensor_msgs/msg/Image",
+        "gisnav_msgs/msg/OrthoImage",
+        "gisnav_msgs/msg/OrthoStereoImage",
+        "gisnav_msgs/msg/MonocularStereoImage",
+        "geometry_msgs/msg/PoseWithCovarianceStamped",
+        "geometry_msgs/msg/PoseWithCovarianceStamped",
         "mavros_msgs/msg/GimbalDeviceAttitudeStatus",
         "sensor_msgs/msg/NavSatFix",
         "geometry_msgs/msg/PoseStamped",
         "sensor_msgs/msg/TimeReference",
-        "rcl_interfaces/msg/ParameterEvent",
         "rcl_interfaces/msg/Log",
         "tf2_msgs/msg/TFMessage",
         "tf2_msgs/msg/TFMessage",

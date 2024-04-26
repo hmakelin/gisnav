@@ -1,0 +1,3 @@
+[tool.vulture]
+paths = ["gisnav/gisnav"]
+min_confidence = 100

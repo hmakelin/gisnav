@@ -11,7 +11,7 @@ Take a look at the :term:`core` node ROS topography diagram to understand
 how the ROS messages flow through the application:
 
 .. mermaid::
-    :caption: Nodes and published topics
+    :caption: Nodes and published messages
 
     graph TB
         MAVROS -->|"NavSatFix"| BBoxNode
@@ -19,88 +19,30 @@ how the ROS messages flow through the application:
 
         subgraph core["GISNav core nodes"]
             BBoxNode -->|"BoundingBox"| GISNode
-            GISNode -->|"Image"| TransformNode
-            TransformNode -->|"Image"| PoseNode
-        end
-
-        subgraph tf2
-            tf["tf"]
-            tf_static["tf_static"]
+            GISNode -->|"OrthoImage"| StereoNode
+            StereoNode -->|"MonocularStereoImage"| PoseNode
+            StereoNode -->|"OrthoStereoImage"| PoseNode
         end
 
         subgraph extension["GISNav extension nodes"]
             MockGPSNode["MockGPSNode"]
         end
 
-        gscam ---->|"Image"| TransformNode
-
-        GISNode -->|"PointCloud2\nreference_%i_%i->WGS 84"| MockGPSNode
-        tf -->|"TransformStamped\nreference_%i_%i->base_link"| MockGPSNode
-
-        PoseNode -->|"TransformStamped\ncamera->world"| tf
-        PoseNode -->|"TransformStamped\ncamera_pnp->camera"| tf_static
-        TransformNode -->|"TransformStamped\nreference_%i_%i->world"| tf
-
-        classDef tfClass fill:transparent,stroke-dasharray:5 5;
-        class tf2 tfClass
-
-tf2 transformations tree
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The below diagram depicts how the frames specified in :class:`.FrameID` relate
-to each other:
-
-.. mermaid::
-    :caption: ROS frames
-
-    graph TB
-        subgraph rep["REP 105 (native units meters)"]
-            earth["earth\nnot used"]
-            odom["odom\nnot used"]
-            map1["map"] --> base_link
+        subgraph robot_localization
+            ekf["ekf_localization_node"] -->|"Odometry"| MockGPSNode
         end
 
-        subgraph gisnav["GISNav (native units pixels but converted to meters)"]
-            camera_pinhole["camera_pnp"] -->|"PoseNode"| camera
-            camera -->|"PoseNode"| world
-            camera -->|"Not Implemented"| base_link
+        gscam ---->|"Image"| StereoNode
 
-            world -->|"TransformNode"| reference
-            world -->|"TransformNode"| reference_ts
+        PoseNode -->|"PoseStamped"| ekf
 
-            reference
-            reference_ts["reference_%i_%i"]
-            reference_ts -->|"Not Implemented"| map1
-        end
-
-        classDef dotted fill:transparent,stroke-dasharray:5 5;
-        class rep,gisnav dotted
-
-.. note::
-    * The reason for publishing the ``PointCloud2`` message separately is that
-      tf2 does not support non-rigid transforms (transform from reference frame
-      to :term:`WGS 84` involves scaling). The timestamp in the
-      ``reference_%i_%i`` frame is used to ensure that a transformation
-      chain ending in that frame is coupled with the correct ``PointCloud2``
-      message.
-    * The ``reference`` frame is published together with the latest
-      ``reference_%i_%i`` frame to make debugging e.g. in RViz more convenient.
-      This enables looking at the world to reference frame relative transformation
-      in isolation.
-    * :term:`tf2` is used extensively in GISNav now. Earlier versions of GISNav
-      did not use on it and relied on custom topics for publishing transformations.
 
 .. todo::
 
     * From BBoxNode, publish map to ``base_link`` and ``base_link`` to ``camera``
       transformations separately to simplify implementation and reduce amount
       of maintained code.
-    * Link up the GISNav tf tree with the REP 105 tf tree, possibly via suggested
-      paths in diagram. Scale GISNav frames to meters.
-    * Try not to mix REP 105 and OpenCV PnP problem frame names.
-    * Replace ``PointCloud2`` message with JSON formatted ``String`` message?
-      Choice of ``PointCloud2`` to represent an affine transform (3-by-3 matrix)
-      feels arbitrary.
+    * Implement :term:`REP 105` properly (currently only partially implemented).
 
 Remapping ROS 2 topics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -114,7 +56,7 @@ nodes with remapped topic names:
     .. tab-item:: ros2 launch
         :selected:
 
-        The below diff is an example remapping for the camera topics for :class:`.TransformNode`:
+        The below diff is an example remapping for the camera topics for :class:`.StereoNode`:
 
         .. literalinclude:: ../../../../gisnav/launch/examples/base_camera_topic_remap.launch.py
             :diff: ../../../../gisnav/launch/base.launch.py
@@ -130,7 +72,7 @@ nodes with remapped topic names:
 
     .. tab-item:: ros2 run
 
-        The below command launches camera topics for :class:`.TransformNode`:
+        The below command launches camera topics for :class:`.StereoNode`:
 
         .. code-block:: bash
             :caption: Camera topic name remapping example using ``ros2 run``

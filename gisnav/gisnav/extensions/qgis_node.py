@@ -6,9 +6,6 @@ accordingly.
 This node enables real-time visualization of data in QGIS, aiding in
 development and debugging.
 
-.. note::
-    This node depends on :class:`.MockGPSNode`.
-
 .. todo::
     Currently SensorGps message (PX4) only (implement GPSINPUT to support
     ArduPilot)
@@ -29,8 +26,8 @@ from ..constants import (
     DELAY_DEFAULT_MS,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
+    ROS_TOPIC_SENSOR_GPS,
 )
-from .mock_gps_node import MockGPSNode
 
 
 class QGISNode(Node):
@@ -255,7 +252,7 @@ class QGISNode(Node):
     @property
     @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
-        MockGPSNode.ROS_TOPIC_SENSOR_GPS,
+        ROS_TOPIC_SENSOR_GPS,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_update_database,
     )

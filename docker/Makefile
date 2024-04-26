@@ -183,14 +183,6 @@ expose-xhost:
 		fi; \
 	done
 
-# shortcut for demo
-.PHONY: demo
-demo:
-	@docker compose -p $(PROJECT_NAME) build gisnav qgc
-	@docker compose -p $(PROJECT_NAME) create gisnav qgc
-	$(MAKE) expose-xhost
-	@docker compose -p $(PROJECT_NAME) up -d gisnav qgc
-
 # shutdown any and all services (stop and remove containers)
 .PHONY: down
 down:
@@ -223,7 +215,7 @@ build:
 .PHONY: dev
 dev:
 	# Recreate containers
-	docker compose -p gisnav create mapserver px4 qgis gscam postgres
+	docker compose -p gisnav create mapserver px4 qgis gscam postgres rviz
 	$(MAKE) expose-xhost
 
 	# Start the mapserver container
@@ -251,4 +243,11 @@ dev:
 	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
 
 	# Start the other development services
-	docker compose -p gisnav start px4 qgis gscam
+	docker compose -p gisnav start px4 qgis gscam rviz
+
+# shortcut for demo
+.PHONY: demo
+demo:
+	docker compose -p gisnav create gisnav
+	$(MAKE) expose-xhost
+	docker compose -p gisnav up gisnav

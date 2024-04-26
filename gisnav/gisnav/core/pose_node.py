@@ -1,31 +1,14 @@
-"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating
-:term:`camera` relative pose between a :term:`query` and :term:`reference` image
+"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating the
+:term:`camera` :term:`pose` in given frames of reference.
+
+The reference image can be either a orthoimagery :term:`raster` from the onboard GIS
+server (deep map matching for noisy global position), or a previous image frame form
+the camera (visual odometry for smooth relative position).
 
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting :term:`PnP` problem.
-
-.. mermaid::
-    :caption: :class:`.PoseNode` computational graph
-
-    graph LR
-        subgraph PoseNode
-            pose[gisnav/pose_node/pose]
-        end
-
-        subgraph TransformNode
-            image[gisnav/transform_node/image]
-        end
-
-        subgraph gscam
-            camera_info[camera/camera_info]
-        end
-
-        camera_info -->|sensor_msgs/CameraInfo| PoseNode
-        image -->|sensor_msgs/Image| PoseNode
-        pose -->|geometry_msgs/PoseStamped| MockGPSNode:::hidden
 """
-from copy import deepcopy
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union, cast
 
 import cv2
 import numpy as np
@@ -33,35 +16,62 @@ import rclpy
 import tf2_ros
 import tf_transformations
 import torch
+from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
+from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from kornia.feature import LoFTR
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from robot_localization.srv import SetPose
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
-from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
-from tf2_ros.transform_broadcaster import TransformBroadcaster
 
-from .. import _messaging as messaging
+from gisnav_msgs.msg import (  # type: ignore[attr-defined]
+    MonocularStereoImage,
+    OrthoStereoImage,
+)
+
+from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
-    DELAY_DEFAULT_MS,
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
-    ROS_TOPIC_RELATIVE_PNP_IMAGE,
-    TRANSFORM_NODE_NAME,
+    ROS_TOPIC_RELATIVE_POSE,
+    ROS_TOPIC_RELATIVE_POSE_IMAGE,
+    ROS_TOPIC_RELATIVE_QUERY_POSE,
+    ROS_TOPIC_RELATIVE_TWIST_IMAGE,
+    STEREO_NODE_NAME,
+    FrameID,
 )
+
+# TODO: make error model and generate covariance matrix dynamically
+# Create dummy covariance matrix
+_covariance_matrix = np.zeros((6, 6))
+np.fill_diagonal(_covariance_matrix, 36)  # 3 meter SD = 9 variance
+_covariance_matrix[3, 3] = np.radians(15**2)  # angle error should be set quite small
+_covariance_matrix[4, 4] = _covariance_matrix[3, 3]
+_covariance_matrix[5, 5] = _covariance_matrix[3, 3]
+_COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
 
 
 class PoseNode(Node):
     """Solves the keypoint matching and :term:`PnP` problems and publishes the
-    solution via ROS transformations library
+    solution to ROS
     """
 
-    CONFIDENCE_THRESHOLD = 0.7
-    """Confidence threshold for filtering out bad keypoint matches"""
+    CONFIDENCE_THRESHOLD_SHALLOW_MATCH = 0.9
+    """Confidence threshold for filtering out bad keypoint matches for shallow matching
 
-    MIN_MATCHES = 20
+    .. note:
+        Stricter threshold for shallow matching because mistakes accumulate in VO
+    """
+
+    CONFIDENCE_THRESHOLD_DEEP_MATCH = 0.7
+    """Confidence threshold for filtering out bad keypoint matches for
+    deep matching
+    """
+
+    MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):
@@ -73,37 +83,44 @@ class PoseNode(Node):
         super().__init__(*args, **kwargs)
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        # Initialize DL model for map matching (noisy global position, no drift)
         self._model = LoFTR(pretrained="outdoor")
         self._model.to(self._device)
 
+        # Initialize ORB detector and brute force matcher for VO
+        # (smooth relative position with drift)
+        self._orb = cv2.ORB_create()
+        self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+
         self._cv_bridge = CvBridge()
 
-        # initialize subscription
+        # initialize subscriptions
         self.camera_info
-        self.image
+        self.pose_image
+        self.twist_image
         self.time_reference
 
-        # Initialize the transform broadcaster
-        self.broadcaster = TransformBroadcaster(self)
-        self.static_broadcaster = StaticTransformBroadcaster(self)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        # initialize publishers (for launch tests)
+        self.pose
+        # TODO method does not support none input
+        self.camera_optical_pose_in_query_frame(None)
 
-        # Pinhole camera model camera from to ROS 2 camera_optical (z-axis forward
-        # along optical axis) frame i.e. create a quaternion that represents
-        # the transformation from a coordinate frame where x points right, y points
-        # down, and z points backwards to the ROS 2 convention
-        # (REP 103 https://www.ros.org/reps/rep-0103.html#id21) where x points
-        # forward, y points left, and z points up
-        # TODO: is PoseNode the appropriate place to publish this transform?
-        q = (0.5, -0.5, -0.5, -0.5)
-        header = messaging.create_header(
-            self, "", self.time_reference
-        )  # time reference is not important here
-        transform_camera = messaging.create_transform_msg(
-            header.stamp, "camera_pinhole", "camera", q, np.zeros(3)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+
+        self._set_pose_client = self.create_client(
+            SetPose, "/robot_localization/set_pose"
         )
-        self.static_broadcaster.sendTransform([transform_camera])
+        while not self._set_pose_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for EKF node set_pose service...")
+        self._set_pose_request = SetPose.Request()
+        self._pose_sent = False
+
+    def _set_initial_pose(self, pose):
+        if not self._pose_sent:
+            self._set_pose_request.pose = pose
+            self._future = self._set_pose_client.call_async(self._set_pose_request)
+            self._pose_sent = True
 
     @property
     @ROS.subscribe(
@@ -120,89 +137,138 @@ class PoseNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
+        """Camera info message including the camera intrinsics matrix"""
 
-    def _image_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.image` message"""
-        preprocessed = self.preprocess(msg)
-        inferred = self.inference(preprocessed)
-        pose_stamped = self.postprocess(inferred)
+    def _pose_image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.pose_image` message"""
+        pose = self.pose
+        if pose is not None:
+            # TODO: need to set via FCU EKF since VO might already be publishing to
+            #  EKF node
+            self._set_initial_pose(pose)
 
-        if pose_stamped is None:
-            return None
-
-        r, t = pose_stamped
-
-        rotation_4x4 = np.eye(4)
-        rotation_4x4[:3, :3] = r
-        try:
-            q = tf_transformations.quaternion_from_matrix(rotation_4x4)
-        except np.linalg.LinAlgError:
-            self.get_logger().warning(
-                "image_cb: Could not compute quaternion from estimated rotation. "
-                "Returning None."
-            )
-            return None
-
-        camera_pos = (-r.T @ t).squeeze()
-        camera_pos[2] = -camera_pos[
-            2
-        ]  # todo: implement cleaner way of getting camera position right
-
-        # TODO: implicit assumption that image message here has timestamp in system time
-        time_reference = self.time_reference
-        if time_reference is None:
-            self.get_logger().warning(
-                "Publishing world to camera_pinhole transformation without time "
-                "reference."
-            )
-            stamp = msg.header.stamp
-        else:
-            stamp = (
-                rclpy.time.Time.from_msg(msg.header.stamp)
-                - (
-                    rclpy.time.Time.from_msg(time_reference.header.stamp)
-                    - rclpy.time.Time.from_msg(time_reference.time_ref)
-                )
-            ).to_msg()
-        transform_camera = messaging.create_transform_msg(
-            stamp, "world", "camera_pinhole", q, camera_pos
-        )
-        self.broadcaster.sendTransform([transform_camera])
-
-        debug_msg = messaging.get_transform(
-            self, "world", "camera_pinhole", rclpy.time.Time()
-        )
-
-        debug_ref_image = self._cv_bridge.imgmsg_to_cv2(
-            deepcopy(msg), desired_encoding="passthrough"
-        )
-
-        # The child frame is the 'camera' frame of the PnP problem as
-        # defined here: https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
-        if debug_msg is not None and self.camera_info is not None:
-            debug_ref_image = debug_ref_image[:, :, 1]  # second channel is world
-            messaging.visualize_transform(
-                debug_msg,
-                debug_ref_image,
-                self.camera_info.height,
-                "Camera position in world frame",
-            )
+    def _twist_image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.twist_image` message"""
+        self.camera_optical_pose_in_query_frame(self.twist_image)
 
     @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_POSE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    @ROS.transform(child_frame_id="camera_optical")
+    def pose(self) -> Optional[PoseWithCovarianceStamped]:
+        """Camera pose in :term:`REP 105` ``map`` frame
+
+        This represents the global 3D poseition and orienation of the ``camera_optical``
+        frame in the earth-fixed ``map`` frame. This is obtained via :term:`deep
+        matching` and is a discontinuous estimate of pose. It is intended to be fused
+        with and complement the continous or smooth twist estimate obtained via
+        :term:`shallow matching or visual odometry <VO>` subsequent images from
+        the onboard camera.
+        """
+        return self._get_pose(self.pose_image)
+
+    @narrow_types
+    def _get_pose(
+        self, msg: Union[OrthoStereoImage, MonocularStereoImage]
+    ) -> Optional[PoseWithCovarianceStamped]:
+        qry, ref, dem = self._preprocess(msg)
+        mkp_qry, mkp_ref = self._process(qry, ref)
+        shallow_inference = isinstance(msg, MonocularStereoImage)
+        pose = self._postprocess(
+            mkp_qry,
+            mkp_ref,
+            dem,
+            qry,
+            ref,
+            "Shallow match / relative position (VO)"
+            if shallow_inference
+            else "Deep match / absolute global position (GIS)",
+        )
+        if pose is None:
+            return None
+        r, t = pose
+
+        r_inv = r.T
+        camera_optical_position_in_world = -r_inv @ t
+
+        # tf_.visualize_camera_position(
+        #    ref.copy(),
+        #    camera_optical_position_in_world,
+        #    f"Camera {'principal point' if shallow_inference else 'position'} "
+        #    f"in {'previous' if shallow_inference else 'world'} frame, "
+        #    f"{'shallow' if shallow_inference else 'deep'} inference",
+        # )
+
+        header = msg.query.header
+
+        pose = tf_.create_pose_msg(
+            header.stamp,
+            cast(FrameID, "earth"),
+            r_inv,
+            camera_optical_position_in_world,
+        )
+
+        if isinstance(msg, OrthoStereoImage):
+            affine = tf_.proj_to_affine(msg.crs.data)
+            t_wgs84 = affine @ np.append(camera_optical_position_in_world, 1)
+            x, y, z = tf_.wgs84_to_ecef(*t_wgs84.tolist())
+            pose.pose.position.x = x
+            pose.pose.position.y = y
+            pose.pose.position.z = z
+
+            # Get rotation matrix from world frame to ENU map_gisnav frame - this
+            # should only be a rotation around the yaw (and a flip of z axis and sign
+            # of rotation, since map_gisnav is ENU while world frame is right-down-
+            # forward which projected to ground means ESD)
+            R = affine[:3, :3]
+            R = R / np.linalg.norm(R, axis=0)
+
+            camera_optical_rotation_in_enu = R @ r_inv
+
+            r_ecef = np.eye(4)
+            r_ecef[:3, :3] = tf_.enu_to_ecef_matrix(t_wgs84[0], t_wgs84[1])
+            r_ecef[:3, :3] = r_ecef[:3, :3] @ camera_optical_rotation_in_enu
+
+            q = tf_transformations.quaternion_from_matrix(r_ecef)
+            pose.pose.orientation = tf_.as_ros_quaternion(np.array(q))
+
+        pose_with_covariance = PoseWithCovariance(
+            pose=pose.pose, covariance=_COVARIANCE_LIST
+        )
+
+        pose_with_covariance = PoseWithCovarianceStamped(
+            header=pose.header, pose=pose_with_covariance
+        )
+
+        return pose_with_covariance
+
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_QUERY_POSE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    # @ROS.transform("camera_optical")  # TODO: enable after scaling to meters
+    @narrow_types
+    def camera_optical_pose_in_query_frame(
+        self, msg: MonocularStereoImage
+    ) -> Optional[PoseWithCovarianceStamped]:
+        """Camera pose in visual odometry world frame (i.e. previous query frame)"""
+        return self._get_pose(msg)
+
+    @property
+    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_PNP_IMAGE.replace("~", TRANSFORM_NODE_NAME)}',
+        f'/{ROS_TOPIC_RELATIVE_POSE_IMAGE.replace("~", STEREO_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_cb,
+        callback=_pose_image_cb,
     )
-    def image(self) -> Optional[Image]:
+    def pose_image(self) -> Optional[OrthoStereoImage]:
         """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
         in a single 4-channel :term:`stack`. The query image is in the first
         channel, the reference image is in the second, and the elevation reference
         is in the last two (sum them together to get a 16-bit elevation reference).
-
 
         .. note::
             The existing :class:`sensor_msgs.msg.Image` message is repurposed
@@ -213,175 +279,270 @@ class PoseNode(Node):
             rosdep index.
         """
 
-    @narrow_types
-    def preprocess(
-        self, image_quad: Image
-    ) -> Tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
-        """Converts incoming 4-channel image to torch tensors
+    @property
+    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_TWIST_IMAGE.replace("~", STEREO_NODE_NAME)}',
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_twist_image_cb,
+    )
+    def twist_image(self) -> Optional[MonocularStereoImage]:
+        """:term:`Query <query>`, :term:`reference image couple for :term:`VO`"""
 
-        :param image_quad: A 4-channel image where the first channel is the
+    @narrow_types
+    def _preprocess(
+        self,
+        stereo_image: Union[OrthoStereoImage, MonocularStereoImage],
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Converts sensor_msgs/Image message to numpy arrays
+
+        :param stereo_image: A 4-channel image where the first channel is the
             :term:`query`, the second channel is the 8-bit
             :term:`elevation reference`, and the last two channels combined
-            represent the 16-bit :term:`elevation reference`.
+            represent the 16-bit :term:`elevation reference` (for deep matching/absolute
+            global position), or a 1-channel image where the left side is the query
+            image, and the right side is the reference image (for VO/shallow matching/
+            relative position)
+
+        :return: A 3-tuple/triplet of query image, reference image, and DEM rasters
         """
         # Convert the ROS Image message to an OpenCV image
-        full_image_cv = self._cv_bridge.imgmsg_to_cv2(
-            image_quad, desired_encoding="passthrough"
-        )
+        if isinstance(stereo_image, OrthoStereoImage):
+            # Extract individual channels
+            query_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.query, desired_encoding="passthrough"
+            )
+            query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2GRAY)
+            reference_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.reference, desired_encoding="mono8"
+            )
+            assert reference_img.ndim == 2 or reference_img.shape[2] == 1
+            # reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2GRAY)
+            # Reconstruct 16-bit elevation from the last two channels
+            reference_elevation = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.dem, desired_encoding="mono8"
+            )
 
-        # Check that the image has 4 channels
-        channels = full_image_cv.shape[2]
-        assert channels == 4, "The image must have 4 channels"
-
-        # Extract individual channels
-        query_img = full_image_cv[:, :, 0]
-        reference_img = full_image_cv[:, :, 1]
-        elevation_16bit_high = full_image_cv[:, :, 2]
-        elevation_16bit_low = full_image_cv[:, :, 3]
-
-        # Reconstruct 16-bit elevation from the last two channels
-        reference_elevation = (
-            elevation_16bit_high.astype(np.uint16) << 8
-        ) | elevation_16bit_low.astype(np.uint16)
-
-        # Optionally display images
-        # self._display_images("Query", query_img, "Reference", reference_img)
-
-        if torch.cuda.is_available():
-            qry_tensor = torch.Tensor(query_img[None, None]).cuda() / 255.0
-            ref_tensor = torch.Tensor(reference_img[None, None]).cuda() / 255.0
+            return (
+                query_img,
+                reference_img,
+                reference_elevation,
+            )
         else:
-            qry_tensor = torch.Tensor(query_img[None, None]) / 255.0
-            ref_tensor = torch.Tensor(reference_img[None, None]) / 255.0
+            assert isinstance(stereo_image, MonocularStereoImage)
+            query_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.query, desired_encoding="mono8"
+            )
+            reference_img = self._cv_bridge.imgmsg_to_cv2(
+                stereo_image.reference, desired_encoding="mono8"
+            )
 
-        return (
-            {"image0": qry_tensor, "image1": ref_tensor},
-            query_img,
-            reference_img,
-            reference_elevation,
-        )
+            return query_img, reference_img, np.zeros_like(reference_img)
 
-    @staticmethod
-    def _display_images(*args):
-        """Displays images using OpenCV"""
-        for i in range(0, len(args), 2):
-            cv2.imshow(args[i], args[i + 1])
-        cv2.waitKey(1)
+    def _process(
+        self, qry: np.ndarray, ref: np.ndarray, shallow_inference: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Returns keypoint matches for input image pair
 
-    def inference(self, preprocessed_data):
-        """Do keypoint matching."""
-        with torch.no_grad():
-            results = self._model(preprocessed_data[0])
-        return results, *preprocessed_data[1:]
+        :return: Tuple of matched query image keypoints, and matched reference image
+            keypoints
+        """
+        if not shallow_inference:  #
+            if torch.cuda.is_available():
+                qry_tensor = torch.Tensor(qry[None, None]).cuda() / 255.0
+                ref_tensor = torch.Tensor(ref[None, None]).cuda() / 255.0
+            else:
+                self.get_logger().warning("CUDA not available - using CPU.")
+                qry_tensor = torch.Tensor(qry[None, None]) / 255.0
+                ref_tensor = torch.Tensor(ref[None, None]) / 255.0
 
-    def postprocess(self, inferred_data) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Filters matches based on confidence threshold and calculates :term:`pose`"""
-
-        @narrow_types(self)
-        def _postprocess(
-            camera_info: CameraInfo, inferred_data
-        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-            results, query_img, reference_img, elevation = inferred_data
+            with torch.no_grad():
+                results = self._model({"image0": qry_tensor, "image1": ref_tensor})
 
             conf = results["confidence"].cpu().numpy()
-            valid = conf > self.CONFIDENCE_THRESHOLD
-            mkp_qry = results["keypoints0"].cpu().numpy()[valid, :]
-            mkp_ref = results["keypoints1"].cpu().numpy()[valid, :]
+            good = conf > self.CONFIDENCE_THRESHOLD_DEEP_MATCH
+            mkp_qry = results["keypoints0"].cpu().numpy()[good, :]
+            mkp_ref = results["keypoints1"].cpu().numpy()[good, :]
 
-            if mkp_qry is None or len(mkp_qry) < self.MIN_MATCHES:
+            return mkp_qry, mkp_ref
+        else:
+            # find the keypoints and descriptors with ORB
+            kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
+            kp_ref, desc_ref = self._orb.detectAndCompute(ref, None)
+
+            matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)
+
+            # Apply ratio test
+            good = []
+            for m, n in matches:
+                # TODO: have a separate confidence threshold for shallow and deep
+                #  keypoint matching?
+                if m.distance < self.CONFIDENCE_THRESHOLD_SHALLOW_MATCH * n.distance:
+                    good.append(m)
+
+            mkps = list(
+                map(
+                    lambda dmatch: (
+                        tuple(kp_qry[dmatch.queryIdx].pt),
+                        tuple(kp_ref[dmatch.trainIdx].pt),
+                    ),
+                    good,
+                )
+            )
+
+            mkp_qry, mkp_ref = zip(*mkps)
+            mkp_qry = np.array(mkp_qry)
+            mkp_ref = np.array(mkp_ref)
+
+            return mkp_qry, mkp_ref
+
+    def _postprocess(
+        self,
+        mkp_qry: np.ndarray,
+        mkp_ref: np.ndarray,
+        elevation: np.ndarray,
+        qry_img: np.ndarray,
+        ref_img: np.ndarray,
+        label: str,
+    ) -> Optional[PoseWithCovarianceStamped]:
+        """Computes camera pose from keypoint matches"""
+
+        @narrow_types(self)
+        def _visualize_matches_and_pose(
+            camera_info: CameraInfo,
+            qry: np.ndarray,
+            ref: np.ndarray,
+            mkp_qry: np.ndarray,
+            mkp_ref: np.ndarray,
+            r: np.ndarray,
+            t: np.ndarray,
+            label: str,
+        ) -> None:
+            """Visualizes matches and projected :term:`FOV`"""
+
+            def _project_fov(img, h_matrix):
+                """Projects :term:`FOV` on :term:`reference` image"""
+                height, width = img.shape[0:2]
+                src_pts = np.float32(
+                    [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
+                ).reshape(-1, 1, 2)
+                try:
+                    return cv2.perspectiveTransform(src_pts, np.linalg.inv(h_matrix))
+                except np.linalg.LinAlgError:
+                    return src_pts
+
+            # We modify these from ROS to cv2 axes convention so we create copies
+            # mkp_qry = mkp_qry.copy()
+            # mkp_ref = mkp_ref.copy()
+
+            k = camera_info.k.reshape((3, 3))
+            h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
+            projected_fov = _project_fov(qry, h_matrix)
+
+            projected_fov[:, :, 1] = projected_fov[:, :, 1]
+            img_with_fov = cv2.polylines(
+                ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
+            )
+
+            mkp_qry = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_qry]
+            mkp_ref = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_ref]
+
+            matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
+
+            match_img = cv2.drawMatches(
+                img_with_fov,
+                mkp_ref,
+                qry,
+                mkp_qry,
+                matches,
+                None,
+                matchColor=(0, 255, 0),
+                flags=2,
+            )
+
+            cv2.imshow(label, match_img)
+            cv2.waitKey(1)
+
+        @narrow_types(self)
+        def _compute_pose(
+            camera_info: CameraInfo,
+            mkp_qry: np.ndarray,
+            mkp_ref: np.ndarray,
+            elevation: np.ndarray,
+            qry_img: np.ndarray,
+            ref_img: np.ndarray,
+            label: str,
+        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+            if len(mkp_qry) < self.MIN_MATCHES:
+                self.get_logger().debug("Not enough matches - returning None")
                 return None
+
+            def _compute_3d_points(
+                mkp_ref: np.ndarray, elevation: np.ndarray
+            ) -> np.ndarray:
+                """Computes 3D points from matches"""
+                if elevation is None:
+                    return np.hstack((mkp_ref, np.zeros((len(mkp_ref), 1))))
+
+                x, y = np.transpose(np.floor(mkp_ref).astype(int))
+                z_values = elevation[y, x].reshape(-1, 1)
+                return np.hstack((mkp_ref, z_values))
+
+            def _compute_pose(
+                mkp2_3d: np.ndarray, mkp_qry: np.ndarray, k_matrix: np.ndarray
+            ) -> Tuple[np.ndarray, np.ndarray]:
+                """Computes :term:`pose` using :func:`cv2.solvePnPRansac`"""
+                dist_coeffs = np.zeros((4, 1))
+                _, r, t, _ = cv2.solvePnPRansac(
+                    mkp2_3d,
+                    mkp_qry,
+                    k_matrix,
+                    dist_coeffs,
+                    useExtrinsicGuess=False,
+                    iterationsCount=10,
+                )
+                r_matrix, _ = cv2.Rodrigues(r)
+
+                return r_matrix, t
 
             k_matrix = camera_info.k.reshape((3, 3))
 
-            mkp2_3d = self._compute_3d_points(mkp_ref, elevation)
+            mkp2_3d = _compute_3d_points(mkp_ref, elevation)
+
             # Adjust y-axis for ROS convention (origin is bottom left, not top left),
             # elevation (z) coordinate remains unchanged
-            mkp2_3d[:, 1] = camera_info.height - mkp2_3d[:, 1]
-            mkp_qry[:, 1] = camera_info.height - mkp_qry[:, 1]
-            r, t = self._compute_pose(mkp2_3d, mkp_qry, k_matrix)
+            # mkp2_3d[:, 1] = camera_info.height - mkp2_3d[:, 1]
+            # mkp_qry[:, 1] = camera_info.height - mkp_qry[:, 1]
 
-            self._visualize_matches_and_pose(
-                query_img.copy(), reference_img.copy(), mkp_qry, mkp_ref, k_matrix, r, t
+            r, t = _compute_pose(mkp2_3d, mkp_qry, k_matrix)
+
+            _visualize_matches_and_pose(
+                camera_info,
+                qry_img.copy(),
+                ref_img.copy(),
+                mkp_qry,
+                mkp_ref,
+                r,
+                t,
+                label,
             )
 
             return r, t
 
-        return _postprocess(self.camera_info, inferred_data)
-
-    @staticmethod
-    def _compute_3d_points(mkp_ref, elevation):
-        """Computes 3D points from matches"""
-        if elevation is None:
-            return np.hstack((mkp_ref, np.zeros((len(mkp_ref), 1))))
-
-        x, y = np.transpose(np.floor(mkp_ref).astype(int))
-        z_values = elevation[y, x].reshape(-1, 1)
-        return np.hstack((mkp_ref, z_values))
-
-    @staticmethod
-    def _compute_pose(mkp2_3d, mkp_qry, k_matrix):
-        """Computes :term:`pose` using :func:`cv2.solvePnPRansac`"""
-        dist_coeffs = np.zeros((4, 1))
-        _, r, t, _ = cv2.solvePnPRansac(
-            mkp2_3d,
-            mkp_qry,
-            k_matrix,
-            dist_coeffs,
-            useExtrinsicGuess=False,
-            iterationsCount=10,
-        )
-        r_matrix, _ = cv2.Rodrigues(r)
-        return r_matrix, t
-
-    def _visualize_matches_and_pose(self, qry, ref, mkp_qry, mkp_ref, k, r, t):
-        """Visualizes matches and projected :term:`FOV`"""
-
-        # We modify these from ROS to cv2 axes convention so we create copies
-        mkp_qry = mkp_qry.copy()
-        mkp_ref = mkp_ref.copy()
-
-        h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
-        projected_fov = self._project_fov(qry, h_matrix)
-
-        # Invert the y-coordinate, considering the image height (input r and t
-        # are in ROS convention where origin is at bottom left of image, we
-        # want origin to be at top left for cv2
-        h = self.camera_info.height
-        mkp_ref[:, 1] = mkp_ref[:, 1]
-        mkp_qry[:, 1] = h - mkp_qry[:, 1]
-
-        projected_fov[:, :, 1] = h - projected_fov[:, :, 1]
-        img_with_fov = cv2.polylines(
-            ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
+        return _compute_pose(
+            self.camera_info, mkp_qry, mkp_ref, elevation, qry_img, ref_img, label
         )
 
-        mkp_qry = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_qry]
-        mkp_ref = [cv2.KeyPoint(x[0], x[1], 1) for x in mkp_ref]
-
-        matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
-
-        match_img = cv2.drawMatches(
-            img_with_fov,
-            mkp_ref,
-            qry,
-            mkp_qry,
-            matches,
-            None,
-            matchColor=(0, 255, 0),
-            flags=2,
-        )
-
-        cv2.imshow("Matches and field of view", match_img)
-        cv2.waitKey(1)
-
-    @staticmethod
-    def _project_fov(img, h_matrix):
-        """Projects :term:`FOV` on :term:`reference` image"""
-        height, width = img.shape[0:2]
-        src_pts = np.float32(
-            [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
-        ).reshape(-1, 1, 2)
-        try:
-            return cv2.perspectiveTransform(src_pts, np.linalg.inv(h_matrix))
-        except np.linalg.LinAlgError:
-            return src_pts
+    def _get_stamp(self, msg) -> Time:
+        if self.time_reference is None:
+            stamp = msg.header.stamp
+        else:
+            stamp = (
+                rclpy.time.Time.from_msg(msg.header.stamp)
+                - (
+                    rclpy.time.Time.from_msg(self.time_reference.header.stamp)
+                    - rclpy.time.Time.from_msg(self.time_reference.time_ref)
+                )
+            ).to_msg()
+        return stamp

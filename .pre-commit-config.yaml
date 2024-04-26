@@ -13,9 +13,13 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
-      - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-xml
 
   - repo: https://github.com/pre-commit/mirrors-isort
     rev: v5.10.1
@@ -48,3 +52,14 @@ repos:
         args:
           - "--max-line-length=88"
           - "--extend-ignore=E203"
+
+  - repo: https://github.com/jendrikseipp/vulture
+    rev: "v2.3"
+    hooks:
+      - id: vulture
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: "1.7.8"
+    hooks:
+      - id: bandit
+        args: ["-lll"]  # 'High' severity only

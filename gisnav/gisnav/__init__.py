@@ -28,10 +28,9 @@ from .constants import (
     POSE_NODE_NAME,
     QGIS_NODE_NAME,
     ROS_NAMESPACE,
-    RVIZ_NODE_NAME,
-    TRANSFORM_NODE_NAME,
+    STEREO_NODE_NAME,
 )
-from .core import BBoxNode, GISNode, PoseNode, TransformNode
+from .core import BBoxNode, GISNode, PoseNode, StereoNode
 
 try:
     from .extensions.qgis_node import QGISNode
@@ -52,16 +51,6 @@ try:
 
 except ModuleNotFoundError as e:
     print(f"Could not import MockGPSNode because a module was not found: {e}")
-
-try:
-    from .extensions.rviz_node import RVizNode
-
-    def run_rviz_node():
-        """Spins up a :class:`.RVizNode`"""
-        _run(RVizNode, RVIZ_NODE_NAME, **_rclpy_node_kwargs)
-
-except ModuleNotFoundError as e:
-    print(f"Could not import RVizNode because a module was not found: {e}")
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
@@ -117,9 +106,9 @@ def run_gis_node():
     _run(GISNode, GIS_NODE_NAME, **_rclpy_node_kwargs)
 
 
-def run_transform_node():
-    """Spins up a :class:`.TransformNode`"""
-    _run(TransformNode, TRANSFORM_NODE_NAME, **_rclpy_node_kwargs)
+def run_stereo_node():
+    """Spins up a :class:`.StereoNode`"""
+    _run(StereoNode, STEREO_NODE_NAME, **_rclpy_node_kwargs)
 
 
 def run_pose_node():

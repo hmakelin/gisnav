@@ -1,63 +1,34 @@
-"""GISNav :term:`extension` :term:`node` that publishes mock GPS (GNSS) messages"""
+"""This module contains the :class:`.MockGPSNode` :term:`extension` :term:`node`
+that publishes mock GPS (GNSS) messages to autopilot middleware
+"""
 import json
 import socket
 from datetime import datetime
-from typing import Final, Optional, Tuple, cast
+from typing import Final, Optional, Tuple
 
 import numpy as np
-import rclpy
+import tf2_geometry_msgs
 import tf2_ros
-from geometry_msgs.msg import TransformStamped
+import tf_transformations
+from geometry_msgs.msg import Vector3Stamped
 from gps_time import GPSTime
+from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from rclpy.timer import Timer
-from sensor_msgs.msg import PointCloud2
 
-from .. import _messaging as messaging
+from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import (
-    GIS_NODE_NAME,
-    ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_GEOTRANSFORM,
-    ROS_TOPIC_SENSOR_GPS,
-    FrameID,
-)
+from ..constants import ROS_TOPIC_SENSOR_GPS
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
 class MockGPSNode(Node):
-    """A node that publishes a mock GPS message over the microRTPS bridge
-
-    .. mermaid::
-
-        graph LR
-            tf[tf]
-
-            subgraph MAVROS
-                navsatfix[mavros/global_position/global]
-            end
-
-            subgraph GISNode
-                geotransform[gisnav/gis_node/geotransform]
-            end
-
-            subgraph MockGPSNode
-                sensor_gps[fmu/in/sensor_gps]
-                gps_input
-            end
-
-            tf -->|'geometry_msgs/TransformStamped camera->wgs84_unscaled'| MockGPSNode
-            geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
-            sensor_gps -->|px4_msgs.msg.SensorGps| micro-ros-agent:::hidden
-            gps_input -->|GPSINPUT over UDP| MAVLink:::hidden
-
-    """
+    """A node that publishes a mock GPS message to autopilot middleware"""
 
     ROS_D_USE_SENSOR_GPS: Final = True
     """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for
@@ -84,10 +55,9 @@ class MockGPSNode(Node):
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default :term:`DEM` vertical datum"""
 
-    ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-    """Absolute :term:`topic` into which this :term:`node` publishes
-    :attr:`.sensor_gps`
-    """
+    # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
+    _EPSG_WGS84 = 4326
+    _EPSG_MSL = 5773  # Example: EGM96
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -108,15 +78,21 @@ class MockGPSNode(Node):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._mock_gps_pub = None
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
-        publish_rate = self.publish_rate
-        assert publish_rate is not None
-        self._publish_timer: Optional[Timer] = self._create_publish_timer(publish_rate)
+        # Create transformers
+        self._transformer_to_wgs84 = Transformer.from_crs(
+            f"EPSG:{self.dem_vertical_datum}",
+            f"EPSG:{self._EPSG_WGS84}",
+            always_xy=True,
+        )
+        self._transformer_to_msl = Transformer.from_crs(
+            f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_MSL}", always_xy=True
+        )
 
-        # Subscribe to geotransform
-        self.geotransform
+        # Subscribe
+        self.odometry
 
     @property
     @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -137,107 +113,208 @@ class MockGPSNode(Node):
         """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
     @property
-    @ROS.parameter(ROS_D_PUBLISH_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def publish_rate(self) -> Optional[float]:
-        """Mock :term:`GPS` :term:`message` publish rate in Hz"""
-
-    @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def dem_vertical_datum(self) -> Optional[int]:
         """:term:`DEM` vertical datum (must match DEM that is published in
         :attr:`.GISNode.orthoimage`)
         """
 
-    @narrow_types
-    def _create_publish_timer(self, publish_rate: float) -> Timer:
-        """Returns a timer that publishes the output mock :term:`GPS`
-        :term:`message` at regular intervals
-
-        :param publish_rate: Publish rate in Hz, see (:attr:`.publish_rate`)
-        :return: The :class:`.Timer` instance
-        """
-        if publish_rate <= 0:
-            error_msg = (
-                f"Mock GPS publish rate rate must be positive ({publish_rate} "
-                f"Hz provided)."
-            )
-            self.get_logger().error(error_msg)
-            raise ValueError(error_msg)
-        timer = self.create_timer(1 / publish_rate, self._publish)
-        return timer
+    def _odometry_cb(self, msg: Odometry) -> None:
+        """Callback for :attr:`.odometry`"""
+        self._publish(msg)
 
     @property
+    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_GEOTRANSFORM.replace("~", GIS_NODE_NAME)}',
+        "/robot_localization/odometry/filtered",
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_odometry_cb,
     )
-    def geotransform(self) -> Optional[PointCloud2]:
-        """Subscribed :term:`reference` frame to :term:`WGS 84` frame
-        affine transformation matrix (3, 3), or None if not available
+    def odometry(self) -> Optional[Odometry]:
+        """Camera info message including the camera intrinsics matrix"""
 
-        .. seealso::
-            :attr:`.GISNode.geotransform`
-        """
-
-    def _publish(self) -> None:
+    def _publish(self, odometry: Odometry) -> None:
         @narrow_types(self)
-        def _publish_inner(
-            base_link_to_reference: TransformStamped, geotransform: PointCloud2
-        ) -> None:
-            translation, rotation = (
-                base_link_to_reference.transform.translation,
-                base_link_to_reference.transform.rotation,
+        def _publish_inner(odometry: Odometry) -> None:
+            pose = odometry.pose.pose
+            # WGS 84 longitude and latitude, and AGL altitude in meters
+            # TODO: this is alt above ellipsoid, not agl
+            lon, lat, alt_agl = tf_.ecef_to_wgs84(
+                pose.position.x, pose.position.y, pose.position.z
             )
 
-            # Unpack the geotransformation affine matrix
-            M = np.frombuffer(geotransform.data, dtype=np.float64).reshape(4, 4)
+            timestamp = tf_.usec_from_header(odometry.header)
 
-            # Geotransform uses numpy convention: origin is top left corner and
-            # first axis is height -> need to swap x and y axis here and invert
-            # the first axis
-            # todo: do not hard code 735 - do this coordinate system transformation
-            #  in GISNode._create_src_corners instead
-            translation_wgs84 = M @ np.array(
-                [735 - translation.y, translation.x, translation.z, 1]
-            )
+            # Heading (yaw := z axis rotation) variance, assume no covariances
+            pose_cov = odometry.pose.covariance.reshape((6, 6))
+            std_dev_c_z = pose_cov[5, 5]
+            h_variance_rad = std_dev_c_z**2
 
-            # TODO: check yaw sign (NED or ENU?)
-            # TODO: get vehicle yaw (heading) not camera yaw
-            vehicle_yaw_degrees = messaging.extract_yaw(rotation)
-            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
-            # MAVLink definition 0 := not available
-            vehicle_yaw_degrees = (
-                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-            )
-
-            lat = int(translation_wgs84[1] * 1e7)
-            lon = int(translation_wgs84[0] * 1e7)
-
+            # WGS 84 ellipsoid and AMSL altitudes
             altitudes = self._convert_to_wgs84(
-                translation_wgs84[1],
-                translation_wgs84[0],
-                translation_wgs84[2],
-                self.dem_vertical_datum,
+                lat,
+                lon,
+                alt_agl,
             )
             if altitudes is not None:
                 alt_ellipsoid, alt_amsl = altitudes
             else:
                 return None
 
-            timestamp = messaging.usec_from_header(base_link_to_reference.header)
+            # Make satellites_visible value unrealistic but technically valid to make
+            # GISNav generated mock GPS messages easy to identify. Do not make this
+            # zero because the messages might then get rejected because of too low
+            # satellite count.
             satellites_visible = np.iinfo(np.uint8).max
-            eph = 10.0
-            epv = 1.0
+
+            # Pose variance: eph (horizontal error SD) and epv (vertical error SD),
+            # assume no covariances
+            x_var = pose_cov[0, 0]
+            y_var = pose_cov[1, 1]
+            eph = np.sqrt(x_var + y_var)
+            z_var = pose_cov[2, 2]
+            epv = np.sqrt(z_var)
+
+            # 3D velocity
+            # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
+            # z axis
+            # TODO: map is not published by GISNav - should use an ENU map frame
+            #  published by gisnav instead
+            twist = odometry.twist.twist
+            transform = tf_.get_transform(
+                self, "map", "camera_optical", odometry.header.stamp
+            )
+
+            # Need to convert linear twist vector to stamped version becase
+            # do_transform_vector3 expects stamped
+            vector_stamped = Vector3Stamped(header=odometry.header, vector=twist.linear)
+            vector_stamped.header.frame_id = odometry.child_frame_id
+            if transform is None:
+                # TODO: do this better
+                return None
+            linear_enu = tf2_geometry_msgs.do_transform_vector3(
+                vector_stamped, transform
+            )
+            linear_enu = linear_enu.vector
+            vel_n_m_s = linear_enu.y
+            vel_e_m_s = linear_enu.x
+            vel_d_m_s = -linear_enu.z
+
+            # Heading
+            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            transform_earth_to_map = tf_.get_transform(
+                self, "map", "earth", odometry.header.stamp
+            )
+
+            pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
+            euler = tf_transformations.euler_from_quaternion(
+                tf_.as_np_quaternion(pose_map.orientation).tolist()
+            )
+            yaw_rad = euler[2]  # ENU frame
+            yaw_rad = -yaw_rad  # NED frame ("heading")
+
+            if yaw_rad < 0:
+                yaw_rad = 2 * np.pi + yaw_rad
+
+            # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
+            vehicle_yaw_degrees = np.degrees(yaw_rad)
+            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
+            # MAVLink yaw definition 0 := not available
+            vehicle_yaw_degrees = (
+                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            )
+
+            # Speed variance, assume no covariances
+            twist_cov = odometry.twist.covariance.reshape((6, 6))
+            # Twist in ENU -> remap to NED here by swapping x and y axes, z axis
+            # inversion should not affect variance
+            vel_n_m_s_var = twist_cov[1, 1]
+            vel_e_m_s_var = twist_cov[0, 0]
+            vel_d_m_s_var = twist_cov[2, 2]
+            s_variance_m_s = vel_n_m_s_var + vel_e_m_s_var + vel_d_m_s_var
+
+            # Course over ground and its variance
+            def _calculate_cog_variance(
+                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
+            ) -> float:
+                numerator = (vel_e_m_s_var * vel_n_m_s**2) + (
+                    vel_n_m_s_var * vel_e_m_s**2
+                )
+                denominator = (vel_e_m_s**2 + vel_n_m_s**2) ** 2
+
+                # Calculate the variance of the CoG in radians
+                cog_var = numerator / denominator
+
+                # TODO handle possible exceptions arising from variance exploding at 0
+                #  velocity (as it should)
+                return float(cog_var)
+
+            def _calculate_course_over_ground(
+                east_velocity: float, north_velocity: float
+            ) -> float:
+                """
+                Calculate the course over ground from east and north velocities.
+
+                :param east_velocity: The velocity towards the east in meters per
+                    second.
+                :param north_velocity: The velocity towards the north in meters per
+                    second.
+                :return: The course over ground in degrees from the north, in the range
+                    [0, 2 * pi).
+
+                The course over ground is calculated using the arctangent of the east
+                and north velocities. The result is adjusted to ensure it is within
+                the [0, 2 * pi) range.
+                """
+                magnitude = np.sqrt(east_velocity**2 + north_velocity**2)
+
+                if east_velocity >= 0 and north_velocity >= 0:
+                    # top-right quadrant
+                    course_over_ground_radians = np.arcsin(east_velocity / magnitude)
+                elif east_velocity >= 0 and north_velocity < 0:
+                    # bottom-right quadrant
+                    course_over_ground_radians = 0.5 * np.pi + np.arcsin(
+                        -north_velocity / magnitude
+                    )
+                elif east_velocity < 0 and north_velocity < 0:
+                    # bottom-left quadrant
+                    course_over_ground_radians = np.pi + np.arcsin(
+                        -east_velocity / magnitude
+                    )
+                elif east_velocity < 0 and north_velocity >= 0:
+                    # top-left quadrant
+                    course_over_ground_radians = 1.5 * np.pi + np.arcsin(
+                        north_velocity / magnitude
+                    )
+                else:
+                    # todo: this is unreachable?
+                    course_over_ground_radians = 0.0
+
+                return course_over_ground_radians
+
+            # Compute course over ground - pay attention to sine only being
+            # defined for 0<=theta<=90
+            cog = _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
+
+            # Compute course over ground variance
+            cog_variance_rad = _calculate_cog_variance(
+                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
+            )
 
             if self.use_sensor_gps:
                 self.sensor_gps(
-                    lat,
-                    lon,
+                    int(lat * 1e7),
+                    int(lon * 1e7),
                     alt_ellipsoid,
                     alt_amsl,
                     vehicle_yaw_degrees,
-                    self._device_id,
+                    h_variance_rad,
+                    vel_n_m_s,
+                    vel_e_m_s,
+                    vel_d_m_s,
+                    cog,
+                    cog_variance_rad,
+                    s_variance_m_s,
                     timestamp,
                     eph,
                     epv,
@@ -255,44 +332,24 @@ class MockGPSNode(Node):
                     satellites_visible,
                 )
 
-        # Must match transformation chain to correct reference frame using
-        # geotransform timestamp. The geotransform timestamp is a proxy for the
-        # orthoimage timestamp, which is also added to the frame_id of the
-        # reference frame. The reference frame is discontinous so it is not and
-        # should not be interpolated using tf2 to prevent jumps in estimation
-        # error whenever the reference frame is updated.
-        geotransform = self.geotransform
-        if self.geotransform is not None:
-            ref_frame: FrameID = cast(
-                FrameID,
-                "reference_{}_{}".format(
-                    geotransform.header.stamp.sec, geotransform.header.stamp.nanosec
-                ),
-            )
-            base_link_to_reference = messaging.get_transform(
-                self,
-                ref_frame,
-                "camera",  # base_link  # todo use base_link, not camera
-                rclpy.time.Time(),
-            )
-        else:
-            base_link_to_reference = None
-
-        _publish_inner(base_link_to_reference, geotransform)
+        _publish_inner(odometry)
 
     @narrow_types
-    @ROS.publish(
-        ROS_TOPIC_SENSOR_GPS,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
+    @ROS.publish(ROS_TOPIC_SENSOR_GPS, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def sensor_gps(
         self,
-        lat: int,
-        lon: int,
+        lat: int,  # todo update to new message definition with degrees, not 1e7 degrees
+        lon: int,  # todo update to new message definition with degrees, not 1e7 degrees
         altitude_ellipsoid: float,
         altitude_amsl: float,
         yaw_degrees: int,
-        device_id: int,
+        h_variance_rad: float,
+        vel_n_m_s: float,
+        vel_e_m_s: float,
+        vel_d_m_s: float,
+        cog: float,
+        cog_variance_rad: float,
+        s_variance_m_s: float,
         timestamp: int,
         eph: float,
         epv: float,
@@ -303,17 +360,15 @@ class MockGPSNode(Node):
 
         Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
         """
-
         yaw_rad = np.radians(yaw_degrees)
 
         msg = SensorGps()
-        msg.timestamp = int(timestamp)
+        msg.timestamp = 0
         msg.timestamp_sample = int(timestamp)
-        msg.device_id = device_id
-        # msg.device_id = 0
+        msg.device_id = 0
         msg.fix_type = 3
-        msg.s_variance_m_s = 5.0  # not estimated, use default cruise speed
-        msg.c_variance_rad = np.nan
+        msg.s_variance_m_s = s_variance_m_s
+        msg.c_variance_rad = cog_variance_rad
         msg.lat = lat
         msg.lon = lon
         msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
@@ -324,20 +379,21 @@ class MockGPSNode(Node):
         msg.vdop = 0.0
         msg.noise_per_ms = 0
         msg.automatic_gain_control = 0
-        msg.jamming_state = 0
+        msg.jamming_state = 0  # 1 := OK, 0 := UNKNOWN
         msg.jamming_indicator = 0
-        msg.vel_m_s = 0.0
-        msg.vel_n_m_s = 0.0
-        msg.vel_e_m_s = 0.0
-        msg.vel_d_m_s = 0.0
-        msg.cog_rad = np.nan
+        msg.spoofing_state = 0  # 1 := OK, 0 := UNKNOWN
+        msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
+        msg.vel_n_m_s = vel_n_m_s
+        msg.vel_e_m_s = vel_e_m_s
+        msg.vel_d_m_s = vel_d_m_s
+        msg.cog_rad = cog
         msg.vel_ned_valid = True
         msg.timestamp_time_relative = 0
         msg.satellites_used = satellites_visible
-        msg.time_utc_usec = msg.timestamp
+        msg.time_utc_usec = msg.timestamp_sample
         msg.heading = float(yaw_rad)
-        msg.heading_offset = 0.0
-        msg.heading_accuracy = 0.0
+        msg.heading_offset = 0.0  # assume map frame is an ENU frame
+        msg.heading_accuracy = h_variance_rad
 
         return msg
 
@@ -413,7 +469,7 @@ class MockGPSNode(Node):
 
     @narrow_types
     def _convert_to_wgs84(
-        self, lat: float, lon: float, elevation: float, epsg_code: int
+        self, lat: float, lon: float, elevation: float
     ) -> Optional[Tuple[float, float]]:
         """
         Convert :term:`elevation` or :term:`altitude` from a specified vertical
@@ -422,24 +478,12 @@ class MockGPSNode(Node):
         :param lat: Latitude in decimal degrees.
         :param lon: Longitude in decimal degrees.
         :param elevation: Elevation in the specified datum.
-        :param epsg_code: EPSG code of the vertical datum.
         :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
             :term:`AMSL`.
         """
-        # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
-        epsg_wgs84 = 4326
-        epsg_msl = 5773  # Example: EGM96
-
-        # Create transformers
-        transformer_to_wgs84 = Transformer.from_crs(
-            f"EPSG:{epsg_code}", f"EPSG:{epsg_wgs84}", always_xy=True
+        _, _, wgs84_elevation = self._transformer_to_wgs84.transform(
+            lon, lat, elevation
         )
-        transformer_to_msl = Transformer.from_crs(
-            f"EPSG:{epsg_code}", f"EPSG:{epsg_msl}", always_xy=True
-        )
-
-        # Perform the transformations
-        _, _, wgs84_elevation = transformer_to_wgs84.transform(lon, lat, elevation)
-        _, _, msl_elevation = transformer_to_msl.transform(lon, lat, elevation)
+        _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
 
         return wgs84_elevation, msl_elevation

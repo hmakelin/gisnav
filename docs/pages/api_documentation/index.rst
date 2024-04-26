@@ -22,14 +22,13 @@ what you are looking for.
 
     public/bbox_node
     public/gis_node
-    public/transform_node
+    public/stereo_node
     public/pose_node
 
 .. toctree::
     :caption: Extension nodes
 
     public/mock_gps_node
-    public/rviz_node
     public/qgis_node
 
 .. toctree::

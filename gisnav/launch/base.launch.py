@@ -16,6 +16,32 @@ def generate_launch_description():
     ld = LaunchDescription()
     ld.add_action(
         Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "-1.571",
+                "0",
+                "-1.571",
+                "camera",
+                "camera_optical",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="robot_localization",
+            name="ekf_node",
+            namespace="robot_localization",
+            executable="ekf_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/ekf_node.yaml")],
+        )
+    )
+    ld.add_action(
+        Node(
             package=_PACKAGE_NAME,
             name="gis_node",
             namespace=_PACKAGE_NAME,
@@ -26,11 +52,11 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
-            name="transform_node",
+            name="stereo_node",
             namespace=_PACKAGE_NAME,
-            executable="transform_node",
+            executable="stereo_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/transform_node.yaml")
+                os.path.join(package_share_dir, "launch/params/stereo_node.yaml")
             ],
         )
     )

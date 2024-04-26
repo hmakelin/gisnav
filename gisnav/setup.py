@@ -116,7 +116,7 @@ setup(
         "OWSLib>=0.25.0",
         "torch>=2.1.0",
         "kornia==0.6.10",
-        "transforms3d",
+        "transforms3d",  # tf_transformations needs this
     ],
     tests_require=["pytest"],
     extras_require={
@@ -150,10 +150,9 @@ setup(
         "console_scripts": [
             "mock_gps_node = gisnav:run_mock_gps_node",
             "gis_node = gisnav:run_gis_node",
-            "transform_node = gisnav:run_transform_node",
+            "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",
             "bbox_node = gisnav:run_bbox_node",
-            "rviz_node = gisnav:run_rviz_node",
             "qgis_node = gisnav:run_qgis_node",
         ],
     },

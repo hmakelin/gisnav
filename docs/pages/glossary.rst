@@ -31,8 +31,8 @@ correct alternative should be easily inferred from the context they are used in.
     Extension
     Extended functionality
         * Functionality beyond GISNav :term:`core` functionality. For example,
-          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS` substitute
-          or complement, or :class:`.RVizNode` for integrating GISNav with :term:`RViz`.
+          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS`
+          substitute or complement.
         * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
     Autopilot
@@ -119,16 +119,6 @@ correct alternative should be easily inferred from the context they are used in.
           :term:`ROS`
         * An :term:`image` frame (i.e. a single frame from a video stream)
 
-    Geopose
-        A :term:`pose` containing a :term:`global position` and :term:`orientation`.
-        More specifically, a ``geographic_msgs/GeoPose`` or
-        ``geographic_msgs/GeoPoseStamped`` type :term:`ROS` :term:`message` .
-
-        .. todo::
-            No longer used since GISNav v0.65.0. :class:`RVizNode` has not
-            yet been updated and might use this term so it is kept in the
-            glossary.
-
     GetFeatureInfo
         A :term:`WMS` operation for requesting non-:term:`raster` features from
         :term:`GIS` servers. Used in earlier versions of GISNav to fetch DEM
@@ -199,7 +189,7 @@ correct alternative should be easily inferred from the context they are used in.
     Map
     map
         * A world-fixed ROS coordinate :term:`frame <Frame>` as defined in
-          `REP 105 <https://www.ros.org/reps/rep-0105.html>`_. In GISNav the
+          :term:`REP 105`. In GISNav the
           ``map`` frame is defined as declared by :term:`MAVROS`.
         * A :term:`raster` retrieved from a :term:`GIS` system. Generic
           term that could e.g. mean :term:`orthoimagery` or :term:`DEMs <DEM>`
@@ -208,6 +198,14 @@ correct alternative should be easily inferred from the context they are used in.
         .. todo::
             Define ``map`` frame independently of MAVROS - could use the
             bounding box ``reference`` frame here instead.
+
+    Match
+    Matching
+        Keypoint matching in the context of trying to estimate the camera
+        :term:`pose` between two images.
+
+        .. seealso::
+            :term:`PnP`.
 
     Message
         A :term:`ROS` message.
@@ -498,6 +496,9 @@ ____________________________________________________
         Domain Name System: `en.wikipedia.org/wiki/Domain_Name_System
         <https://en.wikipedia.org/wiki/Domain_Name_System>`_
 
+    ECEF
+        Earth-Centered, Earth-Fixed (coordinate frame)
+
     EKF
         Extended Kalman Filter
 
@@ -599,6 +600,14 @@ ____________________________________________________
     RDP
         Remote Desktop Protocol
 
+    REP
+    REP 103
+    REP 105
+        ROS Enhancement Proposal
+
+        * `REP 103 <https://www.ros.org/reps/rep-0103.html>`_
+        * `REP 105 <https://www.ros.org/reps/rep-0104.html>`_
+
     RPY
         Roll, pitch, yaw
 
@@ -630,6 +639,9 @@ ____________________________________________________
 
     VNC
         Virtual Network Computing
+
+    VO
+        Visual Odometry
 
     WGS
     WGS 84

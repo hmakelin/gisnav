@@ -46,7 +46,7 @@ from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.transform_broadcaster import TransformBroadcaster
 
-from .. import _messaging as messaging
+from .. import _transformations as messaging
 from .._decorators import ROS, narrow_types
 from ..constants import (
     DELAY_DEFAULT_MS,
@@ -81,8 +81,8 @@ class BBoxNode(Node):
         # Needed for updating tf2 with camera to vehicle relative pose
         # and vehicle to wgs84 relative
         self.broadcaster = TransformBroadcaster(self)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the :term:`global position` message from the
@@ -114,7 +114,8 @@ class BBoxNode(Node):
         )
 
         # Publish local tangent plane (ENU) to vehicle FRD frame transformation
-        transform_base_link = messaging.pose_to_transform(msg, "map", "base_link")
+        assert msg.header.frame_id == "map"
+        transform_base_link = messaging.pose_to_transform(msg, "base_link")
         self.broadcaster.sendTransform([transform_base_link])
 
     @property
@@ -330,7 +331,7 @@ class BBoxNode(Node):
             messaging.get_transform(
                 self,
                 "map",
-                "gimbal",
+                "camera",
                 rclpy.time.Time(),  # self.vehicle_pose.header.stamp
             )
             if self.vehicle_pose is not None
@@ -398,7 +399,7 @@ class BBoxNode(Node):
             # TODO publish relative transform with gimbaldeviceattitudestatus
             #  timestamp (this one now has vehicle pose timestamp)
             parent_frame_id: FrameID = "map"
-            child_frame_id: FrameID = "gimbal"
+            child_frame_id: FrameID = "camera"
 
             assert gimbal_device_attitude_status.flags == 12, (
                 "Currently GISNav only supports a two-axis gimbal that has "

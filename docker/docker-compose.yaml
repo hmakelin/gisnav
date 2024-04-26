@@ -147,7 +147,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
       - gisnav-volume:/etc/gisnav
-    command: ros2 launch gisnav px4.dev.launch.py
+    command: ros2 launch gisnav px4.launch.py
     depends_on:
       - px4
       - mavros

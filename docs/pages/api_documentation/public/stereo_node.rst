@@ -1,6 +1,6 @@
-RVizNode
+StereoNode
 ____________________________________________________
-.. automodule:: gisnav.extensions.rviz_node
+.. automodule:: gisnav.core.stereo_node
    :autosummary:
    :members:
    :undoc-members:

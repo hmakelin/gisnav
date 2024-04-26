@@ -193,13 +193,13 @@ class PoseNode(Node):
         r_inv = r.T
         camera_optical_position_in_world = -r_inv @ t
 
-        tf_.visualize_camera_position(
-            ref.copy(),
-            camera_optical_position_in_world,
-            f"Camera {'principal point' if shallow_inference else 'position'} "
-            f"in {'previous' if shallow_inference else 'world'} frame, "
-            f"{'shallow' if shallow_inference else 'deep'} inference",
-        )
+        # tf_.visualize_camera_position(
+        #    ref.copy(),
+        #    camera_optical_position_in_world,
+        #    f"Camera {'principal point' if shallow_inference else 'position'} "
+        #    f"in {'previous' if shallow_inference else 'world'} frame, "
+        #    f"{'shallow' if shallow_inference else 'deep'} inference",
+        # )
 
         header = msg.query.header
 

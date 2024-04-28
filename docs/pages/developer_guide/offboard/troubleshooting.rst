@@ -84,11 +84,10 @@ ________________________________________________
     [RTPS_TRANSPORT_SHM Error] Failed init_port fastrtps_port7412:
     open_and_lock_file failed -> Function open_port_internal
 
-If you are not able to establish :term:`ROS` communication between the ``mavros`` or
-``micro-ros-agent`` containers and the host, or receive the above error when
-using the ``--network host`` option, try disabling SharedMemory for Fast DDS
-**on your host**. You can do so by creating an XML configuration (e.g.,
-``disable_shared_memory.xml``) as described in `this comment`_
+If you are not able to establish :term:`ROS` communication between the ``mavros`` container
+and the host, or receive the above error when using the ``--network host`` option, try
+disabling SharedMemory for Fast DDS **on your host**. You can do so by creating an XML
+configuration (e.g., ``disable_shared_memory.xml``) as described in `this comment`_
 or discussion `here`_ and restarting the ROS daemon with the new configuration:
 
 .. _this comment: https://github.com/eProsima/Fast-DDS/issues/1698#issuecomment-778039676

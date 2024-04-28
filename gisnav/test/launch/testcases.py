@@ -31,7 +31,6 @@ class TestTopographyCase(unittest.TestCase):
     EXPECTED_TOPICS = (
         "/camera/camera_info",
         "/camera/image_raw",
-        "/fmu/in/sensor_gps",
         "/gisnav/bbox_node/fov/bounding_box",
         "/gisnav/gis_node/orthoimage",
         "/gisnav/stereo_node/pose_image",
@@ -51,7 +50,6 @@ class TestTopographyCase(unittest.TestCase):
     EXPECTED_TYPES = (
         "sensor_msgs/msg/CameraInfo",
         "sensor_msgs/msg/Image",
-        "px4_msgs/msg/SensorGps",
         "geographic_msgs/msg/BoundingBox",
         "gisnav_msgs/msg/OrthoImage",
         "gisnav_msgs/msg/OrthoStereoImage",
@@ -176,49 +174,3 @@ class TestTopographyCase(unittest.TestCase):
             f"Not all expected topics and types were discovered. "
             f"Missing: {missing_topics_and_types}"
         )
-
-
-class TestTopographyArduPilotCase(TestTopographyCase):
-    # Add blank ""s as placeholders to keep tuple same size as tuple being
-    # overridden. Otherwise mypy will complain.
-    EXPECTED_TOPICS = (
-        "/camera/camera_info",
-        "/camera/image_raw",
-        "/gisnav/bbox_node/fov/bounding_box",
-        "/gisnav/gis_node/orthoimage",
-        "/gisnav/stereo_node/pose_image",
-        "/gisnav/stereo_node/twist_image",
-        "/gisnav/pose_node/pose",
-        "/gisnav/pose_node/vo/pose",
-        "/mavros/gimbal_control/device/attitude_status",
-        "/mavros/global_position/global",
-        "/mavros/local_position/pose",
-        "/mavros/time_reference",
-        "/rosout",
-        "/tf",
-        "/tf_static",
-        "",
-    )
-    """Names of topics that should be found when running the launch configuration"""
-
-    # Add blank ""s as placeholders to keep tuple same size as tuple being
-    # overridden. Otherwise mypy will complain.
-    EXPECTED_TYPES = (
-        "sensor_msgs/msg/CameraInfo",
-        "sensor_msgs/msg/Image",
-        "geographic_msgs/msg/BoundingBox",
-        "gisnav_msgs/msg/OrthoImage",
-        "gisnav_msgs/msg/OrthoStereoImage",
-        "gisnav_msgs/msg/MonocularStereoImage",
-        "geometry_msgs/msg/PoseWithCovarianceStamped",
-        "geometry_msgs/msg/PoseWithCovarianceStamped",
-        "mavros_msgs/msg/GimbalDeviceAttitudeStatus",
-        "sensor_msgs/msg/NavSatFix",
-        "geometry_msgs/msg/PoseStamped",
-        "sensor_msgs/msg/TimeReference",
-        "rcl_interfaces/msg/Log",
-        "tf2_msgs/msg/TFMessage",
-        "tf2_msgs/msg/TFMessage",
-        "",
-    )
-    """Types of :py:data:`~EXPECTED_TOPICS` in corresponding order"""

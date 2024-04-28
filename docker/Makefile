@@ -93,10 +93,6 @@ endef
 
 # Define a reusable template for creating Docker Compose middleware targets
 #
-# GISNav needs both micro-ros-agent and mavros for the mock GPS node in PX4
-# configuration, while MAVROS alone is sufficient in ArduPilot configuration,
-# which complicates things just enough to require separate templates.
-#
 # Parameters:
 #   1. The prefix for the target name.
 #   2. The additional Docker Compose options, such as file overrides.
@@ -121,7 +117,7 @@ endef
 #   2. The Docker Compose command to execute (either 'up -d' or 'build').
 define run_middleware
 	@if [ "$*" = "px4" ]; then \
-		docker compose -p $(PROJECT_NAME) $(1) $(2) micro-ros-agent mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	else \

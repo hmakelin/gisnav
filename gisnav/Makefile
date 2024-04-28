@@ -8,8 +8,7 @@ test-sitl:
 
 .PHONY: test-launch
 test-launch:
-	@launch_test gisnav/test/launch/test_px4_launch.py
-	@launch_test gisnav/test/launch/test_ardupilot_launch.py
+	@launch_test gisnav/test/launch/test_default_launch.py
 
 .PHONY: test-unit
 test-unit:

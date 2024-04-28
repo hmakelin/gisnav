@@ -1,0 +1,3 @@
+gisnav:
+  mock_gps_node:
+    ros__parameters: []

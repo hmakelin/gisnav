@@ -88,4 +88,4 @@ Note on camera topics
 
 :term:`GSCam` is in GISNav to publish the :class:`sensor_msgs.msg.CameraInfo`
 and :class:`sensor_msgs.msg.Image` messages. The camera topics are not published
-over the :term:`MAVROS` nor :term:`micro-ROS-agent` middleware.
+over the :term:`MAVROS` middleware.

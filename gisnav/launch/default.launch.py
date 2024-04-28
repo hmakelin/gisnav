@@ -1,4 +1,4 @@
-"""Launches GISNav with PX4 SITL simulation development configuration"""
+"""Launches GISNav with PX4 SITL simulation configuration"""
 import os
 from typing import Final
 
@@ -30,18 +30,7 @@ def generate_launch_description():
             namespace=_PACKAGE_NAME,
             executable="mock_gps_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/mock_gps_node_px4.yaml")
-            ],
-        )
-    )
-    ld.add_action(
-        Node(
-            package=_PACKAGE_NAME,
-            name="qgis_node",
-            namespace=_PACKAGE_NAME,
-            executable="qgis_node",
-            parameters=[
-                os.path.join(package_share_dir, "launch/params/qgis_node.yaml")
+                os.path.join(package_share_dir, "launch/params/mock_gps_node.yaml")
             ],
         )
     )

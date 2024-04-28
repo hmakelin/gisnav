@@ -42,7 +42,6 @@ Docker container with the hostname ``gisnav-mapserver-1``.
             end
             subgraph middleware ["Middleware Services"]
                 middleware_mavros[mavros]
-                middleware_micro_ros_agent[micro-ros-agent]
                 middleware_gscam[gscam]
             end
         end
@@ -77,10 +76,8 @@ Docker container with the hostname ``gisnav-mapserver-1``.
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
         simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
-        simulation_px4 -->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
         simulation_px4 -->|5600/udp\nRTP H.264 Video| middleware_gscam
         middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
-        middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         application_gisnav -->|5432/tcp| gis_postgres
 

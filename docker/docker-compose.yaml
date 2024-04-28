@@ -90,16 +90,6 @@ services:
         - homepage.name=MapServer
         - homepage.description=MapServer GIS service
 
-  micro-ros-agent:
-    <<: [*base, *ros, *mavlink-net]
-    build:
-      context: micro-ros-agent
-    command: udp4 -p 8888
-    labels:
-        - homepage.group=Core services
-        - homepage.name=micro-ROS agent
-        - homepage.description=uORB to ROS (PX4) middleware
-
   mavros:
     <<: [*base, *ros, *mavlink-net]
     build:
@@ -147,11 +137,10 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
       - gisnav-volume:/etc/gisnav
-    command: ros2 launch gisnav px4.launch.py
+    command: ros2 launch gisnav default.launch.py
     depends_on:
       - px4
       - mavros
-      - micro-ros-agent
       - gscam
       - mapserver
       - postgres
@@ -160,7 +149,7 @@ services:
         - homepage.name=GISNav
         - homepage.description=Generates mock GPS messages for FCU using visual map-based navigation
 
-  # The px4 service depends on mavros, mapserver and micro-ros-agent because
+  # The px4 service depends on mavros, mapserver and because
   # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu, *mavlink-net]
@@ -173,7 +162,6 @@ services:
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
     depends_on:
       - mavros
-      - micro-ros-agent
       - qgc
     labels:
         - homepage.group=Development services

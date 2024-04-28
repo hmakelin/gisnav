@@ -27,7 +27,6 @@ Install GISNav system dependencies with the following commands:
 
     cd ~/colcon_ws/src
     git clone --branch |vversion| https://github.com/hmakelin/gisnav.git
-    git clone https://github.com/px4/px4_msgs.git
     git clone \
         --branch gimbal-protocol-v2-plugin \
         https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git \
@@ -95,8 +94,8 @@ Build colcon workspace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build the GISNav package along with other dependencies you have in your colcon
-workspace. If you have already built the other dependencies (such as ``px4_msgs``)
-earlier you may want to skip rebuilding them and build GISNav only to save time:
+workspace. If you have already built the other dependencies earlier you may
+want to skip rebuilding them and build GISNav only to save time:
 
 .. include:: ../_shared/build_colcon_workspace.rst
 

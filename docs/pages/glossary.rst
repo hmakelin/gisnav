@@ -213,7 +213,7 @@ correct alternative should be easily inferred from the context they are used in.
     Middleware
         A software application that facilitates communication between other
         software applications (by transmitting data between them). More
-        specifically, :term:`MAVROS` or :term:`micro-ROS Agent`.
+        specifically, :term:`MAVROS`.
 
     Mission
     Mission mode
@@ -740,11 +740,6 @@ relate to external interfaces.
     Mermaid
     mermaid.js
         A diagram scripting language: `mermaid.js.org <https://mermaid.js.org/>`
-
-    micro-ROS-agent
-    micro-ROS Agent
-        A :term:`ROS` package that wraps the Micro XRCE-DDS Agent :term:`middleware`:
-        `github.com/micro-ROS/micro-ROS-Agent <https://github.com/micro-ROS/micro-ROS-Agent>`_
 
     OpenCV
         Open source computer vision software library: `opencv.org <https://opencv.org/>`_

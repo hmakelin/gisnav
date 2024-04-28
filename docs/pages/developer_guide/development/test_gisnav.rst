@@ -83,7 +83,7 @@ You can also try running only specific launch tests with commands like below:
     :caption: Run ROS specific launch tests
 
     cd ~/colcon_ws/src/gisnav
-    launch_test src/gisnav/gisnav/test/launch/test_px4_launch.py
+    launch_test src/gisnav/gisnav/test/launch/test_default_launch.py
 
 
 Unit tests
@@ -152,12 +152,12 @@ Generate code coverage reports
 To generate and inspect code coverage you can use ``coverage.py``. See the
 `official instructions <https://coverage.readthedocs.io/en/6.4.1/source.html>`_
 on how to configure what source files to measure. Use the below command to run
-and inspect a code coverage report for the launch tests for the PX4 launch
+and inspect a code coverage report for the launch tests for the default launch
 configuration:
 
 .. code-block:: bash
     :caption: Run and inspect code coverage report
 
     cd ~/colcon_ws
-    python3 -m coverage run --branch --include *gisnav* src/gisnav/gisnav/test/launch/test_px4_launch.py
+    python3 -m coverage run --branch --include *gisnav* src/gisnav/gisnav/test/launch/test_default_launch.py
     python3 -m coverage report

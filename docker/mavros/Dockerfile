@@ -97,6 +97,9 @@ COPY docker/mavros/gisnav/entrypoint.sh /
 
 RUN chmod +x /entrypoint.sh
 
+# Download LoFTR pretrained weights
+RUN python3 -c "from kornia.feature import LoFTR; LoFTR(pretrained='outdoor')"
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 # TODO: proper health check - check that public facing topics are publishing

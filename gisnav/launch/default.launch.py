@@ -26,11 +26,11 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
-            name="mock_gps_node",
+            name="nmea_node",
             namespace=_PACKAGE_NAME,
-            executable="mock_gps_node",
+            executable="nmea_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/mock_gps_node.yaml")
+                os.path.join(package_share_dir, "launch/params/nmea_node.yaml")
             ],
         )
     )

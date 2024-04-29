@@ -1,19 +1,18 @@
-"""This module contains the :class:`.MockGPSNode` :term:`extension` :term:`node`
-that publishes mock GPS (GNSS) messages to autopilot middleware
+"""This module contains the :class:`.NMEANode` :term:`extension` :term:`node`
+that publishes mock GPS (GNSS) messages to autopilot middleware over
+:term:`NMEA`
 """
-import json
-import socket
-from datetime import datetime
-from typing import Final, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Final, List, Optional, Tuple
 
 import numpy as np
+import pynmea2
+import serial
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
 from geometry_msgs.msg import Vector3Stamped
-from gps_time import GPSTime
 from nav_msgs.msg import Odometry
-from px4_msgs.msg import SensorGps
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -21,39 +20,22 @@ from rclpy.qos import QoSPresetProfiles
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import ROS_TOPIC_SENSOR_GPS
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
-class MockGPSNode(Node):
+class NMEANode(Node):
     """A node that publishes a mock GPS message to autopilot middleware"""
-
-    ROS_D_USE_SENSOR_GPS: Final = True
-    """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for
-    :term:`ArduPilot`, :class:`px4_msgs.msg.SensorGps` for :term:`PX4` otherwise.
-    """
-
-    ROS_D_UDP_HOST: Final = "127.0.0.1"
-    """MAVProxy GPSInput plugin default host
-
-    .. note::
-        Only used if :attr:`use_sensor_gps` is ``False``
-    """
-
-    ROS_D_UDP_PORT: Final = 25100
-    """MAVProxy GPSInput plugin default port
-
-    .. note::
-        Only used if :attr:`use_sensor_gps` is ``False``
-    """
-
-    ROS_D_PUBLISH_RATE = 1.0
-    """Default mock GPS message publish rate in Hz"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default :term:`DEM` vertical datum"""
+
+    ROS_D_PORT = "/dev/ttyS1"
+    """Default serial port for outgoing :term:`NMEA` messages"""
+
+    ROS_D_BAUDRATE = 9600
+    """Default baudrate for outgoing :term:`NMEA` messages"""
 
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
@@ -66,17 +48,6 @@ class MockGPSNode(Node):
         :param kwargs: Keyword arguments to parent :class:`.Node` constructor
         """
         super().__init__(*args, **kwargs)
-
-        if self.use_sensor_gps:
-            self._mock_gps_pub = self.create_publisher(
-                SensorGps,
-                ROS_TOPIC_SENSOR_GPS,
-                QoSPresetProfiles.SENSOR_DATA.value,
-            )
-            self._socket = None
-        else:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self._mock_gps_pub = None
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -95,29 +66,21 @@ class MockGPSNode(Node):
         self.odometry
 
     @property
-    @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def use_sensor_gps(self) -> Optional[bool]:
-        """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
-        should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
-        instead of as :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
-        """
-
-    @property
-    @ROS.parameter(ROS_D_UDP_HOST, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def udp_host(self) -> Optional[str]:
-        """:term:`ROS` parameter MAVProxy GPSInput plugin host name or IP address"""
-
-    @property
-    @ROS.parameter(ROS_D_UDP_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def udp_port(self) -> Optional[int]:
-        """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
-
-    @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def dem_vertical_datum(self) -> Optional[int]:
         """:term:`DEM` vertical datum (must match DEM that is published in
         :attr:`.GISNode.orthoimage`)
         """
+
+    @property
+    @ROS.parameter(ROS_D_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def port(self) -> Optional[int]:
+        """Serial port for outgoing :term:`NMEA` messages"""
+
+    @property
+    @ROS.parameter(ROS_D_BAUDRATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
+    def baudrate(self) -> Optional[int]:
+        """Baudrate for outgoing :term:`NMEA` messages"""
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
@@ -148,7 +111,7 @@ class MockGPSNode(Node):
             # Heading (yaw := z axis rotation) variance, assume no covariances
             pose_cov = odometry.pose.covariance.reshape((6, 6))
             std_dev_c_z = pose_cov[5, 5]
-            h_variance_rad = std_dev_c_z**2
+            std_dev_c_z**2
 
             # WGS 84 ellipsoid and AMSL altitudes
             altitudes = self._convert_to_wgs84(
@@ -198,31 +161,33 @@ class MockGPSNode(Node):
             linear_enu = linear_enu.vector
             vel_n_m_s = linear_enu.y
             vel_e_m_s = linear_enu.x
-            vel_d_m_s = -linear_enu.z
+            # vel_d_m_s = -linear_enu.z
 
             # Heading
             # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
-            transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", odometry.header.stamp
-            )
+            # transform_earth_to_map = tf_.get_transform(
+            #    self, "map", "earth", odometry.header.stamp
+            # )
 
-            pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
-            euler = tf_transformations.euler_from_quaternion(
-                tf_.as_np_quaternion(pose_map.orientation).tolist()
-            )
-            yaw_rad = euler[2]  # ENU frame
-            yaw_rad = -yaw_rad  # NED frame ("heading")
+            # pose_map = tf2_geometry_msgs.do_transform_pose(
+            # pose, transform_earth_to_map
+            # )
+            # euler = tf_transformations.euler_from_quaternion(
+            #    tf_.as_np_quaternion(pose_map.orientation).tolist()
+            # )
+            # yaw_rad = euler[2]  # ENU frame
+            # yaw_rad = -yaw_rad  # NED frame ("heading")
 
-            if yaw_rad < 0:
-                yaw_rad = 2 * np.pi + yaw_rad
+            # if yaw_rad < 0:
+            #    yaw_rad = 2 * np.pi + yaw_rad
 
             # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
-            vehicle_yaw_degrees = np.degrees(yaw_rad)
-            vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
+            # vehicle_yaw_degrees = np.degrees(yaw_rad)
+            # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available
-            vehicle_yaw_degrees = (
-                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-            )
+            # vehicle_yaw_degrees = (
+            #    360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            # )
 
             # Speed variance, assume no covariances
             twist_cov = odometry.twist.covariance.reshape((6, 6))
@@ -231,7 +196,7 @@ class MockGPSNode(Node):
             vel_n_m_s_var = twist_cov[1, 1]
             vel_e_m_s_var = twist_cov[0, 0]
             vel_d_m_s_var = twist_cov[2, 2]
-            s_variance_m_s = vel_n_m_s_var + vel_e_m_s_var + vel_d_m_s_var
+            vel_n_m_s_var + vel_e_m_s_var + vel_d_m_s_var
 
             # Course over ground and its variance
             def _calculate_cog_variance(
@@ -294,178 +259,131 @@ class MockGPSNode(Node):
 
             # Compute course over ground - pay attention to sine only being
             # defined for 0<=theta<=90
-            cog = _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
+            _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
 
             # Compute course over ground variance
             cog_variance_rad = _calculate_cog_variance(
                 vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
             )
 
-            if self.use_sensor_gps:
-                self.sensor_gps(
-                    int(lat * 1e7),
-                    int(lon * 1e7),
-                    alt_ellipsoid,
-                    alt_amsl,
-                    vehicle_yaw_degrees,
-                    h_variance_rad,
-                    vel_n_m_s,
-                    vel_e_m_s,
-                    vel_d_m_s,
-                    cog,
-                    cog_variance_rad,
-                    s_variance_m_s,
-                    timestamp,
-                    eph,
-                    epv,
-                    satellites_visible,
-                )
-            else:
-                self.gps_input(
-                    lat,
-                    lon,
-                    alt_amsl,
-                    vehicle_yaw_degrees,
-                    timestamp,
-                    eph,
-                    epv,
-                    satellites_visible,
-                )
+            nmea_sentences = self.nmea_sentences(
+                lat,
+                lon,
+                # alt_ellipsoid,
+                alt_amsl,
+                timestamp,
+                satellites_visible,  # TODO: fix
+                vel_n_m_s,
+                vel_e_m_s,
+                # cog,
+                # cog_variance_rad,
+                # s_variance_m_s,
+                eph,  # TODO: fix
+                eph,
+                epv,
+                satellites_visible,  # TODO: fix
+            )
+            self._write_nmea_to_serial(nmea_sentences)
 
         _publish_inner(odometry)
 
     @narrow_types
-    @ROS.publish(ROS_TOPIC_SENSOR_GPS, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
-    def sensor_gps(
+    def nmea_sentences(
         self,
-        lat: int,  # todo update to new message definition with degrees, not 1e7 degrees
-        lon: int,  # todo update to new message definition with degrees, not 1e7 degrees
-        altitude_ellipsoid: float,
+        lat_deg: float,
+        lon_deg: float,
         altitude_amsl: float,
-        yaw_degrees: int,
-        h_variance_rad: float,
+        timestamp: int,
+        satellites_visible: int,
         vel_n_m_s: float,
         vel_e_m_s: float,
-        vel_d_m_s: float,
-        cog: float,
-        cog_variance_rad: float,
-        s_variance_m_s: float,
-        timestamp: int,
-        eph: float,
-        epv: float,
-        satellites_visible: int,
-    ) -> Optional[SensorGps]:
-        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
-        is ``True``
+        pdop: float,
+        hdop: float,
+        vdop: float,
+        satellites_used: list,
+    ) -> Optional[List[str]]:
+        """Outgoing NMEA mock GPS sentences
 
-        Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
+        Constructs GPGGA, GPVTG, and GPGSA NMEA sentences based on provided GPS data.
         """
-        yaw_rad = np.radians(yaw_degrees)
+        # Convert timestamp to hhmmss format
+        time_str = self.format_time_from_timestamp(timestamp)
 
-        msg = SensorGps()
-        msg.timestamp = 0
-        msg.timestamp_sample = int(timestamp)
-        msg.device_id = 0
-        msg.fix_type = 3
-        msg.s_variance_m_s = s_variance_m_s
-        msg.c_variance_rad = cog_variance_rad
-        msg.lat = lat
-        msg.lon = lon
-        msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
-        msg.alt = int(altitude_amsl * 1e3)
-        msg.eph = eph
-        msg.epv = epv
-        msg.hdop = 0.0
-        msg.vdop = 0.0
-        msg.noise_per_ms = 0
-        msg.automatic_gain_control = 0
-        msg.jamming_state = 0  # 1 := OK, 0 := UNKNOWN
-        msg.jamming_indicator = 0
-        msg.spoofing_state = 0  # 1 := OK, 0 := UNKNOWN
-        msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
-        msg.vel_n_m_s = vel_n_m_s
-        msg.vel_e_m_s = vel_e_m_s
-        msg.vel_d_m_s = vel_d_m_s
-        msg.cog_rad = cog
-        msg.vel_ned_valid = True
-        msg.timestamp_time_relative = 0
-        msg.satellites_used = satellites_visible
-        msg.time_utc_usec = msg.timestamp_sample
-        msg.heading = float(yaw_rad)
-        msg.heading_offset = 0.0  # assume map frame is an ENU frame
-        msg.heading_accuracy = h_variance_rad
+        # Format latitude and longitude for NMEA
+        lat_nmea = pynmea2.lat(lat_deg)
+        lon_nmea = pynmea2.lon(lon_deg)
+        lat_dir = "N" if lat_deg >= 0 else "S"
+        lon_dir = "E" if lon_deg >= 0 else "W"
 
-        return msg
+        # Calculate ground speed in knots and course over ground
+        ground_speed_knots = (
+            np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
+        )  # m/s to knots
+        cog_degrees = np.degrees(np.arctan2(vel_e_m_s, vel_n_m_s)) % 360
 
-    @narrow_types
-    # @ROS.publish(
-    #    ROS_TOPIC_GPS_INPUT,
-    #    QoSPresetProfiles.SENSOR_DATA.value,
-    # )
-    def gps_input(
-        self,
-        lat: int,
-        lon: int,
-        altitude_amsl: float,
-        yaw_degrees: int,
-        timestamp: int,
-        eph: float,
-        epv: float,
-        satellites_visible: int,
-    ) -> Optional[dict]:  # Optional[GPSINPUT]
-        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
-        is ``False``
-
-        .. note::
-            Does not use :class:`mavros_msgs.msg.GPSINPUT` message over MAVROS,
-            sends a :term:`MAVLink` GPS_INPUT message directly to :term:`ArduPilot`.
-        """
-        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
-
-        msg = dict(
-            usec=timestamp,
-            gps_id=0,
-            ignore_flags=0,
-            time_week=gps_time.week_number,
-            time_week_ms=int(gps_time.time_of_week * 1e3),
-            fix_type=3,
-            lat=lat,
-            lon=lon,
-            alt=altitude_amsl,
-            horiz_accuracy=eph,
-            vert_accuracy=epv,
-            speed_accuracy=5.0,
-            hdop=0.0,
-            vdop=0.0,
-            vn=0.0,
-            ve=0.0,
-            vd=0.0,
-            satellites_visible=satellites_visible,
-            yaw=yaw_degrees * 100,
+        # Construct the GPGGA sentence
+        gpgga = pynmea2.GGA(
+            "GP",
+            "GGA",
+            (
+                time_str,
+                lat_nmea,
+                lat_dir,
+                lon_nmea,
+                lon_dir,
+                "1",
+                str(satellites_visible),
+                f"{hdop:.2f}",
+                f"{altitude_amsl:.1f}",
+                "M",
+                "0.0",
+                "M",
+                "",
+                "",
+            ),
         )
 
-        # TODO: handle None host or port
-        self._socket.sendto(
-            f"{json.dumps(msg)}".encode("utf-8"), (self.udp_host, self.udp_port)
+        # Construct the GPVTG sentence
+        gpvtg = pynmea2.VTG(
+            "GP",
+            "VTG",
+            (
+                f"{cog_degrees:.1f}",
+                "T",
+                "",
+                "M",
+                f"{ground_speed_knots:.1f}",
+                "N",
+                "",
+                "K",
+            ),
         )
 
-        return msg
-        # return _gps_input(
-        #    self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
-        # )
+        # Construct the GPGSA sentence
+        gpgsa = pynmea2.GSA(
+            "GP",
+            "GSA",
+            (
+                "A",
+                "3",  # Mode: A=Automatic, 3=3D fix
+                *[str(sat) for sat in satellites_used]
+                + [""] * (12 - len(satellites_used)),
+                # Up to 12 satellites
+                f"{pdop:.2f}",
+                f"{hdop:.2f}",
+                f"{vdop:.2f}",
+            ),
+        )
 
-    @property
-    def _device_id(self) -> int:
-        """Generates a device ID for the outgoing `px4_msgs.SensorGps` message"""
-        # For reference, see:
-        # https://docs.px4.io/main/en/middleware/drivers.html and
-        # https://github.com/PX4/PX4-Autopilot/blob/main/src/drivers/drv_sensor.h
-        # https://docs.px4.io/main/en/gps_compass/
+        nmea_sentences = [str(gpgga), str(gpvtg), str(gpgsa)]
+        return nmea_sentences
 
-        # DRV_GPS_DEVTYPE_SIM (0xAF) + dev 1 + bus 1 + DeviceBusType_UNKNOWN
-        # = 10101111 00000001 00001 000
-        # = 11469064
-        return 11469064
+    def format_time_from_timestamp(self, timestamp: int):
+        """Helper function to convert a POSIX timestamp to a time string in
+        hhmmss format.
+        """
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        return dt.strftime("%H%M%S")
 
     @narrow_types
     def _convert_to_wgs84(
@@ -487,3 +405,12 @@ class MockGPSNode(Node):
         _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
 
         return wgs84_elevation, msl_elevation
+
+    def _write_nmea_to_serial(self, nmea_sentences: List[str]) -> None:
+        """Writes a collection of NMEA sentences to the specified serial port.
+
+        :param nmea_sentences: A list of NMEA sentences to be written to the serial port
+        """
+        with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
+            for sentence in nmea_sentences:
+                ser.write((sentence + "\r\n").encode())

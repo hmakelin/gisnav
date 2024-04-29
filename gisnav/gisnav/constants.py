@@ -25,8 +25,8 @@ POSE_NODE_NAME: Final = "pose_node"
 STEREO_NODE_NAME: Final = "stereo_node"
 """Name of :class:`.StereoNode` spun up by :func:`.run_transform_node`"""
 
-MOCK_GPS_NODE_NAME: Final = "mock_gps_node"
-"""Name of :class:`.MockGPSNode` spun up by :func:`.run_mock_gps_node`"""
+NMEA_NODE_NAME: Final = "nmea_node"
+"""Name of :class:`.NMEANode` spun up by :func:`.run_nmea_node`"""
 
 QGIS_NODE_NAME: Final = "qgis_node"
 """Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
@@ -65,10 +65,6 @@ MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
 """The :term:`MAVROS` time reference topic that has the difference between
 the local system time and the foreign :term:`FCU` time
 """
-
-ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-"""Name of ROS topic for outgoing :class:`px4_msgs.msg.SensorGps` messages
-over PX4 DDS bridge"""
 
 ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
 """Name of ROS topic for :class:`sensor_msgs.msg.CameraInfo` messages"""

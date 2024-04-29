@@ -25,7 +25,7 @@ downloading, storing, and publishing the :term:`orthophoto` and optional
 
         camera_info -->|sensor_msgs/CameraInfo| GISNode
         bounding_box -->|geographic_msgs/BoundingBox| GISNode
-        geotransform -->|sensor_msgs/PointCloud2| MockGPSNode
+        geotransform -->|sensor_msgs/PointCloud2| NMEANode
         image -->|sensor_msgs/Image| StereoNode:::hidden
 """
 from copy import deepcopy

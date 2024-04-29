@@ -17,7 +17,7 @@ class TestTopographyCase(unittest.TestCase):
         "stereo_node",
         "bbox_node",
         "pose_node",
-        "mock_gps_node",
+        "nmea_node",
         "test_node",
     )
     """Names of nodes that should be found when running the launch configuration

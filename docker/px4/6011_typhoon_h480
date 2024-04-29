@@ -18,3 +18,7 @@ param set-default EKF2_HEAD_NOISE 1.0   # max value
 param set-default SENS_GPS_MASK 7
 param set-default EKF2_GPS_CTRL 8       # lon/lat, alt, 3D vel, heading
 param set-default EKF2_GPS_CHECK 0
+
+# Secondary GPS (GISNav) at GPS 2 serial port
+param set-default GPS_2_CONFIG 202
+param set-default GPS_2_PROTOCOL 6  # NMEA

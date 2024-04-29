@@ -1,6 +1,6 @@
-MockGPSNode
+NMEANode
 ____________________________________________________
-.. automodule:: gisnav.extensions.mock_gps_node
+.. automodule:: gisnav.extensions.nmea_node
    :autosummary:
    :members:
    :undoc-members:

@@ -25,11 +25,11 @@ how the ROS messages flow through the application:
         end
 
         subgraph extension["GISNav extension nodes"]
-            MockGPSNode["MockGPSNode"]
+            NMEANode["NMEANode"]
         end
 
         subgraph robot_localization
-            ekf["ekf_localization_node"] -->|"Odometry"| MockGPSNode
+            ekf["ekf_localization_node"] -->|"Odometry"| NMEANode
         end
 
         gscam ---->|"Image"| StereoNode

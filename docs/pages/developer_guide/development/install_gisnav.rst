@@ -43,7 +43,7 @@ Install Python dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You must install at least the :term:`core` dependencies. If you know you are not
-e.g. going to use the :class:`.MockGPSNode` :term:`extension`, you can skip
+e.g. going to use the :class:`.NMEANode` :term:`extension`, you can skip
 installing the extended dependencies.
 
 The development dependencies are required for e.g. :ref:`generating documentation
@@ -76,7 +76,7 @@ Install the required and optional Python dependencies with the following command
             :caption: Install GISNav extension Python dependencies
 
             cd ~/colcon_ws/src/gisnav
-            pip3 install ./gisnav[mock_gps_node]
+            pip3 install ./gisnav[nmea_node]
             pip3 install ./gisnav[qgis_node]
 
         You can install the dependencies for any :term:`extension` node

@@ -5,10 +5,6 @@ accordingly.
 
 This node enables real-time visualization of data in QGIS, aiding in
 development and debugging.
-
-.. todo::
-    Currently SensorGps message (PX4) only (implement GPSINPUT to support
-    ArduPilot)
 """
 from typing import Final, Optional, Union
 
@@ -23,10 +19,8 @@ from rclpy.timer import Timer
 from .._decorators import ROS, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
-    DELAY_DEFAULT_MS,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-    ROS_TOPIC_SENSOR_GPS,
 )
 
 
@@ -247,16 +241,4 @@ class QGISNode(Node):
     def bounding_box(self) -> Optional[BoundingBox]:
         """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`
         :term:`FOV` location published via :attr:`.GisNode.bounding_box`
-        """
-
-    @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        ROS_TOPIC_SENSOR_GPS,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_update_database,
-    )
-    def sensor_gps(self) -> Optional[SensorGps]:
-        """Subscribed mock :term:`GNSS` :term:`message` published by
-        :class:`.MockGPSNode`
         """

@@ -31,7 +31,7 @@ correct alternative should be easily inferred from the context they are used in.
     Extension
     Extended functionality
         * Functionality beyond GISNav :term:`core` functionality. For example,
-          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS`
+          :class:`.NMEANode` for integrating GISNav as a :term:`GPS`
           substitute or complement.
         * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
@@ -577,6 +577,10 @@ ____________________________________________________
 
         .. note::
             Down here means :term:`nadir`.
+
+    NMEA
+    NMEA 0183
+        Communication protocol for :term:`GPS` receivers
 
     OGC
         Open Geospatial Consortium: `ogc.org <https://www.ogc.org/>`_

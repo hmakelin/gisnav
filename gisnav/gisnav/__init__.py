@@ -24,7 +24,7 @@ from rclpy.node import Node
 from .constants import (
     BBOX_NODE_NAME,
     GIS_NODE_NAME,
-    MOCK_GPS_NODE_NAME,
+    NMEA_NODE_NAME,
     POSE_NODE_NAME,
     QGIS_NODE_NAME,
     ROS_NAMESPACE,
@@ -43,14 +43,14 @@ except ModuleNotFoundError as e:
     print(f"Could not import QGISNode because a module was not found: {e}")
 
 try:
-    from .extensions.mock_gps_node import MockGPSNode
+    from .extensions.nmea_node import NMEANode
 
-    def run_mock_gps_node():
-        """Spins up a :class:`.MockGPSNode`"""
-        _run(MockGPSNode, MOCK_GPS_NODE_NAME, **_rclpy_node_kwargs)
+    def run_nmea_node():
+        """Spins up a :class:`.NMEANode`"""
+        _run(NMEANode, NMEA_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
-    print(f"Could not import MockGPSNode because a module was not found: {e}")
+    print(f"Could not import NMEANode because a module was not found: {e}")
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):

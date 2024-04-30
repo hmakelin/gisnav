@@ -239,7 +239,20 @@ dev:
 	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
 
 	# Start the other development services
-	docker compose -p gisnav start px4 qgis gscam rviz
+	@docker compose -p gisnav start px4 qgis gscam rviz
+
+	# Run socat to bridge the gisnav output to the px4 container
+	# Extract the IP address of the px4 container
+	$(eval PX4_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1`)
+	@echo "Debug: PX4_IP is '$(PX4_IP)'"
+
+	# Create new PTS device and use it to override the default serial output
+	# port used by GISNav's NMEANode (default is most likely in use on the
+	# development machine)
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 &
+	@sleep 3  # Give socat time to create the pty
+	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
+	@ros2 launch gisnav default.launch.py gisnav.nmea_node.port:=`readlink /tmp/gisnav-pty-link`
 
 # shortcut for demo
 .PHONY: demo

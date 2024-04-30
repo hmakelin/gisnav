@@ -5,7 +5,7 @@ LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 # Update and upgrade packages, then install required packages
 RUN apt-get update && \
     apt-get -y upgrade && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install git python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install git socat python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 
@@ -53,6 +53,12 @@ ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
 RUN mkdir -p /etc/mavlink-router && \
     mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
     chmod +x ./entrypoint.sh
+
+# Look for secondary GPS i.e. GISNav (GPS 2)
+# Use first unassigned available serial port, i.e. /dev/ttyS4
+# https://docs.px4.io/v1.14/en/hardware/serial_port_mapping.html#default-px4board
+#RUN echo "gps start -d /dev/ttyS4" > ROMFS/px4fmu_common/init.d-posix/rcS
+RUN echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
 
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport

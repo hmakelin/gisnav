@@ -12,4 +12,10 @@ mavlink-routerd -e ${QGC_IP:-127.0.0.1}:14550 127.0.0.1:14550 &
 echo "Setting up MAVLink router to MAVROS host ${MAVROS_IP:-127.0.0.1}"
 mavlink-routerd -e ${MAVROS_IP:-127.0.0.1}:14540 127.0.0.1:14540 &
 
+# Listen to GISNav mock GPS messages on TCP port and bridge to serial port on
+# px4 container (simulation host). Bridging serial ports over TCP is easier with
+# Docker than e.g. bridging via virtual serial ports (pseudo-ttys) on Docker
+# host
+socat tcp-listen:15000 pty,link=/dev/ttyS4 &
+
 exec "$@"

@@ -35,6 +35,9 @@
   <depend>tf2_ros</depend>
   <depend>robot_localization</depend>
 
+  <!-- socat only required for SITL simulation (serial to TCP bridge) -->
+  <depend>socat</depend>
+
   <!-- torch, kornia (deep learning dependencies) are still in setup.py -->
   <depend>python3-opencv</depend>s
   <depend>python3-numpy</depend>

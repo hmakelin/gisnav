@@ -10,7 +10,6 @@ import pynmea2
 import serial
 import tf2_geometry_msgs
 import tf2_ros
-import tf_transformations
 from geometry_msgs.msg import Vector3Stamped
 from nav_msgs.msg import Odometry
 from pyproj import Transformer
@@ -74,7 +73,7 @@ class NMEANode(Node):
 
     @property
     @ROS.parameter(ROS_D_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def port(self) -> Optional[int]:
+    def port(self) -> Optional[str]:
         """Serial port for outgoing :term:`NMEA` messages"""
 
     @property

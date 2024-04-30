@@ -29,7 +29,14 @@ Docker container with the hostname ``gisnav-mapserver-1``.
     * Build and expose static docs to home page - possibly no need for a server
 
 .. note::
-    The application services have access to both ``gis`` and ``mavlink`` networks.
+    * The application services have access to both ``gis`` and ``mavlink`` networks.
+    * In SITL simulation the serial output from ``gisnav`` is bridged to ``PX4``
+      via TCP on the ``mavlink`` network so the ``mavlink`` name is not completely
+      descriptive of the nature of the network. Communicating over the network
+      is more convenient and potentially more secure in the case of Docker
+      containers than trying to bridge the serial communication between ``px4``
+      and ``gisnav`` e.g. via binding Docker host virtual serial ports
+      (pseudo-ttys) to the containers.
 
 .. mermaid::
 
@@ -45,6 +52,7 @@ Docker container with the hostname ``gisnav-mapserver-1``.
                 middleware_gscam[gscam]
             end
         end
+        simulation_px4 -->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
 
         subgraph gis_mavlink ["gis & mavlink"]
             subgraph application ["Application Services"]

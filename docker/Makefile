@@ -204,10 +204,12 @@ stop:
 build:
 	@docker compose -p $(PROJECT_NAME) build
 
-# Use this target to start supporting services when usin a local installation
+# Use this target to start supporting services when using a local installation
 # of GISNav. The mapserver needs to be started first and the local /etc/hosts
 # file updated so that the gisnav-mapserver-1 hostname resolves to the mapserver
-# container ID on your local host.
+# container ID on your local host. socat is used to create a virtual serial port
+# (a pseudo-tty) and to bridge it to the TCP port which the px4 container
+# is listening on.
 .PHONY: dev
 dev:
 	# Recreate containers
@@ -249,10 +251,10 @@ dev:
 	# Create new PTS device and use it to override the default serial output
 	# port used by GISNav's NMEANode (default is most likely in use on the
 	# development machine)
-	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 &
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 || echo "Could not establish serial-to-TCP bridge" &
 	@sleep 3  # Give socat time to create the pty
 	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
-	@ros2 launch gisnav default.launch.py gisnav.nmea_node.port:=`readlink /tmp/gisnav-pty-link`
+	@ros2 launch gisnav default.launch.py port:=`readlink /tmp/gisnav-pty-link`
 
 # shortcut for demo
 .PHONY: demo

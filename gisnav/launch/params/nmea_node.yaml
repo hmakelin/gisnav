@@ -1,5 +1,9 @@
+# The port can be overridden via launch args in default launch file
+# It probably should not be statically declared here because the appropriate
+# outbound port should probably be some pseudo-tty (virtual serial port) on a
+# development machine --> use launch args to provide suitable port instead
 gisnav:
   nmea_node:
     ros__parameters:
-      port: "/dev/ttyS1"
       baudrate: 9600
+      #port: "/dev/ttyS1"

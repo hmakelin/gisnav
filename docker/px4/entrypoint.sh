@@ -16,6 +16,7 @@ mavlink-routerd -e ${MAVROS_IP:-127.0.0.1}:14540 127.0.0.1:14540 &
 # px4 container (simulation host). Bridging serial ports over TCP is easier with
 # Docker than e.g. bridging via virtual serial ports (pseudo-ttys) on Docker
 # host
-socat tcp-listen:15000 pty,link=/dev/ttyS4 &
+#socat tcp-listen:15000 pty,link=/dev/ttyS4 &
+socat tcp-listen:15000,reuseaddr,fork pty,raw,echo=0,link=/dev/ttyS4 &
 
 exec "$@"

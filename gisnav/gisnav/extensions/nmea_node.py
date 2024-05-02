@@ -452,7 +452,7 @@ class NMEANode(Node):
         """
         with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
             for sentence in nmea_sentences:
-                ser.write((sentence + "\r\n").encode())
+                ser.write((sentence + "\r").encode())
 
     @staticmethod
     def _decimal_to_nmea(degrees: float) -> str:

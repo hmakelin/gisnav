@@ -2,7 +2,7 @@
 that publishes mock GPS (GNSS) messages to autopilot middleware over
 :term:`NMEA`
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Final, List, Optional, Tuple
 
 import numpy as np
@@ -127,15 +127,15 @@ class NMEANode(Node):
             # GISNav generated mock GPS messages easy to identify. Do not make this
             # zero because the messages might then get rejected because of too low
             # satellite count.
-            satellites_visible = np.iinfo(np.uint8).max
+            np.iinfo(np.uint8).max
 
             # Pose variance: eph (horizontal error SD) and epv (vertical error SD),
             # assume no covariances
-            x_var = pose_cov[0, 0]
-            y_var = pose_cov[1, 1]
-            eph = np.sqrt(x_var + y_var)
-            z_var = pose_cov[2, 2]
-            epv = np.sqrt(z_var)
+            # x_var = pose_cov[0, 0]
+            # y_var = pose_cov[1, 1]
+            # eph np.sqrt(x_var + y_var)
+            # z_var = pose_cov[2, 2]
+            # epv = np.sqrt(z_var)
 
             # 3D velocity
             # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
@@ -230,6 +230,8 @@ class NMEANode(Node):
                 and north velocities. The result is adjusted to ensure it is within
                 the [0, 2 * pi) range.
                 """
+                # TODO: do not send this sentence if the variance is too high (i.e.
+                #  vehicle is not moving)
                 magnitude = np.sqrt(east_velocity**2 + north_velocity**2)
 
                 if east_velocity >= 0 and north_velocity >= 0:
@@ -258,31 +260,27 @@ class NMEANode(Node):
 
             # Compute course over ground - pay attention to sine only being
             # defined for 0<=theta<=90
-            _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
 
             # Compute course over ground variance
             cog_variance_rad = _calculate_cog_variance(
                 vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
             )
 
+            _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
+
             nmea_sentences = self.nmea_sentences(
                 lat,
                 lon,
-                # alt_ellipsoid,
                 alt_amsl,
                 timestamp,
-                satellites_visible,  # TODO: fix
                 vel_n_m_s,
                 vel_e_m_s,
-                # cog,
-                # cog_variance_rad,
-                # s_variance_m_s,
-                eph,  # TODO: fix
-                eph,
-                epv,
-                satellites_visible,  # TODO: fix
+                0.0,  # eph,  # TODO: fix
+                0.0,  # eph,
+                0.0,  # epv,
             )
-            self._write_nmea_to_serial(nmea_sentences)
+            if nmea_sentences is not None:
+                self._write_nmea_to_serial(nmea_sentences)
 
         _publish_inner(odometry)
 
@@ -293,24 +291,22 @@ class NMEANode(Node):
         lon_deg: float,
         altitude_amsl: float,
         timestamp: int,
-        satellites_visible: int,
         vel_n_m_s: float,
         vel_e_m_s: float,
         pdop: float,
         hdop: float,
         vdop: float,
-        satellites_used: list,
     ) -> Optional[List[str]]:
         """Outgoing NMEA mock GPS sentences
 
         Constructs GPGGA, GPVTG, and GPGSA NMEA sentences based on provided GPS data.
         """
         # Convert timestamp to hhmmss format
-        time_str = self.format_time_from_timestamp(timestamp)
+        date_str = self.format_time_from_timestamp(timestamp)
 
         # Format latitude and longitude for NMEA
-        lat_nmea = pynmea2.lat(lat_deg)
-        lon_nmea = pynmea2.lon(lon_deg)
+        lat_nmea = self._decimal_to_nmea(lat_deg)
+        lon_nmea = self._decimal_to_nmea(lon_deg)
         lat_dir = "N" if lat_deg >= 0 else "S"
         lon_dir = "E" if lon_deg >= 0 else "W"
 
@@ -320,68 +316,112 @@ class NMEANode(Node):
         )  # m/s to knots
         cog_degrees = np.degrees(np.arctan2(vel_e_m_s, vel_n_m_s)) % 360
 
-        # Construct the GPGGA sentence
-        gpgga = pynmea2.GGA(
-            "GP",
-            "GGA",
-            (
-                time_str,
-                lat_nmea,
-                lat_dir,
-                lon_nmea,
-                lon_dir,
-                "1",
-                str(satellites_visible),
-                f"{hdop:.2f}",
-                f"{altitude_amsl:.1f}",
-                "M",
-                "0.0",
-                "M",
-                "",
-                "",
+        return [
+            self.GGA(
+                date_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
             ),
+            self.VTG(cog_degrees, ground_speed_knots),
+            self.GSA(pdop, hdop, vdop),
+        ]
+
+    def GGA(
+        self,
+        date_str: str,
+        lat_nmea: float,
+        lat_dir: float,
+        lon_nmea: float,
+        lon_dir: float,
+        altitude_amsl: float,
+        hdop: float,
+    ) -> str:
+        """Returns an :term:`NMEA` GGA sentence
+
+        :param date_str: UTC date and time in ddmmyy format.
+        :param lat_nmea: Latitude in decimal degrees.
+        :param lat_dir: Latitude hemisphere (N for North, S for South).
+        :param lon_nmea: Longitude in decimal degrees.
+        :param lon_dir: Longitude hemisphere (E for East, W for West).
+        :param altitude_amsl: Altitude above mean sea level in meters.
+        :param hdop: Horizontal dilution of precision.
+        :returns: A formatted NMEA GGA sentence as a string.
+        """
+        return str(
+            pynmea2.GGA(
+                "GP",
+                "GGA",
+                (
+                    date_str,
+                    lat_nmea,
+                    lat_dir,
+                    lon_nmea,
+                    lon_dir,
+                    "1",
+                    "12",
+                    f"{hdop:.2f}",
+                    f"{altitude_amsl:.1f}",
+                    "M",
+                    "0.0",
+                    "M",
+                    "",
+                    "",
+                ),
+            )
         )
 
-        # Construct the GPVTG sentence
-        gpvtg = pynmea2.VTG(
-            "GP",
-            "VTG",
-            (
-                f"{cog_degrees:.1f}",
-                "T",
-                "",
-                "M",
-                f"{ground_speed_knots:.1f}",
-                "N",
-                "",
-                "K",
-            ),
+    def VTG(self, cog_degrees: float, ground_speed_knots: float) -> str:
+        """Returns an :term:`NMEA` VTG sentence
+
+        :param cog_degrees: Course over ground in degrees.
+        :param ground_speed_knots: Speed over ground in knots.
+        :returns: A formatted NMEA VTG sentence as a string.
+        """
+        return str(
+            pynmea2.VTG(
+                "GP",
+                "VTG",
+                (
+                    f"{cog_degrees:.1f}",
+                    "T",
+                    "",
+                    "M",
+                    f"{ground_speed_knots:.1f}",
+                    "N",
+                    "",
+                    "K",
+                ),
+            )
         )
 
-        # Construct the GPGSA sentence
-        gpgsa = pynmea2.GSA(
-            "GP",
-            "GSA",
-            (
-                "A",
-                "3",  # Mode: A=Automatic, 3=3D fix
-                *[str(sat) for sat in satellites_used]
-                + [""] * (12 - len(satellites_used)),
-                # Up to 12 satellites
-                f"{pdop:.2f}",
-                f"{hdop:.2f}",
-                f"{vdop:.2f}",
-            ),
-        )
+    def GSA(self, pdop: float, hdop: float, vdop: float) -> str:
+        """Returns an :term:`NMEA` GSA sentence
 
-        nmea_sentences = [str(gpgga), str(gpvtg), str(gpgsa)]
-        return nmea_sentences
+        :param pdop: Positional dilution of precision.
+        :param hdop: Horizontal dilution of precision.
+        :param vdop: Vertical dilution of precision.
+        :returns: A formatted NMEA GSA sentence as a string.
+        """
+        return str(
+            pynmea2.GSA(
+                "GP",
+                "GSA",
+                (
+                    "A",
+                    "3",  # Mode: A=Automatic, 3=3D fix
+                    *[str(sat).zfill(2) for sat in range(12)],  # 12 satellites
+                    f"{pdop:.2f}",
+                    f"{hdop:.2f}",
+                    f"{vdop:.2f}",
+                ),
+            )
+        )
 
     def format_time_from_timestamp(self, timestamp: int):
         """Helper function to convert a POSIX timestamp to a time string in
         hhmmss format.
+
+        :param timestamp: Timestamp in microseconds
         """
-        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        dt = datetime.fromtimestamp(timestamp / 1e6)
         return dt.strftime("%H%M%S")
 
     @narrow_types
@@ -413,3 +453,16 @@ class NMEANode(Node):
         with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
             for sentence in nmea_sentences:
                 ser.write((sentence + "\r\n").encode())
+
+    @staticmethod
+    def _decimal_to_nmea(degrees: float) -> str:
+        """Convert decimal degree to NMEA format (d)ddmm.mmmm where d is degrees and m
+        is minutes (ignores sign of degrees)
+
+        :param degrees: Decimal degree representation.
+        :return: A string representing the degrees in NMEA format.
+        """
+        # Separate the degrees into the integer part and fractional part
+        d = int(degrees)
+        m = abs(degrees - d) * 60
+        return f"{abs(d):02d}{m:07.4f}"

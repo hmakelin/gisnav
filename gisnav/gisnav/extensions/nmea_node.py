@@ -10,6 +10,7 @@ import pynmea2
 import serial
 import tf2_geometry_msgs
 import tf2_ros
+import tf_transformations
 from geometry_msgs.msg import Vector3Stamped
 from nav_msgs.msg import Odometry
 from pyproj import Transformer
@@ -163,30 +164,28 @@ class NMEANode(Node):
             # vel_d_m_s = -linear_enu.z
 
             # Heading
-            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
-            # transform_earth_to_map = tf_.get_transform(
-            #    self, "map", "earth", odometry.header.stamp
-            # )
+            vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            transform_earth_to_map = tf_.get_transform(
+                self, "map", "earth", odometry.header.stamp
+            )
 
-            # pose_map = tf2_geometry_msgs.do_transform_pose(
-            # pose, transform_earth_to_map
-            # )
-            # euler = tf_transformations.euler_from_quaternion(
-            #    tf_.as_np_quaternion(pose_map.orientation).tolist()
-            # )
-            # yaw_rad = euler[2]  # ENU frame
-            # yaw_rad = -yaw_rad  # NED frame ("heading")
+            pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
+            euler = tf_transformations.euler_from_quaternion(
+                tf_.as_np_quaternion(pose_map.orientation).tolist()
+            )
+            yaw_rad = euler[2]  # ENU frame
+            yaw_rad = -yaw_rad  # NED frame ("heading")
 
-            # if yaw_rad < 0:
-            #    yaw_rad = 2 * np.pi + yaw_rad
+            if yaw_rad < 0:
+                yaw_rad = 2 * np.pi + yaw_rad
 
             # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
-            # vehicle_yaw_degrees = np.degrees(yaw_rad)
+            vehicle_yaw_degrees = np.degrees(yaw_rad)
             # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available
-            # vehicle_yaw_degrees = (
-            #    360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-            # )
+            vehicle_yaw_degrees = (
+                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+            )
 
             # Speed variance, assume no covariances
             twist_cov = odometry.twist.covariance.reshape((6, 6))
@@ -275,6 +274,7 @@ class NMEANode(Node):
                 timestamp,
                 vel_n_m_s,
                 vel_e_m_s,
+                vehicle_yaw_degrees,
                 0.0,  # eph,  # TODO: fix
                 0.0,  # eph,
                 0.0,  # epv,
@@ -293,6 +293,7 @@ class NMEANode(Node):
         timestamp: int,
         vel_n_m_s: float,
         vel_e_m_s: float,
+        yaw_degrees: float,
         pdop: float,
         hdop: float,
         vdop: float,
@@ -322,10 +323,11 @@ class NMEANode(Node):
             ),
             self.VTG(cog_degrees, ground_speed_knots),
             self.GSA(pdop, hdop, vdop),
+            self.HDT(yaw_degrees),
         ]
 
+    @staticmethod
     def GGA(
-        self,
         date_str: str,
         lat_nmea: float,
         lat_dir: float,
@@ -368,7 +370,8 @@ class NMEANode(Node):
             )
         )
 
-    def VTG(self, cog_degrees: float, ground_speed_knots: float) -> str:
+    @staticmethod
+    def VTG(cog_degrees: float, ground_speed_knots: float) -> str:
         """Returns an :term:`NMEA` VTG sentence
 
         :param cog_degrees: Course over ground in degrees.
@@ -392,7 +395,8 @@ class NMEANode(Node):
             )
         )
 
-    def GSA(self, pdop: float, hdop: float, vdop: float) -> str:
+    @staticmethod
+    def GSA(pdop: float, hdop: float, vdop: float) -> str:
         """Returns an :term:`NMEA` GSA sentence
 
         :param pdop: Positional dilution of precision.
@@ -414,6 +418,16 @@ class NMEANode(Node):
                 ),
             )
         )
+
+    @staticmethod
+    def HDT(yaw_deg: float):
+        """Returns an :term:`NMEA` HDT sentence
+
+        :param yaw_deg: Vehicle heading in degrees. Heading increases "clockwise" so
+            that north is 0 degrees and east is 90 degrees.
+        :returns: A formatted NMEA HDT sentence as a string.
+        """
+        return str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T")))
 
     def format_time_from_timestamp(self, timestamp: int):
         """Helper function to convert a POSIX timestamp to a time string in
@@ -452,7 +466,7 @@ class NMEANode(Node):
         """
         with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
             for sentence in nmea_sentences:
-                ser.write((sentence + "\r").encode())
+                ser.write((sentence + "\r\n").encode())
 
     @staticmethod
     def _decimal_to_nmea(degrees: float) -> str:

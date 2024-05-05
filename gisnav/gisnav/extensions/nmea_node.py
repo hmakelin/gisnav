@@ -2,6 +2,7 @@
 that publishes mock GPS (GNSS) messages to autopilot middleware over
 :term:`NMEA`
 """
+import time
 from datetime import datetime
 from typing import Final, List, Optional, Tuple
 
@@ -17,6 +18,7 @@ from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from rclpy.timer import Timer
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -41,6 +43,13 @@ class NMEANode(Node):
     _EPSG_WGS84 = 4326
     _EPSG_MSL = 5773  # Example: EGM96
 
+    _NMEA_HEARTBEAT_HZ = 5.0
+    """Update rate for NMEA heartbeat message to let receiver know we are still here
+
+    .. note::
+        PX4 requires 5Hz (see nmea.cpp)
+    """
+
     def __init__(self, *args, **kwargs):
         """Class initializer
 
@@ -64,6 +73,12 @@ class NMEANode(Node):
 
         # Subscribe
         self.odometry
+
+        self.get_logger().info(f"port {self.port} baudrate {self.baudrate}")
+
+        self._heartbeat_timer = self.create_timer(
+            1 / self._NMEA_HEARTBEAT_HZ, self._nmea_heartbeat
+        )
 
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -169,23 +184,26 @@ class NMEANode(Node):
                 self, "map", "earth", odometry.header.stamp
             )
 
-            pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
-            euler = tf_transformations.euler_from_quaternion(
-                tf_.as_np_quaternion(pose_map.orientation).tolist()
-            )
-            yaw_rad = euler[2]  # ENU frame
-            yaw_rad = -yaw_rad  # NED frame ("heading")
+            if transform_earth_to_map is not None:
+                pose_map = tf2_geometry_msgs.do_transform_pose(
+                    pose, transform_earth_to_map
+                )
+                euler = tf_transformations.euler_from_quaternion(
+                    tf_.as_np_quaternion(pose_map.orientation).tolist()
+                )
+                yaw_rad = euler[2]  # ENU frame
+                yaw_rad = -yaw_rad  # NED frame ("heading")
 
-            if yaw_rad < 0:
-                yaw_rad = 2 * np.pi + yaw_rad
+                if yaw_rad < 0:
+                    yaw_rad = 2 * np.pi + yaw_rad
 
-            # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
-            vehicle_yaw_degrees = np.degrees(yaw_rad)
-            # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
-            # MAVLink yaw definition 0 := not available
-            vehicle_yaw_degrees = (
-                360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-            )
+                # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
+                vehicle_yaw_degrees = np.degrees(yaw_rad)
+                # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
+                # MAVLink yaw definition 0 := not available
+                vehicle_yaw_degrees = (
+                    360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
+                )
 
             # Speed variance, assume no covariances
             twist_cov = odometry.twist.covariance.reshape((6, 6))
@@ -278,11 +296,59 @@ class NMEANode(Node):
                 0.0,  # eph,  # TODO: fix
                 0.0,  # eph,
                 0.0,  # epv,
+                odometry,
             )
             if nmea_sentences is not None:
                 self._write_nmea_to_serial(nmea_sentences)
 
         _publish_inner(odometry)
+
+    def compute_rmc_parameters(
+        self, odometry: Odometry
+    ) -> Tuple[str, str, str, str, str, float, float, str]:
+        """Calculate the RMC parameters based on odometry data.
+
+        :param odometry: The odometry data from which to extract GPS details.
+        :returns: A tuple with formatted time, status, latitude, latitude direction,
+                  longitude, longitude direction, speed, course, and date.
+        """
+        # Assume position and timestamp extraction as before
+        pose = odometry.pose.pose
+        lon, lat, _ = tf_.ecef_to_wgs84(
+            pose.position.x, pose.position.y, pose.position.z
+        )
+        timestamp = tf_.usec_from_header(odometry.header)
+        time_str = self.format_time_from_timestamp(timestamp)
+        date_str = self.format_date_from_timestamp(timestamp)
+
+        # Convert speed from m/s to knots
+        twist = odometry.twist.twist
+        speed_knots = (
+            np.sqrt(twist.linear.x**2 + twist.linear.y**2) * 1.94384
+        )  # m/s to knots
+
+        # Calculate course over ground in degrees
+        course_degrees = np.degrees(np.arctan2(twist.linear.y, twist.linear.x)) % 360
+
+        lat_nmea = self._decimal_to_nmea(lat)
+        lon_nmea = self._decimal_to_nmea(lon)
+        lat_dir = "N" if lat >= 0 else "S"
+        lon_dir = "E" if lon >= 0 else "W"
+
+        # Active or void status (assuming active if we have valid data)
+        status = "A" if lat and lon else "V"
+
+        return (
+            time_str,
+            status,
+            lat_nmea,
+            lat_dir,
+            lon_nmea,
+            lon_dir,
+            speed_knots,
+            course_degrees,
+            date_str,
+        )
 
     @narrow_types
     def nmea_sentences(
@@ -297,13 +363,15 @@ class NMEANode(Node):
         pdop: float,
         hdop: float,
         vdop: float,
+        odometry: Odometry,
     ) -> Optional[List[str]]:
         """Outgoing NMEA mock GPS sentences
 
         Constructs GPGGA, GPVTG, and GPGSA NMEA sentences based on provided GPS data.
         """
         # Convert timestamp to hhmmss format
-        date_str = self.format_time_from_timestamp(timestamp)
+        time_str = self.format_time_from_timestamp(timestamp)
+        self.format_date_from_timestamp(timestamp)
 
         # Format latitude and longitude for NMEA
         lat_nmea = self._decimal_to_nmea(lat_deg)
@@ -317,28 +385,32 @@ class NMEANode(Node):
         )  # m/s to knots
         cog_degrees = np.degrees(np.arctan2(vel_e_m_s, vel_n_m_s)) % 360
 
+        rmc_params = self.compute_rmc_parameters(odometry)
         return [
             self.GGA(
-                date_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
+                time_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
             ),
             self.VTG(cog_degrees, ground_speed_knots),
             self.GSA(pdop, hdop, vdop),
             self.HDT(yaw_degrees),
+            # self.GST(time_str, 5, 5, 5, 0, 5, 5, 5),
+            self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0),
+            self.RMC(*rmc_params),
         ]
 
     @staticmethod
     def GGA(
-        date_str: str,
-        lat_nmea: float,
-        lat_dir: float,
-        lon_nmea: float,
-        lon_dir: float,
+        time_str: str,
+        lat_nmea: str,
+        lat_dir: str,
+        lon_nmea: str,
+        lon_dir: str,
         altitude_amsl: float,
         hdop: float,
     ) -> str:
         """Returns an :term:`NMEA` GGA sentence
 
-        :param date_str: UTC date and time in ddmmyy format.
+        :param time_str: UTC time in HHMMSS format.
         :param lat_nmea: Latitude in decimal degrees.
         :param lat_dir: Latitude hemisphere (N for North, S for South).
         :param lon_nmea: Longitude in decimal degrees.
@@ -352,7 +424,7 @@ class NMEANode(Node):
                 "GP",
                 "GGA",
                 (
-                    date_str,
+                    time_str,
                     lat_nmea,
                     lat_dir,
                     lon_nmea,
@@ -362,7 +434,7 @@ class NMEANode(Node):
                     f"{hdop:.2f}",
                     f"{altitude_amsl:.1f}",
                     "M",
-                    "0.0",
+                    "0.0",  # TODO: geoid altitude at sea level - important
                     "M",
                     "",
                     "",
@@ -429,6 +501,95 @@ class NMEANode(Node):
         """
         return str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T")))
 
+    @staticmethod
+    def GST(
+        time_str: str,
+        rms_deviation: float,
+        std_dev_major_axis: float,
+        std_dev_minor_axis: float,
+        orientation_major_axis: float,
+        std_dev_latitude: float,
+        std_dev_longitude: float,
+        std_dev_altitude: float,
+    ) -> str:
+        """Returns an NMEA GST sentence.
+
+        :param time_str: UTC time in hhmmss format.
+        :param rms_deviation: RMS deviation of the pseudorange.
+        :param std_dev_major_axis: Standard deviation of the semi-major axis.
+        :param std_dev_minor_axis: Standard deviation of the semi-minor axis.
+        :param orientation_major_axis: Orientation of the semi-major axis.
+        :param std_dev_latitude: Standard deviation of latitude error.
+        :param std_dev_longitude: Standard deviation of longitude error.
+        :param std_dev_altitude: Standard deviation of altitude error.
+        :returns: A formatted NMEA GST sentence as a string.
+        """
+        return str(
+            pynmea2.GST(
+                "GP",
+                "GST",
+                (
+                    time_str,
+                    f"{rms_deviation:.2f}",
+                    f"{std_dev_major_axis:.2f}",
+                    f"{std_dev_minor_axis:.2f}",
+                    f"{orientation_major_axis:.1f}",
+                    f"{std_dev_latitude:.2f}",
+                    f"{std_dev_longitude:.2f}",
+                    f"{std_dev_altitude:.2f}",
+                ),
+            )
+        )
+
+    @staticmethod
+    def RMC(
+        time_str: str,
+        status: str,
+        lat_nmea: str,
+        lat_dir: str,
+        lon_nmea: str,
+        lon_dir: str,
+        speed_knots: float,
+        course_degrees: float,
+        date_str: str,
+        magnetic_variation: float = 0,
+        var_dir: str = "E",
+    ) -> str:
+        """Returns an NMEA RMC sentence.
+
+        :param time_str: UTC time in hhmmss format.
+        :param status: Status, 'A' for active or 'V' for void.
+        :param lat_nmea: Latitude in NMEA format.
+        :param lat_dir: Latitude hemisphere (N for North, S for South).
+        :param lon_nmea: Longitude in NMEA format.
+        :param lon_dir: Longitude hemisphere (E for East, W for West).
+        :param speed_knots: Speed over ground in knots.
+        :param course_degrees: Course over ground in degrees.
+        :param date_str: Date in ddmmyy format.
+        :param magnetic_variation: Magnetic variation in degrees (optional).
+        :param var_dir: Direction of magnetic variation, 'E' or 'W' (optional).
+        :returns: A formatted NMEA RMC sentence as a string.
+        """
+        return str(
+            pynmea2.RMC(
+                "GP",
+                "RMC",
+                (
+                    time_str,
+                    status,
+                    lat_nmea,
+                    lat_dir,
+                    lon_nmea,
+                    lon_dir,
+                    f"{speed_knots:.1f}",
+                    f"{course_degrees:.1f}",
+                    date_str,
+                    f"{magnetic_variation:.1f}",
+                    var_dir,
+                ),
+            )
+        )
+
     def format_time_from_timestamp(self, timestamp: int):
         """Helper function to convert a POSIX timestamp to a time string in
         hhmmss format.
@@ -437,6 +598,15 @@ class NMEANode(Node):
         """
         dt = datetime.fromtimestamp(timestamp / 1e6)
         return dt.strftime("%H%M%S")
+
+    def format_date_from_timestamp(self, timestamp: int):
+        """Helper function to convert a POSIX timestamp to a date string in
+        YYMMDD format.
+
+        :param timestamp: Timestamp in microseconds
+        """
+        dt = datetime.fromtimestamp(timestamp / 1e6)
+        return dt.strftime("%y%m%d")
 
     @narrow_types
     def _convert_to_wgs84(
@@ -480,3 +650,14 @@ class NMEANode(Node):
         d = int(degrees)
         m = abs(degrees - d) * 60
         return f"{abs(d):02d}{m:07.4f}"
+
+    def _nmea_heartbeat(self):
+        """Send heartbeat messsage at given frequency to let receiver know we are
+        still here.
+
+        E.g. :term:`PX4` NMEA GPS driver expects updates at 5Hz or otherwise it marks
+        the GPS as unhealthy.
+        """
+        time_str = self.format_time_from_timestamp(time.time() * 1e6)
+        nmea_msg = self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0)
+        self._write_nmea_to_serial([nmea_msg])

@@ -56,9 +56,13 @@ RUN mkdir -p /etc/mavlink-router && \
 
 # Look for secondary GPS i.e. GISNav (GPS 2)
 # Use first unassigned available serial port, i.e. /dev/ttyS4
+# baudrate 9600 default
 # https://docs.px4.io/v1.14/en/hardware/serial_port_mapping.html#default-px4board
-RUN echo "gps start -d /dev/ttyS4 -p nmea" >> ROMFS/px4fmu_common/init.d-posix/rcS \
-    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
+#RUN echo "gps start -e /dev/ttyS4 -p nmea -d /dev/ttyS4 -b 115200 -g 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
+#    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board \
+#    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
+RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
+    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
 
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport

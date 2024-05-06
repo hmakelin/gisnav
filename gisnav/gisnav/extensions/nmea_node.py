@@ -12,6 +12,7 @@ import serial
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
+import rclpy
 from geometry_msgs.msg import Vector3Stamped
 from nav_msgs.msg import Odometry
 from pyproj import Transformer
@@ -76,9 +77,11 @@ class NMEANode(Node):
 
         self.get_logger().info(f"port {self.port} baudrate {self.baudrate}")
 
-        self._heartbeat_timer = self.create_timer(
-            1 / self._NMEA_HEARTBEAT_HZ, self._nmea_heartbeat
-        )
+        #self._heartbeat_timer = self.create_timer(
+        #    1 / self._NMEA_HEARTBEAT_HZ, self._nmea_heartbeat
+        #)
+
+        #self.ser = serial.Serial(self.port, self.baudrate, timeout=10)
 
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -121,7 +124,10 @@ class NMEANode(Node):
                 pose.position.x, pose.position.y, pose.position.z
             )
 
-            timestamp = tf_.usec_from_header(odometry.header)
+            alt_agl += 3  # adjust for ellipsoid amsl for SITL TODO publish over nmea instead
+
+            #timestamp = tf_.usec_from_header(odometry.header)
+            timestamp = int(time.time() * 1e6)
 
             # Heading (yaw := z axis rotation) variance, assume no covariances
             pose_cov = odometry.pose.covariance.reshape((6, 6))
@@ -147,11 +153,12 @@ class NMEANode(Node):
 
             # Pose variance: eph (horizontal error SD) and epv (vertical error SD),
             # assume no covariances
-            # x_var = pose_cov[0, 0]
-            # y_var = pose_cov[1, 1]
-            # eph np.sqrt(x_var + y_var)
-            # z_var = pose_cov[2, 2]
-            # epv = np.sqrt(z_var)
+            x_var = pose_cov[0, 0]
+            y_var = pose_cov[1, 1]
+            eph = np.sqrt(x_var + y_var)
+            z_var = pose_cov[2, 2]
+            epv = np.sqrt(z_var)
+            rms = np.sqrt(x_var + y_var + z_var)
 
             # 3D velocity
             # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
@@ -159,8 +166,11 @@ class NMEANode(Node):
             # TODO: map is not published by GISNav - should use an ENU map frame
             #  published by gisnav instead
             twist = odometry.twist.twist
+
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform = tf_.get_transform(
-                self, "map", "camera_optical", odometry.header.stamp
+                self, "map", "camera_optical", rclpy.time.Time()  #odometry.header.stamp
             )
 
             # Need to convert linear twist vector to stamped version becase
@@ -180,8 +190,10 @@ class NMEANode(Node):
 
             # Heading
             vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", odometry.header.stamp
+                self, "map", "earth", rclpy.time.Time()  #odometry.header.stamp
             )
 
             if transform_earth_to_map is not None:
@@ -297,6 +309,11 @@ class NMEANode(Node):
                 0.0,  # eph,
                 0.0,  # epv,
                 odometry,
+                rms,
+                eph,
+                np.sqrt(x_var),
+                np.sqrt(y_var),
+                epv
             )
             if nmea_sentences is not None:
                 self._write_nmea_to_serial(nmea_sentences)
@@ -317,7 +334,8 @@ class NMEANode(Node):
         lon, lat, _ = tf_.ecef_to_wgs84(
             pose.position.x, pose.position.y, pose.position.z
         )
-        timestamp = tf_.usec_from_header(odometry.header)
+        #timestamp = tf_.usec_from_header(odometry.header)]
+        timestamp = int(time.time() * 1e6)
         time_str = self.format_time_from_timestamp(timestamp)
         date_str = self.format_date_from_timestamp(timestamp)
 
@@ -364,6 +382,11 @@ class NMEANode(Node):
         hdop: float,
         vdop: float,
         odometry: Odometry,
+        rms: float,
+        eph: float,
+        sd_x: float,
+        sd_y: float,
+        sd_z: float
     ) -> Optional[List[str]]:
         """Outgoing NMEA mock GPS sentences
 
@@ -390,12 +413,12 @@ class NMEANode(Node):
             self.GGA(
                 time_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
             ),
-            self.VTG(cog_degrees, ground_speed_knots),
+            #self.VTG(cog_degrees, ground_speed_knots),
             self.GSA(pdop, hdop, vdop),
             self.HDT(yaw_degrees),
-            # self.GST(time_str, 5, 5, 5, 0, 5, 5, 5),
-            self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0),
+            #self.GST(time_str, rms, eph, eph, 0.0, sd_y, sd_x, sd_z),
             self.RMC(*rmc_params),
+            #self.GSV
         ]
 
     @staticmethod
@@ -658,6 +681,66 @@ class NMEANode(Node):
         E.g. :term:`PX4` NMEA GPS driver expects updates at 5Hz or otherwise it marks
         the GPS as unhealthy.
         """
-        time_str = self.format_time_from_timestamp(time.time() * 1e6)
-        nmea_msg = self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0)
-        self._write_nmea_to_serial([nmea_msg])
+        #time_str = self.format_time_from_timestamp(time.time() * 1e6)
+        #nmea_msg = self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0)
+        zda = self.ZDA()
+        gsv = self.GSV
+        self._write_nmea_to_serial([zda, gsv])
+
+
+    import datetime
+
+    def ZDA(self, time_zone_hour_offset: int = 0, time_zone_minute_offset: int = 0) -> str:
+        utc_now = datetime.utcnow()
+
+        # Create a ZDA sentence using pynmea2
+        zda = pynmea2.ZDA('GP', 'ZDA', (
+            utc_now.strftime('%H%M%S'),
+            utc_now.strftime('%d'),
+            utc_now.strftime('%m'),
+            utc_now.strftime('%Y'),
+            str(time_zone_hour_offset),
+            str(time_zone_minute_offset)
+        ))
+        return str(zda)
+
+    @property
+    def GSV(self) -> str:
+        """Returns NMEA GSV sentences for 12 satellites statically defined.
+
+        :returns: A formatted NMEA GSV sentences as a string.
+        """
+        # Total satellites and the details for each, assuming maximum visibility and high SNR
+        def create_gsv_message(total_msgs, msg_num, sats_in_view, sat_info):
+            """
+            Creates a GSV message with the specified satellite information.
+
+            :param total_msgs: Total number of GSV messages necessary to report all satellites
+            :param msg_num: The current message number (1-based)
+            :param sats_in_view: Total number of satellites in view
+            :param sat_info: List of tuples for each satellite in this message, each tuple is (sat_id, elevation, azimuth, snr)
+            :return: GSV NMEA sentence as a string
+            """
+            msg = pynmea2.GSV('GP', 'GSV',
+                              (str(total_msgs), str(msg_num), str(sats_in_view)) + sat_info)
+            return msg.render()
+
+        # Example usage: Create GSV messages for 12 satellites
+        satellites = [
+            ('01', '85', '000', '99'), ('02', '85', '030', '99'),
+            ('03', '85', '060', '99'),
+            ('04', '85', '090', '99'), ('05', '85', '120', '99'),
+            ('06', '85', '150', '99'),
+            ('07', '85', '180', '99'), ('08', '85', '210', '99'),
+            ('09', '85', '240', '99'),
+            ('10', '85', '270', '99'), ('11', '85', '300', '99'),
+            ('12', '85', '330', '99')
+        ]
+
+        # Split into messages containing up to 1 satellite each
+        total_messages = len(satellites) // 1 + (1 if len(satellites) % 1 != 0 else 0)
+        messages = [
+            create_gsv_message(total_messages, i + 1, 12, satellites[i])
+            for i in range(total_messages)]
+
+        return "\r\n".join(messages)

@@ -5,5 +5,5 @@
 gisnav:
   nmea_node:
     ros__parameters:
-      baudrate: 9600
+      baudrate: 115200
       #port: "/dev/ttyS1"

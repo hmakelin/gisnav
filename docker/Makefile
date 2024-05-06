@@ -254,7 +254,7 @@ dev:
 	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 || echo "Could not establish serial-to-TCP bridge" &
 	@sleep 3  # Give socat time to create the pty
 	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
-	@ros2 launch gisnav default.launch.py port:=`readlink /tmp/gisnav-pty-link`
+	@ros2 launch gisnav default.launch.py port:=`readlink /tmp/gisnav-pty-link` baudrate:=115200
 
 # shortcut for demo
 .PHONY: demo

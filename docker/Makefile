@@ -256,7 +256,7 @@ dev-nmea: base-dev-setup
 
 .PHONY: dev-uorb
 dev-uorb: base-dev-setup
-	@ros2 launch gisnav default.launch.py protocol:=uorb
+	@ros2 launch gisnav dev.launch.py protocol:=uorb
 
 # shortcut for demo
 .PHONY: demo

@@ -151,7 +151,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
       - gisnav-volume:/etc/gisnav
-    command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py
+    command: ros2 launch gisnav default.launch.py protocol:=uorb
+    #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
     depends_on:
       - px4
       - micro-ros-agent  # depends on this in "production", but in SITL px4 already has this as dep

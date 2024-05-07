@@ -19,8 +19,10 @@ from rclpy.timer import Timer
 from .._decorators import ROS, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
+    DELAY_DEFAULT_MS,
     ROS_NAMESPACE,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
+    ROS_TOPIC_SENSOR_GPS,
 )
 
 
@@ -123,7 +125,7 @@ class QGISNode(Node):
 
     def __del__(self):
         """Class destructor to close database connection"""
-        if self._db_connection:
+        if hasattr(self, "_db_connection") and self._db_connection is not None:
             self._db_connection.close()
 
     @property
@@ -241,4 +243,16 @@ class QGISNode(Node):
     def bounding_box(self) -> Optional[BoundingBox]:
         """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`
         :term:`FOV` location published via :attr:`.GisNode.bounding_box`
+        """
+
+    @property
+    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
+    @ROS.subscribe(
+        ROS_TOPIC_SENSOR_GPS,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_update_database,
+    )
+    def sensor_gps(self) -> Optional[SensorGps]:
+        """Subscribed mock :term:`GNSS` :term:`message` published by
+        :class:`.MockGPSNode`
         """

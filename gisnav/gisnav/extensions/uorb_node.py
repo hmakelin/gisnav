@@ -1,14 +1,5 @@
 """This module contains the :class:`.UORBNode` :term:`extension` :term:`node`
 that publishes PC4 uORB SensorGps (GNSS) messages to the micro-ros agent middleware
-
-.. note::
-    PX4 also supports NMEA but this is preferred when running with PX4 as the PX4
-    nmea.cpp (and the NMEA protocol itself) does not support sub-second timestamps while
-    the PX4 gps.cpp driver hard-codes a 5 Hz / 200ms requirement for NMEA message
-    updates (this is patched in the GISNav `px4` service). Also, the PX4 NMEA driver
-    sets the s_variance_m_s value to 0 which can be problematic when fusion of
-    velocity data is required (e.g. when relying fully on GISNav as secondary GPS
-    after doing `failure gps -i 0 off` on the simulated GPS).
 """
 from typing import Final, Optional, Tuple
 

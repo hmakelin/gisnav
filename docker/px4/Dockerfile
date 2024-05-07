@@ -36,13 +36,20 @@ WORKDIR PX4-Autopilot
 
 # Do not copy Dockerfile so that it can be edited without invalidating this
 # layer
-COPY 6011_typhoon_h480 merge_xml.py iris_hitl_ksql_airport.world entrypoint.sh etc .
+COPY 6011_typhoon_h480 merge_xml.py dds_topics.yaml iris_hitl_ksql_airport.world entrypoint.sh etc .
 
 # Setup ksql_airport.world for HIL
 # empy must be version 3.3.4, see below commit
 # https://github.com/PX4/PX4-containers/commit/80df74db476adbf7a71d08c9b392023756cc1bb0
 RUN pip install --no-cache-dir lxml empy==3.3.4 && \
-    python3 merge_xml.py iris_hitl_ksql_airport.world Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world
+    python3 merge_xml.py iris_hitl_ksql_airport.world Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world \
+
+# Configure XRCE-DDS bridge
+# Increase ping timeout and retries to ensure we do not disconnect too
+# early (running in separate containers so expect some latency and temporary
+# unavailability of the micro-ros agent while it starting)
+RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topics.yaml \
+    && sed -i -e 's/500_ms/1000_ms/g' -e 's/num_pings_missed > 2/num_pings_missed > 5/g' src/modules/uxrce_dds_client/uxrce_dds_client.cpp \
 
 # Apply configuration files
 RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480

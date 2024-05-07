@@ -154,6 +154,7 @@ services:
     command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py
     depends_on:
       - px4
+      - micro-ros-agent  # depends on this in "production", but in SITL px4 already has this as dep
       - mavros
       - gscam
       - mapserver
@@ -163,7 +164,7 @@ services:
         - homepage.name=GISNav
         - homepage.description=Generates mock GPS messages for FCU using visual map-based navigation
 
-  # The px4 service depends on mavros, mapserver and because
+  # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
     <<: [*base, *x11, *tty, *nvidia-gpu, *mavlink-net]
@@ -176,6 +177,7 @@ services:
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
     depends_on:
       - mavros
+      - micro-ros-agent
       - qgc
     labels:
         - homepage.group=Development services

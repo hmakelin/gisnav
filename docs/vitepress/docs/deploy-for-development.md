@@ -29,9 +29,7 @@ make -C docker dev-nmea
 :::
 
 ::: tip Use uORB if possible
-The PX4 NMEA driver and the NMEA 0183 protocol itself does not support sub-second precision for timestamps, while the PX4 (v1.14) GPS driver seems to have hard-coded a 5 Hz / 200 ms frequency requirement for GPS messages even when using the NMEA protocol. This leads to the secondary NMEA mock GPS often being flagged as unhealthy. For context, see the driver code lines [gps.cpp#L985](https://github.com/PX4/PX4-Autopilot/blob/v1.14.2/src/drivers/gps/gps.cpp#L985), [gps.cpp#L994](https://github.com/PX4/PX4-Autopilot/blob/v1.14.2/src/drivers/gps/gps.cpp#L994) and [nmea.cpp#L545-L553](https://github.com/PX4/PX4-GPSDrivers/blob/release/1.14/src/nmea.cpp#L545-L553).
-
-The PX4 NMEA driver also hard-codes some variables like the `s_variance_m_s` speed variance to 0 which may lead to failsafes triggering (unverified) if only relying on GISNav for velocity estimates (e.g. when [simulating failure of the primary GPS](/README#simulate-gps-failure)).
+The PX4 NMEA driver hard-codes some variables like the `s_variance_m_s` speed variance to 0 which may lead to failsafes triggering (unverified) if only relying on GISNav for velocity estimates (e.g. when [simulating failure of the primary GPS](/README#simulate-gps-failure)).
 
 :::
 

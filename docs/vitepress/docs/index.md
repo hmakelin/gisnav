@@ -28,26 +28,22 @@ features:
     details: "Provides a precise global position by visually comparing frames from the vehicle's nadir-facing camera to a map of the UAVs approximate global position retrieved from an onboard GIS server."
 
   - title: "FOSS with MIT License"
-    details: "Open source under the permissive MIT license, allowing for free use, modification, and distribution, fostering a community of innovation and improvement."
+    details: "Open source under the permissive MIT license, allowing for free use, modification, and distribution."
 
   - title: "Monocular Camera Compatibility"
     details: "Compatible with any standard monocular camera, facilitating easy adoption and integration with existing equipment, without requiring specialized hardware."
 
   - title: "MAVLink, NMEA and uORB Protocols"
-    details: "Supports integration with popular autopilot systems like PX4 and ArduPilot through MAVLink, NMEA and uORB protocols, enhancing interoperability and control."
+    details: "Supports integration with popular autopilot systems like PX4 and ArduPilot through MAVLink, NMEA and uORB protocols."
 
   - title: "Secondary GPS Over Serial Port (NMEA)"
-    details: "Functions as a reliable secondary GPS, easily integrating over serial connections without the need for firmware modifications, enhancing navigational redundancy and safety."
+    details: "Functions as a reliable secondary GPS, easily integrating over serial connections without the need for firmware modifications."
 
   - title: "Simulation with Gazebo"
-    details: "Includes support for Gazebo simulations, enabling developers to test and refine drone operations in a fully controlled virtual environment, accelerating development cycles and reducing field testing risks."
+    details: "Includes support for Gazebo simulations, enabling developers to test and refine drone operations in a fully controlled virtual environment."
 
   - title: "ROS 2 Integration"
-    details: "Seamlessly integrates with the ROS 2 ecosystem, providing robust middleware solutions that enhance the functionality and scalability of UAV operations."
-
-  - title: "Live Navigation Updates"
-    details: "Offers live navigation updates, ensuring UAVs respond promptly to environmental changes and mission updates, crucial for dynamic and unpredictable operating conditions."
-
+    details: "Integrates with the ROS 2 ecosystem, providing easy extensibility."
 
 ---
 

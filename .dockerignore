@@ -31,3 +31,9 @@ gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 # mypy
 .mypy_cache
+
+# node
+node_modules
+
+# vitepress
+docs/vitepress/docs/.vitepress/cache/

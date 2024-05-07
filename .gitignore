@@ -36,3 +36,9 @@ debian
 
 # mypy
 .mypy_cache
+
+# node
+node_modules
+
+# vitepress
+docs/vitepress/docs/.vitepress/cache/

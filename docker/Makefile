@@ -210,8 +210,8 @@ build:
 # container ID on your local host. socat is used to create a virtual serial port
 # (a pseudo-tty) and to bridge it to the TCP port which the px4 container
 # is listening on.
-.PHONY: dev
-dev:
+.PHONY: base-dev-setup
+base-dev-setup:
 	# Recreate containers
 	docker compose -p gisnav create mapserver px4 qgis gscam postgres rviz
 	$(MAKE) expose-xhost
@@ -243,18 +243,20 @@ dev:
 	# Start the other development services
 	@docker compose -p gisnav start px4 qgis gscam rviz
 
-	# Run socat to bridge the gisnav output to the px4 container
-	# Extract the IP address of the px4 container
+.PHONY: dev-nmea
+dev-nmea: base-dev-setup
+	# Specific setup for NMEA output
+	@echo "Setting up NMEA output..."
 	$(eval PX4_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1`)
 	@echo "Debug: PX4_IP is '$(PX4_IP)'"
-
-	# Create new PTS device and use it to override the default serial output
-	# port used by GISNav's NMEANode (default is most likely in use on the
-	# development machine)
 	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 || echo "Could not establish serial-to-TCP bridge" &
 	@sleep 3  # Give socat time to create the pty
 	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
-	@ros2 launch gisnav default.launch.py port:=`readlink /tmp/gisnav-pty-link` baudrate:=115200
+	@ros2 launch gisnav default.launch.py protocol:=nmea port:=`readlink /tmp/gisnav-pty-link` baudrate:=115200
+
+.PHONY: dev-uorb
+dev-uorb: base-dev-setup
+	@ros2 launch gisnav default.launch.py protocol:=uorb
 
 # shortcut for demo
 .PHONY: demo

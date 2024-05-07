@@ -12,7 +12,7 @@ robot_localization:
 
       # need predict_to_current_time if required output Hz is higher than input
       # PX4 nmea.cpp compares timestamps at 1 second accuracy (NMEA does not
-      # support sub-second precision for timestamps) but gps_helper.cpp requires
+      # support sub-second precision for timestamps) but gps.cpp requires
       # 5 Hz or ability to discriminate NMEA messages at 200ms intervals which
       # causes the NMEA GPS to be marked as unhealthy very frequently.
       predict_to_current_time: true

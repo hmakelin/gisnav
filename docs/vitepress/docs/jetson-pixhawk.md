@@ -1,6 +1,6 @@
 # Pixhawk & Jetson Nano HIL
 
-::: info NVIDIA Jetson Nano discontinued
+::: tip NVIDIA Jetson Nano discontinued
 This article was created for an older version of GISNav and since its publication, NVIDIA Jetson Nano has been discontinued. This article is provided for reference until an updated article on HIL simulation is written.
 
 :::

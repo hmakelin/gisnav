@@ -49,6 +49,7 @@ export default withMermaid({
           { text: 'Run ROS nodes', link: '/ros-run-node' },
           { text: 'Remap ROS topics', link: '/remap-ros-topics' },
           { text: 'Run tests', link: '/test-gisnav' },
+          { text: 'Generate documentation', link: '/generate-documentation' },
         ]
       },
       {

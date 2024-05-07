@@ -326,7 +326,7 @@ class NMEANode(Node):
 
     def compute_rmc_parameters(
         self, odometry: Odometry
-    ) -> Tuple[str, str, str, str, str, float, float, str]:
+    ) -> Tuple[str, str, str, str, str, str, str, str]:
         """Calculate the RMC parameters based on odometry data.
 
         :param odometry: The odometry data from which to extract GPS details.
@@ -345,12 +345,14 @@ class NMEANode(Node):
 
         # Convert speed from m/s to knots
         twist = odometry.twist.twist
-        speed_knots = (
+        speed_knots: float = (
             np.sqrt(twist.linear.x**2 + twist.linear.y**2) * 1.94384
         )  # m/s to knots
 
         # Calculate course over ground in degrees
-        course_degrees = np.degrees(np.arctan2(twist.linear.y, twist.linear.x)) % 360
+        course_degrees: float = (
+            np.degrees(np.arctan2(twist.linear.y, twist.linear.x)) % 360
+        )
 
         lat_nmea = self._decimal_to_nmea(lat)
         lon_nmea = self._decimal_to_nmea(lon)
@@ -621,7 +623,7 @@ class NMEANode(Node):
             )
         )
 
-    def format_time_from_timestamp(self, timestamp: int):
+    def format_time_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a time string in
         hhmmss format.
 
@@ -630,7 +632,7 @@ class NMEANode(Node):
         dt = datetime.fromtimestamp(timestamp / 1e6)
         return dt.strftime("%H%M%S")
 
-    def format_date_from_timestamp(self, timestamp: int):
+    def format_date_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a date string in
         YYMMDD format.
 

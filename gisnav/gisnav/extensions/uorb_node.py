@@ -13,6 +13,7 @@ that publishes PC4 uORB SensorGps (GNSS) messages to the micro-ros agent middlew
 from typing import Final, Optional, Tuple
 
 import numpy as np
+import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
@@ -141,8 +142,14 @@ class UORBNode(Node):
             # TODO: map is not published by GISNav - should use an ENU map frame
             #  published by gisnav instead
             twist = odometry.twist.twist
+
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform = tf_.get_transform(
-                self, "map", "camera_optical", odometry.header.stamp
+                self,
+                "map",
+                "camera_optical",
+                rclpy.time.Time(),  # odometry.header.stamp
             )
 
             # Need to convert linear twist vector to stamped version becase
@@ -162,9 +169,19 @@ class UORBNode(Node):
 
             # Heading
             # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", odometry.header.stamp
+                self, "map", "earth", rclpy.time.Time()  # odometry.header.stamp
             )
+
+            if transform_earth_to_map is None:
+                self.get_logger().warning(
+                    "Could not determine heading - skpping publishing SensorGps."
+                )
+                # TODO Set yaw to zero and make yaw/heading accuracy
+                #  np.nan in this case?
+                return None
 
             pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
             euler = tf_transformations.euler_from_quaternion(

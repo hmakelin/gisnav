@@ -18,7 +18,6 @@ from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from rclpy.timer import Timer
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -43,13 +42,6 @@ class NMEANode(Node):
     _EPSG_WGS84 = 4326
     _EPSG_MSL = 5773  # Example: EGM96
 
-    _NMEA_HEARTBEAT_HZ = 5.0
-    """Update rate for NMEA heartbeat message to let receiver know we are still here
-
-    .. note::
-        PX4 requires 5Hz (see nmea.cpp)
-    """
-
     def __init__(self, *args, **kwargs):
         """Class initializer
 
@@ -73,14 +65,6 @@ class NMEANode(Node):
 
         # Subscribe
         self.odometry
-
-        self.get_logger().info(f"port {self.port} baudrate {self.baudrate}")
-
-        # self._heartbeat_timer = self.create_timer(
-        #    1 / self._NMEA_HEARTBEAT_HZ, self._nmea_heartbeat
-        # )
-
-        # self.ser = serial.Serial(self.port, self.baudrate, timeout=10)
 
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -213,7 +197,8 @@ class NMEANode(Node):
                 if yaw_rad < 0:
                     yaw_rad = 2 * np.pi + yaw_rad
 
-                # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
+                # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before
+                # re-centering
                 vehicle_yaw_degrees = np.degrees(yaw_rad)
                 # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
                 # MAVLink yaw definition 0 := not available
@@ -295,11 +280,10 @@ class NMEANode(Node):
             # defined for 0<=theta<=90
 
             # Compute course over ground variance
-            cog_variance_rad = _calculate_cog_variance(
-                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
-            )
-
-            _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
+            # cog_variance_rad = _calculate_cog_variance(
+            #    vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
+            # )
+            # _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
 
             nmea_sentences = self.nmea_sentences(
                 lat,
@@ -326,7 +310,7 @@ class NMEANode(Node):
 
     def compute_rmc_parameters(
         self, odometry: Odometry
-    ) -> Tuple[str, str, str, str, str, str, str, str]:
+    ) -> Tuple[str, str, str, str, str, str, float, float, str]:
         """Calculate the RMC parameters based on odometry data.
 
         :param odometry: The odometry data from which to extract GPS details.
@@ -409,10 +393,9 @@ class NMEANode(Node):
         lon_dir = "E" if lon_deg >= 0 else "W"
 
         # Calculate ground speed in knots and course over ground
-        ground_speed_knots = (
-            np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
-        )  # m/s to knots
-        np.degrees(np.arctan2(vel_e_m_s, vel_n_m_s)) % 360
+        # ground_speed_knots = (
+        #    np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
+        # )  # m/s to knots
 
         # The PX4 nmea.cpp driver sets s_variance_m_s to 0 if we publish velocity,
         # which will inevitable lead to failsafes triggering when the simulated GPS
@@ -684,27 +667,10 @@ class NMEANode(Node):
         m = abs(degrees - d) * 60
         return f"{abs(d):02d}{m:07.4f}"
 
-    def _nmea_heartbeat(self):
-        """Send heartbeat messsage at given frequency to let receiver know we are
-        still here.
-
-        E.g. :term:`PX4` NMEA GPS driver expects updates at 5Hz or otherwise it marks
-        the GPS as unhealthy.
-        """
-        # time_str = self.format_time_from_timestamp(time.time() * 1e6)
-        # nmea_msg = self.GST(time_str, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0)
-        zda = self.ZDA()
-        gsv = self.GSV
-        self._write_nmea_to_serial([zda, gsv])
-
-    import datetime
-
     def ZDA(
         self, time_zone_hour_offset: int = 0, time_zone_minute_offset: int = 0
     ) -> str:
         utc_now = datetime.utcnow()
-
-        # Create a ZDA sentence using pynmea2
         zda = pynmea2.ZDA(
             "GP",
             "ZDA",
@@ -726,15 +692,16 @@ class NMEANode(Node):
         :returns: A formatted NMEA GSV sentences as a string.
         """
 
-        # Total satellites and the details for each, assuming maximum visibility and high SNR
         def create_gsv_message(total_msgs, msg_num, sats_in_view, sat_info):
             """
             Creates a GSV message with the specified satellite information.
 
-            :param total_msgs: Total number of GSV messages necessary to report all satellites
+            :param total_msgs: Total number of GSV messages necessary to report all
+                satellites
             :param msg_num: The current message number (1-based)
             :param sats_in_view: Total number of satellites in view
-            :param sat_info: List of tuples for each satellite in this message, each tuple is (sat_id, elevation, azimuth, snr)
+            :param sat_info: List of tuples for each satellite in this message, each
+                tuple is (sat_id, elevation, azimuth, snr)
             :return: GSV NMEA sentence as a string
             """
             msg = pynmea2.GSV(
@@ -744,7 +711,7 @@ class NMEANode(Node):
             )
             return msg.render()
 
-        # Example usage: Create GSV messages for 12 satellites
+        # dummy satellite data
         satellites = [
             ("01", "85", "000", "99"),
             ("02", "85", "030", "99"),
@@ -760,7 +727,7 @@ class NMEANode(Node):
             ("12", "85", "330", "99"),
         ]
 
-        # Split into messages containing up to 1 satellite each
+        # Split into messages containing 1 satellite each
         total_messages = len(satellites) // 1 + (1 if len(satellites) % 1 != 0 else 0)
         messages = [
             create_gsv_message(total_messages, i + 1, 12, satellites[i])

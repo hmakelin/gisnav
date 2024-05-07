@@ -48,4 +48,4 @@ what you are looking for.
     :caption: Private API
 
     private/decorators
-    private/messaging
+    private/transformations

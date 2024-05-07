@@ -14,6 +14,8 @@ log/
 
 # Built Sphinx documentation
 docs/_build/
+docs/sphinx/_build/
+docs/vitepress/docs/_build/
 
 # coverage.py files
 .coverage*

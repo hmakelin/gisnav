@@ -30,9 +30,19 @@ make docs
 
 ## Build Sphinx documentation
 
+
+Make HTML documentation for viewing in web browser:
+
 ```bash
 cd ~/colcon_ws/src/gisnav/docs
 make html
+```
+
+Make Markdown documentation for processing with VitePress:
+
+```bash
+cd ~/colcon_ws/src/gisnav/docs
+sphinx-build -M markdown ./sphinx vitepress/docs/_build/sphinx_
 ```
 
 The HTML documentation will appear in the `~/colcon_ws/src/gisnav/docs/_build/` folder.

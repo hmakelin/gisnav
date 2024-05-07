@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Optional, Union
 from xml.etree import ElementTree
 
-sys.path.insert(0, os.path.abspath("../gisnav"))
+sys.path.insert(0, os.path.abspath("../../gisnav"))
 
 # -- Version information -----------------------------------------------------
 
@@ -67,7 +67,9 @@ class PackageData:
             raise FileNotFoundError(f"Could not find package file at {package_file}.")
 
 
-package_data = PackageData.parse_package_data(os.path.abspath("../gisnav/package.xml"))
+package_data = PackageData.parse_package_data(
+    os.path.abspath("../../gisnav/package.xml")
+)
 
 # -- Project information -----------------------------------------------------
 
@@ -93,6 +95,7 @@ extensions = [
     "sphinxcontrib.mermaid",
     "sphinx_copybutton",
     "sphinx_substitution_extensions",
+    "sphinx_markdown_builder",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

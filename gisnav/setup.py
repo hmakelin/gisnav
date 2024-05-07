@@ -142,6 +142,7 @@ setup(
             "Sphinx-Substitution-Extensions",
             "sphinxcontrib-mermaid",
             "sphinxcontrib-video",
+            "sphinx-markdown-builder==0.6.6",
             "Sphinx",
             "types-PyYAML",
         ],

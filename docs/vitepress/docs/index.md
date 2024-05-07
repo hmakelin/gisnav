@@ -15,7 +15,7 @@ hero:
       link: "/README"
     - theme: alt
       text: "API Reference"
-      link: "/api-examples"
+      link: "/_build/sphinx/markdown/index"
 
 features:
   - title: "GNSS-free navigation"

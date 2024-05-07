@@ -71,12 +71,6 @@ RUN mkdir -p /etc/mavlink-router && \
 RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
     && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
 
-# The gps.cpp driver requires sub-second precision (5 Hz or 200ms) to mark
-# a GPS as healthy but the NMEA protocol and the nmea.cpp driver only support
-# second preicion. We apply a small patch to the PX4 GPS driver to prevent the
-# NMEA GPS from being marked as unhealthy.
-RUN sed -i 's/\(unsigned receive_timeout = \)TIMEOUT_5HZ/\1TIMEOUT_1HZ/' src/drivers/gps/gps.cpp
-
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 

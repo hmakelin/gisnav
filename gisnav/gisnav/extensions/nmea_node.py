@@ -608,12 +608,12 @@ class NMEANode(Node):
 
     def format_time_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a time string in
-        hhmmss format.
+        hhmmss.SSS format, where SSS is milliseconds.
 
         :param timestamp: Timestamp in microseconds
         """
         dt = datetime.fromtimestamp(timestamp / 1e6)
-        return dt.strftime("%H%M%S")
+        return dt.strftime("%H%M%S.%f")[:10]
 
     def format_date_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a date string in

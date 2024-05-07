@@ -13,7 +13,11 @@ from typing import Final
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription  # type: ignore
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, ThisLaunchFileDir
 from launch_ros.actions import Node
@@ -21,9 +25,50 @@ from launch_ros.actions import Node
 _PACKAGE_NAME: Final = "gisnav"
 
 
-def generate_launch_description():
-    """Generates launch description with PX4 Fast DDS bridge adapter"""
+def launch_setup(context, *args, **kwargs):
     package_share_dir = get_package_share_directory(_PACKAGE_NAME)
+
+    protocol = LaunchConfiguration("protocol").perform(context)
+    port_config = LaunchConfiguration("port").perform(context)
+
+    actions = []
+
+    if protocol == "uorb":
+        actions.append(
+            Node(
+                package=_PACKAGE_NAME,
+                executable="uorb_node",
+                name="uorb_node",
+                namespace=_PACKAGE_NAME,
+                parameters=[
+                    os.path.join(package_share_dir, "launch/params/uorb_node.yaml")
+                ],
+            )
+        )
+    elif protocol == "nmea":
+        actions.append(
+            Node(
+                package=_PACKAGE_NAME,
+                executable="nmea_node",
+                name="nmea_node",
+                namespace=_PACKAGE_NAME,
+                parameters=[
+                    os.path.join(package_share_dir, "launch/params/nmea_node.yaml"),
+                    {"port": port_config},
+                ],
+            )
+        )
+    else:
+        raise ValueError(
+            f"Unsupported protocol {protocol}. Choose either 'uorb' or 'nmea'."
+        )
+
+    return actions
+
+
+def generate_launch_description():
+    """Generates launch description"""
+    get_package_share_directory(_PACKAGE_NAME)
 
     # Declare a launch argument for the serial port
     # We override this e.g. in local development where we use socat to generate us a
@@ -37,8 +82,17 @@ def generate_launch_description():
         ]
     )
 
+    ld.add_action(
+        DeclareLaunchArgument(
+            "protocol",
+            default_value="uorb",
+            description="Outbound communications protocol for mock GPS messages. "
+            "Choose 'uorb' or 'nmea'.",
+        )
+    )
+
     # Add serial port and baudrate from launch args if provided
-    port_config = LaunchConfiguration("port")
+    LaunchConfiguration("port")
     # TODO: fix this - the defaults here should not override node's own default.
     #  We want to use the node's own defaults if the launch arguments here are
     #  not provided instead of re-declaring and overriding the defaults here in
@@ -48,19 +102,11 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "port",
             default_value="/dev/ttyS1",
-            description="Outbound serial port for NMEA node",
+            description="Outbound serial port for NMEA node. "
+            "Ignored if protocol is not NMEA.",
         )
     )
-    ld.add_action(
-        Node(
-            package=_PACKAGE_NAME,
-            name="nmea_node",
-            namespace=_PACKAGE_NAME,
-            executable="nmea_node",
-            parameters=[
-                os.path.join(package_share_dir, "launch/params/nmea_node.yaml"),
-                {"port": port_config},
-            ],
-        )
-    )
+
+    ld.add_action(OpaqueFunction(function=launch_setup))
+
     return ld

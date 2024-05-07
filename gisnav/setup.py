@@ -149,6 +149,7 @@ setup(
     entry_points={
         "console_scripts": [
             "nmea_node = gisnav:run_nmea_node",
+            "uorb_node = gisnav:run_uorb_node",
             "gis_node = gisnav:run_gis_node",
             "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",

@@ -28,12 +28,20 @@ STEREO_NODE_NAME: Final = "stereo_node"
 NMEA_NODE_NAME: Final = "nmea_node"
 """Name of :class:`.NMEANode` spun up by :func:`.run_nmea_node`"""
 
+UORB_NODE_NAME: Final = "uorb_node"
+"""Name of :class:`.UORBNode` spun up by :func:`.run_uorb_node`"""
+
 QGIS_NODE_NAME: Final = "qgis_node"
 """Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
 
 ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 """Relative :term:`topic` into which :class:`.GISNode` publishes
 :attr:`.GISNode.orthoimage`.
+"""
+
+ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
+""":term:`Topic` into which :class:`.UORBNode` publishes
+:attr:`.GISNode.sensor_gps`.
 """
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"

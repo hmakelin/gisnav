@@ -103,6 +103,16 @@ services:
         - homepage.name=MAVROS
         - homepage.description=MAVLink to ROS middleware
 
+  micro-ros-agent:
+    <<: [*base, *ros, *mavlink-net]
+    build:
+      context: micro-ros-agent
+    command: udp4 -p 8888
+    labels:
+        - homepage.group=Core services
+        - homepage.name=micro-ROS agent
+        - homepage.description=uORB to ROS (PX4) middleware
+
   qgc:
     <<: [*base, *x11, *mavlink-net]
     build:

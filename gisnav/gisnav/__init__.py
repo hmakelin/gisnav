@@ -29,6 +29,7 @@ from .constants import (
     QGIS_NODE_NAME,
     ROS_NAMESPACE,
     STEREO_NODE_NAME,
+    UORB_NODE_NAME,
 )
 from .core import BBoxNode, GISNode, PoseNode, StereoNode
 
@@ -48,6 +49,16 @@ try:
     def run_nmea_node():
         """Spins up a :class:`.NMEANode`"""
         _run(NMEANode, NMEA_NODE_NAME, **_rclpy_node_kwargs)
+
+except ModuleNotFoundError as e:
+    print(f"Could not import NMEANode because a module was not found: {e}")
+
+try:
+    from .extensions.uorb_node import UORBNode
+
+    def run_uorb_node():
+        """Spins up a :class:`.UORBNode`"""
+        _run(UORBNode, UORB_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
     print(f"Could not import NMEANode because a module was not found: {e}")

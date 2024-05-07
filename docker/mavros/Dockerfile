@@ -80,7 +80,7 @@ WORKDIR /opt/colcon_ws/src/gisnav
 # Install python dependencies, mainly torch and related CUDA deps
 # Finally, build gisnav
 RUN cd gisnav && \
-    pip install . .[nmea_node] .[qgis_node] .[dev] && \
+    pip install . .[nmea_node] .[uorb_node] .[qgis_node] .[dev] && \
     cd /opt/colcon_ws && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
     source install/setup.bash && \

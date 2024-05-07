@@ -70,14 +70,14 @@ RUN cd gisnav/gisnav && \
     rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     rm -rf /var/lib/apt/lists/* && \
-    apt clean \
+    apt clean
 
 # Build px4_msgs, add custom patch to only get SensorGps message
 RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     sed -i 's/\*\.msg/SensorGps.msg/g' px4_msgs/CMakeLists.txt && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
     cd .. && \
-    colcon build --packages-select px4_msgs \
+    colcon build --packages-select px4_msgs
 
 # Copy rest of gisnav ros2 package
 COPY . gisnav/

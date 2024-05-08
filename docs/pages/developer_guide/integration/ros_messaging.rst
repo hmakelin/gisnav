@@ -25,11 +25,11 @@ how the ROS messages flow through the application:
         end
 
         subgraph extension["GISNav extension nodes"]
-            MockGPSNode["MockGPSNode"]
+            NMEANode["NMEANode"]
         end
 
         subgraph robot_localization
-            ekf["ekf_localization_node"] -->|"Odometry"| MockGPSNode
+            ekf["ekf_localization_node"] -->|"Odometry"| NMEANode
         end
 
         gscam ---->|"Image"| StereoNode
@@ -88,4 +88,4 @@ Note on camera topics
 
 :term:`GSCam` is in GISNav to publish the :class:`sensor_msgs.msg.CameraInfo`
 and :class:`sensor_msgs.msg.Image` messages. The camera topics are not published
-over the :term:`MAVROS` nor :term:`micro-ROS-agent` middleware.
+over the :term:`MAVROS` middleware.

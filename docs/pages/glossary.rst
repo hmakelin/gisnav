@@ -31,7 +31,7 @@ correct alternative should be easily inferred from the context they are used in.
     Extension
     Extended functionality
         * Functionality beyond GISNav :term:`core` functionality. For example,
-          :class:`.MockGPSNode` for integrating GISNav as a :term:`GPS`
+          :class:`.NMEANode` for integrating GISNav as a :term:`GPS`
           substitute or complement.
         * A `Docker Compose extension <https://docs.docker.com/compose/compose-file/11-extension/>`_
 
@@ -213,7 +213,7 @@ correct alternative should be easily inferred from the context they are used in.
     Middleware
         A software application that facilitates communication between other
         software applications (by transmitting data between them). More
-        specifically, :term:`MAVROS` or :term:`micro-ROS Agent`.
+        specifically, :term:`MAVROS`.
 
     Mission
     Mission mode
@@ -578,6 +578,10 @@ ____________________________________________________
         .. note::
             Down here means :term:`nadir`.
 
+    NMEA
+    NMEA 0183
+        Communication protocol for :term:`GPS` receivers
+
     OGC
         Open Geospatial Consortium: `ogc.org <https://www.ogc.org/>`_
 
@@ -740,11 +744,6 @@ relate to external interfaces.
     Mermaid
     mermaid.js
         A diagram scripting language: `mermaid.js.org <https://mermaid.js.org/>`
-
-    micro-ROS-agent
-    micro-ROS Agent
-        A :term:`ROS` package that wraps the Micro XRCE-DDS Agent :term:`middleware`:
-        `github.com/micro-ROS/micro-ROS-Agent <https://github.com/micro-ROS/micro-ROS-Agent>`_
 
     OpenCV
         Open source computer vision software library: `opencv.org <https://opencv.org/>`_

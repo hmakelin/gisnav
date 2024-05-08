@@ -93,10 +93,6 @@ endef
 
 # Define a reusable template for creating Docker Compose middleware targets
 #
-# GISNav needs both micro-ros-agent and mavros for the mock GPS node in PX4
-# configuration, while MAVROS alone is sufficient in ArduPilot configuration,
-# which complicates things just enough to require separate templates.
-#
 # Parameters:
 #   1. The prefix for the target name.
 #   2. The additional Docker Compose options, such as file overrides.
@@ -121,7 +117,7 @@ endef
 #   2. The Docker Compose command to execute (either 'up -d' or 'build').
 define run_middleware
 	@if [ "$*" = "px4" ]; then \
-		docker compose -p $(PROJECT_NAME) $(1) $(2) micro-ros-agent mavros; \
+		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	elif [ "$*" = "ardupilot" ]; then \
 		docker compose -p $(PROJECT_NAME) $(1) $(2) mavros; \
 	else \
@@ -208,12 +204,14 @@ stop:
 build:
 	@docker compose -p $(PROJECT_NAME) build
 
-# Use this target to start supporting services when usin a local installation
+# Use this target to start supporting services when using a local installation
 # of GISNav. The mapserver needs to be started first and the local /etc/hosts
 # file updated so that the gisnav-mapserver-1 hostname resolves to the mapserver
-# container ID on your local host.
-.PHONY: dev
-dev:
+# container ID on your local host. socat is used to create a virtual serial port
+# (a pseudo-tty) and to bridge it to the TCP port which the px4 container
+# is listening on.
+.PHONY: base-dev-setup
+base-dev-setup:
 	# Recreate containers
 	docker compose -p gisnav create mapserver px4 qgis gscam postgres rviz
 	$(MAKE) expose-xhost
@@ -243,7 +241,22 @@ dev:
 	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
 
 	# Start the other development services
-	docker compose -p gisnav start px4 qgis gscam rviz
+	@docker compose -p gisnav start px4 qgis gscam rviz
+
+.PHONY: dev-nmea
+dev-nmea: base-dev-setup
+	# Specific setup for NMEA output
+	@echo "Setting up NMEA output..."
+	$(eval PX4_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1`)
+	@echo "Debug: PX4_IP is '$(PX4_IP)'"
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 || echo "Could not establish serial-to-TCP bridge" &
+	@sleep 3  # Give socat time to create the pty
+	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
+	@ros2 launch gisnav default.launch.py protocol:=nmea port:=`readlink /tmp/gisnav-pty-link` baudrate:=115200
+
+.PHONY: dev-uorb
+dev-uorb: base-dev-setup
+	@ros2 launch gisnav dev.launch.py protocol:=uorb
 
 # shortcut for demo
 .PHONY: demo

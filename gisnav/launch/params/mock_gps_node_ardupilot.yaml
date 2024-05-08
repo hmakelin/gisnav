@@ -1,4 +1,0 @@
-gisnav:
-  mock_gps_node:
-    ros__parameters:
-      use_sensor_gps: False  # Set to False for GPSINPUT

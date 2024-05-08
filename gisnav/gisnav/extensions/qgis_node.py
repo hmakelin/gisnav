@@ -5,10 +5,6 @@ accordingly.
 
 This node enables real-time visualization of data in QGIS, aiding in
 development and debugging.
-
-.. todo::
-    Currently SensorGps message (PX4) only (implement GPSINPUT to support
-    ArduPilot)
 """
 from typing import Final, Optional, Union
 
@@ -129,7 +125,7 @@ class QGISNode(Node):
 
     def __del__(self):
         """Class destructor to close database connection"""
-        if self._db_connection:
+        if hasattr(self, "_db_connection") and self._db_connection is not None:
             self._db_connection.close()
 
     @property

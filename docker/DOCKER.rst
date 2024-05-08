@@ -29,7 +29,14 @@ Docker container with the hostname ``gisnav-mapserver-1``.
     * Build and expose static docs to home page - possibly no need for a server
 
 .. note::
-    The application services have access to both ``gis`` and ``mavlink`` networks.
+    * The application services have access to both ``gis`` and ``mavlink`` networks.
+    * In SITL simulation the serial output from ``gisnav`` is bridged to ``PX4``
+      via TCP on the ``mavlink`` network so the ``mavlink`` name is not completely
+      descriptive of the nature of the network. Communicating over the network
+      is more convenient and potentially more secure in the case of Docker
+      containers than trying to bridge the serial communication between ``px4``
+      and ``gisnav`` e.g. via binding Docker host virtual serial ports
+      (pseudo-ttys) to the containers.
 
 .. mermaid::
 
@@ -42,10 +49,10 @@ Docker container with the hostname ``gisnav-mapserver-1``.
             end
             subgraph middleware ["Middleware Services"]
                 middleware_mavros[mavros]
-                middleware_micro_ros_agent[micro-ros-agent]
                 middleware_gscam[gscam]
             end
         end
+        simulation_px4 -->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
 
         subgraph gis_mavlink ["gis & mavlink"]
             subgraph application ["Application Services"]
@@ -77,10 +84,8 @@ Docker container with the hostname ``gisnav-mapserver-1``.
 
         mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
         simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
-        simulation_px4 -->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
         simulation_px4 -->|5600/udp\nRTP H.264 Video| middleware_gscam
         middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
-        middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
         application_gisnav -->|5432/tcp| gis_postgres
 

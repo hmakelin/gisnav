@@ -92,7 +92,7 @@ Then deploy the onboard services on the Jetson Nano:
 
 You should now have the SITL simulation and QGgroundControl running on your
 offboard development computer, while ``gisnav``, ``mapserver``, ``autoheal``,
-and the autopilot specific middleware (``micro-ros-agent`` and/or ``mavros``)
-run on your Jetson Nano. If you have your network setup correctly, the middleware
-on the Jetson Nano will connect to the simulated autopilot on your development
-computer and receive the needed ROS messages for GISNav to consume.
+and the middleware (``mavros``) run on your Jetson Nano. If you have your network
+setup correctly, the middleware on the Jetson Nano will connect to the simulated
+autopilot on your development computer and receive the needed ROS messages for
+GISNav to consume.

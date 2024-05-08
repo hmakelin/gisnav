@@ -36,4 +36,3 @@ it to match your use case.
     integration/gis_server
     integration/modify_params
     integration/ros_messaging
-    integration/mock_gps

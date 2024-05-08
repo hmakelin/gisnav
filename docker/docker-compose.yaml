@@ -90,16 +90,6 @@ services:
         - homepage.name=MapServer
         - homepage.description=MapServer GIS service
 
-  micro-ros-agent:
-    <<: [*base, *ros, *mavlink-net]
-    build:
-      context: micro-ros-agent
-    command: udp4 -p 8888
-    labels:
-        - homepage.group=Core services
-        - homepage.name=micro-ROS agent
-        - homepage.description=uORB to ROS (PX4) middleware
-
   mavros:
     <<: [*base, *ros, *mavlink-net]
     build:
@@ -112,6 +102,16 @@ services:
         - homepage.group=Core services
         - homepage.name=MAVROS
         - homepage.description=MAVLink to ROS middleware
+
+  micro-ros-agent:
+    <<: [*base, *ros, *mavlink-net]
+    build:
+      context: micro-ros-agent
+    command: udp4 -p 8888
+    labels:
+        - homepage.group=Core services
+        - homepage.name=micro-ROS agent
+        - homepage.description=uORB to ROS (PX4) middleware
 
   qgc:
     <<: [*base, *x11, *mavlink-net]
@@ -132,6 +132,10 @@ services:
   #  duplicates these build arguments. They should be changed together.
   # *x11 anchor is needed for debugging (cv2 visualization of matches) for this
   # service
+  # Socat is used to bridge the output serial port to the PX4 SITL container
+  # over TCP - mapping serial ports to Docker host serial ports would be
+  # a bit more messy. For production deployments the socat command is expected
+  # to be left out.
   gisnav:
     <<: [*base, *x11, *ros, *tty, *nvidia-gpu, *all-net]
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
@@ -147,11 +151,12 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
       - gisnav-volume:/etc/gisnav
-    command: ros2 launch gisnav px4.launch.py
+    command: ros2 launch gisnav default.launch.py protocol:=uorb
+    #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
     depends_on:
       - px4
+      - micro-ros-agent  # depends on this in "production", but in SITL px4 already has this as dep
       - mavros
-      - micro-ros-agent
       - gscam
       - mapserver
       - postgres

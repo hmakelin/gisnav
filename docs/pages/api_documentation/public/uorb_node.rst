@@ -1,6 +1,6 @@
-MockGPSNode
+UORBNode
 ____________________________________________________
-.. automodule:: gisnav.extensions.mock_gps_node
+.. automodule:: gisnav.extensions.uorb_node
    :autosummary:
    :members:
    :undoc-members:

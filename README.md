@@ -61,9 +61,6 @@ You can check if PX4 is receiving the mock GPS position estimates by typing the 
 listener sensor_gps
 ```
 
-If the printed GPS message has a `satellites_used` field value of `255`, your PX4 is receiving the mock GPS node output
-as expected. QGroundControl will most likely show 0 satellites used next to the GPS icon as shown in the demo video.
-
 [5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 
 # Documentation

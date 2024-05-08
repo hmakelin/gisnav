@@ -28,7 +28,8 @@ what you are looking for.
 .. toctree::
     :caption: Extension nodes
 
-    public/mock_gps_node
+    public/uorb_node
+    public/nmea_node
     public/qgis_node
 
 .. toctree::

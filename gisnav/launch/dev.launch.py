@@ -19,20 +19,11 @@ def generate_launch_description():
     ld = LaunchDescription(
         [
             IncludeLaunchDescription(
-                PythonLaunchDescriptionSource([ThisLaunchFileDir(), "/base.launch.py"])
+                PythonLaunchDescriptionSource(
+                    [ThisLaunchFileDir(), "/default.launch.py"]
+                )
             ),
         ]
-    )
-    ld.add_action(
-        Node(
-            package=_PACKAGE_NAME,
-            name="mock_gps_node",
-            namespace=_PACKAGE_NAME,
-            executable="mock_gps_node",
-            parameters=[
-                os.path.join(package_share_dir, "launch/params/mock_gps_node_px4.yaml")
-            ],
-        )
     )
     ld.add_action(
         Node(

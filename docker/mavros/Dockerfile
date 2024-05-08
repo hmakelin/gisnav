@@ -87,7 +87,7 @@ WORKDIR /opt/colcon_ws/src/gisnav
 # Install python dependencies, mainly torch and related CUDA deps
 # Finally, build gisnav
 RUN cd gisnav && \
-    pip install . .[mock_gps_node] .[qgis_node] .[dev] && \
+    pip install . .[nmea_node] .[uorb_node] .[qgis_node] .[dev] && \
     cd /opt/colcon_ws && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \
     source install/setup.bash && \
@@ -99,6 +99,12 @@ RUN chmod +x /entrypoint.sh
 
 # Download LoFTR pretrained weights
 RUN python3 -c "from kornia.feature import LoFTR; LoFTR(pretrained='outdoor')"
+
+# Socat for bridging serial port to PX4 container when simulating
+RUN apt-get update \
+    && apt-get -y install socat \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt clean
 
 ENTRYPOINT ["/entrypoint.sh"]
 

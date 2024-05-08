@@ -1,17 +1,14 @@
-"""This module contains the :class:`.MockGPSNode` :term:`extension` :term:`node`
-that publishes mock GPS (GNSS) messages to autopilot middleware
+"""This module contains the :class:`.UORBNode` :term:`extension` :term:`node`
+that publishes PC4 uORB SensorGps (GNSS) messages to the micro-ros agent middleware
 """
-import json
-import socket
-from datetime import datetime
 from typing import Final, Optional, Tuple
 
 import numpy as np
+import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
 from geometry_msgs.msg import Vector3Stamped
-from gps_time import GPSTime
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -27,30 +24,8 @@ _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
-class MockGPSNode(Node):
+class UORBNode(Node):
     """A node that publishes a mock GPS message to autopilot middleware"""
-
-    ROS_D_USE_SENSOR_GPS: Final = True
-    """Set to ``False`` to use :class:`mavros_msgs.msg.GPSINPUT` message for
-    :term:`ArduPilot`, :class:`px4_msgs.msg.SensorGps` for :term:`PX4` otherwise.
-    """
-
-    ROS_D_UDP_HOST: Final = "127.0.0.1"
-    """MAVProxy GPSInput plugin default host
-
-    .. note::
-        Only used if :attr:`use_sensor_gps` is ``False``
-    """
-
-    ROS_D_UDP_PORT: Final = 25100
-    """MAVProxy GPSInput plugin default port
-
-    .. note::
-        Only used if :attr:`use_sensor_gps` is ``False``
-    """
-
-    ROS_D_PUBLISH_RATE = 1.0
-    """Default mock GPS message publish rate in Hz"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default :term:`DEM` vertical datum"""
@@ -67,16 +42,11 @@ class MockGPSNode(Node):
         """
         super().__init__(*args, **kwargs)
 
-        if self.use_sensor_gps:
-            self._mock_gps_pub = self.create_publisher(
-                SensorGps,
-                ROS_TOPIC_SENSOR_GPS,
-                QoSPresetProfiles.SENSOR_DATA.value,
-            )
-            self._socket = None
-        else:
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self._mock_gps_pub = None
+        self._mock_gps_pub = self.create_publisher(
+            SensorGps,
+            ROS_TOPIC_SENSOR_GPS,
+            QoSPresetProfiles.SENSOR_DATA.value,
+        )
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -93,24 +63,6 @@ class MockGPSNode(Node):
 
         # Subscribe
         self.odometry
-
-    @property
-    @ROS.parameter(ROS_D_USE_SENSOR_GPS, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def use_sensor_gps(self) -> Optional[bool]:
-        """:term:`ROS` parameter flag indicating outgoing mock :term:`GPS` message
-        should be published as :class:`px4_msgs.msg.SensorGps` for :term:`PX4`
-        instead of as :class:`mavros_msgs.msg.GPSINPUT` for :term:`ArduPilot`.
-        """
-
-    @property
-    @ROS.parameter(ROS_D_UDP_HOST, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def udp_host(self) -> Optional[str]:
-        """:term:`ROS` parameter MAVProxy GPSInput plugin host name or IP address"""
-
-    @property
-    @ROS.parameter(ROS_D_UDP_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def udp_port(self) -> Optional[int]:
-        """:term:`ROS` parameter MAVProxy GPSInput plugin port"""
 
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
@@ -181,8 +133,14 @@ class MockGPSNode(Node):
             # TODO: map is not published by GISNav - should use an ENU map frame
             #  published by gisnav instead
             twist = odometry.twist.twist
+
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform = tf_.get_transform(
-                self, "map", "camera_optical", odometry.header.stamp
+                self,
+                "map",
+                "camera_optical",
+                rclpy.time.Time(),  # odometry.header.stamp
             )
 
             # Need to convert linear twist vector to stamped version becase
@@ -202,9 +160,19 @@ class MockGPSNode(Node):
 
             # Heading
             # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
+            # TODO: should be able to use the stamp here or extrapolate? instead
+            #  of getting latest
             transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", odometry.header.stamp
+                self, "map", "earth", rclpy.time.Time()  # odometry.header.stamp
             )
+
+            if transform_earth_to_map is None:
+                self.get_logger().warning(
+                    "Could not determine heading - skpping publishing SensorGps."
+                )
+                # TODO Set yaw to zero and make yaw/heading accuracy
+                #  np.nan in this case?
+                return None
 
             pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
             euler = tf_transformations.euler_from_quaternion(
@@ -301,36 +269,24 @@ class MockGPSNode(Node):
                 vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
             )
 
-            if self.use_sensor_gps:
-                self.sensor_gps(
-                    int(lat * 1e7),
-                    int(lon * 1e7),
-                    alt_ellipsoid,
-                    alt_amsl,
-                    vehicle_yaw_degrees,
-                    h_variance_rad,
-                    vel_n_m_s,
-                    vel_e_m_s,
-                    vel_d_m_s,
-                    cog,
-                    cog_variance_rad,
-                    s_variance_m_s,
-                    timestamp,
-                    eph,
-                    epv,
-                    satellites_visible,
-                )
-            else:
-                self.gps_input(
-                    lat,
-                    lon,
-                    alt_amsl,
-                    vehicle_yaw_degrees,
-                    timestamp,
-                    eph,
-                    epv,
-                    satellites_visible,
-                )
+            self.sensor_gps(
+                int(lat * 1e7),
+                int(lon * 1e7),
+                alt_ellipsoid,
+                alt_amsl,
+                vehicle_yaw_degrees,
+                h_variance_rad,
+                vel_n_m_s,
+                vel_e_m_s,
+                vel_d_m_s,
+                cog,
+                cog_variance_rad,
+                s_variance_m_s,
+                timestamp,
+                eph,
+                epv,
+                satellites_visible,
+            )
 
         _publish_inner(odometry)
 
@@ -396,63 +352,6 @@ class MockGPSNode(Node):
         msg.heading_accuracy = h_variance_rad
 
         return msg
-
-    @narrow_types
-    # @ROS.publish(
-    #    ROS_TOPIC_GPS_INPUT,
-    #    QoSPresetProfiles.SENSOR_DATA.value,
-    # )
-    def gps_input(
-        self,
-        lat: int,
-        lon: int,
-        altitude_amsl: float,
-        yaw_degrees: int,
-        timestamp: int,
-        eph: float,
-        epv: float,
-        satellites_visible: int,
-    ) -> Optional[dict]:  # Optional[GPSINPUT]
-        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
-        is ``False``
-
-        .. note::
-            Does not use :class:`mavros_msgs.msg.GPSINPUT` message over MAVROS,
-            sends a :term:`MAVLink` GPS_INPUT message directly to :term:`ArduPilot`.
-        """
-        gps_time = GPSTime.from_datetime(datetime.utcfromtimestamp(timestamp / 1e6))
-
-        msg = dict(
-            usec=timestamp,
-            gps_id=0,
-            ignore_flags=0,
-            time_week=gps_time.week_number,
-            time_week_ms=int(gps_time.time_of_week * 1e3),
-            fix_type=3,
-            lat=lat,
-            lon=lon,
-            alt=altitude_amsl,
-            horiz_accuracy=eph,
-            vert_accuracy=epv,
-            speed_accuracy=5.0,
-            hdop=0.0,
-            vdop=0.0,
-            vn=0.0,
-            ve=0.0,
-            vd=0.0,
-            satellites_visible=satellites_visible,
-            yaw=yaw_degrees * 100,
-        )
-
-        # TODO: handle None host or port
-        self._socket.sendto(
-            f"{json.dumps(msg)}".encode("utf-8"), (self.udp_host, self.udp_port)
-        )
-
-        return msg
-        # return _gps_input(
-        #    self.vehicle_estimated_geopose, self.vehicle_estimated_altitude
-        # )
 
     @property
     def _device_id(self) -> int:

@@ -5,7 +5,7 @@ LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
 # Update and upgrade packages, then install required packages
 RUN apt-get update && \
     apt-get -y upgrade && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install git python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install git socat python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 
@@ -36,7 +36,7 @@ WORKDIR PX4-Autopilot
 
 # Do not copy Dockerfile so that it can be edited without invalidating this
 # layer
-COPY 6011_typhoon_h480 merge_yaml.py merge_xml.py dds_topics.yaml iris_hitl_ksql_airport.world entrypoint.sh etc .
+COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world entrypoint.sh etc .
 
 # Setup ksql_airport.world for HIL
 # empy must be version 3.3.4, see below commit
@@ -60,6 +60,16 @@ ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
 RUN mkdir -p /etc/mavlink-router && \
     mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
     chmod +x ./entrypoint.sh
+
+# Look for secondary GPS i.e. GISNav (GPS 2)
+# Use first unassigned available serial port, i.e. /dev/ttyS4
+# baudrate 9600 default
+# https://docs.px4.io/v1.14/en/hardware/serial_port_mapping.html#default-px4board
+#RUN echo "gps start -e /dev/ttyS4 -p nmea -d /dev/ttyS4 -b 115200 -g 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
+#    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board \
+#    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
+RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
+    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
 
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport

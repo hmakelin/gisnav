@@ -27,7 +27,6 @@ Install GISNav system dependencies with the following commands:
 
     cd ~/colcon_ws/src
     git clone --branch |vversion| https://github.com/hmakelin/gisnav.git
-    git clone https://github.com/px4/px4_msgs.git
     git clone \
         --branch gimbal-protocol-v2-plugin \
         https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git \
@@ -44,7 +43,7 @@ Install Python dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You must install at least the :term:`core` dependencies. If you know you are not
-e.g. going to use the :class:`.MockGPSNode` :term:`extension`, you can skip
+e.g. going to use the :class:`.NMEANode` :term:`extension`, you can skip
 installing the extended dependencies.
 
 The development dependencies are required for e.g. :ref:`generating documentation
@@ -77,7 +76,7 @@ Install the required and optional Python dependencies with the following command
             :caption: Install GISNav extension Python dependencies
 
             cd ~/colcon_ws/src/gisnav
-            pip3 install ./gisnav[mock_gps_node]
+            pip3 install ./gisnav[nmea_node]
             pip3 install ./gisnav[qgis_node]
 
         You can install the dependencies for any :term:`extension` node
@@ -95,8 +94,8 @@ Build colcon workspace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Build the GISNav package along with other dependencies you have in your colcon
-workspace. If you have already built the other dependencies (such as ``px4_msgs``)
-earlier you may want to skip rebuilding them and build GISNav only to save time:
+workspace. If you have already built the other dependencies earlier you may
+want to skip rebuilding them and build GISNav only to save time:
 
 .. include:: ../_shared/build_colcon_workspace.rst
 

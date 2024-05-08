@@ -120,7 +120,7 @@ setup(
     ],
     tests_require=["pytest"],
     extras_require={
-        "mock_gps_node": ["gps-time"],
+        "nmea_node": ["pynmea2"],
         "qgis_node": ["psycopg2"],
         "dev": [
             "aiohttp",
@@ -148,7 +148,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "mock_gps_node = gisnav:run_mock_gps_node",
+            "nmea_node = gisnav:run_nmea_node",
+            "uorb_node = gisnav:run_uorb_node",
             "gis_node = gisnav:run_gis_node",
             "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",

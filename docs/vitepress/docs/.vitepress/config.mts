@@ -4,8 +4,8 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 // https://vitepress.dev/reference/site-config
 //export default defineConfig({
 export default withMermaid({
-  title: "GISNav",
-  description: "GISNav documentation",
+  title: 'GISNav',
+  description: 'GISNav documentation',
   lastUpdated: true,
   cleanUrls: true,
   metaChunk: true,
@@ -80,13 +80,6 @@ export default withMermaid({
           ]
         },
         {
-          text: 'Static API',
-          items: [
-            { text: 'Constants', link: '/_build/sphinx/markdown/public/constants' },
-            { text: 'Entry points', link: '/_build/sphinx/markdown/public/gisnav' },
-          ]
-        },
-        {
           text: 'Testing',
           items: [
             { text: 'Unit tests', link: '/_build/sphinx/markdown/test/unit' },
@@ -97,7 +90,13 @@ export default withMermaid({
           text: 'Private API',
           items: [
             { text: 'Decorators', link: '/_build/sphinx/markdown/private/decorators' },
-            { text: 'Transformations', link: '/_build/sphinx/markdown/test/transformations' },
+            { text: 'Transformations', link: '/_build/sphinx/markdown/private/transformations' },
+          ]
+        },
+        {
+          items: [
+            { text: 'Constants', link: '/_build/sphinx/markdown/public/constants' },
+            { text: 'Entry points', link: '/_build/sphinx/markdown/public/gisnav' },
           ]
         },
       ]

@@ -29,8 +29,9 @@ graph TB
     end
 
     MAVROS -->|"sensor_msgs/NavSatFix"| BBoxNode
+    MAVROS -->|"geometry_msgs/PoseStamped"| BBoxNode
     MAVROS -->|"mavros_msgs/GimbalDeviceAttitudeStatus"| BBoxNode
-    gscam ---->|"sensor_msgs/Image"| StereoNode
+    gscam ---->|"sensor_msgs/Image"| BBoxNode
 
     subgraph core["GISNav core nodes"]
         BBoxNode -->|"geographic_msgs/BoundingBox"| GISNode

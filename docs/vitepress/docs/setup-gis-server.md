@@ -1,19 +1,25 @@
 # Setup GIS Server
 
-GISNav requires access to a GIS server that serves high-resolution orthoimagery for the approximate global position of the vehicle. The orthoimagery consisting of orthophotos and optional DEM (Digital Elevation Model) rasters are requested from a WMS (Web Map Service) which allows querying rasters by an arbitrary bounding box, and DEM elevation values by an arbitrary global position via its GetMap requests.
+GISNav uses an onboard GIS server as a source for high-resolution orthoimagery and digital elevation models (DEM) for the approximate global position of the vehicle. This page describes how to setup a self-hosted GIS server. If you are [running the mock GPS demo](/README), you can
+simply use the provided `mapserver` [Docker Compose service](/deploy-with-docker-compose).
 
-The DEM is optionally used to input ground elevation z-coordinates to the PnP (Perspective-n-Point) problem solved by GISNav's pose estimation algorithm in `PoseNode`. If a DEM is not available, GISNav simply assumes a planar ground elevation, which may be sufficient when flying at higher altitudes where an isometric perspective does not significantly distort the perceived image.
+## Overview
+GISnav requests rasters from a WMS service which allows querying by an arbitrary bounding box (instead of by pre-computed tile).
+
+The DEM is optionally used to input ground elevation z-coordinates to the Perspective-n-Point (PnP) problem solved by [PoseNode](/_build/sphinx/markdown/public/pose_node). If a DEM is not available, GISNav assumes a planar ground elevation, which may be sufficient when flying at higher altitudes where an isometric perspective does not significantly distort the perceived image.
 
 ## Example Setups
 
-You are encouraged to self-host an onboard GIS server with public domain orthoimagery because in a realistic scenario, the GIS should be embedded onboard and not depend on an internet connection. For development, it may sometimes be more convenient to proxy an existing commercial tile-based endpoint.
+You should probably self-host an onboard GIS server with public domain orthoimagery because in a realistic scenario, the GIS should be embedded onboard and not depend on an internet connection. For development, it may sometimes be more convenient to proxy an existing commercial tile-based endpoint.
+
+Because the [mock GPS demo](/README) uses NAIP imagery, in this section we will briefly describe how to obtain NAIP data in case you want to build your own GIS service.
 
 ::: info Tile-based endpoints
 Commercial web-based map services are often [tile-based](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) because it is more efficient to serve pre-rendered tiles than to render unique rasters for each individual requested bounding box. You will need a WMS proxy if you decide to go with a tile-based endpoint.
 
 :::
 
-::: warning: Warning: Caching of map tiles
+::: warning Warning: Caching of map tiles
 Many commercial services explicitly prohibit the caching of map tiles in their Terms of Use (ToU), especially if their business model is based on billing API requests. This is mainly to prevent disintermediation in case their tiles are redistributed to a large number of end users.
 
 While caching tiles onboard your own drone is likely not the kind of misuse targeted by such clauses, you should still make sure you understand the ToU of the service you are using and that it fits your planned use case.
@@ -105,12 +111,18 @@ If you have a drone, you can also use readily available [photogrammetry](https:/
 
 :::
 
+::: info
+The combined layers should cover the flight area of the vehicle at high resolution. Typically this list would have just one layer for highresolution aerial or satellite imagery.
+
+:::
+
+
 ## Rasterizing Vector Data
 
-In some cases, useful map data is not directly provided in raster but in vector format. The GISNav `mapserver` service uses vector-format elevation data from [OSM Buildings](https://osmbuildings.org/) to determine building heights in the simulation area to improve the accuracy of pose estimates especially at lower flight altitudes where the perceived planarity of the terrain is lower. For an example of how the vector data is rasterized using GDAL, see this [old mapserver service Dockerfile](https://github.com/hmakelin/gisnav/blob/v0.65.0/docker/mapserver/Dockerfile).
+In some cases, useful map data is not directly provided in raster but in vector format. The GISNav `mapserver` service uses vector-format elevation data from [OSM Buildings](https://osmbuildings.org/) to determine building heights in the simulation area to improve the accuracy of pose estimates especially at lower flight altitudes where the perceived planarity of the terrain is lower. For an example of how the vector data is rasterized using GDAL, see this [old mapserver service Dockerfile](https://github.com/hmakelin/gisnav/blob/v0.65.0/docker/mapserver/Dockerfile#L43-L47).
 
 ::: info Demo quirks
-The GISNav SITL demo simulation does not actually benefit from the building height data because the simulated KSQL Airport model buildings are all featureless black blocks. See [SITL simulation quirks](#sitl-simulation-quirks) for more information.
+The GISNav SITL demo simulation does not actually benefit from the building height data because the KSQL Airport world buildings are all featureless black blocks, meaning it is unlikely any keypoints will be detected in their location.
 
 :::
 
@@ -120,25 +132,21 @@ The KSQL Gazebo world buildings in the SITL simulation demo are featureless grey
 
 ![LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)](../../../_static/img/gisnav_sitl_featureless_buildings.jpg)
 
-## Managing Onboard Map Rasters
+## Managing onboard maps
 
-A shared volume is used to provide a way for external file manager services to add and delete maps onboard. The MapServer static mapfile points to a VRT file which is automatically regenerated whenever a change is detected on the shared volume which contains the source raster files.
+A captive [admin web portal](/admin-portal) and a FileGator server are available for uploading maps without need for any commandline or coding knowledge.
 
-A sample FileGator-based `fileserver` service is defined in the `docker/docker-compose.yaml` for managing maps on the shared volume. The application is not necessary - e.g., `scp` could also be used instead.
+::: info Shared maps volume
+A Docker shared volume is used to provide a way for external file managers like FileGatore to add and delete maps onboard. The MapServer static mapfile points to a VRT file which is automatically regenerated whenever a change is detected on the shared volume which contains the source raster files.
 
-```mermaid
-graph TB
-    subgraph mapserver
-        note1[inotify automatically extracts GDAL supported
-formats and regenerates VRT file to which
-the default mapfile points]
-        subgraph SharedVolume[Shared volume]
-            /etc/mapserver/maps/imagery
-            /etc/mapserver/maps/dem
-        end
-        note2[mapfile and VRT file not on shared volume.
-Only external user managed map rasters.]
-    end
-    fileserver[External file manager] -->|add/delete| SharedVolume
-    GDAL[GDAL supported raster formats] -->|.zip, .jp2, .tif, .tiff, .ecw, etc.| SharedVolume
+See the [system architecture page](/system-architecture) for more information.
+:::
+
+Simply drop rasters in any GDAL supported formats into the map folder and the GIS server will automatically update itself.
+
+You can use the provided QGIS service to check whether the maps are there:
+
+```bash
+cd ~/colcon_ws/src/gisnav/docker
+docker compose -p gisnav up qgis
 ```

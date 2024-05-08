@@ -17,7 +17,7 @@ class TestTopographyCase(unittest.TestCase):
         "stereo_node",
         "bbox_node",
         "pose_node",
-        "nmea_node",
+        "uorb_node",
         "test_node",
     )
     """Names of nodes that should be found when running the launch configuration
@@ -31,6 +31,7 @@ class TestTopographyCase(unittest.TestCase):
     EXPECTED_TOPICS = (
         "/camera/camera_info",
         "/camera/image_raw",
+        "/fmu/in/sensor_gps",
         "/gisnav/bbox_node/fov/bounding_box",
         "/gisnav/gis_node/orthoimage",
         "/gisnav/stereo_node/pose_image",
@@ -50,6 +51,7 @@ class TestTopographyCase(unittest.TestCase):
     EXPECTED_TYPES = (
         "sensor_msgs/msg/CameraInfo",
         "sensor_msgs/msg/Image",
+        "px4_msgs/msg/SensorGps",
         "geographic_msgs/msg/BoundingBox",
         "gisnav_msgs/msg/OrthoImage",
         "gisnav_msgs/msg/OrthoStereoImage",

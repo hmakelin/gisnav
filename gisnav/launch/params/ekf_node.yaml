@@ -29,12 +29,13 @@ robot_localization:
       # Fuse absolute pose estimated from map rasters
       pose0: "/gisnav/pose_node/pose"
       pose0_config: [true, true, true,     # Position XYZ
-                     true, true, true,     # Orientation (roll, pitch, yaw)
+                     false, false, false, #true, true, true,     # Orientation (roll, pitch, yaw)
                      false, false, false,  # Velocity XYZ
                      false, false, false,  # Angular rates XYZ
                      false, false, false]  # Accelerations XYZ
 
       # Fuse smooth relative pose estimated via VO differentially as velocity
+      # - better than a lagging velocity from pose0
       #pose1: "/gisnav/pose_node/vo/pose"
       #pose1_differential: true
       #pose1_config: [true, true, true,     # Position XYZ
@@ -43,13 +44,13 @@ robot_localization:
       #               false, false, false,  # Angular rates XYZ
       #               false, false, false]  # Accelerations XYZ
 
-      #pose1: "/gisnav/pose_node/vo/pose"
-      #pose1_differential: true
-      #pose1_config: [false, false, false,  # Position XYZ
-      #               false, false, false,  # Orientation (roll, pitch, yaw)
-      #               true, true, true,     # Velocity XYZ
-      #               true, true, true,     # Angular rates XYZ
-      #               false, false, false]  # Accelerations XYZ
+      pose1: "/gisnav/pose_node/vo/pose"
+      pose1_differential: true
+      pose1_config: [false, false, false,  # Position XYZ
+                     false, false, false,  # Orientation (roll, pitch, yaw)
+                     true, true, true,     # Velocity XYZ
+                     true, true, true,     # Angular rates XYZ
+                     false, false, false]  # Accelerations XYZ
 
       #debug: true
       #debug_out_file: "/home/hmakelin/robot_localization_debug.txt"

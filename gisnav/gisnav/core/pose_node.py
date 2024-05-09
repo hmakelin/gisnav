@@ -8,7 +8,7 @@ the camera (visual odometry for smooth relative position).
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting :term:`PnP` problem.
 """
-from typing import Optional, Tuple, Union, cast
+from typing import Final, Optional, Tuple, Union, cast
 
 import cv2
 import numpy as np
@@ -23,6 +23,7 @@ from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
+from scipy.interpolate import interp1d
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
 
 from gisnav_msgs.msg import (  # type: ignore[attr-defined]
@@ -73,6 +74,39 @@ class PoseNode(Node):
 
     MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
+
+    class ScalingBuffer:
+        """Maintains timestamped query frame to world frame scaling in a sliding windown
+        buffer so that shallow matching (VO) pose can be scaled to meters using
+        scaling information obtained from deep matching
+        """
+
+        _WINDOW_LENGTH: Final = 100
+
+        def __init__(self):
+            self._scaling_arr: np.ndarray = np.ndarray([])
+            self._timestamp_arr: np.ndarray = np.ndarray([])
+
+        def append(self, timestamp_usec: int, scaling: float) -> None:
+            self._scaling_arr = np.append(self._scaling_arr, scaling)
+            self._timestamp_arr = np.append(self._timestamp_arr, timestamp_usec)
+
+            if self._scaling_arr.size > self._WINDOW_LENGTH:
+                self._scaling_arr[-self._WINDOW_LENGTH :]
+            if self._timestamp_arr.size > self._WINDOW_LENGTH:
+                self._timestamp_arr[-self._WINDOW_LENGTH :]
+
+        def interpolate(self, timestamp_usec: int) -> Optional[float]:
+            if self._scaling_arr.size < 2:
+                return None
+
+            interp_function = interp1d(
+                self._timestamp_arr,
+                self._scaling_arr,
+                kind="linear",
+                fill_value="extrapolate",
+            )
+            return interp_function(timestamp_usec)
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -126,6 +160,8 @@ class PoseNode(Node):
             self.get_logger().info("Waiting for EKF node set_pose service...")
         self._set_pose_request = SetPose.Request()
         self._pose_sent = False
+
+        self._scaling_buffer = self.ScalingBuffer()
 
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
@@ -202,6 +238,7 @@ class PoseNode(Node):
         r, t = pose
 
         r_inv = r.T
+
         camera_optical_position_in_world = -r_inv @ t
 
         tf_.visualize_camera_position(
@@ -212,15 +249,38 @@ class PoseNode(Node):
             f"{'shallow' if shallow_inference else 'deep'} inference",
         )
 
+        if isinstance(msg, MonocularStereoImage):
+            scaling = self._scaling_buffer.interpolate(
+                tf_.usec_from_header(msg.query.header)
+            )
+            if scaling is not None:
+                camera_optical_position_in_world = (
+                    camera_optical_position_in_world * scaling
+                )
+            else:
+                self.get_logger().debug(
+                    "No scaling availble for VO - will not return VO pose"
+                )
+                return None
+
         pose = tf_.create_pose_msg(
             msg.query.header.stamp,
-            cast(FrameID, "earth"),
+            cast(FrameID, "earth")
+            if isinstance(msg, OrthoStereoImage)
+            else cast(FrameID, "camera_optical"),
             r_inv,
             camera_optical_position_in_world,
         )
 
         if isinstance(msg, OrthoStereoImage):
             affine = tf_.proj_to_affine(msg.crs.data)
+
+            # use z scaling value
+            usec = tf_.usec_from_header(msg.query.header)
+            scaling = np.abs(affine[2, 2])
+            if usec is not None and scaling is not None:
+                self._scaling_buffer.append(usec, scaling)
+
             t_wgs84 = affine @ np.append(camera_optical_position_in_world, 1)
             x, y, z = tf_.wgs84_to_ecef(*t_wgs84.tolist())
             pose.pose.position.x = x

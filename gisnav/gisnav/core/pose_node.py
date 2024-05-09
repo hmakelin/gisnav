@@ -47,8 +47,8 @@ from ..constants import (
 # TODO: make error model and generate covariance matrix dynamically
 # Create dummy covariance matrix
 _covariance_matrix = np.zeros((6, 6))
-np.fill_diagonal(_covariance_matrix, 36)  # 3 meter SD = 9 variance
-_covariance_matrix[3, 3] = np.radians(15**2)  # angle error should be set quite small
+np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
+_covariance_matrix[3, 3] = np.radians(5**2)  # angle error should be set quite small
 _covariance_matrix[4, 4] = _covariance_matrix[3, 3]
 _covariance_matrix[5, 5] = _covariance_matrix[3, 3]
 _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
@@ -71,7 +71,7 @@ class PoseNode(Node):
     deep matching
     """
 
-    MIN_MATCHES = 12
+    MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     def __init__(self, *args, **kwargs):
@@ -358,8 +358,8 @@ class PoseNode(Node):
             keypoints
         """
         if not shallow_inference:
-            qry_tensor = torch.Tensor(qry[None, None]).to(self._device)  # / 255.0
-            ref_tensor = torch.Tensor(ref[None, None]).to(self._device)  # / 255.0
+            qry_tensor = torch.Tensor(qry[None, None]).to(self._device) / 255.0
+            ref_tensor = torch.Tensor(ref[None, None]).to(self._device) / 255.0
             qry_tensor = qry_tensor.expand(-1, 3, -1, -1)
             ref_tensor = ref_tensor.expand(-1, 3, -1, -1)
 
@@ -367,7 +367,7 @@ class PoseNode(Node):
                 input = torch.cat([qry_tensor, ref_tensor], dim=0)
                 # limit number of features to run faster, None means no limit i.e.
                 # slow but accurate
-                max_keypoints = 2048  # None
+                max_keypoints = 1024  # 4096  # None
                 feat_qry, feat_ref = self._extractor(
                     input, max_keypoints, pad_if_not_divisible=True
                 )

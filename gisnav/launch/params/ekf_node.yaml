@@ -13,14 +13,17 @@ robot_localization:
       # need predict_to_current_time if required output Hz is higher than input
       #predict_to_current_time: true
       sensor_timeout: 10.0
-      pose0_queue_size: 20
-      pose0_rejection_threshold: 3.0
+      #pose0_queue_size: 20
+      pose0_rejection_threshold: 2.0
+
+      dynamic_process_noise_covariance: True
+      transform_timeout: 0.200
 
       use_sim_time: false
       two_d_mode: false
 
-      smooth_lagged_data: true
-      history_length: 10.0
+      #smooth_lagged_data: true
+      #history_length: 10.0
       #print_diagnostics: true
 
       # Fuse absolute pose estimated from map rasters

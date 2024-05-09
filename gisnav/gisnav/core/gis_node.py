@@ -372,7 +372,7 @@ class GISNode(Node):
 
     @narrow_types
     def _bounding_box_with_padding_for_latlon(
-        self, latitude: float, longitude: float, padding: float = 100.0
+        self, latitude: float, longitude: float, padding: float = 600.0
     ):
         """Adds 100 meters of padding to coordinates on both sides"""
         meters_in_degree = 111045.0  # at 0 latitude

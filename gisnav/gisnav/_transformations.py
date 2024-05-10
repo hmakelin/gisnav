@@ -443,12 +443,10 @@ def poses_to_twist(
         pose2.pose.pose.orientation.z,
         pose2.pose.pose.orientation.w,
     ]
-    r1 = tf_transformations.quaternion_matrix(q1)
-    r2 = tf_transformations.quaternion_matrix(q2)
-    r_diff = r2 * r1.T
 
-    # TODO do not convert to matrices above, just use quaternions
-    q_diff = tf_transformations.quaternion_from_matrix(r_diff)
+    q_diff = tf_transformations.quaternion_multiply(
+        q2, tf_transformations.quaternion_inverse(q1)
+    )
 
     # Converting quaternion to rotation vector (axis-angle)
     angle = 2 * np.arccos(q_diff[3])  # Compute the rotation angle

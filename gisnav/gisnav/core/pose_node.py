@@ -336,9 +336,10 @@ class PoseNode(Node):
         x, y, z = (
             scaling * 320.0,
             scaling * 180.0,
-            scaling * 205.0,
+            scaling * -205.0,
         )  # todo do not hard code
         previous_pose = tf_.create_identity_pose_stamped(x, y, z)
+        previous_pose.header = msg.reference.header
         current_pose = self._get_pose(msg)
         if current_pose is not None:
             return tf_.poses_to_twist(current_pose, previous_pose)

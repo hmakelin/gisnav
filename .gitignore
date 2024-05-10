@@ -12,10 +12,9 @@ build/
 install/
 log/
 
-# Built Sphinx documentation
+# Built documentation
 docs/_build/
-docs/sphinx/_build/
-docs/vitepress/docs/_build/
+docs/vitepress/_build/
 
 # coverage.py files
 .coverage*
@@ -43,4 +42,4 @@ debian
 node_modules
 
 # vitepress
-docs/vitepress/docs/.vitepress/cache/
+docs/docs/.vitepress/cache/

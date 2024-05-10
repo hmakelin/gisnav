@@ -115,7 +115,7 @@ setup(
         # "shapely>=1.8.2",
         "OWSLib>=0.25.0",
         "torch>=2.1.0",
-        "kornia==0.6.10",
+        "kornia==0.7.2",  # 0.7.2 for LightGlue and DISK
         "transforms3d",  # tf_transformations needs this
     ],
     tests_require=["pytest"],

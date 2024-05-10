@@ -19,7 +19,7 @@ import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
-from kornia.feature import LoFTR
+from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
@@ -47,8 +47,8 @@ from ..constants import (
 # TODO: make error model and generate covariance matrix dynamically
 # Create dummy covariance matrix
 _covariance_matrix = np.zeros((6, 6))
-np.fill_diagonal(_covariance_matrix, 36)  # 3 meter SD = 9 variance
-_covariance_matrix[3, 3] = np.radians(15**2)  # angle error should be set quite small
+np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
+_covariance_matrix[3, 3] = np.radians(5**2)  # angle error should be set quite small
 _covariance_matrix[4, 4] = _covariance_matrix[3, 3]
 _covariance_matrix[5, 5] = _covariance_matrix[3, 3]
 _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
@@ -66,7 +66,7 @@ class PoseNode(Node):
         Stricter threshold for shallow matching because mistakes accumulate in VO
     """
 
-    CONFIDENCE_THRESHOLD_DEEP_MATCH = 0.7
+    CONFIDENCE_THRESHOLD_DEEP_MATCH = 0.8
     """Confidence threshold for filtering out bad keypoint matches for
     deep matching
     """
@@ -84,8 +84,19 @@ class PoseNode(Node):
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Initialize DL model for map matching (noisy global position, no drift)
-        self._model = LoFTR(pretrained="outdoor")
-        self._model.to(self._device)
+        self._matcher = (
+            LightGlueMatcher(
+                "disk",
+                params={
+                    "filter_threshold": self.CONFIDENCE_THRESHOLD_DEEP_MATCH,
+                    "depth_confidence": -1,
+                    "width_confidence": -1,
+                },
+            )
+            .to(self._device)
+            .eval()
+        )
+        self._extractor = DISK.from_pretrained("depth").to(self._device)
 
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
@@ -193,18 +204,16 @@ class PoseNode(Node):
         r_inv = r.T
         camera_optical_position_in_world = -r_inv @ t
 
-        # tf_.visualize_camera_position(
-        #    ref.copy(),
-        #    camera_optical_position_in_world,
-        #    f"Camera {'principal point' if shallow_inference else 'position'} "
-        #    f"in {'previous' if shallow_inference else 'world'} frame, "
-        #    f"{'shallow' if shallow_inference else 'deep'} inference",
-        # )
-
-        header = msg.query.header
+        tf_.visualize_camera_position(
+            ref.copy(),
+            camera_optical_position_in_world,
+            f"Camera {'principal point' if shallow_inference else 'position'} "
+            f"in {'previous' if shallow_inference else 'world'} frame, "
+            f"{'shallow' if shallow_inference else 'deep'} inference",
+        )
 
         pose = tf_.create_pose_msg(
-            header.stamp,
+            msg.query.header.stamp,
             cast(FrameID, "earth"),
             r_inv,
             camera_optical_position_in_world,
@@ -348,24 +357,37 @@ class PoseNode(Node):
         :return: Tuple of matched query image keypoints, and matched reference image
             keypoints
         """
-        if not shallow_inference:  #
-            if torch.cuda.is_available():
-                qry_tensor = torch.Tensor(qry[None, None]).cuda() / 255.0
-                ref_tensor = torch.Tensor(ref[None, None]).cuda() / 255.0
-            else:
-                self.get_logger().warning("CUDA not available - using CPU.")
-                qry_tensor = torch.Tensor(qry[None, None]) / 255.0
-                ref_tensor = torch.Tensor(ref[None, None]) / 255.0
+        if not shallow_inference:
+            qry_tensor = torch.Tensor(qry[None, None]).to(self._device) / 255.0
+            ref_tensor = torch.Tensor(ref[None, None]).to(self._device) / 255.0
+            qry_tensor = qry_tensor.expand(-1, 3, -1, -1)
+            ref_tensor = ref_tensor.expand(-1, 3, -1, -1)
 
-            with torch.no_grad():
-                results = self._model({"image0": qry_tensor, "image1": ref_tensor})
+            with torch.inference_mode():
+                input = torch.cat([qry_tensor, ref_tensor], dim=0)
+                # limit number of features to run faster, None means no limit i.e.
+                # slow but accurate
+                max_keypoints = 1024  # 4096  # None
+                feat_qry, feat_ref = self._extractor(
+                    input, max_keypoints, pad_if_not_divisible=True
+                )
+                kp_qry, desc_qry = feat_qry.keypoints, feat_qry.descriptors
+                kp_ref, desc_ref = feat_ref.keypoints, feat_ref.descriptors
+                lafs_qry = laf_from_center_scale_ori(
+                    kp_qry[None], torch.ones(1, len(kp_qry), 1, 1, device=self._device)
+                )
+                lafs_ref = laf_from_center_scale_ori(
+                    kp_ref[None], torch.ones(1, len(kp_ref), 1, 1, device=self._device)
+                )
+                dists, match_indices = self._matcher(
+                    desc_qry, desc_ref, lafs_qry, lafs_ref
+                )
 
-            conf = results["confidence"].cpu().numpy()
-            good = conf > self.CONFIDENCE_THRESHOLD_DEEP_MATCH
-            mkp_qry = results["keypoints0"].cpu().numpy()[good, :]
-            mkp_ref = results["keypoints1"].cpu().numpy()[good, :]
+            mkp_qry = kp_qry[match_indices[:, 0]].cpu().numpy()
+            mkp_ref = kp_ref[match_indices[:, 1]].cpu().numpy()
 
             return mkp_qry, mkp_ref
+
         else:
             # find the keypoints and descriptors with ORB
             kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)

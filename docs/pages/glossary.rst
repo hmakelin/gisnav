@@ -249,8 +249,8 @@ correct alternative should be easily inferred from the context they are used in.
             navigation filter does not use EKF.
 
     Network
-        A neural network (a machine learning :term:`model`), such as SuperGlue and
-        LoFTR
+        A neural network (a machine learning :term:`model`), such as
+        :term:`LightGlue`
 
     Node
         A :term:`ROS` node.
@@ -724,6 +724,12 @@ relate to external interfaces.
     JupyterLab
     Jupyter notebook
         A web based :term:`IDE`: `jupyter.org <https://jupyter.org/>`_
+
+    LightGlue
+        A keypoint matching model: `github.com/cvg/LightGlue <https://github.com/cvg/LightGlue>`_
+
+    LoFTR
+        A keypoint matching model that GISNav used before switching over to :term:`LightGlue`: `zju3dv.github.io/loftr <https://zju3dv.github.io/loftr/>`_
 
     Make
         GNU Make, a build automation tool: `gnu.org/software/make/ <https://www.gnu.org/software/make/>`_

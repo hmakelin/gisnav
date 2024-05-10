@@ -16,8 +16,8 @@ install/
 log/
 
 # Built documentation
-docs/_build/
-docs/vitepress/_build/
+docs/vitepress/docs/.vitepress/dist
+docs/vitepress/docs/.vitepress/build
 
 # coverage.py files
 .coverage*

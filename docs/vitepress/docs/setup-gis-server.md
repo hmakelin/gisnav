@@ -6,7 +6,7 @@ simply use the provided `mapserver` [Docker Compose service](/deploy-with-docker
 ## Overview
 GISnav requests rasters from a WMS service which allows querying by an arbitrary bounding box (instead of by pre-computed tile).
 
-The DEM is optionally used to input ground elevation z-coordinates to the Perspective-n-Point (PnP) problem solved by [PoseNode](/_build/sphinx/markdown/public/pose_node). If a DEM is not available, GISNav assumes a planar ground elevation, which may be sufficient when flying at higher altitudes where an isometric perspective does not significantly distort the perceived image.
+The DEM is optionally used to input ground elevation z-coordinates to the Perspective-n-Point (PnP) problem solved by `PoseNode`. If a DEM is not available, GISNav assumes a planar ground elevation, which may be sufficient when flying at higher altitudes where an isometric perspective does not significantly distort the perceived image.
 
 ## Example Setups
 
@@ -128,9 +128,7 @@ The GISNav SITL demo simulation does not actually benefit from the building heig
 
 ## SITL Simulation Quirks with DEMs
 
-The KSQL Gazebo world buildings in the SITL simulation demo are featureless grey blocks, so any pose estimation model will most likely not use them for matching. This means any building elevation data (see [Rasterizing vector data](#rasterizing-vector-data)) will not technically be used to improve pose estimates in the SITL simulation. The below figure illustrates how LoFTR finds keypoints at an even density throughout the simulated vehicle's field of view except on the featureless buildings.
-
-![LoFTR does not find keypoints on featureless buildings or terrain (SITL simulation)](../../../_static/img/gisnav_sitl_featureless_buildings.jpg)
+The KSQL Gazebo world buildings in the SITL simulation demo are featureless grey blocks, so any pose estimation model will most likely not use them for matching. This means any building elevation data (see [Rasterizing vector data](#rasterizing-vector-data)) will not technically be used to improve pose estimates in the SITL simulation.
 
 ## Managing onboard maps
 

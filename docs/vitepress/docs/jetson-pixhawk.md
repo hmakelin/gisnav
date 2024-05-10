@@ -81,7 +81,7 @@ graph TB
 
 #### Picture
 
-![NXP FMUK66-E Setup](/gisnav_hil_fmuk66-e_setup.jpg)
+![NXP FMUK66-E Setup](/public/gisnav_hil_fmuk66-e_setup.jpg)
 
 * NXP FMUK66-E (FMU) board connected to laptop via micro-USB and to Jetson Nano via TELEM1.
 * FMU draws power from laptop via micro-USB, and Jetson Nano from wall socket via dedicated micro-USB DC adapter, so no LiPo batteries needed.

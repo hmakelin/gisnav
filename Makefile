@@ -8,5 +8,9 @@ include docker/Makefile
 
 .PHONY: docs
 docs:
-	@$(MAKE) -C docs html
-	@cd docs/_build/html && touch .nojekyll  # for GitHub Pages
+	@cd docs/vitepress && npm run docs:build
+	@cd docs/.vitepress/dist && touch .nojekyll  # for GitHub Pages
+
+.PHONY: docs-preview
+docs-preview:
+	@cd docs/vitepress && npm run docs:preview

@@ -130,4 +130,4 @@ pip3 install ./gisnav[dev]
 
 <!--@include: ./shared/build-colcon-workspace.md-->
 
-Once GISNav is installed, you can try [deploying the development services](/deploy-development-services).
+Once GISNav is installed, you can try [deploying the development services](/deploy-for-development).

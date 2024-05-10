@@ -8,7 +8,7 @@ This page provides an overview of both the topography of the GISNav ROS 2 packag
 
 ## ROS topography
 
-The core ROS topography diagram below depicts how ROS messages flow through GISNav. The [API reference](/api-reference) has more detailed information on the purpose and design of each ROS node.
+The core ROS topography diagram below depicts how ROS messages flow through GISNav. The API reference(under construction) has more detailed information on the purpose and design of each ROS node.
 
 ::: info `MonocularStereoImage` currently disabled
 This diagram depicts partially implemented but disabled visual odometry (VO) functionality (`MonocularStereoImage`).

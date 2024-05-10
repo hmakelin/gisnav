@@ -80,6 +80,19 @@ ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
 ROS_TOPIC_IMAGE: Final = "/camera/image_raw"
 """Name of ROS topic for :class:`sensor_msgs.msg.Image` messages"""
 
+ROS_TOPIC_MAVROS_GLOBAL_POSITION = "/mavros/global_position/global"
+"""MAVROS topic for vehicle :class:`.NavSatFix`"""
+
+ROS_TOPIC_MAVROS_LOCAL_POSITION = "/mavros/local_position/pose"
+"""MAVROS topic for vehicle :class:`.PoseStamped` in EKF local frame"""
+
+ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS = (
+    "/mavros/gimbal_control/device/attitude_status"
+)
+"""MAVROS topic for vehicle :class:`.GimbalDeviceAttitudeStatus` message
+(MAVLink Gimbal protocl v2)
+"""
+
 DELAY_DEFAULT_MS: Final = 2000
 """Max acceptable delay for things like global position"""
 

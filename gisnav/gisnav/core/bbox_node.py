@@ -1,34 +1,7 @@
-"""This module contains :class:`.BBoxNode`, a :term:`ROS` node for computing
-and publishing a :term:`bounding box` of the :term:`camera's <camera>`
-ground-projected :term:`field of view <FOV>`. This bounding box is used by
-:class:`.GISNode` to retrieve orthoimagery for the :term:`vehicle's <vehicle>`
-approximate :term:`global position`.
-
-The below graph shows :class:`.BBoxNode` in the computational graph.
-
-.. mermaid::
-    :caption: :class:`.BBoxNode` computational graph
-
-    graph LR
-
-        subgraph MAVROS
-            navsatfix[mavros/global_position/global]
-            vehicle_pose[mavros/local_position/pose]
-            gimbal_device_attitude_status[mavros/global_position/global]
-        end
-
-        subgraph gscam
-            camera_info[camera/camera_info]
-        end
-
-        subgraph BBoxNode
-            bounding_box[gisnav/bbox_node/fov/bounding_box]
-        end
-
-        navsatfix -->|sensor_msgs/NavSatFix| BBoxNode
-        vehicle_pose -->|geometry_msgs/PoseStamped| BBoxNode
-        camera_info -->|sensor_msgs/CameraInfo| BBoxNode
-        bounding_box -->|geographic_msgs/BoundingBox| GISNode:::hidden.
+"""This module contains :class:`.BBoxNode`, a ROS node that computes and
+publishes a bounding box of the camera's ground-projected field of view. The
+bounding box is used by :class:`.GISNode` to retrieve orthoimagery for the
+vehicle's approximate global position.
 """
 from typing import Final, Optional
 
@@ -49,19 +22,26 @@ from tf2_ros.transform_broadcaster import TransformBroadcaster
 from .. import _transformations as messaging
 from .._decorators import ROS, narrow_types
 from ..constants import (
-    DELAY_DEFAULT_MS,
     ROS_TOPIC_CAMERA_INFO,
+    ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS,
+    ROS_TOPIC_MAVROS_GLOBAL_POSITION,
+    ROS_TOPIC_MAVROS_LOCAL_POSITION,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
     FrameID,
 )
 
 
 class BBoxNode(Node):
-    """Publishes :class:`.BoundingBox` of the :term:`camera's <camera>`
-    ground-projected :term:`field of view <FOV>`"""
+    """Publishes a :class:`.BoundingBox` of the camera's ground-projected FOV
+
+    > [!IMPORTANT] MAVLink Gimbal Protocol v2
+    > If the MAVLink gimbal protocol v2 :class:`.GimbalDeviceAttitudeStatus` message is
+    > available, only the ``flags`` value of 12 i.e. bit mask 1100 (horizon-locked
+    > pitch and roll, floating yaw) is supported.
+    """
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
-    """A read only ROS parameter descriptor"""
+    """A read-only ROS parameter descriptor"""
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -85,29 +65,20 @@ class BBoxNode(Node):
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
-        """Callback for the :term:`global position` message from the
-        :term:`navigation filter`
-        """
+        """Callback for the global position message from the EKF"""
         self.fov_bounding_box
 
     @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
-        "/mavros/global_position/global",
+        ROS_TOPIC_MAVROS_GLOBAL_POSITION,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_nav_sat_fix_cb,
     )
     def nav_sat_fix(self) -> Optional[NavSatFix]:
-        """Vehicle GPS fix, or None if unknown or too old"""
+        """Vehicle GNSS fix, or None if unknown"""
 
     def _vehicle_pose_cb(self, msg: PoseStamped) -> None:
-        """Callback for the :term:`vehicle` :term:`local position` message from
-        the :term:`navigation filter`
-
-        The local position is expected to have a ROS header frame_id called 'map',
-        and this 'map' frame is assumed to be the :term:`EKF` local frame.
-        The 'map' frame is assumed to follow the :term:`ENU` axes convention.
-        """
+        """Callback for vehicle local position message from the EKF"""
         assert msg.header.frame_id == "map", (
             f"Unexpected frame_id for vehicle local frame received via vehicle "
             f"local position pose topic: {msg.header.frame_id} (expected 'map')"
@@ -119,49 +90,44 @@ class BBoxNode(Node):
         self.broadcaster.sendTransform([transform_base_link])
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO:
     @ROS.subscribe(
-        "/mavros/local_position/pose",
+        ROS_TOPIC_MAVROS_LOCAL_POSITION,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_vehicle_pose_cb,
     )
     def vehicle_pose(self) -> Optional[PoseStamped]:
-        """Vehicle local :term:`pose`, or None if not available or too old"""
+        """Vehicle pose in EKF local frame, or None unknown"""
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
     @ROS.subscribe(
         ROS_TOPIC_CAMERA_INFO,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
+        """Camera info for determining appropriate orthoimage resolution, or None
+        unknown
+        """
 
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX, QoSPresetProfiles.SENSOR_DATA.value
     )
     def fov_bounding_box(self) -> Optional[BoundingBox]:
-        """:class:`.BoundingBox` of the :term:`camera's <camera>` ground-projected
-        :term:`field of view <FOV>`.
-        """
+        """:class:`.BoundingBox` of the camera's ground-projected FOV"""
 
         @narrow_types(self)
         def _fov_and_principal_point_on_ground_plane(
             transform: TransformStamped,
             camera_info: CameraInfo,
         ) -> Optional[np.ndarray]:
-            """Projects :term:`camera` principal point and :term:`FOV` corners
-             on ground plane
+            """Projects camera principal point and FOV corners onto ground plane
 
-            .. note::
-                Assumes ground is a flat plane, does not take :term:`DEM` into account
+            Assumes ground is a flat plane, does not take DEM into account
 
             :return: Numpy array of FOV corners and principal point projected onto
-                ground (vehicle :term:`local position` z==0) plane in following
-                order: top-left, top-right, bottom-right, bottom-left, principal point.
-                Shape is (5, 2). Coordinates are meters in
-                :term:`local tangent plane <LTP>` :term:`ENU`.
+                ground plane (z=0 in EKF local frame) in following order: top-left,
+                top-right, bottom-right, bottom-left, principal point. Shape is (5, 2).
+                Coordinates are meters.
             """
             R = tf_transformations.quaternion_matrix(
                 tuple(messaging.as_np_quaternion(transform.transform.rotation))
@@ -216,11 +182,10 @@ class BBoxNode(Node):
         def _enu_to_latlon(
             bbox_coords: np.ndarray, navsatfix: NavSatFix
         ) -> Optional[np.ndarray]:
-            """Convert :term:`ENU` local tangent plane coordinates to
-            latitude and longitude.
+            """Convert EKF local frame ENU coordinates into WGS 84 coordinates
 
             :param bbox_coords: A bounding box in local ENU frame (units in meters)
-            :param navsatfix: :term:`Vehicle` :term:`global position`
+            :param navsatfix: Vehicle global position
 
             :return: Same bounding box in WGS 84 coordinates
             """
@@ -253,9 +218,7 @@ class BBoxNode(Node):
 
         @narrow_types(self)
         def _square_bounding_box(enu_coords: np.ndarray) -> np.ndarray:
-            """
-            Adjust the given bounding box to ensure it's square in the ENU local
-            tangent plane (meters).
+            """Adjusts given bounding box to ensure it's square in the local frame
 
             Adds padding in X (easting) and Y (northing) directions to ensure
             camera FOV is fully enclosed by the bounding box, and to reduce need
@@ -304,13 +267,13 @@ class BBoxNode(Node):
         def _bounding_box(
             fov_local_enu: np.ndarray,
         ) -> BoundingBox:
-            """Create a BoundingBox :term:`message` that envelops the provided
-            :term:`FOV` coordinates.
+            """Create a :class:`.BoundingBox` message that envelops the provided
+            FOV coordinates.
 
-            fov_local_enu: A 4x2 numpy array where N is the number of points,
-                        and each row represents [longitude, latitude].
+            :param fov_local_enu: A 4x2 numpy array where N is the number of points,
+                and each row represents [longitude, latitude].
 
-            Returns: geographic_msgs.msg.BoundingBox
+            :return: A :class:`.BoundingBox`
             """
             assert fov_local_enu.shape == (4, 2)
 
@@ -361,10 +324,9 @@ class BBoxNode(Node):
     def _gimbal_device_attitude_status_cb(
         self, msg: GimbalDeviceAttitudeStatus
     ) -> None:
-        """Callback for :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
+        """Callback for :class:`.GimbalDeviceAttitudeStatus` message
 
-        :param msg: :class:`mavros_msgs.msg.GimbalDeviceAttitudeStatus` message
-            from MAVROS
+        :param msg: :class:`.GimbalDeviceAttitudeStatus` message from MAVROS
         """
 
         def _normalize_quaternion(q: Quaternion) -> Quaternion:
@@ -382,16 +344,13 @@ class BBoxNode(Node):
         ) -> None:
             """Publish camera ENU pose to transformations
 
-            .. note::
-                * Current implementation assumes camera faces directly down from
-                  :term:`vehicle` body if GimbalDeviceAttitudeStatus :term:`message`
-                  (:term:`MAVLink` gimbal protocol v2) is not available. Should
-                  probably not be used for estimating :term:`vehicle`
-                  :term:`orientation`.
-                * If GimbalDeviceAttitudeStatus :term:`message`
-                  (:term:`MAVLink` gimbal protocol v2) is available, only the flags
-                  value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
-                  floating yaw) is supported.
+            * Current implementation assumes camera faces directly down from
+              vehicle body if GimbalDeviceAttitudeStatus message (MAVLink` gimbal
+              protocol v2) is not available. Should probably not be used for estimating
+              vehicle orientation
+            * If GimbalDeviceAttitudeStatus message is available, only the flags
+              value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
+              floating yaw) is supported.
 
             :param vehicle_pose:
             :param gimbal_device_attitude_status:
@@ -454,13 +413,10 @@ class BBoxNode(Node):
         self.fov_bounding_box
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_FAST_MS)  # TODO re-enable
     @ROS.subscribe(
-        "/mavros/gimbal_control/device/attitude_status",
+        ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_gimbal_device_attitude_status_cb,
     )
     def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
-        """:term:`Camera` :term:`FRD` :term:`orientation`, or None if not available
-        or too old
-        """
+        """Camera FRD orientation, or None unknown"""

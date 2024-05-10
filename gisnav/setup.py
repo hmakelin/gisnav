@@ -117,6 +117,7 @@ setup(
         "torch>=2.1.0",
         "kornia==0.7.2",  # 0.7.2 for LightGlue and DISK
         "transforms3d",  # tf_transformations needs this
+        "scipy",
     ],
     tests_require=["pytest"],
     extras_require={

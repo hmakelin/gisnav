@@ -327,7 +327,17 @@ class PoseNode(Node):
         self, msg: MonocularStereoImage
     ) -> Optional[TwistWithCovarianceStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
-        x, y, z = 320.0, 180.0, 205.0  # todo do not hard code
+        scaling = self._scaling_buffer.interpolate(
+            tf_.usec_from_header(msg.query.header)
+        )
+        if scaling is None:
+            return None
+
+        x, y, z = (
+            scaling * 320.0,
+            scaling * 180.0,
+            scaling * 205.0,
+        )  # todo do not hard code
         previous_pose = tf_.create_identity_pose_stamped(x, y, z)
         current_pose = self._get_pose(msg)
         if current_pose is not None:

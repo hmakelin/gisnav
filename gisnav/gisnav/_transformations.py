@@ -14,6 +14,7 @@ from geometry_msgs.msg import (
     PoseWithCovarianceStamped,
     Quaternion,
     TransformStamped,
+    TwistWithCovarianceStamped,
 )
 from pyproj import Proj, transform
 from rclpy.node import Node
@@ -411,3 +412,80 @@ def enu_to_ecef_matrix(lon: float, lat: float) -> np.ndarray:
         ]
     )
     return R
+
+
+def poses_to_twist(
+    pose2: PoseWithCovarianceStamped, pose1: PoseStamped
+) -> TwistWithCovarianceStamped:
+    """pose2 is newer pose with covariances, pose1 is older pose (identity pose in
+    VO)
+    """
+    # Time step between poses
+    t2, t1 = usec_from_header(pose2.header), usec_from_header(pose1.header)
+
+    time_step = (t2 - t1) / 1e6  # seconds
+
+    # Calculate linear velocities
+    dx = pose2.pose.pose.position.x - pose1.pose.position.x
+    dy = pose2.pose.pose.position.y - pose1.pose.position.y
+    dz = pose2.pose.pose.position.z - pose1.pose.position.z
+
+    # Calculate angular velocities using quaternion differences
+    q1 = [
+        pose1.pose.orientation.x,
+        pose1.pose.orientation.y,
+        pose1.pose.orientation.z,
+        pose1.pose.orientation.w,
+    ]
+    q2 = [
+        pose2.pose.pose.orientation.x,
+        pose2.pose.pose.orientation.y,
+        pose2.pose.pose.orientation.z,
+        pose2.pose.pose.orientation.w,
+    ]
+
+    q_diff = tf_transformations.quaternion_multiply(
+        q2, tf_transformations.quaternion_inverse(q1)
+    )
+
+    # Converting quaternion to rotation vector (axis-angle)
+    angle = 2 * np.arccos(q_diff[3])  # Compute the rotation angle
+    axis = q_diff[:3] / np.sin(angle / 2)  # Normalize the axis
+    rotation_vector = angle * axis  # Multiply angle by the normalized axis
+
+    ang_vel = rotation_vector / time_step
+
+    # Create TwistStamped message
+    twist = TwistWithCovarianceStamped()
+    twist.header.stamp = pose2.header.stamp
+    twist.header.frame_id = pose2.header.frame_id
+    twist.twist.twist.linear.x = dx / time_step
+    twist.twist.twist.linear.y = dy / time_step
+    twist.twist.twist.linear.z = dz / time_step
+    twist.twist.twist.angular.x = ang_vel[0]
+    twist.twist.twist.angular.y = ang_vel[1]
+    twist.twist.twist.angular.z = ang_vel[2]
+
+    twist.twist.covariance = pose2.pose.covariance  # todo: could make these smaller?
+
+    return twist
+
+
+def create_identity_pose_stamped(x, y, z):
+    pose_stamped = PoseStamped()
+
+    pose_stamped.header.stamp = rclpy.time.Time().to_msg()
+    pose_stamped.header.frame_id = "camera_optical"
+
+    # Set the position coordinates
+    pose_stamped.pose.position.x = x
+    pose_stamped.pose.position.y = y
+    pose_stamped.pose.position.z = z
+
+    # Set the orientation to identity (no rotation)
+    pose_stamped.pose.orientation.x = 0.0
+    pose_stamped.pose.orientation.y = 0.0
+    pose_stamped.pose.orientation.z = 0.0
+    pose_stamped.pose.orientation.w = 1.0
+
+    return pose_stamped

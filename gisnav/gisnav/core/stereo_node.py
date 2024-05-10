@@ -71,7 +71,7 @@ class StereoNode(Node):
         # setup publisher to pass launch test without image callback being
         # triggered
         self.pose_image
-        # self.twist_image  # todo re-enable once scaling is solved
+        self.twist_image
 
         # Initialize the transform broadcaster and listener
         self._tf_buffer = tf2_ros.Buffer()
@@ -99,8 +99,7 @@ class StereoNode(Node):
         """Callback for :attr:`.image` message"""
         self.pose_image  # publish rotated and cropped orthoimage stack
 
-        # TODO: re-enable once proper scaling is implemented for VO
-        # self.twist_image  # publish two subsequent images for VO
+        self.twist_image  # publish two subsequent images for VO
 
         # TODO this is brittle - nothing is enforcing that this is assigned after
         #  publishing stereo_image

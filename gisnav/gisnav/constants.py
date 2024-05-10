@@ -64,9 +64,9 @@ ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
 :attr:`.StereoNode.pose`.
 
 """
-ROS_TOPIC_RELATIVE_QUERY_POSE: Final = "~/vo/pose"
+ROS_TOPIC_RELATIVE_QUERY_TWIST: Final = "~/vo/twist"
 """Relative :term:`topic` into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.camera_optical_pose_in_query_frame`.
+:attr:`.StereoNode.camera_optical_twist_in_query_frame`.
 """
 
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"

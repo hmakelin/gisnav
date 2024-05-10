@@ -18,7 +18,11 @@ import tf_transformations
 import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
+from geometry_msgs.msg import (
+    PoseWithCovariance,
+    PoseWithCovarianceStamped,
+    TwistWithCovarianceStamped,
+)
 from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -39,7 +43,7 @@ from ..constants import (
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_POSE,
     ROS_TOPIC_RELATIVE_POSE_IMAGE,
-    ROS_TOPIC_RELATIVE_QUERY_POSE,
+    ROS_TOPIC_RELATIVE_QUERY_TWIST,
     ROS_TOPIC_RELATIVE_TWIST_IMAGE,
     STEREO_NODE_NAME,
     FrameID,
@@ -148,7 +152,7 @@ class PoseNode(Node):
         # initialize publishers (for launch tests)
         self.pose
         # TODO method does not support none input
-        self.camera_optical_pose_in_query_frame(None)
+        self.camera_optical_twist_in_camera_optical_frame(None)
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -196,7 +200,7 @@ class PoseNode(Node):
 
     def _twist_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.twist_image` message"""
-        self.camera_optical_pose_in_query_frame(self.twist_image)
+        self.camera_optical_twist_in_camera_optical_frame(self.twist_image)
 
     @property
     @ROS.publish(
@@ -314,16 +318,22 @@ class PoseNode(Node):
         return pose_with_covariance
 
     @ROS.publish(
-        ROS_TOPIC_RELATIVE_QUERY_POSE,
+        ROS_TOPIC_RELATIVE_QUERY_TWIST,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     # @ROS.transform("camera_optical")  # TODO: enable after scaling to meters
     @narrow_types
-    def camera_optical_pose_in_query_frame(
+    def camera_optical_twist_in_camera_optical_frame(
         self, msg: MonocularStereoImage
-    ) -> Optional[PoseWithCovarianceStamped]:
+    ) -> Optional[TwistWithCovarianceStamped]:
         """Camera pose in visual odometry world frame (i.e. previous query frame)"""
-        return self._get_pose(msg)
+        x, y, z = 320.0, 180.0, 205.0  # todo do not hard code
+        previous_pose = tf_.create_identity_pose_stamped(x, y, z)
+        current_pose = self._get_pose(msg)
+        if current_pose is not None:
+            return tf_.poses_to_twist(current_pose, previous_pose)
+        else:
+            return None
 
     @property
     # @ROS.max_delay_ms(DELAY_DEFAULT_MS)

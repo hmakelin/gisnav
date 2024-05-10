@@ -8,9 +8,15 @@ include docker/Makefile
 
 .PHONY: docs
 docs:
+	@cd docs/sphinx && sphinx-build -M markdown ./source ./build
+	@mkdir -p docs/vitepress/docs/reference && cp -r docs/sphinx/build/markdown/* docs/vitepress/docs/reference
 	@cd docs/vitepress && npm run docs:build
-	@cd docs/.vitepress/dist && touch .nojekyll  # for GitHub Pages
+	@cd docs/vitepress/docs/.vitepress/dist && touch .nojekyll  # for GitHub Pages
 
 .PHONY: docs-preview
 docs-preview:
 	@cd docs/vitepress && npm run docs:preview
+
+.PHONY: docs-dev
+docs-preview:
+	@cd docs/vitepress && npm run docs:dev

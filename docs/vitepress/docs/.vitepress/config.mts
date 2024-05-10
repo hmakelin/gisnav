@@ -14,7 +14,7 @@ export default withMermaid({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/README' },
-      { text: 'API Reference', link: '/_build/sphinx/markdown/index' }
+      { text: 'API Reference', link: '/reference/index' }
     ],
     outline: {
       level: 'deep'
@@ -61,42 +61,42 @@ export default withMermaid({
           ]
         }
       ],
-      '/_build/sphinx/markdown/': [
+      '/reference/': [
         {
           text: 'Core nodes',
           items: [
-            { text: 'BBoxNode', link: '/_build/sphinx/markdown/public/bbox_node' },
-            { text: 'GISNode', link: '/_build/sphinx/markdown/public/gis_node' },
-            { text: 'StereoNode', link: '/_build/sphinx/markdown/public/stereo_node' },
-            { text: 'PoseNode', link: '/_build/sphinx/markdown/public/pose_node' },
+            { text: 'BBoxNode', link: '/reference/public/bbox_node' },
+            { text: 'GISNode', link: '/reference/public/gis_node' },
+            { text: 'StereoNode', link: '/reference/public/stereo_node' },
+            { text: 'PoseNode', link: '/reference/public/pose_node' },
           ]
         },
         {
           text: 'Extension nodes',
           items: [
-            { text: 'UORBNode', link: '/_build/sphinx/markdown/public/uorb_node' },
-            { text: 'NMEANode', link: '/_build/sphinx/markdown/public/nmea_node' },
-            { text: 'QGISNode', link: '/_build/sphinx/markdown/public/qgis_node' },
+            { text: 'UORBNode', link: '/reference/public/uorb_node' },
+            { text: 'NMEANode', link: '/reference/public/nmea_node' },
+            { text: 'QGISNode', link: '/reference/public/qgis_node' },
           ]
         },
         {
           text: 'Testing',
           items: [
-            { text: 'Unit tests', link: '/_build/sphinx/markdown/test/unit' },
-            { text: 'Launch tests', link: '/_build/sphinx/markdown/test/launch' },
+            { text: 'Unit tests', link: '/reference/test/unit' },
+            { text: 'Launch tests', link: '/reference/test/launch' },
           ]
         },
         {
           text: 'Private API',
           items: [
-            { text: 'Decorators', link: '/_build/sphinx/markdown/private/decorators' },
-            { text: 'Transformations', link: '/_build/sphinx/markdown/private/transformations' },
+            { text: 'Decorators', link: '/reference/private/decorators' },
+            { text: 'Transformations', link: '/reference/private/transformations' },
           ]
         },
         {
           items: [
-            { text: 'Constants', link: '/_build/sphinx/markdown/public/constants' },
-            { text: 'Entry points', link: '/_build/sphinx/markdown/public/gisnav' },
+            { text: 'Constants', link: '/reference/public/constants' },
+            { text: 'Entry points', link: '/reference/public/gisnav' },
           ]
         },
       ]

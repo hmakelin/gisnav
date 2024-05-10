@@ -15,9 +15,14 @@ build/
 install/
 log/
 
-# Built documentation
+# VitePress
 docs/vitepress/docs/.vitepress/dist
 docs/vitepress/docs/.vitepress/build
+docs/vitepress/docs/.vitepress/cache
+docs/vitepress/docs/reference/
+
+# Sphinx
+docs/sphinx/build
 
 # coverage.py files
 .coverage*
@@ -35,6 +40,3 @@ gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 # node
 node_modules
-
-# vitepress
-docs/docs/.vitepress/cache/

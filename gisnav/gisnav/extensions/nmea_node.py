@@ -36,7 +36,7 @@ class NMEANode(Node):
     """Default for :attr:`.port`"""
 
     ROS_D_BAUDRATE = 9600
-    """Default for :attr:`.badurate`"""
+    """Default for :attr:`.baudrate`"""
 
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326

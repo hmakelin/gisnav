@@ -71,6 +71,7 @@ def _is_generic_instance(value, origin_type, type_args):
 
 
 # TODO: make this work with typed dicts?
+# TODO: consider using @typechecked from the typeguard library instead
 def narrow_types(
     arg: Union[Callable[..., T], Node] = None, return_value: Optional[Any] = None
 ):

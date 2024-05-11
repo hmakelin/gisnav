@@ -40,4 +40,4 @@ Here you can find the automatically generated API reference for the GISNav ROS 2
     :caption: Private API
 
     private/decorators
-    private/messaging
+    private/transformations

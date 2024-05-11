@@ -31,7 +31,7 @@ You will need to have the [Docker Compose plugin][2] and [NVIDIA Container Toolk
 Build the Docker images and create and run the containers (downloading and building everything will take a long time):
 
 > [!WARNING] Warning: Exposed X server
-> This script will expose your X server to the Docker containers to make GUI > applications work.
+> This script will expose your X server to the Docker containers to make GUI applications work.
 
 ```bash
 git clone https://github.com/hmakelin/gisnav.git

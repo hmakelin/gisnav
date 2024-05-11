@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 
 # Configuration file for the Sphinx documentation builder.
@@ -48,3 +49,16 @@ autodoc_default_options = {
 
 html_theme = "alabaster"
 html_static_path = ["_static"]
+
+
+# -- Footer -------------------------------------------------
+try:
+    # Try to add git version and commit information to footer
+    release = (
+        subprocess.check_output(["git", "describe", "--tags"]).strip().decode("utf-8")
+    )
+    rst_epilog = """
+GISNav |release|
+"""
+except subprocess.CalledProcessError:
+    raise

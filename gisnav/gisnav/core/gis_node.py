@@ -242,7 +242,7 @@ class GISNode(Node):
             )
             self.get_logger().error(error_msg)
             raise ValueError(error_msg)
-        timer = self.create_timer(1 / publish_rate, self.publish)
+        timer = self.create_timer(1 / publish_rate, self._publish)
         return timer
 
     @narrow_types
@@ -271,7 +271,7 @@ class GISNode(Node):
     def _publish_timer(self, value: Timer) -> None:
         self.__publish_timer = value
 
-    def publish(self):
+    def _publish(self):
         """Publishes :attr:`.orthoimage`"""
         self.orthoimage
 

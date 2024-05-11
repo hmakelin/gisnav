@@ -1,12 +1,18 @@
-"""This module contains :class:`.PoseNode`, a :term:`ROS` node for estimating the
-:term:`camera` :term:`pose` in given frames of reference.
+"""This module contains :class:`.PoseNode`, a ROS node that estimates camera
+pose in global (REP 105 ``earth``) and local (REP 103 ``camera_optical``) frames
+of reference.
 
-The reference image can be either a orthoimagery :term:`raster` from the onboard GIS
-server (deep map matching for noisy global position), or a previous image frame form
-the camera (visual odometry for smooth relative position).
+The reference image is either an orthoimage raster from the onboard GIS server, or a
+previous image frame from the onboard camera. The former provides a global (absolute)
+but noisy pose estimate that is drift-free, while the latter (visual odometry) provides
+a smooth local (relative) pose estimate that drifts over the long-term.
+
+A deep learning model is used for the global matching problem ("deep" matching), while
+traditional computer vision is used for the local matching problem ("shallow")
+matching.
 
 The pose is estimated by finding matching keypoints between the query and
-reference images and then solving the resulting :term:`PnP` problem.
+reference images and then solving the resulting PnP problem.
 """
 from typing import Final, Optional, Tuple, Union, cast
 
@@ -60,26 +66,25 @@ _COVARIANCE_LIST = _covariance_matrix.flatten().tolist()
 
 
 class PoseNode(Node):
-    """Solves the keypoint matching and :term:`PnP` problems and publishes the
-    solution to ROS
+    """Estimates camera pose in global (REP 105 ``earth``) and local (REP 103
+    ``camera_optical``) frames of reference by finding matching keypoints and
+    solving the PnP problem.
     """
 
     CONFIDENCE_THRESHOLD_SHALLOW_MATCH = 0.9
     """Confidence threshold for filtering out bad keypoint matches for shallow matching
 
-    .. note:
-        Stricter threshold for shallow matching because mistakes accumulate in VO
+    > [!NOTE]
+    > Stricter threshold for shallow matching because mistakes accumulate in VO
     """
 
     CONFIDENCE_THRESHOLD_DEEP_MATCH = 0.8
-    """Confidence threshold for filtering out bad keypoint matches for
-    deep matching
-    """
+    """Confidence threshold for filtering out bad keypoint matches for deep matching"""
 
     MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
 
-    class ScalingBuffer:
+    class _ScalingBuffer:
         """Maintains timestamped query frame to world frame scaling in a sliding windown
         buffer so that shallow matching (VO) pose can be scaled to meters using
         scaling information obtained from deep matching
@@ -165,7 +170,7 @@ class PoseNode(Node):
         self._set_pose_request = SetPose.Request()
         self._pose_sent = False
 
-        self._scaling_buffer = self.ScalingBuffer()
+        self._scaling_buffer = self._ScalingBuffer()
 
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
@@ -179,16 +184,15 @@ class PoseNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def time_reference(self) -> Optional[TimeReference]:
-        """:term:`FCU` time reference via :term:`MAVROS`"""
+        """Time reference from FCU, or None if unknown"""
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
         ROS_TOPIC_CAMERA_INFO,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info message including the camera intrinsics matrix"""
+        """Camera info including the intrinsics matrix, or None if unknown"""
 
     def _pose_image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.pose_image` message"""
@@ -209,14 +213,13 @@ class PoseNode(Node):
     )
     @ROS.transform(child_frame_id="camera_optical")
     def pose(self) -> Optional[PoseWithCovarianceStamped]:
-        """Camera pose in :term:`REP 105` ``map`` frame
+        """Camera pose in :term:`REP 105` ``earth`` frame
 
-        This represents the global 3D poseition and orienation of the ``camera_optical``
-        frame in the earth-fixed ``map`` frame. This is obtained via :term:`deep
-        matching` and is a discontinuous estimate of pose. It is intended to be fused
+        This represents the global 3D position and orientation of the ``camera_optical``
+        frame in the REP 105 ``earth`` (ECEF) frame. This is obtained via deep
+        matching and is a discontinuous estimate of pose. It is intended to be fused
         with and complement the continous or smooth twist estimate obtained via
-        :term:`shallow matching or visual odometry <VO>` subsequent images from
-        the onboard camera.
+        shallow matching or visual odometry (VO).
         """
         return self._get_pose(self.pose_image)
 
@@ -321,12 +324,11 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_QUERY_TWIST,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    # @ROS.transform("camera_optical")  # TODO: enable after scaling to meters
     @narrow_types
     def camera_optical_twist_in_camera_optical_frame(
         self, msg: MonocularStereoImage
     ) -> Optional[TwistWithCovarianceStamped]:
-        """Camera pose in visual odometry world frame (i.e. previous query frame)"""
+        """REP 105 ``camera_optical`` frame twist in its intrisic frame"""
         scaling = self._scaling_buffer.interpolate(
             tf_.usec_from_header(msg.query.header)
         )
@@ -347,7 +349,6 @@ class PoseNode(Node):
             return None
 
     @property
-    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_POSE_IMAGE.replace("~", STEREO_NODE_NAME)}',
@@ -355,18 +356,10 @@ class PoseNode(Node):
         callback=_pose_image_cb,
     )
     def pose_image(self) -> Optional[OrthoStereoImage]:
-        """:term:`Query <query>`, :term:`reference`, and :term:`elevation` image
-        in a single 4-channel :term:`stack`. The query image is in the first
-        channel, the reference image is in the second, and the elevation reference
-        is in the last two (sum them together to get a 16-bit elevation reference).
+        """Aligned and cropped query, reference, DEM rasters from
+        :class:`.StereoNode`
 
-        .. note::
-            The existing :class:`sensor_msgs.msg.Image` message is repurposed
-            to represent a stereo couple with depth information (technically a
-            triplet) to avoid having to introduce custom messages that would
-            have to be distributed in a separate package. It will be easier to
-            package this later as a rosdebian if everything is already in the
-            rosdep index.
+        This image couple is used for "deep" matching.
         """
 
     @property
@@ -378,23 +371,19 @@ class PoseNode(Node):
         callback=_twist_image_cb,
     )
     def twist_image(self) -> Optional[MonocularStereoImage]:
-        """:term:`Query <query>`, :term:`reference image couple for :term:`VO`"""
+        """Aligned and cropped query and reference images from :class:`.StereoNode`
+
+        This image couple is used for visual odometry or "shallow" matching.
+        """
 
     @narrow_types
     def _preprocess(
         self,
         stereo_image: Union[OrthoStereoImage, MonocularStereoImage],
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Converts sensor_msgs/Image message to numpy arrays
+        """Converts :class:`.Image` message to numpy arrays
 
-        :param stereo_image: A 4-channel image where the first channel is the
-            :term:`query`, the second channel is the 8-bit
-            :term:`elevation reference`, and the last two channels combined
-            represent the 16-bit :term:`elevation reference` (for deep matching/absolute
-            global position), or a 1-channel image where the left side is the query
-            image, and the right side is the reference image (for VO/shallow matching/
-            relative position)
-
+        :param stereo_image: A GISNav format stereo image message
         :return: A 3-tuple/triplet of query image, reference image, and DEM rasters
         """
         # Convert the ROS Image message to an OpenCV image
@@ -522,10 +511,10 @@ class PoseNode(Node):
             t: np.ndarray,
             label: str,
         ) -> None:
-            """Visualizes matches and projected :term:`FOV`"""
+            """Visualizes matches and projected FOV"""
 
             def _project_fov(img, h_matrix):
-                """Projects :term:`FOV` on :term:`reference` image"""
+                """Projects FOV on reference image"""
                 height, width = img.shape[0:2]
                 src_pts = np.float32(
                     [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]

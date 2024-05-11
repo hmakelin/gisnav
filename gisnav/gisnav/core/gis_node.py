@@ -342,7 +342,7 @@ class GISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def time_reference(self) -> Optional[TimeReference]:
-        """FCU time reference from FCU, or None if unknown"""
+        """Time reference from FCU, or None if unknown"""
 
     @property
     @ROS.subscribe(

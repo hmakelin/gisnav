@@ -93,6 +93,9 @@ ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS = (
 (MAVLink Gimbal protocl v2)
 """
 
+ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY = "/robot_localization/odometry/filtered"
+"""Topic for filtered odometry from the ``robot_localization`` package EKF node"""
+
 DELAY_DEFAULT_MS: Final = 2000
 """Max acceptable delay for things like global position"""
 

@@ -1,32 +1,5 @@
-"""This module contains :class:`.GISNode`, a :term:`ROS` node for retrieving and
-publishing geographic information and images.
-
-:class:`.GISNode` manages geographic information for the system, including
-downloading, storing, and publishing the :term:`orthophoto` and optional
-:term:`DEM` :term:`raster`. These rasters are retrieved from an :term:`onboard`
-:term:`WMS` based on the projected location of the :term:`camera` field of view.
-
-.. mermaid::
-    :caption: :class:`.GISNode` computational graph
-
-    graph LR
-        subgraph GISNode
-            image[gisnav/gis_node/image]
-            geotransform[gisnav/gis_node/geotransform]
-        end
-
-        subgraph BBoxNode
-            bounding_box[gisnav/bbox_node/fov/bounding_box]
-        end
-
-        subgraph gscam
-            camera_info[camera/camera_info]
-        end
-
-        camera_info -->|sensor_msgs/CameraInfo| GISNode
-        bounding_box -->|geographic_msgs/BoundingBox| GISNode
-        geotransform -->|sensor_msgs/PointCloud2| NMEANode
-        image -->|sensor_msgs/Image| StereoNode:::hidden
+"""This module contains :class:`.GISNode`, a ROS node that requests
+orthoimagery from the GIS and publishes it to ROS.
 """
 from copy import deepcopy
 from typing import IO, Final, List, Optional, Tuple
@@ -62,118 +35,95 @@ from ..constants import (
 
 
 class GISNode(Node):
-    """Publishes the :term:`orthophoto` and optional :term:`DEM` as a single
-    :term:`stacked <stack>` :class:`.Image` message.
+    """Publishes the orthoimage, DEM, and their CRS as a single, atomic ROS message.
 
-    .. warning::
-        ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests``
-        library under the hood but does not document the various exceptions it
-        raises that are passed through by ``OWSLib`` as part of its public API.
-        The :meth:`.get_map` method is therefore expected to raise `errors and
-        exceptions
-        <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_
-        specific to the ``requests`` library.
-
-        These errors and exceptions are not handled by the :class:`.GISNode`
-        to avoid a direct dependency on ``requests``. They are therefore handled
-        as unexpected errors.
+    > [!WARNING] OWSLib exception handling
+    > ``OWSLib``, *as of version 0.25.0*, uses the Python ``requests`` library under
+    > the hood but does not document the various exceptions it raises that are passed
+    > through by ``OWSLib`` as part of its public API. The private method that calls the
+    > ``OWSLib`` method that implements the GetMap call is therefore expected to raise > `errors and exceptions <https://requests.readthedocs.io/en/latest/user/quickstart/#errors-and-exceptions>`_
+    > specific to the ``requests`` library.
+    >
+    > These errors and exceptions are not handled by the :class:`.GISNode` to avoid a
+    > direct dependency on ``requests``. They are therefore handled as unexpected
+    > errors.
     """  # noqa: E501
 
     ROS_D_URL = "http://127.0.0.1:80/wms"
-    """Default WMS URL
+    """Default value for :attr:`.wms_url`
 
-    When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the host
-    name of the MapServer container ``gisnav-mapserver-1`` should be used instead.
-    This should already be configured in the `default launch parameter file
-    <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.yaml>`_
-    which overrides this default value.
+    When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the
+    Docker DNS host name of the MapServer container ``gisnav-mapserver-1`` should be
+    used in the URL. This should already be configured in the `default launch parameter
+    file <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.
+    yaml>`_ which overrides this default value.
     """
 
     ROS_D_VERSION = "1.3.0"
-    """Default WMS version"""
+    """Default value for :attr:`.wms_version`"""
 
     ROS_D_TIMEOUT = 10
-    """Default WMS GetMap request timeout in seconds"""
+    """Default value for :attr:`.wms_timeout`"""
 
     ROS_D_PUBLISH_RATE = 1.0
-    """Default publish rate for :class:`.OrthoImage3D` messages in Hz"""
+    """Default value for :attr:`.publish_rate`"""
 
     ROS_D_WMS_POLL_RATE = 0.1
-    """Default WMS connection status poll rate in Hz"""
+    """Default value for :attr:`.wms_poll_rate`"""
 
     ROS_D_LAYERS = ["imagery"]
-    """Default WMS GetMap request layers parameter for image raster
+    """Default value for :attr:`.wms_layers`
 
-    .. note::
-        The combined layers should cover the flight area of the vehicle at high
-        resolution. Typically this list would have just one layer for high
-        resolution aerial or satellite imagery.
+    > [!TIP]
+    > The combined layers should cover the flight area of the vehicle at high
+    > resolution. Typically this list would have just one layer for high resolution
+    > aerial or satellite imagery.
     """
 
     ROS_D_DEM_LAYERS = ["dem"]
-    """Default WMS GetMap request layers parameter for DEM raster
+    """Default value for :attr:`.wms_dem_layers`
 
-    .. note::
-        This is an optional elevation layer that makes the pose estimation more
-        accurate especially when flying at low altitude. It should be a grayscale
-        raster with pixel values corresponding meters relative to vertical datum.
-        Vertical datum can be whatever system is used (e.g. USGS DEM uses NAVD 88),
-        although it is assumed to be flat across the flight mission area.
+    > [!TIP]
+    > This is an optional elevation layer that makes the pose estimation more accurate
+    > especially when flying at low altitude. It should be a grayscale raster with
+    > pixel values corresponding meters relative to vertical datum. Vertical datum can
+    > be whatever system is used (e.g. USGS DEM uses NAVD 88), although it is assumed
+    > to be flat across the flight mission area.
     """
 
     ROS_D_STYLES = [""]
-    """Default WMS GetMap request styles parameter for image raster
+    """Default value for :attr:`.wms_styles`
 
-    .. note::
-        Must be same length as :py:attr:`.ROS_D_LAYERS`. Use empty strings for
-        server default styles.
+    > [!TIP]
+    > Must be same length as :py:attr:`.ROS_D_LAYERS`. Use empty strings for server
+    > default styles.
     """
 
     ROS_D_DEM_STYLES = [""]
-    """Default WMS GetMap request styles parameter for DEM raster
+    """Default value for :attr:`.wms_dem_styles`
 
-    .. note::
-        Must be same length as :py:attr:`.ROS_D_DEM_LAYERS`. Use empty strings
-        for server default styles.
+    > [!TIP]
+    > Must be same length as :py:attr:`.ROS_D_DEM_LAYERS`. Use empty strings for server
+    > default styles.
     """
 
     ROS_D_SRS = "EPSG:4326"
-    """Default WMS GetMap request SRS parameter"""
+    """Default value for :attr:`.wms_srs`"""
 
     ROS_D_IMAGE_FORMAT = "image/jpeg"
-    """Default WMS GetMap request image format"""
+    """Default value for :attr:`.wms_format`"""
 
     ROS_D_IMAGE_TRANSPARENCY = False
-    """Default WMS GetMap request image transparency
+    """Default value for :attr:`.wms_transparency`
 
-    .. note::
-        Not supported by jpeg format
+    > [!NOTE]
+    > This parameter is not supported by jpeg format
     """
 
     ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD = 0.85
-    """Required overlap ratio between suggested new :term:`bounding box` and
-    current :term:`orthoimage` bounding box, under which a new map will be
-    requested.
-    """
-
-    ROS_D_MAP_UPDATE_UPDATE_DELAY = 1
-    """Default delay in seconds for throttling WMS GetMap requests
-
-    .. todo::
-        TODO: ROS_D_MAP_UPDATE_UPDATE_DELAY not currently used but could be
-        useful (old param from basenode)
-
-    When the camera is mounted on a gimbal and is not static, this delay should
-    be set quite low to ensure that whenever camera field of view is moved to
-    some other location, the map update request will follow very soon after.
-    The field of view of the camera projected on ground generally moves
-    *much faster* than the vehicle itself.
-
-    .. note::
-        This parameter provides a hard upper limit for WMS GetMap request
-        frequency. Even if this parameter is set low, WMS GetMap requests will
-        likely be much less frequent because they will throttled by the
-        conditions set in :meth:`._should_request_new_map`.
+    """The default ROS parameter for the minimum required overlap ratio between the
+    bounding boxes of the current and new orthoimages. If the overlap is below this
+    threshold, a new map request is triggered.
     """
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
@@ -213,67 +163,64 @@ class GISNode(Node):
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def wms_url(self) -> Optional[str]:
-        """WMS client endpoint URL"""
+        """ROS WMS client endpoint URL parameter"""
 
     @property
     @ROS.parameter(ROS_D_VERSION, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def wms_version(self) -> Optional[str]:
-        """Used WMS protocol version"""
+        """ROS WMS protocol version parameter"""
 
     @property
     @ROS.parameter(ROS_D_TIMEOUT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def wms_timeout(self) -> Optional[int]:
-        """WMS request timeout in seconds"""
+        """ROS WMS request timeout [seconds] parameter"""
 
     @property
     @ROS.parameter(ROS_D_LAYERS)
     def wms_layers(self) -> Optional[List[str]]:
-        """WMS request layers for :term:`orthophoto` :term:`GetMap` requests"""
+        """ROS parameter for WMS request layers for orthoimagery GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_DEM_LAYERS)
     def wms_dem_layers(self) -> Optional[List[str]]:
-        """WMS request layers for :term:`DEM` :term:`GetMap` requests"""
+        """ROS WMS parameter for WMS request layers for DEM GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_STYLES)
     def wms_styles(self) -> Optional[List[str]]:
-        """WMS request styles for :term:`orthophoto` :term:`GetMap` requests"""
+        """ROS parameter for WMS request styles for orthoimegry GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_DEM_STYLES)
     def wms_dem_styles(self) -> Optional[List[str]]:
-        """WMS request styles for :term:`DEM` :term:`GetMap` requests"""
+        """ROS parameter for WMS request styles for :DEM GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_SRS)
     def wms_srs(self) -> Optional[str]:
-        """WMS request :term:`SRS` for all :term:`GetMap` requests"""
+        """ROS parameter for WMS request CRS for all GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_IMAGE_TRANSPARENCY)
     def wms_transparency(self) -> Optional[bool]:
-        """WMS request transparency for all :term:`GetMap` requests"""
+        """ROS parameter for WMS request transparency for all GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_IMAGE_FORMAT)
     def wms_format(self) -> Optional[str]:
-        """WMS request format for all :term:`GetMap` requests"""
+        """ROS parameter for WMS request format for all GetMap requests"""
 
     @property
     @ROS.parameter(ROS_D_WMS_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def wms_poll_rate(self) -> Optional[float]:
-        """:term:`WMS` connection status poll rate in Hz"""
+        """ROS parameter for WMS connection status poll rate in Hz"""
 
     @property
     @ROS.parameter(ROS_D_MAP_OVERLAP_UPDATE_THRESHOLD)
     def min_map_overlap_update_threshold(self) -> Optional[float]:
-        """Required :term:`bounding box` overlap ratio for new :term:`GetMap`
-        requests
-
-        If the overlap between the candidate new bounding box and the current
-        :term:`orthoimage` bounding box is below this value, a new map will be
-        requested.
+        """ROS parameter for the minimum required overlap ratio between the bounding
+        boxes of the current and new orthoimages. If the overlap is below this
+        threshold, a new map request is triggered.
         """
 
     @property
@@ -300,7 +247,7 @@ class GISNode(Node):
 
     @narrow_types
     def _create_connect_wms_timer(self, poll_rate: float) -> Timer:
-        """Returns a timer that reconnects :term:`WMS` client when needed
+        """Returns a timer that reconnects the WMS client when needed
 
         :param poll_rate: WMS connection status poll rate for the timer (in Hz)
         :return: The :class:`.Timer` instance
@@ -317,7 +264,7 @@ class GISNode(Node):
 
     @property
     def _publish_timer(self) -> Timer:
-        """:class:`gisnav_msgs.msg.OrthoImage3D` publish and map update timer"""
+        """:attr:`.orthoimage` publish and map update timer"""
         return self.__publish_timer
 
     @_publish_timer.setter
@@ -325,12 +272,7 @@ class GISNode(Node):
         self.__publish_timer = value
 
     def publish(self):
-        """
-        Publish :attr:`.orthoimage` (:attr:`.ground_track_elevation` and
-        :attr:`.terrain_geopoint_stamped` are also published but that
-        publish is triggered by callbacks since the messages are smaller and
-        can be published more often)
-        """
+        """Publishes :attr:`.orthoimage`"""
         self.orthoimage
 
     def _try_wms_client_instantiation(self) -> None:
@@ -400,33 +342,32 @@ class GISNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def time_reference(self) -> Optional[TimeReference]:
-        """:term:`FCU` time reference via :term:`MAVROS`"""
+        """FCU time reference from FCU, or None if unknown"""
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def bounding_box(self) -> Optional[BoundingBox]:
-        """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`
-        :term:`FOV` location.
+        """Subscribed bounding box of the camera's ground-projected FOV, or None if
+        unknown
         """
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS) - camera info has no header (?)
     @ROS.subscribe(
         ROS_TOPIC_CAMERA_INFO,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
+        """Subscribed camera info for determining appropriate :attr:`.orthoimage`
+        resolution, or None if unknown
+        """
 
     @property
     def _orthoimage_size(self) -> Optional[Tuple[int, int]]:
-        """
-        Padded map size tuple (height, width) or None if the information
+        """Padded map size tuple (height, width) or None if the information
         is not available.
 
         Because the deep learning models used for predicting matching keypoints
@@ -463,8 +404,7 @@ class GISNode(Node):
         styles: List[str],
         dem_styles: List[str],
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """
-        Sends GetMap request to GIS WMS for image and DEM layers and returns
+        """Sends GetMap request to GIS WMS for image and DEM layers and returns
         :attr:`.orthoimage` attribute.
 
         Assumes zero raster as DEM if no DEM layer is available.
@@ -561,11 +501,7 @@ class GISNode(Node):
     )
     @cache_if(_should_request_orthoimage)
     def orthoimage(self) -> Optional[OrthoImage]:
-        """Outgoing orthoimage and elevation raster :term:`stack`
-
-        First channel is 8-bit grayscale orthoimage, 2nd and 3rd channels are
-        16-bit elevation reference (:term:`DEM`)
-        """
+        """Outgoing orthoimage and DEM raster"""
         bounding_box = deepcopy(self.bounding_box)
         map = self._request_orthoimage_for_bounding_box(
             bounding_box,
@@ -619,7 +555,7 @@ class GISNode(Node):
     def _calculate_affine_transformation_matrix(
         self, height: int, width: int, bbox: BoundingBox
     ) -> Optional[np.ndarray]:
-        """Calculate the 3x3 affine transformation matrix that transforms orthoimage
+        """Calculates the 3x3 affine transformation matrix that transforms orthoimage
         frame pixel coordinates to WGS84 lon, lat coordinates.
 
         :param height: Height in pixels of the :term:`reference` image
@@ -711,7 +647,7 @@ class GISNode(Node):
     def _get_map(
         self, layers, styles, srs, bbox, size, format_, transparency, grayscale=False
     ) -> Optional[np.ndarray]:
-        """Sends WMS :term:`GetMap` request and returns response :term:`raster`"""
+        """Sends WMS GetMap request and returns response raster"""
         if self._wms_client is None:
             self.get_logger().warning(
                 "WMS client not instantiated. Skipping sending GetMap request."

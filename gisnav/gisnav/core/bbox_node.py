@@ -75,7 +75,7 @@ class BBoxNode(Node):
         callback=_nav_sat_fix_cb,
     )
     def nav_sat_fix(self) -> Optional[NavSatFix]:
-        """Vehicle GNSS fix, or None if unknown"""
+        """Vehicle GNSS fix from FCU, or None if unknown"""
 
     def _vehicle_pose_cb(self, msg: PoseStamped) -> None:
         """Callback for vehicle local position message from the EKF"""
@@ -96,7 +96,7 @@ class BBoxNode(Node):
         callback=_vehicle_pose_cb,
     )
     def vehicle_pose(self) -> Optional[PoseStamped]:
-        """Vehicle pose in EKF local frame, or None unknown"""
+        """Vehicle pose in EKF local frame from FCU, or None unknown"""
 
     @property
     @ROS.subscribe(
@@ -104,8 +104,9 @@ class BBoxNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate orthoimage resolution, or None
-        unknown
+        """Subscribed camera info, or None if unknown
+
+        Camera intrinsics from this message are needed for the FOV projection
         """
 
     @property
@@ -113,7 +114,7 @@ class BBoxNode(Node):
         ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX, QoSPresetProfiles.SENSOR_DATA.value
     )
     def fov_bounding_box(self) -> Optional[BoundingBox]:
-        """:class:`.BoundingBox` of the camera's ground-projected FOV"""
+        """Published bounding box of the camera's ground-projected FOV"""
 
         @narrow_types(self)
         def _fov_and_principal_point_on_ground_plane(
@@ -419,4 +420,4 @@ class BBoxNode(Node):
         callback=_gimbal_device_attitude_status_cb,
     )
     def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
-        """Camera FRD orientation, or None unknown"""
+        """Camera orientation from FCU, or None unknown"""

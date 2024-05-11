@@ -19,10 +19,10 @@ BBOX_NODE_NAME: Final = "bbox_node"
 """Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
 
 POSE_NODE_NAME: Final = "pose_node"
-"""Name of :class:`.PoseNode` from gisnav_gpu package."""
+"""Name of :class:`.PoseNode` spun up by :func:`.run_pose_node`."""
 
 STEREO_NODE_NAME: Final = "stereo_node"
-"""Name of :class:`.StereoNode` spun up by :func:`.run_transform_node`"""
+"""Name of :class:`.StereoNode` spun up by :func:`.run_stereo_node`"""
 
 NMEA_NODE_NAME: Final = "nmea_node"
 """Name of :class:`.NMEANode` spun up by :func:`.run_nmea_node`"""
@@ -37,7 +37,7 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 """Relative topic into which :class:`.GISNode` publishes :attr:`.GISNode.orthoimage`."""
 
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-"""Topic into which :class:`.UORBNode` publishes :attr:`.GISNode.sensor_gps`."""
+"""Topic into which :class:`.UORBNode` publishes :attr:`.UORBNode.sensor_gps`."""
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 """Relative topic into which :class:`.BBoxNode` publishes
@@ -55,13 +55,13 @@ ROS_TOPIC_RELATIVE_TWIST_IMAGE: Final = "~/twist_image"
 """
 
 ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
-"""Relative topic into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.pose`.
+"""Relative topic into which :class:`.PoseNode` publishes
+:attr:`.PoseNode.pose`.
 
 """
 ROS_TOPIC_RELATIVE_QUERY_TWIST: Final = "~/vo/twist"
-"""Relative topic into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.camera_optical_twist_in_query_frame`.
+"""Relative topic into which :class:`.PoseNode` publishes
+:attr:`.PoseNode.camera_optical_twist_in_camera_optical_frame`.
 """
 
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
@@ -85,7 +85,7 @@ ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS = (
     "/mavros/gimbal_control/device/attitude_status"
 )
 """MAVROS topic for vehicle :class:`.GimbalDeviceAttitudeStatus` message
-(MAVLink Gimbal protocl v2)
+(MAVLink Gimbal protocol v2)
 """
 
 ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY = "/robot_localization/odometry/filtered"
@@ -101,7 +101,7 @@ FrameID = Literal[
     "map",
     "earth",
 ]
-"""Allowed ROS message header ``frame_id``s as specified in REP 103 and
+"""Allowed ROS message header ``frame_id`` as specified in REP 103 and
 REP 105. The ``odom`` frame is not used by GISNav but may be published e.g. by
 MAVROS.
 """

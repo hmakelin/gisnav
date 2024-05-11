@@ -14,6 +14,10 @@ Install Node v18+ on your system by following the [official instructions](https:
 
 ## Make docs
 
+The documentation is built in a two-stage process where first the reST Python docstrings are converted into Markdown files using Sphinx, after which they are built into the final static documentation page using VitePress.
+
+The Makefile `docs` target implements this recipe:
+
 ::: code-group
 
 ```bash [Local]
@@ -22,30 +26,17 @@ make docs
 ```
 
 ```bash [Docker]
-cd ~/colcon_ws/src/gisnav
-make docs
+cd ~/colcon_ws/src/gisnav/docker
+docker compose -p gisnav run gisnav make docs
 ```
 
 :::
 
-## Build Sphinx documentation
+The static HTML documentation will appear in the below folder:
 
-
-Make HTML documentation for viewing in web browser:
-
-```bash
-cd ~/colcon_ws/src/gisnav/docs
-make html
+```text
+~/colcon_ws/src/gisnav/docs/vitepress/docs/dist
 ```
-
-Make Markdown documentation for processing with VitePress:
-
-```bash
-cd ~/colcon_ws/src/gisnav/docs
-sphinx-build -M markdown ./sphinx vitepress/docs/_build/sphinx_
-```
-
-The HTML documentation will appear in the `~/colcon_ws/src/gisnav/docs/_build/` folder.
 
 ## Serve VitePress documentation
 

@@ -60,15 +60,3 @@ listener sensor_gps
 ```
 
 [4]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
-
-## Documentation
-
-See the [GISNav home page][5] for user and developer guides and API reference.
-
-[5]: https://hmakelin.github.io/gisnav
-
-## License
-
-This software is released under the MIT license. See the [LICENSE.md][6] file for more information.
-
-[6]: https://github.com/hmakelin/gisnav/blob/master/LICENSE.md

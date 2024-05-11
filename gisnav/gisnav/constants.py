@@ -1,17 +1,16 @@
-"""This module contains the static configuration of the :term:`ROS` namespace
-and node and topic names
+"""This module contains the static configuration of the ROS namespace and node and
+topic names
 
-Using this module nodes that talk to each other can refer to a single source
-of truth
+Using this module, nodes that talk to each other can refer to a single source of truth.
 
-.. warning::
-    This module should not import anything from the gisnav package namespace
-    to prevent circular imports.
+> [!WARNING] Circular imports
+> This module should not import anything from the gisnav package namespace to prevent
+> circular imports.
 """
 from typing import Final, Literal
 
 ROS_NAMESPACE: Final = "gisnav"
-""":term:`ROS` node namespace"""
+"""Namespace for all GISNav ROS nodes"""
 
 GIS_NODE_NAME: Final = "gis_node"
 """Name of :class:`.GISNode` spun up by :func:`.run_gis_node`"""
@@ -35,43 +34,39 @@ QGIS_NODE_NAME: Final = "qgis_node"
 """Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
 
 ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
-"""Relative :term:`topic` into which :class:`.GISNode` publishes
-:attr:`.GISNode.orthoimage`.
-"""
+"""Relative topic into which :class:`.GISNode` publishes :attr:`.GISNode.orthoimage`."""
 
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
-""":term:`Topic` into which :class:`.UORBNode` publishes
-:attr:`.GISNode.sensor_gps`.
-"""
+"""Topic into which :class:`.UORBNode` publishes :attr:`.GISNode.sensor_gps`."""
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
-"""Relative :term:`topic` into which :class:`.BBoxNode` publishes
+"""Relative topic into which :class:`.BBoxNode` publishes
 :attr:`.BBoxNode.fov_bounding_box`.
 """
 
 ROS_TOPIC_RELATIVE_POSE_IMAGE: Final = "~/pose_image"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+"""Relative topic into which :class:`.StereoNode` publishes
 :attr:`.StereoNode.pose_image`.
 """
 
 ROS_TOPIC_RELATIVE_TWIST_IMAGE: Final = "~/twist_image"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+"""Relative topic into which :class:`.StereoNode` publishes
 :attr:`.StereoNode.twist_image`.
 """
 
 ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+"""Relative topic into which :class:`.StereoNode` publishes
 :attr:`.StereoNode.pose`.
 
 """
 ROS_TOPIC_RELATIVE_QUERY_TWIST: Final = "~/vo/twist"
-"""Relative :term:`topic` into which :class:`.StereoNode` publishes
+"""Relative topic into which :class:`.StereoNode` publishes
 :attr:`.StereoNode.camera_optical_twist_in_query_frame`.
 """
 
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
-"""The :term:`MAVROS` time reference topic that has the difference between
-the local system time and the foreign :term:`FCU` time
+"""The MAVROS time reference topic that has the difference between
+the local system time and the foreign FCU time
 """
 
 ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
@@ -106,7 +101,7 @@ FrameID = Literal[
     "map",
     "earth",
 ]
-"""Allowed ROS message header ``frame_id``s as specified in :term:`REP 103` and
-:term:`REP 105`. The ``odom`` frame is not used by GISNav but may be published e.g. by
-:term:`MAVROS`.
+"""Allowed ROS message header ``frame_id``s as specified in REP 103 and
+REP 105. The ``odom`` frame is not used by GISNav but may be published e.g. by
+MAVROS.
 """

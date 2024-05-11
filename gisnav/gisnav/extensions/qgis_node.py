@@ -1,15 +1,12 @@
-"""This module contains a :term:`ROS 2` node for interacting with a PostgreSQL
-database. The node enables real-time data visualization in QGIS by subscribing
-to specific GISNav :term:`core` output messages and updating the database
-accordingly.
+"""This module contains :class:`.QGISNode`, an extension ROS node that
+subscribes to and stores :attr:`.UORBNode.sensor_gps` messages in a PostGIS
+database.
 
-This node enables real-time visualization of data in QGIS, aiding in
-development and debugging.
+The node enables real-time data visualization in QGIS by via the PostGIS database.
 """
-from typing import Final, Optional, Union
+from typing import Final, Optional
 
 import psycopg2
-from geographic_msgs.msg import BoundingBox
 from px4_msgs.msg import SensorGps
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
@@ -17,23 +14,16 @@ from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
 
 from .._decorators import ROS, narrow_types
-from ..constants import (
-    BBOX_NODE_NAME,
-    DELAY_DEFAULT_MS,
-    ROS_NAMESPACE,
-    ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-    ROS_TOPIC_SENSOR_GPS,
-)
+from ..constants import ROS_TOPIC_SENSOR_GPS
 
 
 class QGISNode(Node):
-    """:term:`ROS 2` node that subscribes to GISNav :term:`core` output
-    messages and updates an in-memory PostgreSQL database for visualization in
-    QGIS.
+    """:term:`ROS 2` node that that subscribes to and stores
+    :attr:`.UORBNode.sensor_gps` messages in a PostGIS database.
     """
 
     ROS_D_SQL_POLL_RATE = 0.1
-    """Default :term:`SQL` client connection attempt poll rate in Hz"""
+    """Default for :attr:`.sql_poll_rate`"""
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
@@ -50,9 +40,6 @@ class QGISNode(Node):
     DEBUG_GPS_TABLE: Final = "gps_table"
     """Table name for mock GPS location"""
 
-    DEBUG_BBOX_TABLE: Final = "bbox_table"
-    """Table name for :term:`FOV` :term:`bounding box`"""
-
     def __init__(self, *args, **kwargs):
         """Class initializer
 
@@ -62,7 +49,6 @@ class QGISNode(Node):
         super().__init__(*args, **kwargs)
 
         # Initialize ROS subscriptions by calling the decorated properties once
-        # self.bounding_box  # todo: this callback writes to disk very often
         self.sensor_gps
 
         sql_poll_rate = self.sql_poll_rate
@@ -131,11 +117,11 @@ class QGISNode(Node):
     @property
     @ROS.parameter(ROS_D_SQL_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def sql_poll_rate(self) -> Optional[float]:
-        """:term:`SQL` connection attempt poll rate in Hz"""
+        """SQL connection attempt poll rate in Hz"""
 
     def _create_tables(self):
-        """Create (and recreate if exist) temporary tables for storing SensorGps
-        and BoundingBox data as PostGIS geometries.
+        """Create (and recreate if exist) temporary tables for storing
+        :attr:`UORBNode.SensorGps` data as PostGIS geometries.
         """
         drop_gps_table_query = f"""
             DROP TABLE IF EXISTS {self.DEBUG_GPS_TABLE};
@@ -147,34 +133,20 @@ class QGISNode(Node):
                 altitude DOUBLE PRECISION
             );
         """
-        drop_bbox_table_query = f"""
-            DROP TABLE IF EXISTS {self.DEBUG_BBOX_TABLE};
-        """
-        create_bbox_table_query = f"""
-            CREATE UNLOGGED TABLE {self.DEBUG_BBOX_TABLE} (
-                id SERIAL PRIMARY KEY,
-                geom GEOMETRY(Polygon, 4326)  -- SRID 4326 for GPS coordinates
-            );
-        """
 
         with self._db_connection.cursor() as cursor:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
-
             # Drop the tables if they exist - we do not want to persist old
             # debugging data
             cursor.execute(drop_gps_table_query)
-            cursor.execute(drop_bbox_table_query)
-
             cursor.execute(create_gps_table_query)
-            cursor.execute(create_bbox_table_query)
             self._db_connection.commit()
 
-    def _update_database(self, msg: Union[SensorGps, BoundingBox]) -> None:
+    def _update_database(self, msg: SensorGps) -> None:
         """Updates the PostgreSQL database with the received ROS 2 message data
 
-        :param msg: :class:`px4_msgs.msg.SensorGps` or
-            :class:`geographic_msgs.msg.BoundingBox` message containing
-            data to insert into the database
+        :param msg: :class:`.SensorGps` message containing data to insert into the
+            database
         """
         if self._db_connection is None:
             self.get_logger().error(
@@ -198,61 +170,13 @@ class QGISNode(Node):
                         f"Cannot insert SensorGps message."
                     )
 
-            elif isinstance(msg, BoundingBox):
-                query = f"""
-                    INSERT INTO {self.DEBUG_BBOX_TABLE} (geom)
-                    VALUES (ST_SetSRID(ST_MakePolygon(ST_GeomFromText('LINESTRING('
-                        || %s || ' ' || %s || ', '
-                        || %s || ' ' || %s || ', '
-                        || %s || ' ' || %s || ', '
-                        || %s || ' ' || %s || ', '
-                        || %s || ' ' || %s || ')')), 4326));
-                """
-                try:
-                    cursor.execute(
-                        query,
-                        (
-                            msg.min_pt.longitude,
-                            msg.min_pt.latitude,
-                            msg.min_pt.longitude,
-                            msg.max_pt.latitude,
-                            msg.max_pt.longitude,
-                            msg.max_pt.latitude,
-                            msg.max_pt.longitude,
-                            msg.min_pt.latitude,
-                            msg.min_pt.longitude,
-                            msg.min_pt.latitude,
-                        ),
-                    )
-                except psycopg2.errors.UndefinedTable:
-                    self.get_logger().error(
-                        f"Table f{self.DEBUG_BBOX_TABLE} does not exist. "
-                        f"Cannot insert BoundingBox message."
-                    )
-
             self._db_connection.commit()
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_DEFAULT_MS)
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_update_database,
-    )
-    def bounding_box(self) -> Optional[BoundingBox]:
-        """:term:`Bounding box` of approximate :term:`vehicle` :term:`camera`
-        :term:`FOV` location published via :attr:`.GisNode.bounding_box`
-        """
-
-    @property
-    @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         ROS_TOPIC_SENSOR_GPS,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_update_database,
     )
     def sensor_gps(self) -> Optional[SensorGps]:
-        """Subscribed mock :term:`GNSS` :term:`message` published by
-        :class:`.MockGPSNode`
-        """
+        """Subscribed :attr:`.UORBNode.sensor_gps` mock GPS message"""

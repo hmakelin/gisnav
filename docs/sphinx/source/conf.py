@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath("../gisnav"))
 project = "GISNav"
 copyright = "2024, Harri Makelin"
 author = "Harri Makelin"
-release = "v0.66.0"
+release = "v0.67.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

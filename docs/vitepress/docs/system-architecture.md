@@ -1,6 +1,6 @@
 # System architecture
 
-The GISNav ROS 2 package receives upstream inputs from the autopilot via MAVLink and transforms them in multiple sequential steps to downstream outputs, the most important of which are the NMEA mock GPS messages. In GISNav this data processing algorithm is expressed as a distributed unidirectional network of ROS nodes.
+The GISNav ROS 2 package receives upstream inputs from the autopilot via MAVLink and transforms them in multiple sequential steps to downstream outputs, the most important of which are the mock GPS messages. In GISNav this data processing algorithm is expressed as a distributed unidirectional network of ROS nodes.
 
 The GISNav ROS application also has many external interfaces and effective development requires a simulation environment. GISNav defines and [deploys that simulation environment with Docker Compose](/deploy-with-docker-compose).
 
@@ -8,11 +8,7 @@ This page provides an overview of both the topography of the GISNav ROS 2 packag
 
 ## ROS topography
 
-The core ROS topography diagram below depicts how ROS messages flow through GISNav. The API reference(under construction) has more detailed information on the purpose and design of each ROS node.
-
-::: info `MonocularStereoImage` currently disabled
-This diagram depicts partially implemented but disabled visual odometry (VO) functionality (`MonocularStereoImage`).
-:::
+The core ROS topography diagram below depicts how ROS messages flow through GISNav. The [API reference](/reference/) has more detailed information on the purpose and design of each ROS node.
 
 ::: info Todo
 - From BBoxNode, publish map to `base_link` and `base_link` to `camera` transformations separately to simplify implementation and reduce amount of maintained code.

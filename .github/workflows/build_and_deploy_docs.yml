@@ -25,7 +25,7 @@ jobs:
         run: |
           mkdir -p docs/_build
           docker run ghcr.io/${{ github.repository }}:latest make docs
-          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/vitepress/docs/dist docs
+          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/vitepress/docs/.vitepress/dist docs
 
       - name: Install node
         run: |

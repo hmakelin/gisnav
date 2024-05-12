@@ -112,6 +112,7 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && source ~/.nvm/nvm.sh \
     && nvm install 18 \
     && nvm use 18 \
+    && cd docs/vitepress \
     && npm install
 
 ENTRYPOINT ["/entrypoint.sh"]

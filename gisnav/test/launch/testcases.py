@@ -1,4 +1,4 @@
-"""Tests case for topic subscriptions"""
+"""This module contains launch test case implementations"""
 import time
 import unittest
 from typing import List, Tuple
@@ -8,9 +8,7 @@ import rclpy.node
 
 
 class TestTopographyCase(unittest.TestCase):
-    """Tests that all nodes initialize with the correct :term:`ROS` topic
-    subscriptions
-    """
+    """Tests that all nodes initialize with the correct ROS topic subscriptions"""
 
     EXPECTED_NODES = (
         "gis_node",
@@ -22,7 +20,7 @@ class TestTopographyCase(unittest.TestCase):
     )
     """Names of nodes that should be found when running the launch configuration
 
-    `test_node` is created by the test case.
+    ``test_node`` is created by the test case.
     """
 
     EXPECTED_NAMESPACES = ("/gisnav", "/gisnav", "/gisnav", "/gisnav", "/gisnav", "/")
@@ -81,7 +79,7 @@ class TestTopographyCase(unittest.TestCase):
         :param timeout: Timeout in seconds
         :return: List of tuples containing node name and type
         :raise: :class:`.AssertionError` if names and namespaces are not
-            returned within :param timeout_sec:
+            returned within timeout
         """
         names_and_namespaces = None
         end_time = time.time() + timeout
@@ -102,7 +100,7 @@ class TestTopographyCase(unittest.TestCase):
         :param timeout: Timeout in seconds
         :return: List of tuples containing topic name and type
         :raise: :class:`.AssertionError` if names and types are not returned
-            within :param timeout_sec:
+            within timeout
         """
         names_and_types = None
         end_time = time.time() + timeout

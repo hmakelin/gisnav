@@ -107,6 +107,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && apt clean
 
+# Node 18 for building the docs (Sphinx dependencies already in setup.py)
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
+    && source ~/.nvm/nvm.sh \
+    && nvm install 18 \
+    && nvm use 18
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 # TODO: proper health check - check that public facing topics are publishing

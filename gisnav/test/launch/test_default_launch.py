@@ -1,4 +1,4 @@
-"""Tests :term:`ROS` launch file for :term:`PX4` configuration"""
+"""Tests the ``default.launch.py`` ROS launch file"""
 import os
 
 import pytest

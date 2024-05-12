@@ -1,3 +1,1 @@
-"""Package containing GISNav :term:`ROS` nodes implementing
-:term:`extended functionality`
-"""
+"""This package contains the GISNav extension ROS nodes"""

@@ -1,7 +1,5 @@
-"""Unit tests
+"""This sub-package contains unit tests
 
-.. note::
-
-    This subpackage is still very much Work In Progress - do not expect the tests
-    here to work.
+> [!NOTE] Not implemented
+> No unit test suites implemented yet.
 """

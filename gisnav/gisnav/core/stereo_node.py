@@ -1,8 +1,14 @@
-"""This module contains :class:`.StereoNode`, a :term:`ROS` node generating the
-:term:`query` and :term:`reference` stereo image pair by either rotating the reference
-image based on :term:`vehicle` heading and then cropping it based on the
-:term:`camera` information, or by coupling to successive image frames from the monocular
-onboard camera.
+"""This module contains :class:`.StereoNode`, a ROS node that generates and publishes a
+synthetic query and reference stereo image couple.
+
+Synthetic refers to the fact that no stereo camera is actually assumed or required.
+The reference can be an older image from the same monocular camera, or alternatively an
+aligned orthoimage and DEM raster from the GIS server.
+
+Alignment and cropping to the same dimension as the query image is done to the
+reference orthoimage by using information of the onboard camera resolution and the
+vehicle's heading. Alignment  is required since the deep learning network that is used
+for matching keypoints is not assumed to be rotation agnostic.
 """
 from typing import Final, Optional, Tuple
 
@@ -39,11 +45,7 @@ from ..constants import (
 
 
 class StereoNode(Node):
-    """Generates and publishes a synthetic :term:`query` and :term:`reference` stereo
-    image couple. Synthetic refers to the fact that no stereo camera is actually assumed
-    or required. The reference can be an older image from the same monocular camera, or
-    alternatively an aligned map raster from the GIS server.
-    """
+    """Generates and publishes a synthetic query and reference stereo image couple."""
 
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
@@ -84,7 +86,7 @@ class StereoNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def orthoimage(self) -> Optional[OrthoImage]:
-        """Subscribed :term:`orthoimage` for :term:`pose` estimation"""
+        """Subscribed orthoimage, or None if unknown"""
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
@@ -93,7 +95,8 @@ class StereoNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def camera_info(self) -> Optional[CameraInfo]:
-        """Camera info for determining appropriate :attr:`.orthoimage` resolution"""
+        """Subscribed camera info for determining appropriate :attr:`.orthoimage` crop
+        resolution, or None if unknown"""
 
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
@@ -115,7 +118,7 @@ class StereoNode(Node):
         callback=_image_cb,
     )
     def image(self) -> Optional[Image]:
-        """Raw image data from vehicle camera for pose estimation"""
+        """Subscribed raw image from vehicle camera, or None if unknown"""
 
     def _world_to_reference_proj_str(
         self,
@@ -158,14 +161,8 @@ class StereoNode(Node):
         QoSPresetProfiles.SENSOR_DATA.value,
     )
     def pose_image(self) -> Optional[OrthoStereoImage]:
-        """Published :term:`stacked <stack>` image consisting of query image,
-        reference image, and optional reference elevation raster (:term:`DEM`).
-
-        .. note::
-            Semantically not a single image, but a stack of two 8-bit grayscale
-            images and one 16-bit "image-like" elevation reference, stored in a
-            compact way in an existing message type so to avoid having to also
-            publish custom :term:`ROS` message definitions.
+        """Published aligned and cropped orthoimage consisting of query image,
+        reference image, and optional reference elevation raster (DEM).
         """
 
         @narrow_types(self)
@@ -259,7 +256,8 @@ class StereoNode(Node):
     )
     def twist_image(self) -> Optional[MonocularStereoImage]:
         """Published stereo couple image consisting of query image and reference image
-        for :term:`VO` use.
+
+        Used for visual odometry and specifically velocity estimation
         """
 
         @narrow_types(self)

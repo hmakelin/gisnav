@@ -1,4 +1,4 @@
-"""Package containing GISNav :term:`core` :term:`ROS` nodes"""
+"""This package contains the GISNav core ROS nodes"""
 
 from .bbox_node import BBoxNode
 from .gis_node import GISNode

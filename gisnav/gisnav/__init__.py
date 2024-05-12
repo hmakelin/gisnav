@@ -1,17 +1,11 @@
-"""ROS 2 package for estimating airborne drone global position by matching
-video to map retrieved from onboard GIS server
+"""This is a ROS 2 package that determines UAV global position by aligning real-time
+video with maps from an onboard GIS server.
 
 All ROS 2 nodes are defined in dedicated modules to keep individual file size
-down. They are imported here to package namespace for convenience. For example:
+down.
 
-.. code-block::
-
-    #from gisnav.core.gis_node import GISNode
-    from gisnav import GISNode
-
-ROS namespace and :term:`core` node names are hard-coded inside the static
-public node entrypoints defined here. Other node initialization arguments are p
-rovided via ROS 2 launch arguments.
+The ROS namespace and node names are hard-coded in :mod:`.constants`, and the
+static node entrypoints are defined here in the package root namespace.
 """
 import cProfile
 import io
@@ -37,7 +31,17 @@ try:
     from .extensions.qgis_node import QGISNode
 
     def run_qgis_node():
-        """Spins up a :class:`.QGISNode`"""
+        """Spins up a :class:`.QGISNode`
+
+        > [!NOTE] Must install extra
+        > Not available if the ``ggis_node`` Python extra has not been installed.
+
+        .. code-block:: bash
+            :caption: Install QGISNode
+
+            cd ~/colcon_ws/src/gisnav/gisnav
+            pip install .[qgis_node]
+        """
         _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
@@ -47,7 +51,17 @@ try:
     from .extensions.nmea_node import NMEANode
 
     def run_nmea_node():
-        """Spins up a :class:`.NMEANode`"""
+        """Spins up a :class:`.NMEANode`
+
+        > [!NOTE] Must install extra
+        > Not available if the ``nmea_node`` Python extra has not been installed.
+
+        .. code-block:: bash
+            :caption: Install NMEANode
+
+            cd ~/colcon_ws/src/gisnav/gisnav
+            pip install .[nmea_node]
+        """
         _run(NMEANode, NMEA_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
@@ -57,7 +71,17 @@ try:
     from .extensions.uorb_node import UORBNode
 
     def run_uorb_node():
-        """Spins up a :class:`.UORBNode`"""
+        """Spins up a :class:`.UORBNode`
+
+        > [!NOTE] Must install extra
+        > Not available if the ``uorb_node`` Python extra has not been installed.
+
+        .. code-block:: bash
+            :caption: Install UORBNode
+
+            cd ~/colcon_ws/src/gisnav/gisnav
+            pip install .[uorb_node]
+        """
         _run(UORBNode, UORB_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:

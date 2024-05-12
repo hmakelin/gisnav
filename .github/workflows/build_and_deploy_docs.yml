@@ -1,0 +1,61 @@
+name: Build and deploy docs
+
+on:
+  # Push trigger is disabled because the Docker container that builds the docs
+  # in this workflow will not have the new tag, meaning the API reference would
+  # have the wrong version tag displayed (commit would still be correct). Need to
+  # build a new Docker image and then use that to build and deploy the docs.
+  #push:
+  #  # Run when new version tag is pushed
+  #  tags:
+  #    - v*
+
+  # Allows running manually from the Actions tab
+  workflow_dispatch:
+
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Build docs
+        run: |
+          mkdir -p docs/_build
+          docker run ghcr.io/${{ github.repository }}:latest make docs
+          docker cp $(docker ps -q -l):/opt/colcon_ws/src/gisnav/docs/vitepress/docs/dist docs
+
+      - name: Install node
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install curl
+          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          sudo apt-get install -y nodejs
+
+      - name: Configure pages
+        uses: actions/configure-pages@v1
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: "docs"
+
+  deploy:
+    needs: build
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Deploy pages
+        id: deployment
+        uses: actions/deploy-pages@v3

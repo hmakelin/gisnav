@@ -1,6 +1,5 @@
-"""This module contains the :class:`.NMEANode` :term:`extension` :term:`node`
-that publishes mock GPS (GNSS) messages to autopilot middleware over
-:term:`NMEA`
+"""This module contains :class:`.NMEANode`, an extension ROS node that publishes
+mock GPS (GNSS) messages to FCU over the NMEA protocol via a serial port
 """
 from datetime import datetime
 from typing import Final, List, Optional, Tuple
@@ -21,22 +20,23 @@ from rclpy.qos import QoSPresetProfiles
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
+from ..constants import ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
 class NMEANode(Node):
-    """A node that publishes a mock GPS message to autopilot middleware"""
+    """Publishes mock GPS messages to FCU over NMEA protocol via a serial port"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
-    """Default :term:`DEM` vertical datum"""
+    """Default for :attr:`.dem_vertical_datum`"""
 
     ROS_D_PORT = "/dev/ttyS1"
-    """Default serial port for outgoing :term:`NMEA` messages"""
+    """Default for :attr:`.port`"""
 
     ROS_D_BAUDRATE = 9600
-    """Default baudrate for outgoing :term:`NMEA` messages"""
+    """Default for :attr:`.baudrate`"""
 
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
@@ -69,33 +69,35 @@ class NMEANode(Node):
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def dem_vertical_datum(self) -> Optional[int]:
-        """:term:`DEM` vertical datum (must match DEM that is published in
-        :attr:`.GISNode.orthoimage`)
+        """DEM vertical datum
+
+        > [!IMPORTANT]
+        > Must match DEM that is published in :attr:`.GISNode.orthoimage`
         """
 
     @property
     @ROS.parameter(ROS_D_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def port(self) -> Optional[str]:
-        """Serial port for outgoing :term:`NMEA` messages"""
+        """Serial port for outgoing NMEA messages"""
 
     @property
     @ROS.parameter(ROS_D_BAUDRATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def baudrate(self) -> Optional[int]:
-        """Baudrate for outgoing :term:`NMEA` messages"""
+        """Baudrate for outgoing NMEA messages"""
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
         self._publish(msg)
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
-        "/robot_localization/odometry/filtered",
+        ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_odometry_cb,
     )
     def odometry(self) -> Optional[Odometry]:
-        """Camera info message including the camera intrinsics matrix"""
+        """Subscribed filtered odometry from ``robot_localization`` package EKF node,
+        or None if unknown"""
 
     def _publish(self, odometry: Odometry) -> None:
         @narrow_types(self)
@@ -234,8 +236,7 @@ class NMEANode(Node):
             def _calculate_course_over_ground(
                 east_velocity: float, north_velocity: float
             ) -> float:
-                """
-                Calculate the course over ground from east and north velocities.
+                """Calculates course over ground from east and north velocities.
 
                 :param east_velocity: The velocity towards the east in meters per
                     second.
@@ -311,7 +312,7 @@ class NMEANode(Node):
     def compute_rmc_parameters(
         self, odometry: Odometry
     ) -> Tuple[str, str, str, str, str, str, float, float, str]:
-        """Calculate the RMC parameters based on odometry data.
+        """Calculates RMC parameters based on odometry data.
 
         :param odometry: The odometry data from which to extract GPS details.
         :returns: A tuple with formatted time, status, latitude, latitude direction,
@@ -380,7 +381,13 @@ class NMEANode(Node):
     ) -> Optional[List[str]]:
         """Outgoing NMEA mock GPS sentences
 
-        Constructs GPGGA, GPVTG, and GPGSA NMEA sentences based on provided GPS data.
+        Published sentences:
+        - GGA (position fix)
+        - GSA (position fix)
+        - HDT (heading)
+        - GST (standard deviations)
+        - VTG (velocities, disabled)
+        - RMC (velocities, disabled)
         """
         # Convert timestamp to hhmmss format
         time_str = self.format_time_from_timestamp(timestamp)
@@ -424,7 +431,7 @@ class NMEANode(Node):
         altitude_amsl: float,
         hdop: float,
     ) -> str:
-        """Returns an :term:`NMEA` GGA sentence
+        """Returns an NMEA GPGGA sentence
 
         :param time_str: UTC time in HHMMSS format.
         :param lat_nmea: Latitude in decimal degrees.
@@ -460,7 +467,7 @@ class NMEANode(Node):
 
     @staticmethod
     def VTG(cog_degrees: float, ground_speed_knots: float) -> str:
-        """Returns an :term:`NMEA` VTG sentence
+        """Returns an NMEA GPVTG sentence
 
         :param cog_degrees: Course over ground in degrees.
         :param ground_speed_knots: Speed over ground in knots.
@@ -485,7 +492,7 @@ class NMEANode(Node):
 
     @staticmethod
     def GSA(pdop: float, hdop: float, vdop: float) -> str:
-        """Returns an :term:`NMEA` GSA sentence
+        """Returns an NMEA GPGSA sentence
 
         :param pdop: Positional dilution of precision.
         :param hdop: Horizontal dilution of precision.
@@ -509,7 +516,7 @@ class NMEANode(Node):
 
     @staticmethod
     def HDT(yaw_deg: float):
-        """Returns an :term:`NMEA` HDT sentence
+        """Returns an NMEA GPHDT sentence
 
         :param yaw_deg: Vehicle heading in degrees. Heading increases "clockwise" so
             that north is 0 degrees and east is 90 degrees.
@@ -528,7 +535,7 @@ class NMEANode(Node):
         std_dev_longitude: float,
         std_dev_altitude: float,
     ) -> str:
-        """Returns an NMEA GST sentence.
+        """Returns an NMEA GPGST sentence.
 
         :param time_str: UTC time in hhmmss format.
         :param rms_deviation: RMS deviation of the pseudorange.
@@ -571,7 +578,7 @@ class NMEANode(Node):
         magnetic_variation: float = 0,
         var_dir: str = "E",
     ) -> str:
-        """Returns an NMEA RMC sentence.
+        """Returns an NMEA GPRMC sentence.
 
         :param time_str: UTC time in hhmmss format.
         :param status: Status, 'A' for active or 'V' for void.
@@ -628,15 +635,12 @@ class NMEANode(Node):
     def _convert_to_wgs84(
         self, lat: float, lon: float, elevation: float
     ) -> Optional[Tuple[float, float]]:
-        """
-        Convert :term:`elevation` or :term:`altitude` from a specified vertical
-        datum to :term:`WGS 84`.
+        """Converts elevation or altitude from :attr:`.dem_vertical_datum` to WGS 84.
 
         :param lat: Latitude in decimal degrees.
         :param lon: Longitude in decimal degrees.
         :param elevation: Elevation in the specified datum.
-        :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
-            :term:`AMSL`.
+        :return: A tuple containing elevation above WGS 84 ellipsoid and AMSL.
         """
         _, _, wgs84_elevation = self._transformer_to_wgs84.transform(
             lon, lat, elevation
@@ -646,7 +650,7 @@ class NMEANode(Node):
         return wgs84_elevation, msl_elevation
 
     def _write_nmea_to_serial(self, nmea_sentences: List[str]) -> None:
-        """Writes a collection of NMEA sentences to the specified serial port.
+        """Writes a collection of NMEA sentences to :attr:`.port`.
 
         :param nmea_sentences: A list of NMEA sentences to be written to the serial port
         """
@@ -687,7 +691,7 @@ class NMEANode(Node):
 
     @property
     def GSV(self) -> str:
-        """Returns NMEA GSV sentences for 12 satellites statically defined.
+        """Returns NMEA GPGSV sentences for 12 statically defined dummy satellites.
 
         :returns: A formatted NMEA GSV sentences as a string.
         """

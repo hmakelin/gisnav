@@ -1,5 +1,5 @@
-"""This module contains the :class:`.UORBNode` :term:`extension` :term:`node`
-that publishes PC4 uORB SensorGps (GNSS) messages to the micro-ros agent middleware
+"""This module contains :class:`.UORBNode`, an extension ROS node that publishes PX4
+uORB :class:`.SensorGps` (GNSS) messages to the uXRCE-DDS middleware
 """
 from typing import Final, Optional, Tuple
 
@@ -18,17 +18,18 @@ from rclpy.qos import QoSPresetProfiles
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import ROS_TOPIC_SENSOR_GPS
+from ..constants import ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY, ROS_TOPIC_SENSOR_GPS
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
 class UORBNode(Node):
-    """A node that publishes a mock GPS message to autopilot middleware"""
+    """A node that publishes PX4 uORB :class:`.SensorGps` (GNSS) messages to the
+    uXRCE-DDS middleware"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
-    """Default :term:`DEM` vertical datum"""
+    """Default for :attr:`.dem_vertical_datum`"""
 
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
@@ -67,8 +68,10 @@ class UORBNode(Node):
     @property
     @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def dem_vertical_datum(self) -> Optional[int]:
-        """:term:`DEM` vertical datum (must match DEM that is published in
-        :attr:`.GISNode.orthoimage`)
+        """DEM vertical datum
+
+        > [!IMPORTANT]
+        > Must match DEM that is published in :attr:`.GISNode.orthoimage`
         """
 
     def _odometry_cb(self, msg: Odometry) -> None:
@@ -76,14 +79,14 @@ class UORBNode(Node):
         self._publish(msg)
 
     @property
-    # @ROS.max_delay_ms(messaging.DELAY_SLOW_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
-        "/robot_localization/odometry/filtered",
+        ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY,
         QoSPresetProfiles.SENSOR_DATA.value,
         callback=_odometry_cb,
     )
     def odometry(self) -> Optional[Odometry]:
-        """Camera info message including the camera intrinsics matrix"""
+        """Subscribed filtered odometry from ``robot_localization`` package EKF node,
+        or None if unknown"""
 
     def _publish(self, odometry: Odometry) -> None:
         @narrow_types(self)
@@ -221,7 +224,7 @@ class UORBNode(Node):
                 east_velocity: float, north_velocity: float
             ) -> float:
                 """
-                Calculate the course over ground from east and north velocities.
+                Calculates course over ground from east and north velocities.
 
                 :param east_velocity: The velocity towards the east in meters per
                     second.
@@ -311,10 +314,10 @@ class UORBNode(Node):
         epv: float,
         satellites_visible: int,
     ) -> Optional[SensorGps]:
-        """Outgoing mock :term:`GNSS` :term:`message` when :attr:`use_sensor_gps`
-        is ``True``
+        """Outgoing mock GPS message, or None if cannot be computed
 
-        Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
+        > [!IMPORTANT] px4_msgs release/1.14
+        > Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
         """
         yaw_rad = np.radians(yaw_degrees)
 
@@ -370,15 +373,12 @@ class UORBNode(Node):
     def _convert_to_wgs84(
         self, lat: float, lon: float, elevation: float
     ) -> Optional[Tuple[float, float]]:
-        """
-        Convert :term:`elevation` or :term:`altitude` from a specified vertical
-        datum to :term:`WGS 84`.
+        """Converts elevation or altitude from :attr:`.dem_vertical_datum` to WGS 84.
 
         :param lat: Latitude in decimal degrees.
         :param lon: Longitude in decimal degrees.
         :param elevation: Elevation in the specified datum.
-        :return: A tuple containing :term:`elevation` above :term:`WGS 84` and
-            :term:`AMSL`.
+        :return: A tuple containing elevation above WGS 84 ellipsoid and AMSL.
         """
         _, _, wgs84_elevation = self._transformer_to_wgs84.transform(
             lon, lat, elevation

@@ -110,8 +110,8 @@ RUN apt-get update \
 # Node 18 for building the docs (Sphinx dependencies already in setup.py)
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
     && source ~/.nvm/nvm.sh \
-    && nvm install 18 \
-    && nvm use 18 \
+    && nvm install 20 \
+    && nvm use 20 \
     && cd docs/vitepress \
     && npm install
 

@@ -35,7 +35,7 @@ docker compose -p gisnav run gisnav make docs
 The static HTML documentation will appear in the below folder:
 
 ```text
-~/colcon_ws/src/gisnav/docs/vitepress/docs/dist
+~/colcon_ws/src/gisnav/docs/vitepress/docs/.vitepress/dist
 ```
 
 ## Serve VitePress documentation

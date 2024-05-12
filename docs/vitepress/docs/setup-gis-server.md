@@ -91,9 +91,7 @@ firefox "http://localhost:80/?map=/etc/mapserver/wms.map&service=WMS&request=Get
 If you want to run your own GIS server or WMS proxy, you may want to consider these FOSS options:
 
 - MapServer
-- [GeoServer](https://geoserver.org) (full-fledged OGC-compliant GIS server
-
-)
+- [GeoServer](https://geoserver.org) (full-fledged OGC-compliant GIS server)
 - [Mapnik](https://mapnik.org) and [MapProxy](https://mapproxy.org)
 
 ## Orthoimagery and DEMs

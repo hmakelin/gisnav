@@ -25,7 +25,7 @@ cd ~/colcon_ws/src/gisnav
 make docs
 ```
 
-```bash [Docker (Todo: not implemented)]
+```bash [Docker]
 cd ~/colcon_ws/src/gisnav/docker
 docker compose -p gisnav run gisnav make docs
 ```

@@ -1,8 +1,8 @@
 name: Push latest GISNav multi-arch Docker images to GHCR
 
 on:
-  push:
-    branches: [ "master" ]
+  #push:
+  #  branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 

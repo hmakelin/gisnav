@@ -167,7 +167,7 @@ A software application that facilitates communication between other software app
 
 ### Model
 - A machine learning model or neural [network](#network). In GISNav used specifically for [camera](#camera) [pose](#pose) estimation.
-- A [Gazebo][#gazebo] model, more specifically a [vehicle](#vehicle) model
+- A [Gazebo](#gazebo) model, more specifically a [vehicle](#vehicle) model
 
 ### Module
 A [Python](#python) module.

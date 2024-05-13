@@ -506,6 +506,9 @@ ROS Enhancement Proposal
 ### RPY
 Roll, pitch, yaw. Euler angle representation of [attitude](#orientation-attitude) which suffers from gimbal lock, unlike [quaternions](#quaternion)
 
+### SBC
+Single Board Computer
+
 ### SCP, `scp`
 Secure Copy Protocol
 
@@ -632,6 +635,9 @@ PX4 Autopilot: [px4.io](https://px4.io/)
 
 ### Python
 A computer programming language: [python.org](https://www.python.org/)
+
+### Raspberry Pi 5
+A popular SBC: [raspberrypi.com/products/raspberry-pi-5](https://www.raspberrypi.com/products/raspberry-pi-5/)
 
 ### QEMU
 A FOSS full-system emulator: [qemu.org](https://www.qemu.org/)

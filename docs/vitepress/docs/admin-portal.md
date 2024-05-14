@@ -15,4 +15,9 @@ The following command should launch the home page and any required supporting se
 docker compose -p gisnav up homepage
 ```
 
-You should then find the homepage at `localhost:3000`.
+You should then be able to open the admin portal in a browser using the below commands:
+
+```bash
+HOMEPAGE_IP=$(docker inspect -f '{{.NetworkSettings.Networks.gisnav_admin.IPAddress}}' gisnav-homepage-1)
+firefox $HOMEPAGE_IP:3000
+```

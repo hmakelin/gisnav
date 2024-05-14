@@ -116,6 +116,7 @@ pip3 install ./gisnav
 ```bash [Extended <Badge type="info" text="Optional"/>]
 cd ~/colcon_ws/src/gisnav
 pip3 install ./gisnav[nmea_node]
+pip3 install ./gisnav[uorb_node]
 pip3 install ./gisnav[qgis_node]
 ```
 

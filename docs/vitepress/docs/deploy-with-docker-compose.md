@@ -6,9 +6,13 @@ This page provides details on how to build and deploy these services, allowing f
 
 ## Prerequisites
 
-### Docker Compose and NVIDIA Container Toolkit
+### Docker Compose
 
-<!--@include: ./shared/docker-compose-and-nvidia-container-toolkit-required.md-->
+<!--@include: ./shared/docker-compose-required.md-->
+
+### NVIDIA Container Toolkit <Badge type="info" text="Optional"/>
+
+<!--@include: ./shared/nvidia-container-toolkit-required.md-->
 
 ### GISNav source code
 

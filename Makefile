@@ -2,7 +2,6 @@ SHELL := /bin/bash
 
 include gisnav/Makefile
 include docker/Makefile
-include systemd/Makefile
 
 # The docs/Makefile has a catch-all target so it is not included here
 #include docs/Makefile

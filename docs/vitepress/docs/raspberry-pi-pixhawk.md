@@ -135,8 +135,7 @@ graph TB
     end
     subgraph "Raspberry Pi 5"
         subgraph USB["USB ports (interchangeable)"]
-            Pi_USB[USB x2]
-            Pi_micro_USB["Micro-USB"]
+            Pi_USB[USB x3]
             Pi_USB_C["USB-C"]
         end
         Pi_HDMI[HDMI]
@@ -158,10 +157,10 @@ graph TB
     FMU_TELEM1_RX --- Converter_TX
     FMU_TELEM1_GND --- Converter_GND
     FMU_USB ---|Upload PX4 firmware| Laptop_USB
-    Converter_USB ---|NMEA 0183| Pi_micro_USB
+    Converter_USB ---|NMEA 0183| Pi_USB
     Pi_USB_C --- Socket
     Pi_HDMI --- Display
     Pi_USB --- Mouse
     Pi_USB --- Keyboard
-    Pi_ETH ---|Upload GISNav services| Laptop_ETH
+    Pi_ETH ---|ssh| Laptop_ETH
 ```

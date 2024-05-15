@@ -290,6 +290,7 @@ Most likely rotation of the [reference raster](#reference-reference-image-refere
 ### Service
 - A [Docker Compose](#docker-compose) service
 - A [ROS](#ros-ros-2) service
+- A [systemd](#systemd) service
 
 ### Service orchestration
 Deploying and managing [Docker Compose](#docker-compose) [services](#service) that constitute a GISNav [deployment](#deploy-deployment). Currently done using [Make](#make-make) (Makefiles).
@@ -661,6 +662,9 @@ ROS 3D visualization software: [github.com/ros2/rviz](https://github.com/ros2/rv
 
 ### Sphinx
 Documentation generation software: [sphinx-doc.org/en/master/](https://www.sphinx-doc.org/en/master/)
+
+### systemd
+A system and service manager for Linux: [systemd.io](https://systemd.io/)
 
 ### tf2
 [ROS 2](#ros-ros-2) transformations library: [wiki.ros.org/tf2](http://wiki.ros.org/tf2)

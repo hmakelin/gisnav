@@ -21,7 +21,7 @@ setup:
 
 # Copy source files to build folder
 copy_files: setup
-	@cp ${COMPOSE_FILE_PATH}/{docker-compose.yaml,.env} $(DEB_DIR)/etc/gisnav-compose/
+	@cp -r ${COMPOSE_FILE_PATH}/{docker-compose.yaml,.env,apache,gscam,homepage,mavros,micro-ros-agent,postgres} $(DEB_DIR)/etc/gisnav-compose/
 	@cp etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postinst $(DEB_DIR)/DEBIAN/

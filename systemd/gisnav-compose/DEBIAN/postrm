@@ -1,15 +1,28 @@
 #!/bin/sh
 set -e
 
-# Change to the directory where the docker-compose.yml is located
-cd /etc/gisnav-compose
+# Stop and disable the systemd service
+if [ -x "$(command -v systemctl)" ]; then
+    systemctl stop gisnav-compose.service
+    systemctl disable gisnav-compose.service
+fi
 
-# "down" removes networks, volumes, containers
-docker compose -p gisnav down
+# Execute docker-compose down
+# "down" removes containers, volumes, networks
+if [ -x "$(command -v docker)" ]; then
+    cd /etc/gisnav-compose
+    docker compose -p gisnav down
+fi
 
-# Finally remove the compose files
+# Remove the systemd service file
 case "$1" in
     purge|remove)
+        # Remove systemd service file
+        if [ -f /etc/systemd/system/gisnav-compose.service ]; then
+            rm -f /etc/systemd/system/gisnav-compose.service
+            systemctl daemon-reload
+        fi
+        # Remove the compose files directory
         if [ -d /etc/gisnav-compose ]; then
             rm -rf /etc/gisnav-compose
         fi

@@ -569,6 +569,9 @@ NVIDIA parallel computing platform: [developer.nvidia.com/cuda-zone](https://dev
 ### DDS / Data Distribution Service
 A middleware protocol and standard: [dds-foundation.org](https://www.dds-foundation.org/)
 
+### Debian
+A Linux distribution: [debian.org/](https://www.debian.org/)
+
 ### Docker
 Software containerization tool: [docker.com](https://www.docker.com/)
 

@@ -2,22 +2,31 @@
 
 This page describes how to run HIL simulation on a Pixhawk board using the Raspberry Pi 5 as a companion computer.
 
-## Prerequisites for Raspberry Pi 5
-
-### Docker Compose plugin
-
-<!--@include: ./shared/docker-compose-required.md-->
-
-### systemd
-
-You will also need to have a Linux distro that uses `systemd` such as Debian or any of its derivatives installed on the Raspberry Pi 5.
-
 ## Concepts
 
 This page uses the below terminology:
 
 - **Simulation host**: Computer that hosts the HIL simulation world (Gazebo in this case)
 - **Development host**: Computer that optionally builds (potentially cross-platform) Docker images and hosts a private Docker registry for the Raspberry Pi 5 companion computer to pull (potentially non-distributable) Docker images from.
+
+## Prerequisites for Raspberry Pi 5
+
+### Docker Compose plugin
+
+<!--@include: ./shared/docker-compose-required.md-->
+
+### systemd.
+
+The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as Debian or one of its derivatives like Raspberry Pi OS or Ubuntu.
+
+### Connectivity & networking
+
+- You need `ssh` enabled on your Raspberry Pi 5.
+
+- These instructions assume you are using the default hostname `raspberrypi.local` from the `rpi-imager` tool.
+
+- Your development host and Raspberry Pi 5 must be on the same local network. You can e.g. connect them with an Ethernet cable.
+
 
 ## Install GISNav Compose Services
 
@@ -31,7 +40,11 @@ sudo apt-get -y install ./gisnav-compose-*_all.deb
 ```
 :::
 
-Open an `ssh` shell to your Raspberry Pi 5 and use the commands below to install the `gisnav-compose` systemd service from the GISNav Debian repository.
+Open an `ssh` shell to your Raspberry Pi 5:
+
+```bash
+ssh raspberrypi.local
+```
 
 Add the GISNav Debian repository as a trusted repository:
 

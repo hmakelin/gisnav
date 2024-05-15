@@ -8,7 +8,7 @@ Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/etc/gisnav-compose
 ExecStart=docker compose -p gisnav up gisnav -d
-ExecStop=docker compose down
+ExecStop=docker compose -p gisnav down
 TimeoutStartSec=0
 
 [Install]

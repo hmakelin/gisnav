@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 PACKAGE_NAME = gisnav-compose
 VERSION = 0.67.0
 BUILD_DIR = build
@@ -19,7 +21,7 @@ setup:
 
 # Copy source files to build folder
 copy_files: setup
-	@cp ${COMPOSE_FILE_PATH}/docker-compose.yaml $(DEB_DIR)/etc/gisnav-compose
+	@cp ${COMPOSE_FILE_PATH}/{docker-compose.yaml,.env} $(DEB_DIR)/etc/gisnav-compose/
 	@cp etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postinst $(DEB_DIR)/DEBIAN/

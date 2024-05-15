@@ -7,7 +7,7 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/etc/gisnav-compose
-ExecStart=docker compose -p gisnav up gisnav -d
+ExecStart=docker compose -p gisnav up gisnav homepage -d
 ExecStop=docker compose -p gisnav stop
 TimeoutStartSec=0
 

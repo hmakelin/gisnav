@@ -102,3 +102,23 @@ docker compose stop \
 :::
 
 After you have your supporting services deployed, you might be interested in [launching a local GISNav app](/deploy-for-development#deploy-via-ros-launch-system).
+
+
+## Private registry
+
+::: warning Warning: Untested feature
+This is a suggested model for deploying Docker images, which may be non-distributable whether for licensing or other reasons, to a companion computer on a local or internal network.
+
+This has not yet been tested.
+
+:::
+
+::: info Todo
+- Missing example commands, including building cross-platform images
+- Should be moved to HIL section as this mainly concerns deployment on companion computers?
+
+:::
+
+You can push the built Docker images to a private (or even [air-gapped](https://distribution.github.io/distribution/#considerations-for-air-gapped-registries)) Docker registry to simplify deployment to a companion computer.
+
+The `docker/docker-compose.yaml` file uses the environment variables in the `docker/.env` file to determine the registry host, user namespace and port. These can be all changed to point to your private registry.

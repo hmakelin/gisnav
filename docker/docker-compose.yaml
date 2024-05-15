@@ -82,6 +82,7 @@ services:
     build:
       context: apache
       target: mapserver
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-mapserver"
     command: apache2ctl -D FOREGROUND
     volumes:
       - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
@@ -97,6 +98,7 @@ services:
       target: mavros
       args:
         ROS_VERSION: humble
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-mavros"
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
     labels:
         - homepage.group=Core services
@@ -107,6 +109,7 @@ services:
     <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-micro-ros-agent"
     command: udp4 -p 8888
     labels:
         - homepage.group=Core services
@@ -139,7 +142,7 @@ services:
   gisnav:
     <<: [*base, *x11, *ros, *tty, *nvidia-gpu, *all-net]
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
-    image: ghcr.io/hmakelin/gisnav:latest
+    image: "${GISNAV_DOCKER_REGISTRY_HOST:-ghcr.io}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav"
     build:
       context: ..
       dockerfile: docker/mavros/Dockerfile
@@ -218,6 +221,7 @@ services:
       context: gscam
       args:
         ROS_VERSION: humble
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-gscam"
     volumes:
       - /dev/shm:/dev/shm  # todo: make work with *ros anchor
       - gscam-volume:/etc/gscam
@@ -266,6 +270,7 @@ services:
     <<: [*base, *gis-net]
     build:
       context: postgres
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-postgres"
     environment:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
@@ -281,6 +286,7 @@ services:
     build:
       context: apache
       target: fileserver
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-fileserver"
     command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
@@ -299,6 +305,7 @@ services:
     <<: [*base, *x11-environment, *nvidia-gpu, *admin-net]
     build:
       context: homepage
+    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-homepage"
     labels:
         - homepage.group=Admin services
         - homepage.name=Homepage
@@ -312,7 +319,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
 
   monitoring:
-    <<: [ *base, *x11-environment, *nvidia-gpu ] #, *admin-net ]
+    <<: [ *x11-environment, *nvidia-gpu ] #, *admin-net ]
     image: nicolargo/glances:latest-full
     pid: host
     network_mode: host
@@ -325,6 +332,14 @@ services:
         - homepage.group=Admin services
         - homepage.name=Glances
         - homepage.description=System monitor
+
+  registry:
+    image: registry
+    network_mode: host
+    labels:
+        - homepage.group=Admin services
+        - homepage.name=Registry
+        - homepage.description=Docker registry for sharing images between hosts across the local network
 
 volumes:
   maps-volume:

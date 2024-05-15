@@ -4,7 +4,13 @@ This page describes how to run HIL simulation on a Pixhawk board using the Raspb
 
 ## Prerequisites for Raspberry Pi 5
 
+### Docker Compose plugin
+
 <!--@include: ./shared/docker-compose-required.md-->
+
+### systemd
+
+You will also need to have a Linux distro that uses `systemd` such as Debian or any of its derivatives installed on the Raspberry Pi 5.
 
 ## Concepts
 
@@ -39,11 +45,22 @@ Add the GPG key of the GISNav Debian repository:
 curl -s https://hmakelin.github.io/gisnav/public.key | sudo apt-key add -
 ```
 
-Install the `gisnav-compose` Debian package:
+Install the `gisnav-compose` Debian package using the below command. The install script will pull and/or build a number of Docker images and can take several hours.
+
+::: tip Private registry
+You can make this process quicker by building your own (potentially cross-platform) images on your development host and pulling them onto your Raspberry Pi 5 using a [private registry](/deploy-with-docker-compose#private-registry).
+
+:::
 
 ```bash
 sudo apt-get update
 sudo apt-get -y install gisnav-compose
+```
+
+Check that the installation was successful and that the `gisnav-compose` service is running with the following command:
+
+```bash
+sudo systemctl status gisnav-compose.service
 ```
 
 ## Uninstall GISNav Compose Services

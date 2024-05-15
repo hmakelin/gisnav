@@ -17,6 +17,7 @@ copy_files: setup
 	cp ../docker/docker-compose.yaml $(DEB_DIR)/etc/gisnav-compose
     cp systemd/gisnav-compose/etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system/
     cp systemd/gisnav-compose/DEBIAN/control $(DEB_DIR)/DEBIAN/
+    cp systemd/gisnav-compose/DEBIAN/postinst $(DEB_DIR)/DEBIAN/
     cp systemd/gisnav-compose/DEBIAN/postrm $(DEB_DIR)/DEBIAN/
 
 build_package: copy_files

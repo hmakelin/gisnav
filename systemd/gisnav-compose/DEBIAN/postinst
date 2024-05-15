@@ -7,4 +7,7 @@ cd /etc/gisnav-compose
 # Pull or build the Docker images
 docker compose -p gisnav create
 
+# Enable the gisnav-compose.service at startup
+systemctl enable gisnav-compose.service
+
 exit 0

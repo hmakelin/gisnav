@@ -57,15 +57,52 @@ sudo apt-get update
 sudo apt-get -y install gisnav-compose
 ```
 
-Check that the installation was successful and that the `gisnav-compose` service is running with the following command:
+## Manage GISNav Compose Services
+
+### Start
+
+The `gisnav-compose.service` should start automatically when the system is started. Restart the system or start the `gisnav-compose` service manually to make it active:
 
 ```bash
-sudo systemctl status gisnav-compose.service
+sudo systemctl start gisnav-compose.service
 ```
 
-## Uninstall GISNav Compose Services
+The below example shows how you can check that the `gisnav-compose` service is active:
+
+```console
+hmakelin@hmakelin-MS-7D48:~$ sudo systemctl status gisnav-compose.service
+● gisnav-compose.service - GISNav Docker Compose Services
+     Loaded: loaded (/etc/systemd/system/gisnav-compose.service; enabled; vendor preset: enabled)
+     Active: active (exited) since Wed 2024-05-15 15:10:21 BST; 3min 35s ago
+   Main PID: 241948 (code=exited, status=0/SUCCESS)
+        CPU: 354ms
+
+May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-mavros-1  Started
+May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gscam-1  Started
+May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-micro-ros-agent-1  Started
+May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-px4-1  Starting
+May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-mapserver-1  Started
+May 15 15:10:19 hmakelin-MS-7D48 docker[241971]:  Container gisnav-postgres-1  Started
+May 15 15:10:20 hmakelin-MS-7D48 docker[241971]:  Container gisnav-px4-1  Started
+May 15 15:10:20 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gisnav-1  Starting
+May 15 15:10:21 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gisnav-1  Started
+May 15 15:10:21 hmakelin-MS-7D48 systemd[1]: Finished GISNav Docker Compose Services.
+
+```
+
+You can also see the service status from the onboard [Admin portal](/admin-portal).
+
+### Stop
+
+You can use the below commands to stop the service (and the related Docker Compose services):
+```bash
+sudo systemctl stop gisnav-compose.service
+```
+
+### Uninstall
 
 If you want to uninstall the service, use the below command:
+
 ```bash
 sudo apt-get remove gisnav-compose
 ```

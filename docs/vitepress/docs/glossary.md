@@ -331,6 +331,9 @@ Bounding box
 ### Dev
 Development
 
+### Distro
+Distribution, a Linux distribution such as Debian
+
 ### Coords
 Coordinates
 

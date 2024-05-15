@@ -52,6 +52,7 @@ export default withMermaid({
             { text: 'Remap ROS topics', link: '/remap-ros-topics' },
             { text: 'Run tests', link: '/test-gisnav' },
             { text: 'Generate documentation', link: '/generate-documentation' },
+            { text: 'Create Debian distributable', link: '/create-debian' },
           ]
         },
         {

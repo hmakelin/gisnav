@@ -39,6 +39,7 @@ gisnav/test/sitl/ulog_analysis/output
 debian
 .pybuild
 *.deb
+systemd/gisnav-compose/etc
 
 # mypy
 .mypy_cache

@@ -40,3 +40,9 @@ gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 
 # node
 node_modules
+
+# Debian package builds
+debian
+.pybuild
+*.deb
+systemd/gisnav-compose/etc

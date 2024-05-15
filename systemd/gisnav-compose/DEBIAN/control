@@ -1,0 +1,10 @@
+Package: gisnav-compose
+Version: 0.67.0
+Section: base
+Priority: optional
+Architecture: all
+Depends: docker-compose
+Maintainer: Harri Makelin <hmakelin@protonmail.com>
+Description: GISNav Docker Compose Services
+ This Debian package installs a systemd service that starts GISNav onboard
+ Docker Compose services on system start.

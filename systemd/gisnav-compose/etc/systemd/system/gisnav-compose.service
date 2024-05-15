@@ -1,0 +1,15 @@
+[Unit]
+Description=GISNav Docker Compose Services
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/etc/gisnav-compose
+ExecStart=docker compose -p gisnav up gisnav -d
+ExecStop=docker compose down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

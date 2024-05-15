@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge|remove)
+        if [ -d /etc/gisnav-compose ]; then
+            rm -rf /etc/gisnav-compose
+        fi
+        ;;
+esac
+
+exit 0

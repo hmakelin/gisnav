@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 
+# Change to the directory where the docker-compose.yml is located
+cd /etc/gisnav-compose
+
+# "down" removes networks, volumes, containers
+docker compose -p gisnav down
+
+# Finally remove the compose files
 case "$1" in
     purge|remove)
         if [ -d /etc/gisnav-compose ]; then

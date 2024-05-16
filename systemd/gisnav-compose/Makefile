@@ -6,7 +6,9 @@ BUILD_DIR = build
 BUILD_ID = $(shell date +%Y%m%d%H%M%S)
 ARCHITECTURE = all
 DEB_DIR = $(BUILD_DIR)/$(PACKAGE_NAME)
-COMPOSE_FILE_PATH = ../../docker
+REPO_ROOT_PATH = ../..
+COMPOSE_FILE_PATH = ${REPO_ROOT_PATH}/docker
+GISNAV_ROS_PACKAGE_PATH = ${REPO_ROOT_PATH}/gisnav
 DEB_FILE = $(PACKAGE_NAME)_$(VERSION)-$(BUILD_ID)_$(ARCHITECTURE).deb
 
 all: dist
@@ -16,12 +18,20 @@ clean:
 
 setup:
 	@mkdir -p $(DEB_DIR)/DEBIAN
-	@mkdir -p $(DEB_DIR)/etc/gisnav-compose
+	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/gisnav
+	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/docker
 	@mkdir -p $(DEB_DIR)/etc/systemd/system
 
 # Copy source files to build folder
+# We copy the gisnav ROS package source too so that we can build the gisnav
+# image locally and not be dependent on any external container registries
+# TODO: do not copy development and testing files over to the .deb package
 copy_files: setup
-	@cp -r ${COMPOSE_FILE_PATH}/{docker-compose.yaml,.env,apache,gscam,homepage,mavros,micro-ros-agent,postgres} $(DEB_DIR)/etc/gisnav-compose/
+	@cp ${REPO_ROOT_PATH}/.gitignore .rsyncignore
+	@echo '${REPO_ROOT_PATH}/.git/' >> .rsyncignore
+	@rsync -av --exclude-from='.rsyncignore' ${GISNAV_ROS_PACKAGE_PATH}/ $(DEB_DIR)/etc/gisnav-compose/gisnav/
+	@rsync -av --exclude-from='.rsyncignore' ${COMPOSE_FILE_PATH}/ $(DEB_DIR)/etc/gisnav-compose/docker/
+	@rm .rsyncignore
 	@cp etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postinst $(DEB_DIR)/DEBIAN/

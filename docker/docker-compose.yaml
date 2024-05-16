@@ -82,7 +82,6 @@ services:
     build:
       context: apache
       target: mapserver
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-mapserver"
     command: apache2ctl -D FOREGROUND
     volumes:
       - maps-volume:/etc/mapserver/maps  # TODO: make read only? copy files and have user delete duplicates from their own volume?
@@ -98,7 +97,6 @@ services:
       target: mavros
       args:
         ROS_VERSION: humble
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-mavros"
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@localhost:14557
     labels:
         - homepage.group=Core services
@@ -109,7 +107,6 @@ services:
     <<: [*base, *ros, *mavlink-net]
     build:
       context: micro-ros-agent
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-micro-ros-agent"
     command: udp4 -p 8888
     labels:
         - homepage.group=Core services
@@ -221,7 +218,6 @@ services:
       context: gscam
       args:
         ROS_VERSION: humble
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-gscam"
     volumes:
       - /dev/shm:/dev/shm  # todo: make work with *ros anchor
       - gscam-volume:/etc/gscam
@@ -270,7 +266,6 @@ services:
     <<: [*base, *gis-net]
     build:
       context: postgres
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-postgres"
     environment:
       POSTGRES_DB: gisnav
       POSTGRES_USER: gisnav
@@ -286,7 +281,6 @@ services:
     build:
       context: apache
       target: fileserver
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-fileserver"
     command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
@@ -305,7 +299,6 @@ services:
     <<: [*base, *x11-environment, *nvidia-gpu, *admin-net]
     build:
       context: homepage
-    image: "${GISNAV_DOCKER_REGISTRY_HOST}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav-homepage"
     labels:
         - homepage.group=Admin services
         - homepage.name=Homepage

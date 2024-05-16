@@ -120,6 +120,15 @@ root@669b94309b51:/PX4-Autopilot# cat /dev/ttyS4
 $GPGGA,090425,3731.4157,N,12215.3002,W,1,12,0.00,45.5,M,0.0,M,,*68
 ```
 
+### Issues reinstalling `gisnav-compose`
+
+Try removing any previous installation and cleaning `apt` cache before reinstalling:
+
+```bash
+sudo apt-get remove gisnav-compose
+sudo apt-get clean
+```
+
 ## General debugging
 
 ### Run shell inside container

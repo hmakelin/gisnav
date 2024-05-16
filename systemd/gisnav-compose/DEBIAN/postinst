@@ -2,10 +2,10 @@
 set -e
 
 # Change to the directory where the docker-compose.yml is located
-cd /etc/gisnav-compose
+cd /etc/gisnav-compose/docker
 
-# Pull or build the Docker images
-docker compose -p gisnav create
+# Pull or build the Docker images and create containers
+docker compose -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav create --build gisnav homepage
 
 # Enable the gisnav-compose.service at startup
 systemctl enable gisnav-compose.service

@@ -3,15 +3,35 @@ set -e
 
 # Stop and disable the systemd service
 if [ -x "$(command -v systemctl)" ]; then
-    systemctl stop gisnav-compose.service
-    systemctl disable gisnav-compose.service
+    if systemctl stop gisnav-compose.service; then
+        echo "Successfully stopped gisnav-compose.service."
+    else
+        echo "Could not stop gisnav-compose.service - this is OK if the service was not running."
+    fi
+
+    if systemctl disable gisnav-compose.service; then
+        echo "Successfully disabled gisnav-compose.service."
+    else
+        echo "Could not disable gisnav-compose.service - this is OK if the service was not enabled."
+    fi
+else
+    echo "systemctl command not found. Skipping service stop and disable."
 fi
 
 # Execute docker-compose down
-# "down" removes containers, volumes, networks
 if [ -x "$(command -v docker)" ]; then
-    cd /etc/gisnav-compose
-    docker compose -p gisnav down
+    if cd /etc/gisnav-compose/docker; then
+        # "down" removes containers, volumes, networks
+        if docker compose  -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav down; then
+            echo "Successfully executed docker compose down."
+        else
+            echo "Failed to execute docker compose down. Please stop and remove any GISNav Docker containers manually."
+        fi
+    else
+        echo "Failed to change directory to /etc/gisnav-compose/docker. Please stop and remove any GISNav Docker containers manually."
+    fi
+else
+    echo "docker command not found. Skipping docker compose down."
 fi
 
 # Remove the systemd service file
@@ -19,12 +39,25 @@ case "$1" in
     purge|remove)
         # Remove systemd service file
         if [ -f /etc/systemd/system/gisnav-compose.service ]; then
-            rm -f /etc/systemd/system/gisnav-compose.service
-            systemctl daemon-reload
+            if rm -f /etc/systemd/system/gisnav-compose.service; then
+                echo "Removed /etc/systemd/system/gisnav-compose.service."
+                systemctl daemon-reload
+            else
+                echo "Failed to remove /etc/systemd/system/gisnav-compose.service."
+            fi
+        else
+            echo "Removed /etc/systemd/system/gisnav-compose.service (did not exist)."
         fi
-        # Remove the compose files directory
+
+        # Remove the gisnav-compose directory including any sub-directories
         if [ -d /etc/gisnav-compose ]; then
-            rm -rf /etc/gisnav-compose
+            if rm -rf /etc/gisnav-compose; then
+                echo "Removed /etc/gisnav-compose directory."
+            else
+                echo "Failed to remove /etc/gisnav-compose directory."
+            fi
+        else
+                echo "Removed /etc/gisnav-compose directory (did not exist)."
         fi
         ;;
 esac

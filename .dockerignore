@@ -48,4 +48,3 @@ debian
 .pybuild
 *.deb
 systemd/gisnav-compose/etc
-.rsyncignore

@@ -26,12 +26,12 @@ docs/sphinx/build
 
 # SITL test log output (but leave one sample flight log)
 gisnav/test/sitl/output/
+*.ulg
+*.ulog
 
 # Jupyter Notebook checkpoints, notebooks
 gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
 gisnav/test/sitl/ulog_analysis/output
-*.ulg
-*.ulog
 
 .benchmarks/
 
@@ -42,10 +42,12 @@ debian
 .pybuild
 *.deb
 systemd/gisnav-compose/etc
-.rsyncignore
 
 # mypy
 .mypy_cache
 
 # node
 node_modules
+
+# pytest
+*.pytest_cache/*

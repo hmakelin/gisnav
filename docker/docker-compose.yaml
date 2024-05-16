@@ -333,14 +333,6 @@ services:
         - homepage.name=Glances
         - homepage.description=System monitor
 
-  registry:
-    image: registry
-    network_mode: host
-    labels:
-        - homepage.group=Admin services
-        - homepage.name=Registry
-        - homepage.description=Docker registry for sharing images between hosts across the local network
-
 volumes:
   maps-volume:
   gscam-volume:

@@ -26,6 +26,9 @@ setup:
 # We copy the gisnav ROS package source too so that we can build the gisnav
 # image locally and not be dependent on any external container registries
 # TODO: do not copy development and testing files over to the .deb package
+# TODO: make the rsync part less brittle - might unintendedly copy over files
+# that are not intended for distribution as the .gitignore relative paths are
+# not respected (are not the same)
 copy_files: setup
 	@cp ${REPO_ROOT_PATH}/.gitignore .rsyncignore
 	@echo '${REPO_ROOT_PATH}/.git/' >> .rsyncignore
@@ -36,6 +39,7 @@ copy_files: setup
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postinst $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postrm $(DEB_DIR)/DEBIAN/
+	@echo -e "\033[1;33mWarning! Check the file lists above that no unintended files were copied over to the distributable.\033[0m"
 
 build_package: copy_files
 	@dpkg-deb --build $(DEB_DIR)

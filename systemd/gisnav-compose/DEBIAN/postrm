@@ -57,7 +57,7 @@ case "$1" in
                 echo "Failed to remove /etc/gisnav-compose directory."
             fi
         else
-                echo "Removed /etc/gisnav-compose directory (did not exist)."
+            echo "Removed /etc/gisnav-compose directory (did not exist)."
         fi
         ;;
 esac

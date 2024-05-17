@@ -32,7 +32,6 @@ export default withMermaid({
           text: 'HIL simulation',
           items: [
             { text: 'Raspberry Pi 5 & Pixhawk FMUv4', link: '/raspberry-pi-pixhawk' },
-            { text: 'Jetson & Pixhawk', link: '/jetson-pixhawk' }
           ]
         },
         {

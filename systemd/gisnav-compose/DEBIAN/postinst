@@ -7,6 +7,7 @@ cd /etc/gisnav-compose/docker
 # Pull or build the Docker images including dependencies and create containers
 docker compose -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav pull --include-deps gisnav homepage
 docker compose -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav build --with-dependencies gisnav homepage
+docker compose -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav create gisnav homepage
 
 # Enable the gisnav-compose.service at startup
 systemctl enable gisnav-compose.service

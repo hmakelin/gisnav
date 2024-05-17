@@ -275,13 +275,11 @@ services:
         - homepage.name=Postgres
         - homepage.description=PostGIS relational database for efficiently storing geographical information
 
-  # todo: open web browser from homepage service, not from here
   fileserver:
     <<: [*base, *x11-environment, *nvidia-gpu, *gis-net]
     build:
       context: apache
       target: fileserver
-    command: firefox "http://gisnav-homepage-1:3000"
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix # TODO: merge x-11-volumes?
       - maps-volume:/var/www/filegator/repository/mapserver

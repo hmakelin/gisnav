@@ -15,7 +15,12 @@ This page uses the below terminology:
 
 <!--@include: ./shared/docker-compose-required.md-->
 
-### systemd.
+::: tip Install Docker Engine on Debian
+Take a look at Docker's [official instructions](https://docs.docker.com/engine/install/debian/) for installing Docker Engine on a Debian-based system.
+
+:::
+
+### systemd
 
 The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as Debian or one of its derivatives like Raspberry Pi OS or Ubuntu.
 
@@ -25,8 +30,7 @@ The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as De
 
 - These instructions assume you are using the default hostname `raspberrypi.local` from the `rpi-imager` tool.
 
-- Your development host and Raspberry Pi 5 must be on the same local network. You can e.g. connect them with an Ethernet cable.
-
+- Your development host and Raspberry Pi 5 must be on the same local network. You can e.g. connect them with an Ethernet cable. You may want to share Internet connection to the Raspberry Pi 5 if you want to download the Debian package directly from the Internet onto the Pi.
 
 ## Install GISNav Compose Services
 
@@ -46,29 +50,30 @@ Open an `ssh` shell to your Raspberry Pi 5:
 ssh raspberrypi.local
 ```
 
-Add the GISNav Debian repository as a trusted repository:
+Download the `gisnav-compose` Debian package and install it using the below commands. You can edit the release string to match your needs.
 
-```bash
-echo "deb [trusted=yes] https://hmakelin.github.io/gisnav/ ./" | sudo tee /etc/apt/sources.list.d/gisnav.list
-```
+::: warning Warning: Long build time
+The `postinst` script of the Debian package will attempt to pull and build all required Docker images and then create the containers. If the images are not available to be pulled, be prepared for a very long build time.
 
-Add the GPG key of the GISNav Debian repository:
+:::
 
-```bash
-curl -s https://hmakelin.github.io/gisnav/public.key | sudo apt-key add -
-```
-
-Install the `gisnav-compose` Debian package using the below command. The install script will pull and/or build a number of Docker images and can take several hours.
-
-::: tip Private registry
-You can make this process quicker by building your own (potentially cross-platform) images on your development host and pulling them onto your Raspberry Pi 5 using a [private registry](/deploy-with-docker-compose#private-registry).
+::: tip Private Docker registry
+You can make this process quicker by building your own (potentially cross-platform) images on your development host and pulling them onto your Raspberry Pi 5 using a [private container registry](/deploy-with-docker-compose#private-registry).
 
 :::
 
 ```bash
-sudo apt-get update
-sudo apt-get -y install gisnav-compose
+GISNAV_RELEASE=v0.67.0
+wget https://github.com/hmakelin/gisnav/releases/download/${GISNAV_RELEASE}/gisnav-compose_${GISNAV_RELEASE}_all.deb -O gisnav-compose_${GISNAV_RELEASE}_all.deb
+sudo dpkg -i gisnav-compose_${GISNAV_RELEASE}_all.deb
 ```
+
+After installing you can fix any missing dependencies using `apt-get`:
+
+```bash
+sudo apt-get install -f
+```
+
 
 ## Manage GISNav Compose Services
 
@@ -134,7 +139,7 @@ sudo apt-get remove gisnav-compose
 
 ```mermaid
 graph TB
-    subgraph "FMUK66-E (FMUv4)"
+    subgraph "FMUK66-E (Pixhawk FMUv4)"
         subgraph "GPS 2"
             FMU_TELEM1_RX[RX]
             FMU_TELEM1_TX[TX]
@@ -177,3 +182,72 @@ graph TB
     Pi_USB --- Keyboard
     Pi_ETH ---|ssh| Laptop_ETH
 ```
+
+## Upload PX4 firmware
+
+See the [PX4 uploading firmware instructions](https://docs.px4.io/main/en/dev_setup/building_px4.html#uploading-firmware-flashing-the-board) for how to upload your development version of PX4 onto your Pixhawk board (should look something like `make px4_fmu-v4_default upload`) for FMUv4.
+
+To find the `make` target for your specific board, list all options with the `make list_config_targets` command on your development host computer:
+
+```bash
+# on development host (not on Raspberry Pi)
+cd ~/colcon_ws/src/gisnav/docker
+docker compose -p gisnav run px4 make list_config_targets
+```
+
+Then choose your appropriate board for the following examples. We are going to choose `nxp_fmuk66-e_default` for this example:
+
+```bash
+# on development host (not on Raspberry Pi)
+docker compose -p gisnav run px4 make distclean
+docker compose -p gisnav run px4 make nxp_fmuk66-e_default upload
+```
+
+## Deploy HIL simulation
+
+### Offboard services
+
+The following steps to deploy the offboard services are based on the [PX4 HIL simulation instructions](https://docs.px4.io/main/en/simulation/hitl.html). The `px4` Docker compose service has a custom `iris_hitl` model and a `hitl_iris_ksql_airport.world` Gazebo world that we are going to use in this example:
+
+::: info TODO
+Update the commands below to start the HIL simulation offboard services (need to update override file)
+
+:::
+
+```bash
+# on development host (not on Raspberry Pi)
+docker compose -p gisnav run -e DONT_RUN=1 px4 make px4_sitl_default gazebo-classic
+docker compose -p gisnav run px4 source Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
+docker compose -p gisnav run px4 gazebo Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world
+
+# Important: Start QGroundControl last
+docker compose up qgc
+```
+
+After deploying the HIL simulation, adjust the settings via the QGC application as follows:
+
+- Precisely match the `COM_RC_IN_MODE` parameter setting if mentioned in the instructions.
+- Ensure that you have HITL enabled in QGC Safety settings.
+- You may also need to enable the virtual joystick enabled in QGC General settings to prevent failsafes from triggering.
+
+### Onboard services
+
+Ensure that you have started the `gisnav-compose` systemd service:
+
+```bash
+# on Raspberry Pi 5
+sudo systemctl start gisnav-compose
+```
+
+You can also use Docker to check that the GISNav containers are running:
+
+```bash
+# on Raspberry Pi 5
+# may require sudo depending on how you have setup docker on your Pi
+docker ps
+```
+
+::: tip Admin portal
+You can also use the [Admin portal](/admin-portal) hosted on the Raspberry Pi 5 to see that the core services are running.
+
+:::

@@ -9,9 +9,21 @@ This page uses the below terminology:
 - **Simulation host**: Computer that hosts the HIL simulation world (Gazebo in this case)
 - **Development host**: Computer that optionally builds (potentially cross-platform) Docker images and hosts a private Docker registry for the Raspberry Pi 5 companion computer to pull (potentially non-distributable) Docker images from.
 
-## Prerequisites for Raspberry Pi 5
+## Prerequisites
 
-### Docker Compose plugin
+### Simulation host
+
+<!--@include: ./shared/clone-to-colcon-workspace.md-->
+
+::: info todo
+Instructions to clone only the docker part (e.g. as a submodule).
+
+:::
+
+### Raspberry Pi 5
+
+
+#### Docker Compose plugin
 
 <!--@include: ./shared/docker-compose-required.md-->
 
@@ -20,7 +32,7 @@ Take a look at Docker's [official instructions](https://docs.docker.com/engine/i
 
 :::
 
-### systemd
+#### systemd
 
 The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as Debian or one of its derivatives like Raspberry Pi OS or Ubuntu.
 

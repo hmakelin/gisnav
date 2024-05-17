@@ -2,6 +2,11 @@
 
 This page describes how to run HIL simulation on a Pixhawk board using the Raspberry Pi 5 as a companion computer.
 
+::: warning Warning: Propellers off
+If your autopilot is connected to a vehicle, it is highly recommended to disable the propellers or take other necessary precautions to ensure the vehicle remains grounded.
+
+:::
+
 ## Concepts
 
 This page uses the below terminology:
@@ -21,7 +26,6 @@ Instructions to clone only the docker part (e.g. as a submodule).
 :::
 
 ### Raspberry Pi 5
-
 
 #### Docker Compose plugin
 

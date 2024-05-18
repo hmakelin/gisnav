@@ -17,6 +17,8 @@ clean:
 # TODO: makes a dummy docs/vitepress/package.json so that gisnav image will
 # build - need to define a base image that does not need docs or dev dependencies
 setup:
+	@mkdir -p ${BUILD_DIR}
+	@touch ${BUILD_DIR}/COLCON_IGNORE
 	@mkdir -p $(DEB_DIR)/DEBIAN
 	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/gisnav
 	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/docker

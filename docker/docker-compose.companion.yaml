@@ -1,14 +1,4 @@
 version: "3.4"
 
-services:
-  # Running gisnav on companion computer:
-  # Remove px4 from depends_on key as the autopilot SITL or HIL simulation
-  # is assumed to run on a separate simulation host computer.
-  gisnav:
-    depends_on:
-      # - px4
-      - micro-ros-agent
-      - mavros
-      - gscam
-      - mapserver
-      - postgres
+#services:
+  # nothing here

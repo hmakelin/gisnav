@@ -263,4 +263,4 @@ dev-uorb: base-dev-setup
 demo:
 	docker compose -p gisnav create gisnav
 	$(MAKE) expose-xhost
-	docker compose -p gisnav up gisnav
+	docker compose -p gisnav up gisnav px4

@@ -38,14 +38,14 @@ To deploy the [mock GPS demonstration](/README) introduced locally without using
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav build gisnav
+docker compose -p gisnav build gisnav px4
 ```
 
 #### Create containers
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav create gisnav
+docker compose -p gisnav create gisnav px4
 ```
 
 #### Expose X server to containers
@@ -56,14 +56,14 @@ docker compose -p gisnav create gisnav
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start gisnav
+docker compose -p gisnav start gisnav px4
 ```
 
 #### Stop containers
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start gisnav
+docker compose -p gisnav stop gisnav px4
 ```
 
 

@@ -40,13 +40,7 @@ ARG ROS_VERSION
 
 WORKDIR /opt/colcon_ws/
 
-COPY mavros/filter_plugins.sh /opt/colcon_ws/src/mavros/mavros_extras
-
-# Install mavros from binary (faster than building from source)
-#RUN apt-get update \
-#    && apt-get -y install ros-${ROS_VERSION}-mavros \
-#    && rm -rf /var/lib/apt/lists/* \
-#    && apt clean
+COPY mavros/filter_plugins.sh /opt/colcon_ws/src/mavros
 
 # Build mavros and mavros_extras gimbal protocol v2 (gimbal_control) plugin
 # We use the filter_plugins.sh script to disable unneeded plugins to significantly
@@ -54,7 +48,7 @@ COPY mavros/filter_plugins.sh /opt/colcon_ws/src/mavros/mavros_extras
 # mavros_msgs was built earlier so we ignore it here
 RUN source /opt/ros/${ROS_VERSION}/setup.bash \
     && source install/setup.bash \
-    && cd src/mavros/mavros_extras \
+    && cd src/mavros \
     && ./filter_plugins.sh \
     && cd /opt/colcon_ws/ \
     && colcon build --packages-ignore mavros_msgs

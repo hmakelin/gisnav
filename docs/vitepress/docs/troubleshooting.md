@@ -129,6 +129,43 @@ sudo apt-get remove gisnav-compose
 sudo apt-get clean
 ```
 
+## Cannot build `mavros` or X on Raspberry Pi
+
+### CPU overheating
+
+The CPU might be overheating. You can get a case for your Pi that has a fan to improve heat dissipation.
+
+### Out of memory
+
+4GB of memory may not be enough to build `mavros`. You can try adding another 4 GB using a swapfile:
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Monitor your swapfile usage:
+
+```bash
+watch swapon --show
+```
+
+Monitor your memory usage:
+
+```bash
+watch free -m
+```
+
+Delete the swapfile after building (optional):
+
+```bash
+sudo swapoff /swapfile
+sudo rm /swapfile
+```
+
 ## General debugging
 
 ### Run shell inside container

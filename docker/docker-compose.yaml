@@ -326,7 +326,6 @@ services:
       homepage.href: /fileserver
       homepage.target: _blank
 
-  # Give this thing access to all networks to see docker container status?
   # extra_hosts with docker host needed for monitoring service
   homepage:
     <<: [ *admin-net ]
@@ -340,7 +339,7 @@ services:
       homepage.href: /
       homepage.target: _self
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety
 
   monitoring:
     <<: [ *gpu, *admin-net ]

@@ -342,9 +342,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety
 
   monitoring:
-    <<: [ *gpu, *admin-net ]
-    build:
-      context: monitoring
+    <<: [ *admin-net ]
+    image: nicolargo/glances:latest-full
     pid: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

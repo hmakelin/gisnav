@@ -8,15 +8,14 @@ x-gis-net: &gis-net
   networks:
     - gis
 
-x-admin-net: &admin-net
-  networks:
-    - gis
-    - admin
-
 x-app-net: &app-net
   networks:
     - mw
     - gis
+
+x-admin-net: &admin-net
+  networks:
+    - admin
 
 # Todo: move nvidia runtime to an override and make no-gpu the default?
 # NVIDIA is default - this needs an override if your system does not have
@@ -67,15 +66,15 @@ volumes:
   maps-volume:
     labels:
       <<: *labels
-      org.gisnav.description: "Volume for storing map data, exposed to end-user tools in the admin network"
+      org.gisnav.description: "Volume for storing map data, exposed to end-user tools in the Docker host network"
   gscam-volume:
     labels:
       <<: *labels
-      org.gisnav.description: "Volume for GSCam configuration data, exposed to end-user tools in the admin network"
+      org.gisnav.description: "Volume for GSCam configuration data, exposed to end-user tools in the Docker host network"
   gisnav-volume:
     labels:
       <<: *labels
-      org.gisnav.description: "Volume for GISNav ROS configuration such as launch and parameter files, exposed to end-user tools in the admin network"
+      org.gisnav.description: "Volume for GISNav ROS configuration such as launch and parameter files, exposed to end-user tools in the Docker host network"
 
 networks:
   gis:
@@ -323,7 +322,8 @@ services:
       homepage.group: Admin services
       homepage.name: FileGator
       homepage.description: File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files
-      homepage.href: http://gisnav-fileserver-1
+      homepage.href: /fileserver
+      homepage.target: _blank
 
   # Give this thing access to all networks to see docker container status?
   # extra_hosts with docker host needed for monitoring service
@@ -336,34 +336,42 @@ services:
       homepage.group: Admin services
       homepage.name: Homepage
       homepage.description: Administration dashboard
-    depends_on:
-      - fileserver
-      - monitoring
-      - firefox
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      homepage.href: /
+      homepage.target: _self
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro  # read-only for safety - admin dashboard uses this
 
   monitoring:
-    <<: [ *gpu ]
+    <<: [ *gpu, *admin-net ]
     build:
       context: monitoring
     pid: host
-    #network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /run/user/1000/podman/podman.sock:/run/user/1000/podman/podman.sock
     command: glances -w
-    ports:
-      - 61208-61209:61208-61209
     labels:
       <<: *labels
       homepage.group: Admin services
       homepage.name: Glances
       homepage.description: System monitor
-      homepage.href: http://localhost:61208
+      homepage.href: /monitoring
+      homepage.target: _blank
 
-  firefox:
-    <<: [ *x11-volumes-and-devices, *gpu ]
-    image: jlesage/firefox
+  nginx:
+    <<: [ *admin-net ]
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"  # Expose port 80 on the host to port 80 in the container in the admin network
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - fileserver
+      - homepage
+      - monitoring
+    labels:
+      <<: *labels
+      homepage.group: Admin services
+      homepage.name: Nginx
+      homepage.description: Reverse proxy server

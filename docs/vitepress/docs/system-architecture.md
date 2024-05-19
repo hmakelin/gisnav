@@ -118,9 +118,11 @@ graph TD
         end
     end
 
-    subgraph host ["host"]
+    subgraph admin ["admin"]
         homepage[homepage]
-        fileserver[fileserver]
+        fileserver[FileGator]
+        monitoring[Glances]
+        nginx[Nginx]
     end
 
     subgraph volumes ["User managed\nshared volumes"]
@@ -145,14 +147,16 @@ graph TD
     gis_mapserver ---|/etc/mapserver| gis_maps_volume
     application_gisnav_volume ---|/etc/gisnav| application_gisnav
     application_docs_volume ---|/path/to/built/docs| application_gisnav
-    homepage ---|3000/tcp| fileserver
+    nginx ---|3000/tcp| homepage
+    nginx ---|80/tcp| fileserver
+    nginx ---|61208/tcp| monitoring
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
     application_docs_volume ---|/path/to/docs:ro| homepage
 
     classDef network fill:transparent,stroke-dasharray:5 5;
-    class mw,gis,gis_mw,admin,admin_gis,host network
+    class mw,gis,gis_mw,admin,admin_gis network
 ```
 
 ### Service descriptions

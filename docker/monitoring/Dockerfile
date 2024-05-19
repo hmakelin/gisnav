@@ -8,4 +8,4 @@ RUN apt update \
     && apt clean
 
 # Expose the port on which Glances will run
-EXPOSE 61208
+#EXPOSE 61208

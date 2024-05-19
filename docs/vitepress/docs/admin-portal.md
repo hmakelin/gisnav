@@ -7,17 +7,25 @@ The admin portal is very much untested and is intended for exploring how to prov
 
 GISNav includes a captive or self-hosted Homepage admin portal with links to relevant resources and a FileGator file server for editing configuration files without need for programming knowledge or commandline work.
 
-## Launch home page
 
-The following command should launch the home page and any required supporting services:
+## Launch Home Page
 
-```
-docker compose -p gisnav up homepage
-```
-
-You should then be able to open the admin portal in a browser using the below commands:
+To launch the home page along with any required supporting services, use the following command:
 
 ```bash
-HOMEPAGE_IP=$(docker inspect -f '{{.NetworkSettings.Networks.gisnav_admin.IPAddress}}' gisnav-homepage-1)
-firefox http://$HOMEPAGE_IP:3000
+docker compose -p gisnav up nginx
 ```
+
+Once the services are running, you can open the admin portal in a web browser using the hostname of the server hosting the homepage on port `80`. Below are examples for accessing the homepage hosted on the `localhost` as well as on an external [Raspberry Pi](/raspberry-pi-pixhawk) with the default hostname `raspberrypi.local`:
+
+::: code-group
+
+```bash [localhost]
+firefox http://localhost:80
+```
+
+```bash [raspberrypi.local]
+firefox http://raspberrypi.local:80
+```
+
+:::

@@ -184,6 +184,7 @@ services:
       - mapserver
       - postgres
       - autoheal
+      - nginx
     labels:
       <<: *labels
       homepage.group: Application services

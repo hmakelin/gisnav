@@ -21,11 +21,11 @@ Once the services are running, you can open the admin portal in a web browser us
 ::: code-group
 
 ```bash [localhost]
-firefox http://localhost:80
+firefox http://localhost
 ```
 
 ```bash [raspberrypi.local]
-firefox http://raspberrypi.local:80
+firefox http://raspberrypi.local
 ```
 
 :::

@@ -75,22 +75,21 @@ The diagram below depicts the GISNav services topography for SITL simulation tha
 
 Some notes on the service topography:
 
-- The Application services `gisnav` and `autoheal` have access to both `gis` and `mavlink` networks.
+- The Application services `gisnav` and `autoheal` have access to both `gis` and `mw` networks.
 - The Application services, Simulation services, Middleware services, GIS services, and Data services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description.
 - `socat` could also be considered a middleware service but runs non-containerized on the Docker host so it is not included in the Middleware services in the diagram.
 - The deployed topography will slightly vary if Docker Compose overrides are used, for example when deploying for HIL instead of SITL simulation.
 - GISnav uses `gscam` to publish the ROS `sensor_msgs.msg.CameraInfo` and `sensor_msgs.msg.Image` messages. The camera topics are not published over the MAVROS middleware.
 
 ::: info Todo
-- In SITL simulation the serial output from `gisnav` is bridged to `PX4` via TCP on the `mavlink` network so the `mavlink` name is not completely descriptive of the nature of the network (--> change name). With Docker containers, communicating over the network is more convenient and potentially more secure  than trying to bridge the serial communication between `px4` and `gisnav` e.g. via binding Docker host virtual serial ports (pseudo-ttys) to the containers.
-- Potentially split `mavlink` network into `mavlink` and `ros` networks. For ROS the intention is to use the shared memory device instead of serializing and going through the network stack since we will be passing a lot of (pointers to) images around.
+- Potentially split `mw` network into `mavlink` and `ros` networks. For ROS the intention is to use the shared memory device instead of serializing and going through the network stack since we will be passing a lot of (pointers to) images around.
 - `docs-volume` not yet implemented, but is intended to contain static documentation (may need a server).
 :::
 
 ```mermaid
 graph TD
-    subgraph mavlink ["mavlink"]
-        mavlink_qgc[qgc]
+    subgraph mw ["mw"]
+        mw_qgc[qgc]
         subgraph simulation ["Simulation Services"]
             simulation_px4[px4]
             simulation_ardupilot[ardupilot]
@@ -103,7 +102,7 @@ graph TD
     end
     simulation_px4 -->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
 
-    subgraph gis_mavlink ["gis & mavlink"]
+    subgraph gis_mw ["gis & mw"]
         subgraph application ["Application Services"]
             application_gisnav[gisnav]
             application_autoheal[autoheal]
@@ -119,7 +118,7 @@ graph TD
         end
     end
 
-    subgraph admin ["admin"]
+    subgraph host ["host"]
         homepage[homepage]
         fileserver[fileserver]
     end
@@ -131,7 +130,7 @@ graph TD
     end
     application_docs_volume[docs-volume]
 
-    mavlink_qgc -->|14550/udp\nMAVLink| simulation_px4
+    mw_qgc -->|14550/udp\nMAVLink| simulation_px4
     simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
     simulation_px4 -->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
     simulation_px4 -->|5600/udp\nRTP H.264 Video| middleware_gscam
@@ -153,7 +152,7 @@ graph TD
     application_docs_volume ---|/path/to/docs:ro| homepage
 
     classDef network fill:transparent,stroke-dasharray:5 5;
-    class mavlink,gis,gis_mavlink,admin,admin_gis,host network
+    class mw,gis,gis_mw,admin,admin_gis,host network
 ```
 
 ### Service descriptions

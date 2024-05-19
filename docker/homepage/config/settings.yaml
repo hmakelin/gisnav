@@ -1,18 +1,2 @@
-title: GISNav home
+title: GISNav admin portal
 language: en
-#background: images/logo-no-background.svg
-favicon: images/gisnav-website-favicon-color.png
-showStats: true
-layout:
-  Admin services:
-    icon: mdi-cog
-  Download maps:
-    icon: mdi-map-plus
-  Core services:
-    icon: mdi-shield-alert
-    style: row
-    columns: 4
-  Development services:
-    icon: mdi-code-braces
-    style: row
-    columns: 4

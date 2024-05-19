@@ -1,7 +1,5 @@
 FROM ubuntu:jammy AS apache
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 # Update apt repository and install necessary packages
 RUN apt-get update && apt-get install -y \
     cgi-mapserver \
@@ -93,13 +91,9 @@ RUN apt-get update && \
     bzip2 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY fileserver/logo-no-background.svg /
-
-# Setup filegator and add some customization so that we know we are
-# still within GISNav. Granting guest user permissions here will skip the login
+# Setup filegator. Granting guest user permissions here will skip the login
 # screen on launch.
-# TODO clone specific version and build with customizations - current customizations
-#  are very brittle in case the app structure is changed in a new release
+# TODO clone specific version and build with less brittle customizations
 RUN mkdir -p /var/www/ && \
     cd /var/www && \
     wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
@@ -109,13 +103,8 @@ RUN mkdir -p /var/www/ && \
     chmod -R 775 filegator && \
     cd filegator && \
     cp configuration_sample.php configuration.php && \
-    sed -i "s/'app_name' => 'FileGator'/'app_name' => 'GISNav'/g" configuration.php && \
-    sed -i "s|'logo' => 'https://filegator.io/filegator_logo.svg'|'logo' => 'img/logo-no-background.svg'|g" configuration.php && \
     sed -i "/'editable' => \[/ s/]/, '.yml', '.yaml'&/" configuration.php && \
     sed -i 's/100 \* 1024 \* 1024/2 \* 1024 \* 1024 \* 1024/g' configuration.php && \
-    mkdir -p dist/img && \
-    cp /logo-no-background.svg dist/img && \
-    sed -i 's/#34b891/#ff4136/g' dist/css/app.css && \
     jq '.["2"].permissions = "read|write|upload|download|zip"' private/users.json.blank > temp.json && mv temp.json private/users.json
 
 

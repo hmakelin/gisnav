@@ -1,7 +1,5 @@
 FROM ubuntu:focal
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 ARG USERNAME=qgroundcontrol
 ARG UID=1000
 ARG GID=$UID

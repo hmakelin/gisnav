@@ -1,7 +1,5 @@
 FROM ros:foxy
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 ARG USERNAME=gisnav
 ARG UID=1000
 ARG GID=$UID

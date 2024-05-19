@@ -1,7 +1,5 @@
 FROM postgres:14
 
-LABEL maintainer=" Makelin <hmakelin@protonmail.com>"
-
 RUN apt-get update \
     && apt-get -y install postgresql-14-postgis-3 \
     && rm -rf /var/lib/apt/lists/* \

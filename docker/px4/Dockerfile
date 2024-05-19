@@ -1,7 +1,5 @@
 FROM ubuntu:focal
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 # Update and upgrade packages, then install required packages
 RUN apt-get update && \
     apt-get -y upgrade && \

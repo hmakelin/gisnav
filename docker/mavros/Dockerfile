@@ -4,8 +4,6 @@ FROM ros:${ROS_VERSION} as mavros-msgs
 ARG ROS_VERSION
 ENV ROS_VERSION=${ROS_VERSION}
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 # Combine apt update, upgrade and cleaning up in one layer
 RUN apt update --fix-missing && \
     apt -y upgrade

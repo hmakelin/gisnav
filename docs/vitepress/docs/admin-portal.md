@@ -19,5 +19,5 @@ You should then be able to open the admin portal in a browser using the below co
 
 ```bash
 HOMEPAGE_IP=$(docker inspect -f '{{.NetworkSettings.Networks.gisnav_admin.IPAddress}}' gisnav-homepage-1)
-firefox $HOMEPAGE_IP:3000
+firefox http://$HOMEPAGE_IP:3000
 ```

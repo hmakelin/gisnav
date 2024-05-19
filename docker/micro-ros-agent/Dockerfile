@@ -1,7 +1,5 @@
 FROM microros/micro-ros-agent:foxy
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
-
 # sed edits px4_msgs CMakeLists.txt so that only SensorGps message is built
 RUN cd /uros_ws && \
     mkdir src && \

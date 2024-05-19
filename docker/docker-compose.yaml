@@ -326,7 +326,6 @@ services:
       homepage.href: /fileserver
       homepage.target: _blank
 
-  # extra_hosts with docker host needed for monitoring service
   homepage:
     <<: [ *admin-net ]
     build:

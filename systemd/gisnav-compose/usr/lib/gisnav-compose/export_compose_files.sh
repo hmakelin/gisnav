@@ -4,22 +4,24 @@
 #
 # Requires export_gpu_type.sh and GISNAV_GPU_TYPE env variable.
 
+gisnav_docker_home=/etc/gisnav-compose/docker
+
 case $GISNAV_GPU_TYPE in
     "nvidia")
-        echo "Launching Docker Compose with Nvidia override."
-        compose_files="-f docker-compose.yaml -f docker-compose.nvidia.yaml"
+        echo "Using Docker Compose with Nvidia override."
+        compose_files="-f $gisnav_docker_home/docker-compose.yaml -f $gisnav_docker_home/docker-compose.nvidia.yaml"
         ;;
     "broadcom")
-        echo "Launching Docker Compose with Broadcom override."
-        compose_files="-f docker-compose.yaml -f docker-compose.broadcom.yaml"
+        echo "Using Docker Compose with Broadcom override."
+        compose_files="-f $gisnav_docker_home/docker-compose.yaml -f $gisnav_docker_home/docker-compose.broadcom.yaml"
         ;;
     "none")
-        echo "No GPU detected. Launching Docker Compose without GPU-specific overrides."
-        compose_files="-f docker-compose.yaml -f docker-compose.no-gpu.yaml"
+        echo "No GPU detected. Using Docker Compose without GPU-specific overrides."
+        compose_files="-f $gisnav_docker_home/docker-compose.yaml"
         ;;
     *)
-        echo "Unknown GPU type detected. Launching Docker Compose without GPU-specific overrides."
-        compose_files="-f docker-compose.yaml -f docker-compose.no-gpu.yaml"
+        echo "Unknown GPU type detected. Using Docker Compose without GPU-specific overrides."
+        compose_files="-f $gisnav_docker_home/docker-compose.yaml"
         ;;
 esac
 

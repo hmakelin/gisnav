@@ -15,18 +15,6 @@ x-admin-net: &admin-net
   networks:
     - admin
 
-# Todo: move nvidia runtime to an override and make no-gpu the default?
-# NVIDIA is default - this needs an override if your system does not have
-# an NVIDIA GPU (e.g. Raspberry Pi 5 has Broadcom VideoCore)
-x-gpu: &gpu
-  deploy:
-    resources:
-      reservations:
-        devices:
-          - driver: nvidia
-            count: 1
-            capabilities: [ gpu ]
-
 # volumes conflict with x11-volumes-and-devices
 x-ros-volumes: &ros-volumes
   volumes:
@@ -135,7 +123,7 @@ services:
       homepage.description: uORB to ROS (PX4) middleware
 
   qgc:
-    <<: [ *x11-volumes-and-devices, *gpu, *mw-net ]
+    <<: [ *x11-volumes-and-devices, *mw-net ]
     build:
       context: qgc
     privileged: true  # TODO: remove this flag?
@@ -155,7 +143,7 @@ services:
   # a bit more messy. For production deployments the socat command is expected
   # to be left out.
   gisnav:
-    <<: [ *ros-x11-volumes-and-devices, *gpu, *app-net ]
+    <<: [ *ros-x11-volumes-and-devices, *app-net ]
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
     image: "${GISNAV_DOCKER_REGISTRY_HOST:-ghcr.io}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav"
     build:
@@ -187,7 +175,7 @@ services:
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
-    <<: [ *x11-volumes-and-devices, *gpu, *tty, *mw-net ]
+    <<: [ *x11-volumes-and-devices, *tty, *mw-net ]
     build:
       context: px4
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
@@ -202,7 +190,7 @@ services:
       homepage.description: PX4 simulation and firmware tool
 
   ardupilot:
-    <<: [ *x11-volumes-and-devices, *gpu, *mw-net ]
+    <<: [ *x11-volumes-and-devices, *mw-net ]
     build:
       context: ardupilot
     privileged: True
@@ -214,7 +202,7 @@ services:
       homepage.description: ArduPilot simulation and firmware tool
 
   rviz:
-    <<: [ *x11-volumes-and-devices, *ros-volumes, *gpu, *mw-net ]
+    <<: [ *x11-volumes-and-devices, *ros-volumes, *mw-net ]
     build:
       context: rviz
       args:
@@ -266,7 +254,7 @@ services:
       homepage.description: Monitors and maintains health of other services.
 
   qgis:
-    <<: [ *x11-volumes-and-devices, *gpu, *gis-net ]
+    <<: [ *x11-volumes-and-devices, *gis-net ]
     build:
       context: qgis
     command: qgis

@@ -47,9 +47,9 @@ remove_temp_swapfile() {
 create_temp_swapfile
 
 # Pull or build the Docker images including dependencies and create containers
-docker compose $GISNAV_COMPOSE_FILES $project_name pull --include-deps $services
-docker compose $GISNAV_COMPOSE_FILES $project_name build --with-dependencies $services
-docker compose $GISNAV_COMPOSE_FILES $project_name create $services
+docker compose $GISNAV_COMPOSE_FILES -p $project_name pull --include-deps $services
+docker compose $GISNAV_COMPOSE_FILES -p $project_name build --with-dependencies $services
+docker compose $GISNAV_COMPOSE_FILES -p $project_name create $services
 
 # Remove the temporary swap file after build is complete
 remove_temp_swapfile

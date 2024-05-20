@@ -1,0 +1,26 @@
+x-gpu-devices: &gpu-devices
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [ gpu ]
+services:
+  gisnav:
+    <<: *gpu-devices
+
+  px4:
+    <<: *gpu-devices
+
+  ardupilot:
+    <<: *gpu-devices
+
+  qgc:
+    <<: *gpu-devices
+
+  qgis:
+    <<: *gpu-devices
+
+  rviz:
+    <<: *gpu-devices

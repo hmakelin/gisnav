@@ -37,6 +37,7 @@ copy_files: setup
 	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' gisnav/ systemd/gisnav-compose/$(DEB_DIR)/etc/gisnav-compose/gisnav/
 	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docker/ systemd/gisnav-compose/$(DEB_DIR)/etc/gisnav-compose/docker/
 	@cp etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system
+	@cp -r usr/ $(DEB_DIR)/usr
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postinst $(DEB_DIR)/DEBIAN/
 	@cp DEBIAN/postrm $(DEB_DIR)/DEBIAN/

@@ -22,15 +22,16 @@ export default withMermaid({
     sidebar: {
       '/': [
         {
-          text: 'SITL simulation',
+          text: 'Getting Started',
           items: [
-            { text: 'Run mock GPS demo', link: '/README' },
-            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
+            { text: 'Install from Debian package', link: '/install' },
+            { text: 'Mock GPS demo', link: '/README' },
           ]
         },
         {
-          text: 'HIL simulation',
+          text: 'Simulation',
           items: [
+            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
             { text: 'Raspberry Pi 5 & Pixhawk FMUv4', link: '/raspberry-pi-pixhawk' },
           ]
         },

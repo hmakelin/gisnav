@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Function to print usage
+print_usage() {
+    echo "Usage: gnv {start|stop|setup|status|--help|-h}"
+    echo "Commands:"
+    echo "  start     Start the GISNav Docker Compose services."
+    echo "  stop      Stop the GISNav Docker Compose services."
+    echo "  status    Check the status of the GISNav Docker Compose services (not implemented)."
+    echo "  setup     Sets up GISNav Docker Compose services by preparing Docker containers."
+    echo ""
+    echo "            WARNING: May require a swapfile on memory limited systems."
+    echo ""
+    echo "  --help|-h Show this help message."
+}
+
+# Check if an argument is provided
+if [ $# -eq 0 ]; then
+    print_usage
+    exit 1
+fi
+
+# Handle the command
+case "$1" in
+    start)
+        /usr/lib/gisnav-compose/start.sh
+        ;;
+    stop)
+        /usr/lib/gisnav-compose/stop.sh
+        ;;
+    setup)
+        /usr/lib/gisnav-compose/setup.sh
+        ;;
+    status)
+        echo "The 'status' command is not implemented yet."
+        ;;
+    --help|-h)
+        print_usage
+        ;;
+    *)
+        echo "Invalid command: $1"
+        print_usage
+        exit 1
+        ;;
+esac

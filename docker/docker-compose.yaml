@@ -1,5 +1,3 @@
-version: "3.4"
-
 x-mw-net: &mw-net
   networks:
     - mw
@@ -137,14 +135,10 @@ services:
       homepage.description: uORB to ROS (PX4) middleware
 
   qgc:
-    <<: [ *x11-volumes-and-devices, *mw-net ]
+    <<: [ *x11-volumes-and-devices, *gpu, *mw-net ]
     build:
       context: qgc
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/shm:/dev/shm
-      - /dev/dri:/dev/dri
-    privileged: true
+    privileged: true  # TODO: remove this flag?
     labels:
       <<: *labels
       homepage.group: Ground services
@@ -171,9 +165,8 @@ services:
       args:
         ROS_VERSION: humble
     volumes:
-      - /dev/shm:/dev/shm
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/dri:/dev/dri  # TODO: make volumes merging work with ancors (x11, ros, etc?)
+      - /dev/shm:/dev/shm  # ros
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro  # x11
       - gisnav-volume:/etc/gisnav
     command: ros2 launch gisnav default.launch.py protocol:=uorb
     #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
@@ -197,10 +190,6 @@ services:
     <<: [ *x11-volumes-and-devices, *gpu, *tty, *mw-net ]
     build:
       context: px4
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/shm:/dev/shm
-      - /dev/dri:/dev/dri
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
     depends_on:
       - mavros
@@ -216,10 +205,6 @@ services:
     <<: [ *x11-volumes-and-devices, *gpu, *mw-net ]
     build:
       context: ardupilot
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - /dev/shm:/dev/shm
-      - /dev/dri:/dev/dri
     privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
     labels:
@@ -248,7 +233,7 @@ services:
       args:
         ROS_VERSION: humble
     volumes:
-      - /dev/shm:/dev/shm  # todo: make work with *ros anchor
+      - /dev/shm:/dev/shm  # ros
       - gscam-volume:/etc/gscam
     command:
       - "ros2"
@@ -281,7 +266,7 @@ services:
       homepage.description: Monitors and maintains health of other services.
 
   qgis:
-    <<: [ *x11-volumes-and-devices, *gis-net ]
+    <<: [ *x11-volumes-and-devices, *gpu, *gis-net ]
     build:
       context: qgis
     command: qgis

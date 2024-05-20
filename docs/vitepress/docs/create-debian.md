@@ -7,6 +7,19 @@ A broader overview of how GISNav components are built and distributed, including
 
 :::
 
+## Prerequisites
+
+<!--@include: ./shared/create-colcon-workspace.md-->
+
+<!--@include: ./shared/clone-to-colcon-workspace.md-->
+
+::: info Todo
+The dependency repos like `px4_msgs` or `mavros` are not needed in this case, just `gisnav`.
+
+:::
+
+## Make distributable
+
 Create the `.deb` file:
 
 ```bash
@@ -17,5 +30,5 @@ make dist
 You will then find the file in the below folder:
 
 ```bash
-~/colcon_ws/src/gisnav/systemd/gisnav-compose/build
+~/colcon_ws/src/gisnav/systemd/gisnav-compose/build/gisnav-compose
 ```

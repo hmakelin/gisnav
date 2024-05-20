@@ -22,9 +22,11 @@ export default withMermaid({
     sidebar: {
       '/': [
         {
-          text: 'Getting Started',
+          text: 'Getting started',
           items: [
-            { text: 'Install from Debian package', link: '/install' },
+            { text: 'Install from Debian package', link: '/install-from-debian-package' },
+            { text: 'GISNav CLI', link: '/gisnav-cli' },
+            { text: 'Admin portal', link: '/admin-portal' },
             { text: 'Mock GPS demo', link: '/README' },
           ]
         },
@@ -33,13 +35,6 @@ export default withMermaid({
           items: [
             { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
             { text: 'Raspberry Pi 5 & Pixhawk FMUv4', link: '/raspberry-pi-pixhawk' },
-          ]
-        },
-        {
-          text: 'Configuration',
-          items: [
-            { text: 'Admin portal', link: '/admin-portal' },
-            { text: 'Setup GIS server', link: '/setup-gis-server' },
           ]
         },
         {
@@ -53,6 +48,7 @@ export default withMermaid({
             { text: 'Run tests', link: '/test-gisnav' },
             { text: 'Generate documentation', link: '/generate-documentation' },
             { text: 'Create Debian distributable', link: '/create-debian' },
+            { text: 'Setup GIS server', link: '/setup-gis-server' },
           ]
         },
         {

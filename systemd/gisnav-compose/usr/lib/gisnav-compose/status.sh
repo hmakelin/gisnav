@@ -8,4 +8,4 @@ services="gisnav nginx"
 source /usr/lib/gisnav-compose/export_compose_files.sh
 
 # Launch Docker Compose with the determined options
-docker compose -p $project_name $GISNAV_COMPOSE_FILES up -d $services
+docker compose -p $project_name ps

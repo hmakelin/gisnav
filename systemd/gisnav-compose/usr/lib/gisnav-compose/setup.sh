@@ -7,25 +7,8 @@ services="gisnav nginx"
 # Load the GPU type from the export_gpu_type.sh script
 source /usr/lib/gisnav-compose/export_gpu_type.sh
 
-# Define docker compose command options
-case $GISNAV_GPU_TYPE in
-    "nvidia")
-        echo "Launching Docker Compose with Nvidia override."
-        compose_files="-f docker-compose.yaml -f docker-compose.nvidia.yaml"
-        ;;
-    "broadcom")
-        echo "Launching Docker Compose with Broadcom override."
-        compose_files="-f docker-compose.yaml -f docker-compose.broadcom.yaml"
-        ;;
-    "none")
-        echo "No GPU detected. Launching Docker Compose without GPU-specific overrides."
-        compose_files="-f docker-compose.yaml -f docker-compose.no-gpu.yaml"
-        ;;
-    *)
-        echo "Unknown GPU type detected. Launching Docker Compose without GPU-specific overrides."
-        compose_files="-f docker-compose.yaml -f docker-compose.no-gpu.yaml"
-        ;;
-esac
+# Figure out which Docker Compose overrides to use based on GPU type
+source /usr/lib/gisnav-compose/export_compose_files.sh
 
 REQUIRED_SWAP=4  # Required swap size in GB
 TEMP_SWAPFILE="/tmp/temp_swapfile"
@@ -64,9 +47,9 @@ remove_temp_swapfile() {
 create_temp_swapfile
 
 # Pull or build the Docker images including dependencies and create containers
-docker compose $compose_files $project_name pull --include-deps $services
-docker compose $compose_files $project_name build --with-dependencies $services
-docker compose $compose_files $project_name create $services
+docker compose $GISNAV_COMPOSE_FILES $project_name pull --include-deps $services
+docker compose $GISNAV_COMPOSE_FILES $project_name build --with-dependencies $services
+docker compose $GISNAV_COMPOSE_FILES $project_name create $services
 
 # Remove the temporary swap file after build is complete
 remove_temp_swapfile

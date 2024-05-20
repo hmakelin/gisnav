@@ -1,12 +1,3 @@
-x-gpu-x11-ros-devices: &gpu-x11-ros-devices
-  devices:
-    - /dev/shm:/dev/shm  # ros
-    - /dev/dri:/dev/dri  # gpu, x11
-    - /dev/vc-mem:/dev/vc-mem  # gpu
-    - /dev/vcio:/dev/vcio  # gpu
-
-# if the service does not need ros shared memory transport, otherwise
-# same as gpu-x11-ros-devices
 x-gpu-x11-devices: &gpu-x11-devices
   devices:
     - /dev/dri:/dev/dri  # gpu, x11
@@ -15,7 +6,7 @@ x-gpu-x11-devices: &gpu-x11-devices
 
 services:
   gisnav:
-    <<: *gpu-x11-ros-devices
+    <<: *gpu-x11-devices
 
   px4:
     <<: *gpu-x11-devices
@@ -30,4 +21,4 @@ services:
     <<: *gpu-x11-devices
 
   rviz:
-    <<: *gpu-x11-ros-devices
+    <<: *gpu-x11-devices

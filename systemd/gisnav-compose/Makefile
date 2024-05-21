@@ -21,6 +21,7 @@ setup:
 	@touch ${BUILD_DIR}/COLCON_IGNORE
 	@mkdir -p $(DEB_DIR)/DEBIAN
 	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/gisnav
+	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/gisnav_msgs
 	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/docker
 	@mkdir -p $(DEB_DIR)/etc/gisnav-compose/docs/vitepress
 	@echo "{}" > $(DEB_DIR)/etc/gisnav-compose/docs/vitepress/package.json
@@ -33,9 +34,11 @@ setup:
 # TODO: make a "production" gisnav image that does not need docs folder to build,
 # rename current image to gisnav-deb and use the "production" or core image as
 # base
+# Need to be in repo root path to make .gitignore work
 copy_files: setup
-	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' gisnav/ systemd/gisnav-compose/$(DEB_DIR)/etc/gisnav-compose/gisnav/
-	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docker/ systemd/gisnav-compose/$(DEB_DIR)/etc/gisnav-compose/docker/
+	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' gisnav/ systemd/$(PACKAGE_NAME)/$(DEB_DIR)/etc/$(PACKAGE_NAME)/gisnav/
+	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' gisnav_msgs/ systemd/$(PACKAGE_NAME)/$(DEB_DIR)/etc/$(PACKAGE_NAME)/gisnav_msgs/
+	@cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docker/ systemd/$(PACKAGE_NAME)/$(DEB_DIR)/etc/$(PACKAGE_NAME)/docker/
 	@cp etc/systemd/system/gisnav-compose.service $(DEB_DIR)/etc/systemd/system
 	@cp -r usr/ $(DEB_DIR)/usr
 	@cp DEBIAN/control $(DEB_DIR)/DEBIAN/

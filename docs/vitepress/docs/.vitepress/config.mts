@@ -13,7 +13,7 @@ export default withMermaid({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/README' },
+      { text: 'Guide', link: '/introduction' },
       { text: 'API Reference', link: '/reference/index' }
     ],
     outline: {
@@ -24,6 +24,7 @@ export default withMermaid({
         {
           text: 'Getting started',
           items: [
+            { text: 'Introduction', link: '/introduction' },
             { text: 'Install from Debian package', link: '/install-from-debian-package' },
             { text: 'GISNav CLI', link: '/gisnav-cli' },
             { text: 'Admin portal', link: '/admin-portal' },

@@ -34,7 +34,7 @@ Once the services are running, you can open the admin portal in a web browser us
 
 ## Visit admin portal
 
-You can find the admin portal at port `80` on the host machine (e.g. `localhost`, or a [Raspberry Pi](/raspberry-pi)). Use the below commands to open the web page with your default web browser:
+You can find the admin portal at port `80` on the host machine (e.g. `localhost`, or a [Raspberry Pi](/raspberry-pi-pixhawk)). Use the below commands to open the web page with your default web browser:
 
 ::: code-group
 

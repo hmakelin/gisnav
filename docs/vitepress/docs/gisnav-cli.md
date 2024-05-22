@@ -1,6 +1,6 @@
 # GISNav CLI
 
-The [Debian package](/install-debian-package) comes with the `gnv` command line interface (CLI) tool that simplifies setup and deployment. `gnv` is a light wrapper around Docker Compose that eliminates the need for specifying which Compose files or overrides should be used and which services to build, create or deploy.
+The [Debian package](/install-from-debian-package) comes with the `gnv` command line interface (CLI) tool that simplifies setup and deployment. `gnv` is a light wrapper around Docker Compose that eliminates the need for specifying which Compose files or overrides should be used and which services to build, create or deploy.
 
 This page contains a quick intro to using `gnv`.
 

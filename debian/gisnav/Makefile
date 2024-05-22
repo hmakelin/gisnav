@@ -6,7 +6,8 @@ BUILD_DIR = build
 REPO_ROOT_PATH = ../..
 
 ARCHITECTURE = all
-VERSION = $(shell git describe --tags $(git rev-list --tags --max-count=1))
+VERSION_RAW = $(shell git describe --tags --abbrev=0)
+VERSION = $(shell echo $(VERSION_RAW) | sed 's/^[^0-9]*//')
 BUILD_ID = $(shell date +%Y%m%d%H%M%S)
 DEB_FILE = $(PACKAGE_NAME)_$(VERSION)-$(BUILD_ID)_$(ARCHITECTURE).deb
 
@@ -17,14 +18,13 @@ all: dist
 clean:
 	@rm -rf $(BUILD_DIR)
 
-dist: clean $(BUILD_DIR)
+dist: clean $(BUILD_DIR)/$(DEB_FILE)
 
-$(BUILD_DIR): $(BUILD_DIR)/$(DEB_FILE)
-	@mv $(BUILD_DIR)/${PACKAGE_NAME}.deb ${BUILD_DIR}/$(DEB_FILE)
+$(BUILD_DIR): $(BUILD_DIR)/DEBIAN $(BUILD_DIR)/etc $(BUILD_DIR)/usr
+
+$(BUILD_DIR)/$(DEB_FILE): $(BUILD_DIR)
+	dpkg-deb --build $(BUILD_DIR) $(BUILD_DIR)/$(DEB_FILE)
 	@echo "Debian package built successfully."
-
-$(BUILD_DIR)/$(DEB_FILE): $(BUILD_DIR)/DEBIAN $(BUILD_DIR)/etc $(BUILD_DIR)/usr
-	dpkg-deb --build $(BUILD_DIR)
 
 $(BUILD_DIR)/DEBIAN: $(BUILD_DIR)/DEBIAN/control $(BUILD_DIR)/DEBIAN/copyright $(BUILD_DIR)/DEBIAN/postinst $(BUILD_DIR)/DEBIAN/postrm
 
@@ -45,7 +45,7 @@ $(BUILD_DIR)/DEBIAN/postrm: DEBIAN/postrm
 	@cp $< $@
 
 $(BUILD_DIR)/usr:
-	@mkdir -p $(BUILD_DIR)/{usr}
+	@mkdir -p $(BUILD_DIR)/usr
 	@cp -r usr/ $(BUILD_DIR)/
 
 $(BUILD_DIR)/etc: $(BUILD_DIR)/etc/systemd $(BUILD_DIR)/etc/gisnav
@@ -71,5 +71,5 @@ $(BUILD_DIR)/etc/gisnav/docker:
 # TODO package.json needed for gisnav image build to go through - try to
 # refactor it out (need better defined gisnav image)
 $(BUILD_DIR)/etc/gisnav/docs:
-	@mkdir -p $@/vitepress && \
+	@mkdir -p $@/vitepress
 	@echo "{}" > $@/vitepress/package.json

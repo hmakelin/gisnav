@@ -61,6 +61,63 @@ The `docker/docker-compose.yaml` file defines the Docker Compose services that s
 
 In the `docker/` folder, you can find a collection of directories roughly corresponding to Docker build contexts, and a number of Docker Compose files defining services that use these build contexts. In case of multi-stage builds, multiple service images can be created from the same build context. The `docker/Makefile` may define additional phony targets for commonly needed tasks such as exposing the X server to containers that have a GUI component.
 
+It is important to share layers to keep the overall size of the system down.
+
+::: info Todo
+- Update simulation services to use `ubuntu:jammy` and `ros:humble` instead of the older `ubuntu:focal` and `ros:foxy`.
+- Ensure we use the same ubuntu base image for `glances` (and not e.g. alpine)
+- Update `qgc` from `focal` to `jammy`
+- Ensure we use our ubuntu base image also for `qgis`
+:::
+
+```mermaid
+graph TD
+    subgraph base_images ["Pulled base images (Docker Hub)"]
+        ubuntu_jammy["ubuntu:jammy"]
+        ubuntu_focal["ubuntu:focal"]
+        ros_humble["ros:humble"]
+        ros_foxy["ros:foxy"]
+        postgres
+        autoheal
+        nginx
+        micro-ros-agent
+        glances
+        qgis
+    end
+
+    subgraph built_images ["Built GISNav images"]
+        subgraph apache_ctx[apache]
+            apache
+            mapserver
+            fileserver
+        end
+        subgraph mavros_ctx[mavros]
+            gisnav
+            mavros
+            mavros-msgs
+        end
+        gscam
+        px4
+        ardupilot
+        qgc
+    end
+
+
+    ubuntu_focal --> ros_foxy
+    ubuntu_jammy --> apache
+    apache --> fileserver
+    apache --> mapserver
+    ubuntu_jammy --> ros_humble
+    ros_humble --> mavros-msgs
+    mavros-msgs --> mavros
+    mavros-msgs --> gisnav
+    ros_humble --> gscam
+    ubuntu_focal --> px4
+    ros_foxy --> ardupilot
+    ubuntu_focal --> qgc
+
+```
+
 ### Network isolation
 
 Isolation of groups of directly unrelated services is provided by allocating dedicated Docker bridge networks to groups of related services. Docker bridge networks have in-built DNS which means the container names resolve to their respective IP addresses on the bridge networks. The container name will equal the service name prefixed with `gisnav-` and suffixed with `-1`. For example, deploying the `mapserver` service using the Compose file will thereby start a container that can be found by any other container on the same network by its hostname `gisnav-mapserver-1`.

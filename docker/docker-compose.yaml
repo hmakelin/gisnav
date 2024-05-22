@@ -1,7 +1,7 @@
 # This Docker Compose file is the main configuration for the GISNav project.
 # It defines the volumes, networks, and services required to run the GISNav system.
-# Each service is built from a specified context, with commands, dependencies,
-# and environment variables configured as necessary.
+# Each service is either pulled from an upstream registry or built from a specified #
+# context. Environment variables configured as necessary.
 
 name: gisnav
 

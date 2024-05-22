@@ -1,5 +1,6 @@
 SHELL := /bin/bash
 
+.PHONY: docs
 docs:
 	@cd docs/sphinx && sphinx-build -M markdown ./source ./build
 	@mkdir -p docs/vitepress/docs/reference && cp -r docs/sphinx/build/markdown/* docs/vitepress/docs/reference

@@ -1,0 +1,44 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that enables GUI applications
+# in specific services by setting up necessary environment variables,
+# volumes, and devices for X11 forwarding.
+
+name: gisnav
+
+# x-x11 is an anchor that holds the configuration needed to enable GUI applications
+# to display using the host's X11 server. This includes setting environment variables,
+# mounting necessary volumes, and exposing the required devices.
+
+x-x11: &x11
+  environment:
+    # Disable MIT-SHM extension to avoid shared memory issues
+    QT_X11_NO_MITSHM: 1
+    # Set DISPLAY to the host's display environment variable
+    DISPLAY: ${DISPLAY}
+  volumes:
+    # Mount the X11 Unix socket for communication with the X server
+    - /tmp/.X11-unix:/tmp/.X11-unix:ro
+  devices:
+    # Expose the DRI (Direct Rendering Infrastructure) devices for hardware acceleration
+    - /dev/dri:/dev/dri
+
+# Define the services that will inherit the x11 configuration
+services:
+  qgc:
+    # Merge the configuration into the service
+    <<: *x11
+
+  gisnav:
+    <<: *x11
+
+  px4:
+    <<: *x11
+
+  ardupilot:
+    <<: *x11
+
+  rviz:
+    <<: *x11
+
+  qgis:
+    <<: *x11

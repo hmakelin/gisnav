@@ -1,0 +1,19 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that sets up TTY (Teletype) settings
+# for services that require interactive command-line interfaces.
+
+name: gisnav
+
+# x-tty is an anchor that holds the common TTY configuration.
+# This includes enabling stdin (standard input) and allocating a TTY.
+
+x-tty: &tty
+  stdin_open: true  # Keep the standard input open, allowing the container to run interactively.
+  tty: true         # Allocate a pseudo-TTY, enabling a terminal interface for the container.
+
+# Define the services that will inherit the tty configuration
+services:
+  px4:
+    # Merge the tty configuration into the px4 service. This is needed for the
+    # MAVLink/nsh shell to properly function.
+    <<: *tty

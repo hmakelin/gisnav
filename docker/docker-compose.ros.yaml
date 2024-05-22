@@ -1,0 +1,34 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that sets up the necessary
+# environment variables and volumes for ROS (Robot Operating System) applications.
+
+name: gisnav
+
+# x-ros is an anchor that holds the common ROS configuration.
+# This includes setting environment variables and mounting necessary volumes.
+
+x-ros: &ros
+  environment:
+    # Set the ROS_DOMAIN_ID for ROS 2 DDS (Data Distribution Service) communication
+    ROS_DOMAIN_ID: 0
+  volumes:
+    # Mount the shared memory directory to enable inter-process communication
+    - /dev/shm:/dev/shm
+
+# Define the services that will inherit the ros configuration
+services:
+  mavros:
+    # Merge the configuration into the service
+    <<: *ros
+
+  micro-ros-agent:
+    <<: *ros
+
+  gisnav:
+    <<: *ros
+
+  rviz:
+    <<: *ros
+
+  gscam:
+    <<: *ros

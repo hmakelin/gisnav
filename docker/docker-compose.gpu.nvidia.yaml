@@ -1,0 +1,38 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that sets up NVIDIA GPU resources
+# for services that require hardware acceleration.
+
+name: gisnav
+
+# x-nvidia is an anchor that holds the common NVIDIA GPU configuration.
+# This includes specifying the driver, the number of GPUs, and the required capabilities.
+
+x-nvidia: &nvidia
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [ gpu ]
+
+# Define the services that will inherit the nvidia configuration
+services:
+  gisnav:
+    # Merge the configuration into the service
+    <<: *nvidia
+
+  px4:
+    <<: *nvidia
+
+  ardupilot:
+    <<: *nvidia
+
+  qgc:
+    <<: *nvidia
+
+  qgis:
+    <<: *nvidia
+
+  rviz:
+    <<: *nvidia

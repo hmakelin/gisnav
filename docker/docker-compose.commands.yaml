@@ -39,12 +39,12 @@ services:
       target: mavros
       args:
         ROS_VERSION: humble
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:?err}:14557
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:-localhost}:14557
 
   micro-ros-agent:
     build:
       context: micro-ros-agent
-    command: udp4 -p ${GISNAV_UXRCE_AGENT_UDP_BIND_PORT:?err}
+    command: udp4 -p 8888
 
   qgc:
     build:
@@ -60,7 +60,7 @@ services:
   # to be left out.
   gisnav:
     #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
-    image: "${GISNAV_DOCKER_REGISTRY_HOST:?err}:${GISNAV_DOCKER_REGISTRY_PORT:?err}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav"
+    image: "${GISNAV_DOCKER_REGISTRY_HOST:-ghcr.io}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav"
     build:
       context: ..
       dockerfile: docker/mavros/Dockerfile

@@ -1,0 +1,20 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It sets up services with access to the Docker socket for various purposes
+# such as monitoring and restarting unhealthy containers.
+
+name: gisnav
+
+# Define the services that will inherit the socket configuration
+services:
+  autoheal:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  homepage:
+    volumes:
+      # read-only mode is sufficient here
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  monitoring:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -68,11 +68,11 @@ ENV ROS_VERSION=${ROS_VERSION}
 WORKDIR /opt/colcon_ws/src/
 
 # Copy package.xml only to install system dependencies
-COPY gisnav/package.xml gisnav/gisnav/package.xml
+COPY ros/gisnav/package.xml gisnav/ros/gisnav/package.xml
 
 # Install GISNav system dependencies - we will install
 # the setup.py python dependencies later.
-RUN cd gisnav/gisnav && \
+RUN cd gisnav/ros/gisnav && \
     rosdep update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     rm -rf /var/lib/apt/lists/* && \
@@ -86,13 +86,13 @@ RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     colcon build --packages-select px4_msgs
 
 # Copy rest of gisnav ros2 package
-COPY . gisnav/
+COPY ros/ gisnav/ros
 
-WORKDIR /opt/colcon_ws/src/gisnav
+WORKDIR /opt/colcon_ws/src/gisnav/
 
 # Install python dependencies, mainly torch and related CUDA deps
 # Finally, build gisnav
-RUN cd gisnav && \
+RUN cd ros/gisnav && \
     pip install . .[nmea_node] .[uorb_node] .[qgis_node] .[dev] && \
     cd /opt/colcon_ws && \
     source /opt/ros/${ROS_VERSION}/setup.bash && \

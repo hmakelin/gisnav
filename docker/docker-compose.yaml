@@ -23,15 +23,12 @@ networks:
     driver: bridge
     attachable: true
 
-# Define services with their build context, commands, volumes, and dependencies.
+# Define services with their upstream images and potential build contexts
 services:
   mapserver:
     build:
       context: apache
       target: mapserver
-    command: apache2ctl -D FOREGROUND
-    volumes:
-      - maps-volume:/etc/mapserver/maps
 
   mavros:
     build:
@@ -39,12 +36,10 @@ services:
       target: mavros
       args:
         ROS_VERSION: humble
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:?err}:14557
 
   micro-ros-agent:
     build:
       context: micro-ros-agent
-    command: udp4 -p ${GISNAV_UXRCE_AGENT_UDP_BIND_PORT:?err}
 
   qgc:
     build:
@@ -67,49 +62,30 @@ services:
       target: gisnav
       args:
         ROS_VERSION: humble
-    volumes:
-      - gisnav-volume:/etc/gisnav
-    command: ros2 launch gisnav default.launch.py protocol:=uorb
-    #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
 
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
     build:
       context: px4
-    command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
   # TODO: ardupilot service has been unmaintained for a while - does not work
   ardupilot:
     build:
       context: ardupilot
     privileged: True
-    command: bash -c "cd ~ && make sim_vehicle"
 
   rviz:
     build:
       context: rviz
       args:
         ROS_VERSION: humble
-    command: rviz2 -d gisnav_config.rviz
 
   gscam:
     build:
       context: gscam
       args:
         ROS_VERSION: humble
-    volumes:
-      - gscam-volume:/etc/gscam
-    command:
-      - "ros2"
-      - "run"
-      - "gscam"
-      - "gscam_node"
-      - "--ros-args"
-      - "--params-file"
-      - "/etc/gscam/gscam_params.yaml"
-      - "-p"
-      - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
 
   autoheal:
     image: willfarrell/autoheal
@@ -134,11 +110,6 @@ services:
     build:
       context: apache
       target: fileserver
-    command: apache2ctl -D FOREGROUND
-    volumes:
-      - maps-volume:/var/www/filegator/repository/mapserver
-      - gscam-volume:/var/www/filegator/repository/gscam
-      - gisnav-volume:/var/www/filegator/repository/gisnav
 
   homepage:
     build:
@@ -147,10 +118,7 @@ services:
   monitoring:
     image: nicolargo/glances:latest-full
     pid: host
-    command: glances -w
 
   nginx:
     image: nginx:latest
     container_name: nginx
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

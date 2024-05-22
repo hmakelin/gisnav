@@ -1,105 +1,36 @@
-# This Docker Compose file is the main configuration for the GISNav project.
-# It defines the volumes, networks, and services required to run the GISNav system.
-# Each service is built from a specified context, with commands, dependencies,
-# and environment variables configured as necessary.
+
+# This Docker Compose override file is part of the GISNav project configuration.
+# It specifies the commands to run for each service, ensuring that they start
+# with the appropriate entry points and configurations.
 
 name: gisnav
 
-# Define volumes for storing persistent data and configuration files.
-volumes:
-  maps-volume:
-  gscam-volume:
-  gisnav-volume:
-
-# Define networks for segregating services based on their functionality.
-networks:
-  gis:
-    driver: bridge
-    attachable: true
-  mavlink:
-    driver: bridge
-    attachable: true
-  admin:
-    driver: bridge
-    attachable: true
-
-# Define services with their build context, commands, volumes, and dependencies.
 services:
   mapserver:
-    build:
-      context: apache
-      target: mapserver
     command: apache2ctl -D FOREGROUND
-    volumes:
-      - maps-volume:/etc/mapserver/maps
 
   mavros:
-    build:
-      context: mavros
-      target: mavros
-      args:
-        ROS_VERSION: humble
     command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:-localhost}:14557
 
   micro-ros-agent:
     build:
       context: micro-ros-agent
-    command: udp4 -p 8888
+    command: udp4 -p ${GISNAV_UXRCE_AGENT_UDP_BIND_PORT:?err}
 
-  qgc:
-    build:
-      context: qgc
-    privileged: true  # TODO: remove this flag?
-
-  # Note: build context is repository root
-  # Note 2: The "docker buildx build" command in the push_gisnav_images.yml workflow
-  #  duplicates these build arguments. They should be changed together.
-  # Socat is used to bridge the output serial port to the PX4 SITL container
-  # over TCP - mapping serial ports to Docker host serial ports would be
-  # a bit more messy. For production deployments the socat command is expected
-  # to be left out.
   gisnav:
-    #image: "ghcr.io/hmakelin/gisnav:${TAG:-latest}"
-    image: "${GISNAV_DOCKER_REGISTRY_HOST:-ghcr.io}:${GISNAV_DOCKER_REGISTRY_PORT:-443}/${GISNAV_DOCKER_REGISTRY_NAMESPACE}/gisnav"
-    build:
-      context: ..
-      dockerfile: docker/mavros/Dockerfile
-      target: gisnav
-      args:
-        ROS_VERSION: humble
-    volumes:
-      - gisnav-volume:/etc/gisnav
     command: ros2 launch gisnav default.launch.py protocol:=uorb
     #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
 
-  # The px4 service depends on mavros, mapserver and micro-ros-agent because
-  # their IP addresses are used in the px4 service entrypoint.sh script
   px4:
-    build:
-      context: px4
     command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
-  # TODO: ardupilot service has been unmaintained for a while - does not work
   ardupilot:
-    build:
-      context: ardupilot
-    privileged: True
     command: bash -c "cd ~ && make sim_vehicle"
 
   rviz:
-    build:
-      context: rviz
-      args:
-        ROS_VERSION: humble
     command: rviz2 -d gisnav_config.rviz
 
   gscam:
-    build:
-      context: gscam
-      args:
-        ROS_VERSION: humble
-    volumes:
-      - gscam-volume:/etc/gscam
     command:
       - "ros2"
       - "run"
@@ -111,46 +42,8 @@ services:
       - "-p"
       - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
 
-  autoheal:
-    image: willfarrell/autoheal
-    restart: always
-    environment:
-      AUTOHEAL_CONTAINER_LABEL: all
-
-  qgis:
-    build:
-      context: qgis
-    command: qgis
-
-  postgres:
-    build:
-      context: postgres
-    environment:
-      POSTGRES_DB: gisnav
-      POSTGRES_USER: gisnav
-      POSTGRES_PASSWORD: gisnav
-
   fileserver:
-    build:
-      context: apache
-      target: fileserver
     command: apache2ctl -D FOREGROUND
-    volumes:
-      - maps-volume:/var/www/filegator/repository/mapserver
-      - gscam-volume:/var/www/filegator/repository/gscam
-      - gisnav-volume:/var/www/filegator/repository/gisnav
-
-  homepage:
-    build:
-      context: homepage
 
   monitoring:
-    image: nicolargo/glances:latest-full
-    pid: host
     command: glances -w
-
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

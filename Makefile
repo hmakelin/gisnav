@@ -14,20 +14,20 @@ docs\ preview:
 docs\ dev:
 	@cd docs/vitepress && npm run docs:dev
 
+.PHONY:
 build:
 	@echo "Building the project..."
-	@$(MAKE) -C debian
+	@$(MAKE) -C debian/gisnav $@
 
+.PHONY:
 dist: build
 	@echo "Creating distribution package..."
-	# TODO
+	@$(MAKE) -C debian/gisnav $@
 
 .PHONY: clean
-clean:
+clean: clean\ docs
 	@echo "Cleaning up..."
-	@rm -rf docs/sphinx/build
-	@rm -rf docs/vitepress/docs/reference
-	@rm -rf docs/vitepress/docs/.vitepress/dist
+	@$(MAKE) -C debian/gisnav $@
 	# TODO - build and dist
 
 .PHONY: clean\ docs
@@ -40,7 +40,7 @@ clean\ docs:
 .PHONY: install
 install: dist
 	@echo "Installing the project and dependencies..."
-	# TODO - make dist and install from there
+	@dpkg -i debian/gisnav/build/gisnav_*_all.deb
 	@echo "Installation complete. Try 'gnv help' to see available commands."
 
 .PHONY: test

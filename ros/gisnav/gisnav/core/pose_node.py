@@ -29,17 +29,16 @@ from geometry_msgs.msg import (
     PoseWithCovarianceStamped,
     TwistWithCovarianceStamped,
 )
+from gisnav_msgs.msg import (  # type: ignore[attr-defined]
+    MonocularStereoImage,
+    OrthoStereoImage,
+)
 from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
 from scipy.interpolate import interp1d
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
-
-from gisnav_msgs.msg import (  # type: ignore[attr-defined]
-    MonocularStereoImage,
-    OrthoStereoImage,
-)
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types

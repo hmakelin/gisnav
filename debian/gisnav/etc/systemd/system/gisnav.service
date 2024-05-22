@@ -1,12 +1,12 @@
 [Unit]
-Description=GISNav Docker Compose Services
+Description=GISNav systemd service
 After=network.target docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/etc/gisnav-compose/docker
+WorkingDirectory=/etc/gisnav/docker
 ExecStart=gnv start
 ExecStop=gnv stop
 TimeoutStartSec=0

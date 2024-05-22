@@ -16,7 +16,7 @@ docs\ dev:
 
 build:
 	@echo "Building the project..."
-	# TODO
+	@$(MAKE) -C debian
 
 dist: build
 	@echo "Creating distribution package..."

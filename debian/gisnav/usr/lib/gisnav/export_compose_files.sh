@@ -4,7 +4,7 @@
 #
 # Requires export_gpu_type.sh and GISNAV_GPU_TYPE env variable.
 
-gisnav_docker_home=/etc/gisnav-compose/docker
+gisnav_docker_home=/etc/gisnav/docker
 
 case $GISNAV_GPU_TYPE in
     "nvidia")

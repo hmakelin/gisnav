@@ -24,16 +24,16 @@ fi
 # Handle the command
 case "$1" in
     start)
-        /usr/lib/gisnav-compose/start.sh
+        /usr/lib/gisnav/start.sh
         ;;
     stop)
-        /usr/lib/gisnav-compose/stop.sh
+        /usr/lib/gisnav/stop.sh
         ;;
     setup)
-        /usr/lib/gisnav-compose/setup.sh
+        /usr/lib/gisnav/setup.sh
         ;;
     status)
-        /usr/lib/gisnav-compose/status.sh
+        /usr/lib/gisnav/status.sh
         ;;
     sim)
         echo "The 'sim' command is not implemented yet."

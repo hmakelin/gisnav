@@ -5,10 +5,10 @@ project_name="gisnav"
 services="gisnav nginx"
 
 # Load the GPU type from the export_gpu_type.sh script
-source /usr/lib/gisnav-compose/export_gpu_type.sh
+source /usr/lib/gisnav/export_gpu_type.sh
 
 # Figure out which Docker Compose overrides to use based on GPU type
-source /usr/lib/gisnav-compose/export_compose_files.sh
+source /usr/lib/gisnav/export_compose_files.sh
 
 REQUIRED_SWAP=4  # Required swap size in GB
 TEMP_SWAPFILE="/tmp/temp_swapfile"

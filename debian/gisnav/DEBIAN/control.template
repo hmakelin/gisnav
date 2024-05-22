@@ -1,0 +1,12 @@
+Package: gisnav
+Version: ${VERSION}
+Section: base
+Priority: optional
+Architecture: all
+Depends: docker-compose-plugin
+Maintainer: Harri Makelin <hmakelin@protonmail.com>
+Homepage: https://gisnav.org
+Description: GNSS-free navigation for airborne drones using GIS data
+ GISNav provides GNSS-free navigation for UAVs by visually comparing frames from the drone's camera to orthoimagery and digital elevation models retrieved from an onboard GIS server.
+ .
+ This package provides a command-line tool and configuration and source code files to build the system Docker images. Additionally, it includes a systemd service that ensures Docker containers are running on system startup if enabled.

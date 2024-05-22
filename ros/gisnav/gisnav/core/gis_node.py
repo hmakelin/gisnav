@@ -9,6 +9,7 @@ import numpy as np
 import requests
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
+from gisnav_msgs.msg import OrthoImage  # type: ignore[attr-defined]
 from owslib.util import ServiceException
 from owslib.wms import WebMapService
 from rcl_interfaces.msg import ParameterDescriptor
@@ -18,8 +19,6 @@ from rclpy.timer import Timer
 from sensor_msgs.msg import CameraInfo, TimeReference
 from shapely.geometry import box
 from std_msgs.msg import String
-
-from gisnav_msgs.msg import OrthoImage  # type: ignore[attr-defined]
 
 from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types

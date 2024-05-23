@@ -7,6 +7,7 @@ SHELL := /bin/bash
 # Package configuration variables
 PACKAGE_NAME = gisnav
 BUILD_DIR = build
+DIST_DIR = dist
 REPO_ROOT_PATH = ../..
 ARCHITECTURE = all
 
@@ -26,16 +27,17 @@ all: dist
 # Phony target for cleaning the build directory
 .PHONY: clean
 clean:
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BUILD_DIR) $(DIST_DIR)
 
 # Target to clean the build directory and then build the Debian package
-dist: clean $(BUILD_DIR)/$(DEB_FILE)
+dist: clean $(DIST_DIR)/$(DEB_FILE)
 
 # Ensure the build directory and necessary subdirectories exist
 $(BUILD_DIR): $(BUILD_DIR)/DEBIAN $(BUILD_DIR)/etc $(BUILD_DIR)/usr
 
 # Target to build the Debian package
-$(BUILD_DIR)/$(DEB_FILE): $(BUILD_DIR)
+$(DIST_DIR)/$(DEB_FILE): $(BUILD_DIR)
+	@mkdir -p dist
 	dpkg-deb --build $< $@
 	@echo "Debian package built successfully."
 

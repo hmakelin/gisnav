@@ -164,7 +164,7 @@ graph TB
 
         subgraph middleware ["Middleware Services"]
             middleware_mavros[mavros]
-            middleware_micro_ros_agent[micro-ros-agent]
+            middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
             middleware_gscam[gscam]
         end
         subgraph gis_net
@@ -172,7 +172,7 @@ graph TB
                 application_gisnav[gisnav]
             end
             subgraph gis_services ["GIS Services"]
-                gis_postgres["postgres (PostGIS)"]
+                gis_postgres["postgres\n(PostGIS)"]
                 gis_mapserver[mapserver]
             end
             subgraph dev_services ["Dev Services"]
@@ -183,10 +183,10 @@ graph TB
         subgraph admin_net
             subgraph admin_services ["Admin services"]
                 homepage[homepage]
-                fileserver[FileGator]
-                monitoring[Glances]
+                fileserver["fileserver\n(FileGator)"]
+                monitoring["monitoring\n(Glances)"]
             end
-            nginx[Nginx]
+            nginx
         end
 
         subgraph volumes ["User managed\nshared volumes"]

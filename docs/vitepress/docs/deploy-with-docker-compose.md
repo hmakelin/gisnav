@@ -26,6 +26,11 @@ This page provides details on how to build and deploy these services, allowing f
 
 This step is optional since the `docker compose` example commands on this page will use the `-p gisnav` option to ensure the project name is always specified.
 
+### Compose file stack
+
+<!--@include: ./shared/export-compose-files.md-->
+
+
 ## Example deployments
 
 The interdependencies between different services are hard-coded into the Docker Compose file using the `depends_on` key and typically you will need to start only a few services explicitly to get everything up and running.
@@ -38,14 +43,14 @@ To deploy the [mock GPS demonstration](/README) introduced locally without using
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav build gisnav px4
+docker compose $GISNAV_COMPOSE_FILES -p gisnav build gisnav px4
 ```
 
 #### Create containers
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav create gisnav px4
+docker compose $GISNAV_COMPOSE_FILES -p gisnav create gisnav px4
 ```
 
 #### Expose X server to containers
@@ -56,14 +61,14 @@ docker compose -p gisnav create gisnav px4
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start gisnav px4
+docker compose $GISNAV_COMPOSE_FILES -p gisnav start gisnav px4
 ```
 
 #### Stop containers
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav stop gisnav px4
+docker compose $GISNAV_COMPOSE_FILES -p gisnav stop gisnav px4
 ```
 
 
@@ -79,7 +84,7 @@ Remember to [expose your X server to your containers](#expose-x-server-to-contai
 
 ```bash [Build images and create containers]
 cd ~/colcon_ws/src/gisnav/docker
-docker compose create --build \
+docker compose $GISNAV_COMPOSE_FILES -p gisnav create --build \
     px4 \
     rviz \
     qgis
@@ -88,7 +93,7 @@ docker compose create --build \
 
 ```bash [Start containers]
 cd ~/colcon_ws/src/gisnav/docker
-docker compose start \
+docker compose $GISNAV_COMPOSE_FILES -p gisnav start \
     px4 \
     rviz \
     qgis
@@ -97,7 +102,7 @@ docker compose start \
 
 ```bash [Stop containers]
 cd ~/colcon_ws/src/gisnav/docker
-docker compose stop \
+docker compose -p gisnav stop \
     px4 \
     rviz \
     qgis
@@ -110,10 +115,8 @@ After you have your supporting services deployed, you might be interested in [la
 
 ## Private registry
 
-::: warning Warning: Untested feature
-This is a suggested model for deploying Docker images, which may be non-distributable whether for licensing or other reasons, to a companion computer on a local or internal network.
-
-This has not yet been tested.
+::: warning Warning: Untested, not implemented
+This is a suggested model for deploying Docker images which may be non-distributable, whether for licensing or other reasons, to a companion computer on a local network.
 
 :::
 

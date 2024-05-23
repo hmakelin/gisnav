@@ -1,8 +1,9 @@
 #!/bin/bash
 # Determines what Docker Compose overrides should be used based on environment
 # (most likely based on GPU type).
-#
-# Requires export_gpu_type.sh and GISNAV_GPU_TYPE env variable.
+
+# Load the GPU type from the export_gpu_type.sh script
+source /usr/lib/gisnav/export_gpu_type.sh
 
 gisnav_docker_home=/etc/gisnav/docker
 

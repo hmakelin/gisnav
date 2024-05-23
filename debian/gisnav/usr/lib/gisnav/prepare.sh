@@ -6,9 +6,6 @@ project_name="gisnav"
 # Load Docker Compose services to deploy
 source /usr/lib/gisnav/export_services.sh
 
-# Load the GPU type from the export_gpu_type.sh script
-source /usr/lib/gisnav/export_gpu_type.sh
-
 # Figure out which Docker Compose overrides to use based on GPU type
 source /usr/lib/gisnav/export_compose_files.sh
 
@@ -48,8 +45,10 @@ remove_temp_swapfile() {
 # Create a temporary swap file if needed
 create_temp_swapfile
 
-# Pull or build the Docker images including dependencies and create containers
-docker compose $GISNAV_COMPOSE_FILES -p $project_name pull --include-deps $GISNAV_SERVICES
+# Pull or build the Docker images including dependencies and create container
+# Pulling disabled since we might not have the right CUDA versions or other
+# environment specific installed on the gisnav development image in GHCR
+#docker compose $GISNAV_COMPOSE_FILES -p $project_name pull --include-deps $GISNAV_SERVICES
 docker compose $GISNAV_COMPOSE_FILES -p $project_name build --with-dependencies $GISNAV_SERVICES
 docker compose $GISNAV_COMPOSE_FILES -p $project_name create $GISNAV_SERVICES
 

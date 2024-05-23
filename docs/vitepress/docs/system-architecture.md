@@ -215,14 +215,14 @@ graph TB
     nginx ---|3000/tcp| homepage
     nginx ---|80/tcp| fileserver
     nginx ---|61208/tcp| monitoring
-    nginx ---|3000/tcp| application_docs_volume
+    nginx ---|/path/to/built/docs| application_docs_volume
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
-    classDef network fill:transparent,stroke-dasharray:5 5;
+    classDef network fill:transparent,stroke-dasharray:10 5;
     class mavlink_net,gis_net,admin_net network
 
-    classDef host fill:transparent;
+    classDef host fill:transparent,stroke:10;
     class simulation_host,companion host
 ```
 

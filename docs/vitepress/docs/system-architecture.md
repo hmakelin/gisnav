@@ -132,88 +132,98 @@ The diagram below depicts the GISNav services topography for SITL simulation tha
 
 Some notes on the service topography:
 
-- The Application services `gisnav` and `autoheal` have access to both `gis` and `mw` networks.
-- The Application services, Simulation services, Middleware services, GIS services, and Data services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description.
+- The Application services, Simulation services, Middleware services, GIS services, Dev services, and Admin services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description besides that only neighboring layers should talk to each other - there should be no jumps across layers in communication.
 - `socat` could also be considered a middleware service but runs non-containerized on the Docker host so it is not included in the Middleware services in the diagram.
-- The deployed topography will slightly vary if Docker Compose overrides are used, for example when deploying for HIL instead of SITL simulation.
 - GISnav uses `gscam` to publish the ROS `sensor_msgs.msg.CameraInfo` and `sensor_msgs.msg.Image` messages. The camera topics are not published over the MAVROS middleware.
+- ROS middleware does not have to be in the same network as `gisnav`. The shared memory device is used instead of going through the network stack since we will be passing a lot of (pointers to) images around.
+- `qgis` is a GUI app that is part of the companion computer grouping but should probably only be run on the simulation host during development i.e. when using the simulation host to also run the companion computer services.
 
 ::: info Todo
-- Potentially split `mw` network into `mavlink` and `ros` networks. For ROS the intention is to use the shared memory device instead of serializing and going through the network stack since we will be passing a lot of (pointers to) images around.
-- `docs-volume` not yet implemented, but is intended to contain static documentation (may need a server).
+- `docs-volume` not yet implemented, but is intended to contain static documentation.
+- There will probably be need for a web based viewer (=not QGIS) for the maps in the GIS server that can be accessed from the admin network / via nginx
 :::
 
 ```mermaid
-graph TD
-    subgraph mw ["mw"]
-        mw_qgc[qgc]
-        subgraph simulation ["Simulation Services"]
-            simulation_px4[px4]
-            simulation_ardupilot[ardupilot]
+graph TB
+
+    subgraph simulation_host["Simulation host"]
+        subgraph mavlink_net ["mavlink_net"]
+            mw_qgc[qgc]
+            subgraph simulation ["Simulation Services"]
+                simulation_px4[px4]
+                simulation_ardupilot[ardupilot]
+            end
         end
+    end
+    simulation_px4 ----->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
+
+    browser["Web browser"] -->|"80/http (443/https not currently supported)"| nginx
+
+    subgraph companion["Companion computer (or simulation host)"]
+        application_autoheal[autoheal]
+
         subgraph middleware ["Middleware Services"]
             middleware_mavros[mavros]
             middleware_micro_ros_agent[micro-ros-agent]
             middleware_gscam[gscam]
         end
-    end
-    simulation_px4 -->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
-
-    subgraph gis_mw ["gis & mw"]
-        subgraph application ["Application Services"]
-            application_gisnav[gisnav]
-            application_autoheal[autoheal]
+        subgraph gis_net
+            subgraph application ["Application Services"]
+                application_gisnav[gisnav]
+            end
+            subgraph gis_services ["GIS Services"]
+                gis_postgres["postgres (PostGIS)"]
+                gis_mapserver[mapserver]
+            end
+            subgraph dev_services ["Dev Services"]
+                gis_qgis["qgis"]
+            end
         end
-    end
-    subgraph gis ["gis"]
-        subgraph gis_services ["GIS Services"]
-            gis_mapserver[mapserver]
-            gis_qgis[qgis]
-        end
-        subgraph data_services ["Data Services"]
-            gis_postgres[postgres]
-        end
-    end
 
-    subgraph admin ["admin"]
-        homepage[homepage]
-        fileserver[FileGator]
-        monitoring[Glances]
-        nginx[Nginx]
-    end
+        subgraph admin_net
+            subgraph admin_services ["Admin services"]
+                homepage[homepage]
+                fileserver[FileGator]
+                monitoring[Glances]
+            end
+            nginx[Nginx]
+        end
 
-    subgraph volumes ["User managed\nshared volumes"]
-        gscam_volume[gscam-volume]
-        gis_maps_volume[maps-volume]
-        application_gisnav_volume[gisnav-volume]
+        subgraph volumes ["User managed\nshared volumes"]
+            gscam_volume[gscam-volume]
+            gis_maps_volume[maps-volume]
+            application_gisnav_volume[gisnav-volume]
+        end
+        application_docs_volume[docs-volume]
     end
-    application_docs_volume[docs-volume]
 
     mw_qgc -->|14550/udp\nMAVLink| simulation_px4
-    simulation_px4 -->|14540/udp\nMAVLink| middleware_mavros
-    simulation_px4 -->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
-    simulation_px4 -->|5600/udp\nRTP H.264 Video| middleware_gscam
+    simulation_px4 ----->|14540/udp\nMAVLink| middleware_mavros
+    simulation_px4 ----->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
+    simulation_px4 ----->|5600/udp\nRTP H.264 Video| middleware_gscam
     middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     application_gisnav -->|5432/tcp| gis_postgres
 
     application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
+    gis_postgres -->|5432/tcp| gis_qgis
     gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
-    gis_qgis -->|5432/tcp| gis_postgres
     gis_mapserver ---|/etc/mapserver| gis_maps_volume
     application_gisnav_volume ---|/etc/gisnav| application_gisnav
     application_docs_volume ---|/path/to/built/docs| application_gisnav
     nginx ---|3000/tcp| homepage
     nginx ---|80/tcp| fileserver
     nginx ---|61208/tcp| monitoring
+    nginx ---|3000/tcp| application_docs_volume
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
-    application_docs_volume ---|/path/to/docs:ro| homepage
-
     classDef network fill:transparent,stroke-dasharray:5 5;
-    class mw,gis,gis_mw,admin,admin_gis network
+    class mavlink_net,gis_net,admin_net network
+
+    classDef host fill:transparent;
+    class simulation_host,companion host
 ```
 
 ### Service descriptions

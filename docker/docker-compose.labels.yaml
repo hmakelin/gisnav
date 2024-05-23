@@ -116,14 +116,14 @@ services:
   qgis:
     labels:
       <<: *labels
-      homepage.group: GIS services
+      homepage.group: Dev services
       homepage.name: QGIS
       homepage.description: GIS client for viewing map rasters
 
   postgres:
     labels:
       <<: *labels
-      homepage.group: Data services
+      homepage.group: GIS services
       homepage.name: Postgres
       homepage.description: PostGIS relational database for efficiently storing geographical information
 

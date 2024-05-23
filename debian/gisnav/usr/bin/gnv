@@ -12,8 +12,10 @@ print_usage() {
     echo "  help|--help|-h  Show this help message."
     echo ""
     echo "Deployment types:"
-    echo "  cmp             Companion computer deployment. Default deployment type if not provided."
+    echo "  cmp             Companion computer deployment."
     echo "  sim             Simulation deployment."
+    echo ""
+    echo "  Note: You can choose to not provide the deployment type, in which case both types are deployed."
     echo ""
     echo "Deployment subtypes:"
     echo "  sitl            Software-in-the-loop. Default subtype if not provided."
@@ -34,6 +36,7 @@ manage_tasks() {
     # Define services to deploy in different deployment types
     local services_cmp="gisnav"
     local services_sim="px4"
+    local services_dual="$services_cmp $services_sim"
 
     # Handle submode
     case "$deployment_subtype" in
@@ -56,6 +59,8 @@ manage_tasks() {
         services=$services_sim
     elif [ "$deployment_type" == "cmp" ]; then
         services=$services_cmp
+    elif [ "$deployment_type" == "dual" ]; then
+        services=$services_dual
     else
         echo "Unknown deployment type: $deployment_type"
         print_usage
@@ -67,10 +72,10 @@ manage_tasks() {
             /usr/lib/gisnav/start.sh $services
             ;;
         stop)
-            /usr/lib/gisnav/stop.sh
+            /usr/lib/gisnav/stop.sh $services
             ;;
         status)
-            /usr/lib/gisnav/status.sh
+            /usr/lib/gisnav/status.sh $services
             ;;
         prepare)
             /usr/lib/gisnav/prepare.sh $services
@@ -93,7 +98,7 @@ if [ $# -lt 1 ]; then
 fi
 
 # Determine defaults for deployment type and subtype if not provided
-deployment_type="cmp"
+deployment_type="dual"
 deployment_subtype="sitl"
 command=""
 

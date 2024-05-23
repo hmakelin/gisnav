@@ -2,50 +2,118 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: gnv {start|stop|prepare|status|sim|help|--help|-h}"
+    echo "Usage: gnv [cmp|sim] [sitl|hil] {start|stop|prepare|status|help|--help|-h}"
+    echo ""
     echo "Commands:"
-    echo "  start     Start services."
-    echo "  stop      Stop services."
-    echo "  status    Check services status."
-    echo "  prepare     Setup services by preparing Docker containers."
+    echo "  start           Start services."
+    echo "  stop            Stop services."
+    echo "  status          Check services status."
+    echo "  prepare         Setup services by preparing Docker containers."
+    echo "  help|--help|-h  Show this help message."
     echo ""
-    echo "            WARNING:"
-    echo "            - Setup may use a temporary swapfile on memory limited systems."
-    echo "            - Setup may take a long time."
+    echo "Deployment types:"
+    echo "  cmp             Companion computer deployment. Default deployment type if not provided."
+    echo "  sim             Simulation deployment."
     echo ""
-    echo "  sim       Manage simulation related tasks (placeholder, not implemented)."
-    echo "  help|--help|-h Show this help message."
+    echo "Deployment subtypes:"
+    echo "  sitl            Software-in-the-loop. Default subtype if not provided."
+    echo "  hil             Hardware-in-the-loop. (Note: HIL subtype is currently unsupported by 'gnv')."
+    echo ""
+    echo "Examples:"
+    echo "  gnv start"
+    echo "  GISNAV_COMPANION_HOST=raspberrypi.local gnv sim start"
+    echo "  gnv cmp hil start"
 }
 
-# Check if an argument is provided
-if [ $# -eq 0 ]; then
+# Function to manage tasks
+manage_tasks() {
+    local deployment_type=$1
+    local deployment_subtype=$2
+    shift 2
+
+    # Define services to deploy in different deployment types
+    local services_cmp="gisnav"
+    local services_sim="px4"
+
+    # Handle submode
+    case "$deployment_subtype" in
+        sitl)
+            ;;
+        hil)
+            echo "WARNING: HIL subtype is unsupported."
+            exit 1
+            ;;
+        *)
+            echo "Unknown subtype: $deployment_subtype"
+            print_usage
+            exit 1
+            ;;
+    esac
+
+    # Determine services to start/prepare based on deployment type
+    local services=""
+    if [ "$deployment_type" == "sim" ]; then
+        services=$services_sim
+    elif [ "$deployment_type" == "cmp" ]; then
+        services=$services_cmp
+    else
+        echo "Unknown deployment type: $deployment_type"
+        print_usage
+        exit 1
+    fi
+
+    case "$1" in
+        start)
+            /usr/lib/gisnav/start.sh $services
+            ;;
+        stop)
+            /usr/lib/gisnav/stop.sh
+            ;;
+        status)
+            /usr/lib/gisnav/status.sh
+            ;;
+        prepare)
+            /usr/lib/gisnav/prepare.sh $services
+            ;;
+        help|--help|-h)
+            print_usage
+            ;;
+        *)
+            echo "Unknown command: $1"
+            print_usage
+            exit 1
+            ;;
+    esac
+}
+
+# Check if enough arguments are provided
+if [ $# -lt 1 ]; then
     print_usage
     exit 1
 fi
 
-# Handle the command
-case "$1" in
-    start)
-        /usr/lib/gisnav/start.sh
-        ;;
-    stop)
-        /usr/lib/gisnav/stop.sh
-        ;;
-    prepare)
-        /usr/lib/gisnav/prepare.sh
-        ;;
-    status)
-        /usr/lib/gisnav/status.sh
-        ;;
-    sim)
-        echo "The 'sim' command is not implemented yet."
-        ;;
-    help|--help|-h)
-        print_usage
-        ;;
-    *)
-        echo "Invalid command: $1"
-        print_usage
-        exit 1
-        ;;
-esac
+# Determine defaults for deployment type and subtype if not provided
+deployment_type="cmp"
+deployment_subtype="sitl"
+command=""
+
+if [ "$1" == "sim" ] || [ "$1" == "cmp" ]; then
+    deployment_type=$1
+    shift
+fi
+
+if [ "$1" == "sitl" ] || [ "$1" == "hil" ]; then
+    deployment_subtype=$1
+    shift
+fi
+
+if [ -n "$1" ]; then
+    command=$1
+    shift
+else
+    print_usage
+    exit 1
+fi
+
+# Manage tasks based on provided arguments
+manage_tasks $deployment_type $deployment_subtype $command "$@"

@@ -328,19 +328,25 @@ Direction pointing directly up from the [vehicle](#vehicle) (opposed to [nadir](
 ### BBox
 Bounding box
 
-### Dev
-Development
-
-### Distro
-Distribution, a Linux distribution such as Debian
+### `cmp`
+Companion computer
 
 ### Coords
 Coordinates
+
+### Dev
+Development
 
 ### Diff, `diff`
 Difference
 
 Also `git diff` and `diff` command line utilities to show differences in git repositories and files respectively.
+
+### Distro
+Distribution, a Linux distribution such as Debian
+
+### `gnv`
+GISNav (CLI tool)
 
 ### Img
 Image
@@ -357,7 +363,7 @@ Query
 ### Ref
 Reference
 
-### Sim
+### Sim, `sim`
 Simulation
 
 ### TTY, `tty`, `pty`

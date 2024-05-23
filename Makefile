@@ -41,8 +41,7 @@ clean\ docs:
 .PHONY: install
 install: dist
 	@echo "Installing the project and dependencies..."
-	@dpkg -i debian/gisnav/build/gisnav_*_all.deb
-	@echo "Installation complete."
+	@$(MAKE) -C debian/gisnav $@
 
 .PHONY: test
 test:

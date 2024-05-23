@@ -29,6 +29,10 @@ all: dist
 clean:
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)
 
+.PHONY: install
+install: dist
+	@sudo dpkg -i $(DIST_DIR)/$(DEB_FILE)
+
 # Target to clean the build directory and then build the Debian package
 dist: clean $(DIST_DIR)/$(DEB_FILE)
 

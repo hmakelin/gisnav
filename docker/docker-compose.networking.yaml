@@ -21,7 +21,7 @@ services:
     networks:
       - mavlink
     ports:
-      - "${UXRCE_DDS_PRT:?err}:${UXRCE_DDS_PRT:?err}/udp"
+      - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
 
   qgc:
     networks:
@@ -45,9 +45,9 @@ services:
       # Expose TCP port for NMEA input
       - "15000:15000/tcp"
     environment:
-      PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?err}
-      UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?err}
-      GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?err}
+      PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
+      UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
+      GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?empty or not set}
 
   # TODO: Define and expose necessary ports for ArduPilot.
   ardupilot:

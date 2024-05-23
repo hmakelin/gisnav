@@ -2,19 +2,19 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: gnv {start|stop|setup|status|sim|--help|-h}"
+    echo "Usage: gnv {start|stop|prepare|status|sim|help|--help|-h}"
     echo "Commands:"
     echo "  start     Start services."
     echo "  stop      Stop services."
     echo "  status    Check services status."
-    echo "  setup     Setup services by preparing Docker containers."
+    echo "  prepare     Setup services by preparing Docker containers."
     echo ""
-    echo "            WARNING:
-    echo "            - Setup may use a temporary swapfile on memory limited systems.
-    echo "            - Setup may take a long time.
+    echo "            WARNING:"
+    echo "            - Setup may use a temporary swapfile on memory limited systems."
+    echo "            - Setup may take a long time."
     echo ""
     echo "  sim       Manage simulation related tasks (placeholder, not implemented)."
-    echo "  --help|-h Show this help message."
+    echo "  help|--help|-h Show this help message."
 }
 
 # Check if an argument is provided
@@ -31,7 +31,7 @@ case "$1" in
     stop)
         /usr/lib/gisnav/stop.sh
         ;;
-    setup)
+    prepare)
         /usr/lib/gisnav/prepare.sh
         ;;
     status)
@@ -40,7 +40,7 @@ case "$1" in
     sim)
         echo "The 'sim' command is not implemented yet."
         ;;
-    --help|-h)
+    help|--help|-h)
         print_usage
         ;;
     *)

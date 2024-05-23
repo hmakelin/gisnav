@@ -10,12 +10,12 @@ services:
     command: apache2ctl -D FOREGROUND
 
   mavros:
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:-localhost}:14557
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp://:14540@${GISNAV_FCU_URL:?empty or not set}:14557
 
   micro-ros-agent:
     build:
       context: micro-ros-agent
-    command: udp4 -p ${GISNAV_UXRCE_AGENT_UDP_BIND_PORT:?err}
+    command: udp4 -p ${UXRCE_DDS_PRT:?empty or not set}
 
   gisnav:
     command: ros2 launch gisnav default.launch.py protocol:=uorb

@@ -43,7 +43,9 @@ services:
       - mavlink
     ports:
       # Expose TCP port for NMEA input
-      - "15000:15000/tcp"
+      # Note that we expose 15001 instead of 15000 so that we do not have a
+      # conflict in case px4 and gisnav are run on the same (simulation) host
+      - "15001:15000/tcp"
     environment:
       PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}

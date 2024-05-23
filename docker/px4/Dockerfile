@@ -34,7 +34,7 @@ WORKDIR PX4-Autopilot
 
 # Do not copy Dockerfile so that it can be edited without invalidating this
 # layer
-COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world entrypoint.sh etc .
+COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world etc .
 
 # Setup ksql_airport.world for HIL
 # empy must be version 3.3.4, see below commit
@@ -52,12 +52,6 @@ RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topic
 # Apply configuration files
 RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
 
-# The hostname of the gscam service in the network is assumed to be gisnav-gscam-1
-ENV PX4_VIDEO_HOST_IP=gisnav-gscam-1
-
-RUN mkdir -p /etc/mavlink-router && \
-    mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
-    chmod +x ./entrypoint.sh
 
 # Look for secondary GPS i.e. GISNav (GPS 2)
 # Use first unassigned available serial port, i.e. /dev/ttyS4
@@ -73,5 +67,10 @@ RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
 # No health check - if simulation dies makes no sense to restart via autoheal
+
+COPY entrypoint.sh .
+RUN mkdir -p /etc/mavlink-router && \
+    mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
+    chmod +x ./entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]

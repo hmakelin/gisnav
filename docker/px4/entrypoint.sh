@@ -5,12 +5,20 @@ set -e
 # https://docs.px4.io/main/en/simulation/#use-mavlink-router
 # See description of how PX4 uses ports for simulation here:
 # https://docs.px4.io/main/en/simulation/#default-px4-mavlink-udp-ports
+# TODO: assumes that QGC is running in the same Docker bridge network as px4 -
+#   not necessarily true
 export QGC_IP=$(getent hosts gisnav-qgc-1 | awk '{ print $1 }')
-export MAVROS_IP=$(getent hosts gisnav-mavros-1 | awk '{ print $1 }')
+export COMPANION_IP=$(getent hosts ${GISNAV_COMPANION_HOST:?empty or not set} | awk '{ print $1 }')
+
+# Resolve IPv6 loopback address to IPv4 127.0.0.1
+if [ "$COMPANION_IP" = "::1" ]; then
+    COMPANION_IP="127.0.0.1"
+fi
+
 echo "Setting up MAVLink router to QGC host ${QGC_IP:-127.0.0.1}"
 mavlink-routerd -e ${QGC_IP:-127.0.0.1}:14550 127.0.0.1:14550 &
-echo "Setting up MAVLink router to MAVROS host ${MAVROS_IP:-127.0.0.1}"
-mavlink-routerd -e ${MAVROS_IP:-127.0.0.1}:14540 127.0.0.1:14540 &
+echo "Setting up MAVLink router to MAVROS host ${COMPANION_IP:?empty or not set}"
+mavlink-routerd -e ${COMPANION_IP:?empty or not set}:14540 127.0.0.1:14540 &
 
 # Listen to GISNav mock GPS messages on TCP port and bridge to serial port on
 # px4 container (simulation host). Bridging serial ports over TCP is easier with
@@ -22,15 +30,12 @@ socat tcp-listen:15000,reuseaddr,fork pty,raw,echo=0,link=/dev/ttyS4 &
 # Setup uXRCE agent IP
 # PX4 needs the IP as int32 - convert_ip.py script does the conversion
 # https://docs.px4.io/main/en/middleware/uxrce_dds.html#starting-the-client
-# UDP port 8888 used by default for SITL simulation
-export UXRCE_AGENT_IP=$(getent hosts gisnav-micro-ros-agent-1 | awk '{ print $1 }')
-export UXRCE_DDS_AG_IP=$(python3 Tools/convert_ip.py $UXRCE_AGENT_IP)
-echo "Connecting uXRCE client with agent at ${UXRCE_AGENT_IP:-127.0.0.1} (${UXRCE_DDS_AG_IP})."
-#echo "uxrce_dds_client start -h ${UXRCE_AGENT_IP}" >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
+export UXRCE_DDS_AG_IP=$(python3 Tools/convert_ip.py ${COMPANION_IP:?empty or not set})
+echo "Connecting uXRCE-DDS client with agent at ${COMPANION_IP:?empty or not set} (${UXRCE_DDS_AG_IP:?empty or not set})."
 
 # Restart the uXRCE client in the main SITL startup script (rcS) with
 # the correct DDS agent IP address (rcS hard codes 127.0.0.1)
 echo "uxrce_dds_client stop" >> ROMFS/px4fmu_common/init.d-posix/rcS
-echo "uxrce_dds_client start -h ${UXRCE_AGENT_IP}" >> ROMFS/px4fmu_common/init.d-posix/rcS
+echo "uxrce_dds_client start -h ${UXRCE_DDS_AG_IP:?empty or not set} -p ${UXRCE_DDS_PRT:?empty or not set}" >> ROMFS/px4fmu_common/init.d-posix/rcS
 
 exec "$@"

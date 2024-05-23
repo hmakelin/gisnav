@@ -113,6 +113,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && apt clean
 
+COPY docs/ docs/
+
 # Node 18 for building the docs (Sphinx dependencies already in setup.py)
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
     && source ~/.nvm/nvm.sh \

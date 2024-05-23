@@ -18,8 +18,6 @@ services:
 
   px4:
     depends_on:
-      - mavros
-      - micro-ros-agent
       - qgc
 
   qgis:

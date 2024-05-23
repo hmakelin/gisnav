@@ -42,7 +42,7 @@ clean\ docs:
 install: dist
 	@echo "Installing the project and dependencies..."
 	@dpkg -i debian/gisnav/build/gisnav_*_all.deb
-	@echo "Installation complete. Try 'gnv help' to see available commands."
+	@echo "Installation complete."
 
 .PHONY: test
 test:

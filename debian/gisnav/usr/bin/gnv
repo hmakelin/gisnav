@@ -4,12 +4,14 @@
 print_usage() {
     echo "Usage: gnv {start|stop|setup|status|sim|--help|-h}"
     echo "Commands:"
-    echo "  start     Start the GISNav Docker Compose services."
-    echo "  stop      Stop the GISNav Docker Compose services."
-    echo "  status    Check the status of the GISNav Docker Compose services."
-    echo "  setup     Sets up GISNav Docker Compose services by preparing Docker containers."
+    echo "  start     Start services."
+    echo "  stop      Stop services."
+    echo "  status    Check services status."
+    echo "  setup     Setup services by preparing Docker containers."
     echo ""
-    echo "            WARNING: Setup may use a temporary swapfile on memory limited systems."
+    echo "            WARNING:
+    echo "            - Setup may use a temporary swapfile on memory limited systems.
+    echo "            - Setup may take a long time.
     echo ""
     echo "  sim       Manage simulation related tasks (placeholder, not implemented)."
     echo "  --help|-h Show this help message."
@@ -30,7 +32,7 @@ case "$1" in
         /usr/lib/gisnav/stop.sh
         ;;
     setup)
-        /usr/lib/gisnav/setup.sh
+        /usr/lib/gisnav/prepare.sh
         ;;
     status)
         /usr/lib/gisnav/status.sh

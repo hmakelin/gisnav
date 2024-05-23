@@ -5,14 +5,16 @@ set -e
 cd /etc/gisnav/docker
 
 # The gnv CLI tool should be provided with this package
-# We setup here as part of the installation process so that the user experience
-# is better when running `gnv start` for the first time (i.e. will not have to
-# pull or build Docker images then).
-gnv setup
+# We prepare containers here as part of the installation process so that the
+# user experience is better when running `gnv start` for the first time (i.e.
+# will not have to pull or build Docker images then).
+gnv prepare
 
 # Enable the gisnav.service at startup
 # Not enabled automatically here because this could significantly slow down
 # resource constrained edge devices.
 #systemctl enable gisnav.service
+
+echo Installation complete. Type 'gnv help' to see available commands.
 
 exit 0

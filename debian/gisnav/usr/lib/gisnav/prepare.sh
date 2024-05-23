@@ -2,7 +2,9 @@
 
 # Define common variables
 project_name="gisnav"
-services="gisnav nginx"
+
+# Load Docker Compose services to deploy
+source /usr/lib/gisnav/export_services.sh
 
 # Load the GPU type from the export_gpu_type.sh script
 source /usr/lib/gisnav/export_gpu_type.sh
@@ -47,9 +49,9 @@ remove_temp_swapfile() {
 create_temp_swapfile
 
 # Pull or build the Docker images including dependencies and create containers
-docker compose $GISNAV_COMPOSE_FILES -p $project_name pull --include-deps $services
-docker compose $GISNAV_COMPOSE_FILES -p $project_name build --with-dependencies $services
-docker compose $GISNAV_COMPOSE_FILES -p $project_name create $services
+docker compose $GISNAV_COMPOSE_FILES -p $project_name pull --include-deps $GISNAV_SERVICES
+docker compose $GISNAV_COMPOSE_FILES -p $project_name build --with-dependencies $GISNAV_SERVICES
+docker compose $GISNAV_COMPOSE_FILES -p $project_name create $GISNAV_SERVICES
 
 # Remove the temporary swap file after build is complete
 remove_temp_swapfile

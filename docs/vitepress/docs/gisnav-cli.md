@@ -39,8 +39,8 @@ See command line help:
 gnv --help
 ```
 
-Setup or update existing Docker Compose services:
+Update existing Docker Compose services:
 
 ```bash
-gnv setup
+gnv prepare
 ```

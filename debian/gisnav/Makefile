@@ -19,7 +19,8 @@ VERSION = $(shell echo $(VERSION_RAW) | sed 's/^[^0-9]*//')
 BUILD_ID = $(shell date +%Y%m%d%H%M%S)
 
 # Define the output Debian package file name
-DEB_FILE = $(PACKAGE_NAME)_$(VERSION)-$(BUILD_ID)_$(ARCHITECTURE).deb
+#DEB_FILE = $(PACKAGE_NAME)_$(VERSION)-$(BUILD_ID)_$(ARCHITECTURE).deb
+DEB_FILE = $(PACKAGE_NAME)_$(VERSION)_$(ARCHITECTURE).deb
 
 # Default target to build the distribution package
 all: dist
@@ -33,8 +34,8 @@ clean:
 install: dist
 	@sudo dpkg -i $(DIST_DIR)/$(DEB_FILE)
 
-# Target to clean the build directory and then build the Debian package
-dist: clean $(DIST_DIR)/$(DEB_FILE)
+# Create distributable
+dist: $(DIST_DIR)/$(DEB_FILE)
 
 # Ensure the build directory and necessary subdirectories exist
 $(BUILD_DIR): $(BUILD_DIR)/DEBIAN $(BUILD_DIR)/etc $(BUILD_DIR)/usr

@@ -8,7 +8,7 @@ print_usage() {
     echo "  start           Start services."
     echo "  stop            Stop services."
     echo "  status          Check services status."
-    echo "  prepare         Setup services by preparing Docker containers."
+    echo "  prepare         Prepare service containers."
     echo "  help|--help|-h  Show this help message."
     echo ""
     echo "Deployment types:"

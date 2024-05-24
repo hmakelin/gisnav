@@ -74,4 +74,8 @@ done &
 mv /etc/mapserver/$NAIP_ZIP_FILENAME $IMAGERY_DIR || echo "NAIP imagery not found on container - likely already moved to shared volume"
 mv /etc/mapserver/$DEM_FILENAME $DEM_DIR || echo "USGS DEM not found on container - likely already moved to shared volume"
 
+# Process directory change once on startup in case .vrt files have been destroyed
+process_directory_change "$DEM_DIR" "$DEM_VRT_FILE" "does-not-exist-dem.tif"
+process_directory_change "$IMAGERY_DIR" "$IMAGERY_VRT_FILE" "does-not-exist-imagery.tif"
+
 exec "$@"

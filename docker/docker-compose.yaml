@@ -22,6 +22,9 @@ networks:
   admin:
     driver: bridge
     attachable: true
+  dds:
+    driver: bridge
+    attachable: true
 
 # Define services with their upstream images and potential build contexts
 services:

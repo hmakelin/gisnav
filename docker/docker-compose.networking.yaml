@@ -12,10 +12,14 @@ services:
       - gis
 
   mavros:
+    networks:
+      - dds
     ports:
       - "${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}/udp"
 
   micro-ros-agent:
+    networks:
+      - dds
     ports:
       - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
 
@@ -27,6 +31,7 @@ services:
   gisnav:
     networks:
       - gis
+      - dds
 
   px4:
     networks:
@@ -48,6 +53,8 @@ services:
       - mavlink
 
   gscam:
+    networks:
+      - dds
     ports:
       # Not needed if a local device is used as video source instead of network stream
       # see gscam_params.yaml file

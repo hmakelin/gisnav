@@ -141,13 +141,14 @@ Some notes on the service topography:
 ::: info Todo
 - `docs-volume` not yet implemented, but is intended to contain static documentation.
 - There will probably be need for a web based viewer (=not QGIS) for the maps in the GIS server that can be accessed from the admin network / via nginx
+- Make shared memory transport work. It does not work possibly because of the note on privileged uses [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
 :::
 
 ```mermaid
 graph TB
 
     subgraph simulation_host["Simulation host"]
-        subgraph mavlink_net ["mavlink_net"]
+        subgraph mavlink ["mavlink"]
             mw_qgc[qgc]
             subgraph simulation ["Simulation Services"]
                 simulation_px4[px4]
@@ -162,12 +163,14 @@ graph TB
     subgraph companion["Companion computer (or simulation host)"]
         application_autoheal[autoheal]
 
-        subgraph middleware ["Middleware Services"]
-            middleware_mavros[mavros]
-            middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
-            middleware_gscam[gscam]
+        subgraph dds
+            subgraph middleware ["Middleware Services"]
+                middleware_mavros[mavros]
+                middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
+                middleware_gscam[gscam]
+            end
         end
-        subgraph gis_net
+        subgraph gis
             subgraph application ["Application Services"]
                 application_gisnav[gisnav]
             end
@@ -180,7 +183,7 @@ graph TB
             end
         end
 
-        subgraph admin_net
+        subgraph admin
             subgraph admin_services ["Admin services"]
                 homepage[homepage]
                 fileserver["fileserver\n(FileGator)"]
@@ -219,8 +222,10 @@ graph TB
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
+    dds -.-|dds| application_gisnav
+
     classDef network fill:transparent,stroke-dasharray:10 5;
-    class mavlink_net,gis_net,admin_net network
+    class mavlink,gis,admin,dds network
 
     classDef host fill:transparent,stroke:10;
     class simulation_host,companion host

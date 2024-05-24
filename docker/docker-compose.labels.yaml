@@ -39,6 +39,10 @@ networks:
     labels:
       <<: *labels
       org.gisnav.description: "Network for administrative access and management, where end-user tools can access specific volumes that contain configuration data"
+  dds:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Network for UDP communication between ROS nodes. Fast-DDS shared memory transport between ROS nodes seems to have issues when running ROS inside Docker containers, possibly when running containers as root. So the middleware is placed in the same network with the `gisnav` service to allow communication over the network stack instead."
 
 # Define services with labels for metadata, grouping, and descriptions.
 # The homepage.* labels are displayed on the Homepage admin portal

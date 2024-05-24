@@ -2,6 +2,10 @@
 # It defines a reusable configuration layer that sets up the necessary
 # environment variables and volumes for ROS (Robot Operating System) applications.
 
+# Note: A dds network in the networking file (not here in this file) is included
+# to enable Fast DDS to communicate over the network stack instead of only
+# relying on the shared memory devices mounted here in this file
+
 name: gisnav
 
 # x-ros is an anchor that holds the common ROS configuration.

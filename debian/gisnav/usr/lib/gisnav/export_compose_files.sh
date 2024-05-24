@@ -5,7 +5,10 @@
 # Load the GPU type from the export_gpu_type.sh script
 source /usr/lib/gisnav/export_gpu_type.sh
 
-gisnav_docker_home=/etc/gisnav/docker
+gisnav_docker_home=${1:-/etc/gisnav/docker}
+
+# Print the path for verification
+echo "Using GISNav Docker home at: $gisnav_docker_home"
 
 # Base compose files, excluding GPU-specific ones
 compose_files="-f $gisnav_docker_home/docker-compose.yaml \

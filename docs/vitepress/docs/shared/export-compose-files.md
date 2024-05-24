@@ -5,12 +5,12 @@ A script that comes with the Debian package and is included in the source code h
 ::: code-group
 
 ```bash [Persistent <Badge type="tip" text="Recommended"/>]
-source ~/colcon_ws/src/gisnav/debian/gisnav/usr/lib/gisnav/export_compose_files.sh
+source ~/colcon_ws/src/gisnav/debian/gisnav/usr/lib/gisnav/export_compose_files.sh ~/colcon_ws/src/gisnav/docker
 echo "export GISNAV_COMPOSE_FILES=$GISNAV_COMPOSE_FILES" >> ~/.bashrc
 ```
 
 ```bash [Current session]
-source ~/colcon_ws/src/gisnav/debian/gisnav/usr/lib/gisnav/export_compose_files.sh
+source ~/colcon_ws/src/gisnav/debian/gisnav/usr/lib/gisnav/export_compose_files.sh ~/colcon_ws/src/gisnav/docker
 ```
 
 :::
@@ -18,6 +18,6 @@ source ~/colcon_ws/src/gisnav/debian/gisnav/usr/lib/gisnav/export_compose_files.
 You can then check that you are correctly parsing the Compose file stack by inspecting the resolved configuration in canonical format:
 
 ```bash
-source ~/colcon_ws/src/gisnav/docker
+cd ~/colcon_ws/src/gisnav/docker
 docker compose -p gisnav $GISNAV_COMPOSE_FILES config
 ```

@@ -19,47 +19,15 @@ else
 fi
 
 # Execute docker compose down
-if [ -x "$(command -v docker)" ]; then
-    if cd /etc/gisnav/docker; then
-        # "down" removes containers, volumes, networks
-        if docker compose  -f docker-compose.yaml -f docker-compose.companion.yaml -p gisnav down; then
-            echo "Successfully executed docker compose down."
-        else
-            echo "Failed to execute docker compose down. Please stop and remove any GISNav Docker containers manually."
-        fi
+if [ -x "$(command -v docker compose)" ]; then
+    # "down" removes containers, volumes, networks
+    if docker compose -p gisnav down; then
+        echo "Successfully executed docker compose down."
     else
-        echo "Failed to change directory to /etc/gisnav/docker. Please stop and remove any GISNav Docker containers manually."
+        echo "Failed to execute docker compose down. Please stop and remove any GISNav Docker containers manually."
     fi
 else
     echo "docker command not found. Skipping docker compose down."
 fi
-
-# Remove the systemd service file
-case "$1" in
-    purge|remove)
-        # Remove systemd service file
-        if [ -f /etc/systemd/system/gisnav.service ]; then
-            if rm -f /etc/systemd/system/gisnav.service; then
-                echo "Removed /etc/systemd/system/gisnav.service."
-                systemctl daemon-reload
-            else
-                echo "Failed to remove /etc/systemd/system/gisnav.service."
-            fi
-        else
-            echo "Removed /etc/systemd/system/gisnav.service (did not exist)."
-        fi
-
-        # Remove the gisnav directory including any sub-directories
-        if [ -d /etc/gisnav ]; then
-            if rm -rf /etc/gisnav; then
-                echo "Removed /etc/gisnav directory."
-            else
-                echo "Failed to remove /etc/gisnav directory."
-            fi
-        else
-            echo "Removed /etc/gisnav directory (did not exist)."
-        fi
-        ;;
-esac
 
 exit 0

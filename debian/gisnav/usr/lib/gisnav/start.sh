@@ -12,7 +12,7 @@ fi
 GISNAV_SERVICES="$@"
 
 # Figure out which Docker Compose overrides to use based on GPU type
-source /usr/lib/gisnav/export_compose_files.sh
+source /usr/lib/gisnav/export_compose_files.sh /etc/gisnav/docker
 
 # Launch Docker Compose with the determined options
 docker compose -p $project_name $GISNAV_COMPOSE_FILES up -d $GISNAV_SERVICES

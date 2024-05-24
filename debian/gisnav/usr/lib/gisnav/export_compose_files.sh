@@ -1,10 +1,6 @@
 #!/bin/bash
 # Determines what Docker Compose overrides should be used based on environment
-# (most likely based on GPU type).
-
-# Load the GPU type from the export_gpu_type.sh script
-source /usr/lib/gisnav/export_gpu_type.sh
-
+# (most likely based on GPU type). Exports GISNAV_COMPOSE_FILES.
 gisnav_docker_home=${1:-/etc/gisnav/docker}
 
 # Print the path for verification
@@ -21,6 +17,9 @@ compose_files="-f $gisnav_docker_home/docker-compose.yaml \
                -f $gisnav_docker_home/docker-compose.tty.yaml \
                -f $gisnav_docker_home/docker-compose.volumes.yaml \
                -f $gisnav_docker_home/docker-compose.x11.yaml"
+
+# Load the GPU type from the export_gpu_type.sh script
+source /usr/lib/gisnav/export_gpu_type.sh
 
 # Determine the GPU override
 case $GISNAV_GPU_TYPE in
@@ -41,4 +40,4 @@ case $GISNAV_GPU_TYPE in
 esac
 
 # Export the Docker Compose overrides as an environment variable
-export GISNAV_COMPOSE_FILES=$compose_files
+export GISNAV_COMPOSE_FILES="--env-file $gisnav_docker_home/.env $compose_files"

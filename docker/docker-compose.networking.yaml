@@ -12,14 +12,10 @@ services:
       - gis
 
   mavros:
-    networks:
-      - mavlink
     ports:
-      - "14540:14540/udp"
+      - "${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}/udp"
 
   micro-ros-agent:
-    networks:
-      - mavlink
     ports:
       - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
 
@@ -27,37 +23,35 @@ services:
     networks:
       - mavlink
 
-  # TODO: Consider using environment variables for FCU or simulation host computer hostname (i.e. where to send the outgoing comms during simulation).
-  # TODO: Expose serial device instead of TCP port and output NMEA directly.
+  # TODO: Expose serial device instead of TCP port and output NMEA directly?
   gisnav:
     networks:
       - gis
-    ports:
-      # Expose TCP port for NMEA output
-      - "15000:15000/tcp"
 
-  # The px4 service simulates the PX4 flight control unit.
-  # TODO: Consider using environment variables for companion computer hostname.
   px4:
     networks:
       - mavlink
     ports:
-      # Expose TCP port for NMEA input
-      # Note that we expose 15001 instead of 15000 so that we do not have a
-      # conflict in case px4 and gisnav are run on the same (simulation) host
-      - "15001:15000/tcp"
+      # Expose TCP port for NMEA input via TCP at port 15000
+      - "15000:15000/tcp"
     environment:
       PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
       GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?empty or not set}
+      GISNAV_CMP_MAVROS_BIND_PORT: ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # TODO: Define and expose necessary ports for ArduPilot.
   ardupilot:
     networks:
       - mavlink
 
-  # TODO: Determine if gscam needs to be in the same network as px4 during simulation.
   gscam:
+    ports:
+      # Not needed if a local device is used as video source instead of network stream
+      # see gscam_params.yaml file
+      - "5600:5600/udp"
 
   qgis:
     networks:
@@ -74,6 +68,8 @@ services:
   homepage:
     networks:
       - admin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   monitoring:
     networks:

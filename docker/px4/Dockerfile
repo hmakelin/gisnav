@@ -68,6 +68,10 @@ RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 
 # No health check - if simulation dies makes no sense to restart via autoheal
 
+# Fix uXRCE-DDS bridge host (uXRCE-DDS middleware not on localhost)
+# GISNAV_COMPANION_IP needs to be set in entrypoint.sh
+RUN sed -i "s/127\.0\.0\.1/\$GISNAV_COMPANION_IP/" ROMFS/px4fmu_common/init.d-posix/rcS
+
 COPY entrypoint.sh .
 RUN mkdir -p /etc/mavlink-router && \
     mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \

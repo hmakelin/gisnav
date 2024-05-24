@@ -1,0 +1,10 @@
+# This Docker Compose override file is part of the GISNav project configuration.
+# It specifies the commands to run for each service, ensuring that they start
+# with the appropriate entry points and configurations.
+
+# TODO: use env variables instead of override for serial port
+
+services:
+  # Connects MAVROS over serial instead of default UDP
+  mavros:
+    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=/dev/ttyUSB0:57600

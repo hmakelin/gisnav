@@ -2,17 +2,17 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: gnv [sitl|hil] {<any docker compose command>|help}"
+    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help}"
     echo ""
     echo "Deployment modes:"
     echo "  sitl            Software-in-the-loop. Default mode if not provided."
-    echo "  hil             Hardware-in-the-loop. (Note: HIL mode is currently unsupported by 'gnv')."
+    echo "  hil             Hardware-in-the-loop. (Note: HIL mode is currently unsupported by 'gnc')."
     echo ""
     echo "Examples:"
-    echo "  gnv start"
-    echo "  gnv logs gisnav"
-    echo "  GISNAV_COMPANION_HOST=raspberrypi.local gnv start"
-    echo "  gnv hil start"
+    echo "  gnc start"
+    echo "  gnc logs gisnav"
+    echo "  GISNAV_COMPANION_HOST=raspberrypi.local gnc start"
+    echo "  gnc hil start"
 }
 
 # Function to manage tasks

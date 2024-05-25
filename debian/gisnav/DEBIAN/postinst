@@ -4,18 +4,18 @@ set -e
 # Change to the directory where the docker-compose.yml is located
 cd /etc/gisnav/docker
 
-# The gnv CLI tool should be provided with this package
+# The gnc CLI tool should be provided with this package
 # We prepare containers here as part of the installation process so that the
-# user experience is better when running `gnv start` for the first time (i.e.
+# user experience is better when running `gnc start` for the first time (i.e.
 # will not have to pull or build Docker images then).
-gnv build gisnav --with-dependencies
-gnv create gisnav
+gnc build gisnav --with-dependencies
+gnc create gisnav
 
 # Enable the gisnav.service at startup
 # Not enabled automatically here because this could significantly slow down
 # resource constrained edge devices.
 #systemctl enable gisnav.service
 
-echo Installation complete. Type 'gnv help' to see available commands.
+echo "Installation complete. Type 'gnc help' to see available commands."
 
 exit 0

@@ -14,10 +14,16 @@ You can use the [CLI tool](/gisnav-cli) or [Docker Compose](/deploy-with-docker-
 
 ### GISNav CLI
 
-The admin portal is automatically served when using the CLI:
+The admin portal is automatically served when starting `gisnav` using the CLI:
 
 ```bash
-gnv start
+gnc start gisnav
+```
+
+You can also only start the admin tools:
+
+```bash
+gnc start nginx
 ```
 
 ### Docker Compose

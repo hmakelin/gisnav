@@ -119,16 +119,16 @@ If you want to uninstall the service, use the below command:
 sudo apt-get remove gisnav-compose
 ```
 
-### `gnv` CLI
+### GSINav CLI
 
-You can also try using the `gnv` command line client that comes with the Debian package to start and stop the services:
+You can also try using the `gnc` command line client that comes with the Debian package to start and stop the services:
 
 ```bash
-gnv start
+gnc start gisnav
 ```
 
 ```bash
-gnv stop
+gnc stop
 ```
 
 ## Connect Raspberry Pi 5 and Pixhawk

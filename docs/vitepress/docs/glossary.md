@@ -345,8 +345,8 @@ Also `git diff` and `diff` command line utilities to show differences in git rep
 ### Distro
 Distribution, a Linux distribution such as Debian
 
-### `gnv`
-GISNav (CLI tool)
+### `gnc`
+GISNav CLI
 
 ### Img
 Image

@@ -8,7 +8,8 @@ cd /etc/gisnav/docker
 # We prepare containers here as part of the installation process so that the
 # user experience is better when running `gnv start` for the first time (i.e.
 # will not have to pull or build Docker images then).
-gnv prepare
+gnv build gisnav --with-dependencies
+gnv create gisnav
 
 # Enable the gisnav.service at startup
 # Not enabled automatically here because this could significantly slow down

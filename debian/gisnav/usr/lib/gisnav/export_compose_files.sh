@@ -1,10 +1,22 @@
 #!/bin/bash
 # Determines what Docker Compose overrides should be used based on environment
 # (most likely based on GPU type). Exports GISNAV_COMPOSE_FILES.
+
+# Check for verbose flag
+verbose=0
+for arg in "$@"; do
+    if [[ "$arg" == "-v" || "$arg" == "--verbose" ]]; then
+        verbose=1
+        break
+    fi
+done
+
 gisnav_docker_home=${1:-/etc/gisnav/docker}
 
-# Print the path for verification
-echo "Using GISNav Docker home at: $gisnav_docker_home"
+# Print the path for verification if verbose flag is set
+if [[ $verbose -eq 1 ]]; then
+    echo "Using GISNav Docker home at: $gisnav_docker_home"
+fi
 
 # Base compose files, excluding GPU-specific ones
 compose_files="-f $gisnav_docker_home/docker-compose.yaml \
@@ -18,24 +30,36 @@ compose_files="-f $gisnav_docker_home/docker-compose.yaml \
                -f $gisnav_docker_home/docker-compose.volumes.yaml \
                -f $gisnav_docker_home/docker-compose.x11.yaml"
 
-# Load the GPU type from the export_gpu_type.sh script
-source /usr/lib/gisnav/export_gpu_type.sh
+# Load the GPU type from the export_gpu_type.sh script, pass verbose flag if set
+if [[ $verbose -eq 1 ]]; then
+    source /usr/lib/gisnav/export_gpu_type.sh --verbose
+else
+    source /usr/lib/gisnav/export_gpu_type.sh
+fi
 
 # Determine the GPU override
 case $GISNAV_GPU_TYPE in
     "nvidia")
-        echo "Using Docker Compose with Nvidia override."
+        if [[ $verbose -eq 1 ]]; then
+            echo "Using Docker Compose with Nvidia override."
+        fi
         compose_files="$compose_files -f $gisnav_docker_home/docker-compose.gpu.nvidia.yaml"
         ;;
     "broadcom")
-        echo "Using Docker Compose with Broadcom override."
+        if [[ $verbose -eq 1 ]]; then
+            echo "Using Docker Compose with Broadcom override."
+        fi
         compose_files="$compose_files -f $gisnav_docker_home/docker-compose.gpu.broadcom.yaml"
         ;;
     "none")
-        echo "No GPU detected. Using Docker Compose without GPU-specific overrides."
+        if [[ $verbose -eq 1 ]]; then
+            echo "No GPU detected. Using Docker Compose without GPU-specific overrides."
+        fi
         ;;
     *)
-        echo "Unknown GPU type detected. Using Docker Compose without GPU-specific overrides."
+        if [[ $verbose -eq 1 ]]; then
+            echo "Unknown GPU type detected. Using Docker Compose without GPU-specific overrides."
+        fi
         ;;
 esac
 

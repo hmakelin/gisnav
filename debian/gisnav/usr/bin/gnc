@@ -2,7 +2,7 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help}"
+    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help} [service@remote ...]"
     echo ""
     echo "Deployment modes:"
     echo "  sitl            Software-in-the-loop. Default mode if not provided."
@@ -11,8 +11,8 @@ print_usage() {
     echo "Examples:"
     echo "  gnc start"
     echo "  gnc logs gisnav"
-    echo "  GISNAV_COMPANION_HOST=raspberrypi.local gnc start"
-    echo "  gnc hil start"
+    echo "  gnc start px4 gisnav@raspberrypi.local"
+    echo "  gnc stop @raspberrypi.local"
 }
 
 # Function to manage tasks
@@ -35,25 +35,60 @@ manage_tasks() {
             ;;
     esac
 
-    case "$1" in
-        build)
-            # Custom handling for building images on resource constrained
-            # systems
-            /usr/lib/gisnav/build.sh "$@"
-            ;;
-        create)
-            # Custom handling for creating images to enable GUI apps
-            /usr/lib/gisnav/create.sh "$@"
-            ;;
-        help)
-            # alias for --help|-h
-            /usr/lib/gisnav/compose.sh --help
-            ;;
-        *)
-            # Default script
-            /usr/lib/gisnav/compose.sh "$@"
-            ;;
-    esac
+    # Initialize associative array for services and their remotes
+    declare -A service_remotes
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            *@*)
+                service="${1%@*}"
+                remote="${1#*@}"
+                service_remotes[$service]=$remote
+                ;;
+            *)
+                if [ -z "$command" ]; then
+                    command="$1"
+                else
+                    command_args+=("$1")
+                fi
+                ;;
+        esac
+        shift
+    done
+
+    # If no command provided, print usage
+    if [ -z "$command" ]; then
+        print_usage
+        exit 1
+    fi
+
+    # Execute command for each service and its remote
+    for service in "${!service_remotes[@]}"; do
+        remote=${service_remotes[$service]}
+        echo "Executing '$command' for service '$service' on remote '$remote'"
+        ssh "$remote" "gnc $deployment_mode $command $service ${command_args[*]}"
+    done
+
+    # Handle default script execution if no specific service@remote provided
+    if [ ${#service_remotes[@]} -eq 0 ]; then
+        case "$command" in
+            build)
+                # Custom handling for building images on resource constrained systems
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}"
+                ;;
+            create)
+                # Custom handling for creating images to enable GUI apps
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}"
+                ;;
+            help)
+                print_usage
+                ;;
+            *)
+                # Default script
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}"
+                ;;
+        esac
+    fi
 }
 
 # Check if enough arguments are provided
@@ -65,19 +100,12 @@ fi
 # Determine default for deployment mode if not provided
 deployment_mode="sitl"
 command=""
+declare -a command_args
 
 if [ "$1" == "sitl" ] || [ "$1" == "hil" ]; then
     deployment_mode=$1
     shift
 fi
 
-if [ -n "$1" ]; then
-    command=$1
-    shift
-else
-    print_usage
-    exit 1
-fi
-
 # Manage tasks based on provided arguments
-manage_tasks $deployment_mode $command "$@"
+manage_tasks $deployment_mode "$@"

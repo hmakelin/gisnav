@@ -1,8 +1,8 @@
 # GISNav CLI
 
-The [Debian package](/install-from-debian-package) comes with the `gnv` command line interface (CLI) tool streamlines deployment of the Compose services. `gnv` is a light wrapper around Docker Compose that eliminates the need for specifying which Compose files or overrides should be used and which services to build, create or deploy.
+The [Debian package](/install-from-debian-package) comes with the `gnc` command line interface (CLI) tool streamlines deployment of the Compose services. `gnc` is a light wrapper around Docker Compose that eliminates the need for specifying which Compose files or overrides should be used and which services to build, create or deploy.
 
-This page contains a quick intro to using `gnv`.
+This page contains a quick intro to using `gnc`.
 
 ## Prerequisites
 
@@ -13,30 +13,30 @@ You must have installed the [Debian package](/install-from-debian-package).
 Start simulation and gisnav services on a companion computer:
 
 ```bash
-gnv start px4 gisnav
+gnc start px4 gisnav
 ```
 
 Stop all services:
 
 ```bash
-gnv stop
+gnc stop
 ```
 
 View services status:
 
 ```bash
-gnv ps
+gnc ps
 ```
 
 See command line help:
 
 ```bash
-gnv --help
+gnc --help
 ```
 
 Update existing services:
 
 ```bash
-gnv build gisnav px4 --with-dependencies
-gnv create gisnav px4
+gnc build gisnav px4 --with-dependencies
+gnc create gisnav px4
 ```

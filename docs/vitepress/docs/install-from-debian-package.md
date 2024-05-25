@@ -8,7 +8,7 @@ This page describes how you can a install containerized version of GISNav for HI
 - For a SITL mock GPS demo, see [here](/README) instead. Eventually the [GISNav CLI](/gisnav-cli) that comes with the Debian package should be able to run the demo as well, but currently that is not the case.
 
     ::: info Todo
-    Run demo from CLI, e.g. `gnv sim start` or `gnv sim sitl start`
+    Run demo from CLI, e.g. `gnc sim start` or `gnc sim sitl start`
 
     :::
 

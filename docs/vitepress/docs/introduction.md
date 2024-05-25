@@ -14,7 +14,7 @@ GISNav uses visual comparisons between frames captured by the vehicle's camera a
 
 3. **ROS 2 package**: The core of GISNav is a ROS 2 package called `gisnav`, implementing the main application logic and providing integration with the ROS ecosystem. This ensures compatibility with a wide range of existing robotics applications.
 
-4. [**Command Line Interface**](/gisnav-cli): The GISNav Debian package comes with a simple command line interface (CLI) tool called `gnv` that allows users to easily control the system. The CLI provides commands for setting up the environment, starting and stopping services, and monitoring the system's status.
+4. [**Command Line Interface**](/gisnav-cli): The GISNav Debian package comes with a simple command line interface (CLI) tool called `gnc` that allows users to easily control the system. The CLI provides commands for setting up the environment, starting and stopping services, and monitoring the system's status.
 
 5. **systemd service**: The Debian package also includes the `gisnav.service` systemd service that ensures all required services are automatically started on system startup.
 

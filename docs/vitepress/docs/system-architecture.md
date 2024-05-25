@@ -142,13 +142,14 @@ Some notes on the service topography:
 - `docs-volume` not yet implemented, but is intended to contain static documentation.
 - There will probably be need for a web based viewer (=not QGIS) for the maps in the GIS server that can be accessed from the admin network / via nginx
 - Make shared memory transport work. It does not work possibly because of the note on privileged uses [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
+- `px4` shares the host network stack (along with `qgc`) because receiving communication from `uxrce_dds_agent` seems to depend on ephemeral ports  (unverified) -> try to isolate the simulator and QGC in a `mavlink` network
 :::
 
 ```mermaid
 graph TB
 
     subgraph simulation_host["Simulation host"]
-        subgraph mavlink ["mavlink"]
+        subgraph mavlink ["host"]
             mw_qgc[qgc]
             subgraph simulation ["Simulation Services"]
                 simulation_px4[px4]

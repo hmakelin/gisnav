@@ -5,8 +5,10 @@ project_name="gisnav"
 
 GISNAV_SERVICES="$@"
 
+gisnav_docker_home=/etc/gisnav/docker
+
 # Figure out which Docker Compose overrides to use based on GPU type
-source /usr/lib/gisnav/export_compose_files.sh /etc/gisnav/docker
+source /usr/lib/gisnav/export_compose_files.sh $gisnav_docker_home
 
 REQUIRED_SWAP=4  # Required swap size in GB
 TEMP_SWAPFILE="/tmp/temp_swapfile"
@@ -53,3 +55,6 @@ docker compose $GISNAV_COMPOSE_FILES -p $project_name create $GISNAV_SERVICES
 
 # Remove the temporary swap file after build is complete
 remove_temp_swapfile
+
+# Expose X server to new containers
+make -C $gisnav_docker_home expose-xhost

@@ -24,8 +24,7 @@ services:
       - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
 
   qgc:
-    networks:
-      - mavlink
+    network_mode: host
 
   # TODO: Expose serial device instead of TCP port and output NMEA directly?
   gisnav:
@@ -34,11 +33,7 @@ services:
       - dds
 
   px4:
-    networks:
-      - mavlink
-    ports:
-      # Expose TCP port for NMEA input via TCP at port 15000
-      - "15000:15000/tcp"
+    network_mode: host
     environment:
       PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
@@ -49,8 +44,8 @@ services:
 
   # TODO: Define and expose necessary ports for ArduPilot.
   ardupilot:
-    networks:
-      - mavlink
+    network_mode: host
+
 
   gscam:
     networks:

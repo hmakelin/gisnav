@@ -35,21 +35,57 @@ manage_tasks() {
             ;;
     esac
 
-    # Initialize associative array for services and their remotes
-    declare -A service_remotes
+    # Initialize associative array for remotes and their services
+    declare -A remote_services
+    BLANK_SERVICE=" "  # Variable for blank space service
+    command=""
+    command_args=()
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            *@localhost|*@127.0.0.1)
+                service="${1%@*}"
+                # If service is empty, replace it with a blank space
+                if [ -z "$service" ]; then
+                    service="$BLANK_SERVICE"
+                fi
+                if [ -z $local_services ]; then
+                    local_services="$service"
+                else
+                    local_services+=" $service"
+                fi
+                ;;
             *@*)
                 service="${1%@*}"
+                # If service is empty, replace it with a blank space
+                if [ -z "$service" ]; then
+                    service="$BLANK_SERVICE"
+                fi
                 remote="${1#*@}"
-                service_remotes[$service]=$remote
+                if [ -z "${remote_services[$remote]}" ]; then
+                    remote_services[$remote]="$service"
+                else
+                    remote_services[$remote]+=" $service"
+                fi
                 ;;
             *)
                 if [ -z "$command" ]; then
+                    # we need and expect the command to be the first arg
                     command="$1"
-                else
+                elif [[ "$1" == -* || "$1" == --* ]]; then
                     command_args+=("$1")
+                else
+                    service="$1"
+                    #service="${1%@*}"
+                    # If service is empty, replace it with a blank space
+                    if [ -z "$service" ]; then
+                        service="$BLANK_SERVICE"
+                    fi
+                    if [ -z $local_services ]; then
+                        local_services="$service"
+                    else
+                        local_services+=" $service"
+                    fi
                 fi
                 ;;
         esac
@@ -62,33 +98,41 @@ manage_tasks() {
         exit 1
     fi
 
-    # Execute command for each service and its remote
-    for service in "${!service_remotes[@]}"; do
-        remote=${service_remotes[$service]}
-        echo "Executing '$command' for service '$service' on remote '$remote'"
-        ssh "$remote" "gnc $deployment_mode $command $service ${command_args[*]}"
+    # Execute command for each remote and its services
+    for remote in "${!remote_services[@]}"; do
+        services=${remote_services[$remote]}
+        if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
+            echo "Executing '$command' on remote '$remote'"
+            ssh "$remote" "gnc $deployment_mode $command ${command_args[*]}"
+        else
+            echo "Executing '$command' for services '$services' on remote '$remote'"
+            ssh "$remote" "gnc $deployment_mode $command $services ${command_args[*]}"
+        fi
     done
 
-    # Handle default script execution if no specific service@remote provided
-    if [ ${#service_remotes[@]} -eq 0 ]; then
+    # Handle command for local services. Either we have collected local services
+    # earlier (gnc start px4, gnc start px4 gisnav@raspberrypi.local) and it's not empty,
+    # or both remote services and local services are empty (gnc start)
+    if [ ! -z "$local_services" ] || ( [ -z "$local_services" ] && [ ! ${#remote_services[@]} -gt 0 ] ); then
         case "$command" in
             build)
                 # Custom handling for building images on resource constrained systems
-                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}"
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" $local_services
                 ;;
             create)
                 # Custom handling for creating images to enable GUI apps
-                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}"
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" $local_services
                 ;;
             help)
                 print_usage
                 ;;
             *)
                 # Default script
-                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}"
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services
                 ;;
         esac
     fi
+
 }
 
 # Check if enough arguments are provided

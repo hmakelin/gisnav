@@ -2,7 +2,7 @@
 
 # Function to print usage
 print_usage() {
-    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help} [service@remote ...]"
+    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help} service[@remote] ..."
     echo ""
     echo "Deployment modes:"
     echo "  sitl            Software-in-the-loop. Default mode if not provided."

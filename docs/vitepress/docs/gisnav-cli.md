@@ -27,13 +27,13 @@ gnc create gisnav@raspberrypi.local
 ```
 
 
-Start both simulation and gisnav services on localhost:
+Start both simulation and `gisnav` services on localhost:
 
 ```bash
 gnc start px4 gisnav
 ```
 
-Start simulation on localhost and gisnav on `raspberrypi.local`:
+Start simulation on localhost and `gisnav` on `raspberrypi.local`:
 
 ```bash
 gnc start px4 gisnav@raspberrypi.local

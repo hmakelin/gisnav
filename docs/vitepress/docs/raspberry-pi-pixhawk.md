@@ -36,19 +36,21 @@ Take a look at Docker's [official instructions](https://docs.docker.com/engine/i
 
 :::
 
+Make sure you have added your user to the `docker` group as described in the [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) to ensure you can run `docker` without `sudo`.
+
 #### systemd
 
 The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as Debian or one of its derivatives like Raspberry Pi OS or Ubuntu.
 
 ### Connectivity & networking
 
-- You need `ssh` enabled on your Raspberry Pi 5.
+- You need the `ssh` server enabled on your Raspberry Pi 5. Include your own `ssh` public key in the `~/.ssh/authorized_keys` file on the Pi to ensure you can `ssh` in.
 
 - These instructions assume you are using the default hostname `raspberrypi.local` from the `rpi-imager` tool.
 
 - Your development host and Raspberry Pi 5 must be on the same local network. You can e.g. connect them with an Ethernet cable. You may want to share Internet connection to the Raspberry Pi 5 if you want to download the Debian package directly from the Internet onto the Pi.
 
-## Install GISNav Compose Services
+## Install GISNav CLI
 
 ::: info Building your own `.deb`
 Instead of installing the `gisnav` Debian package from the public registry, you can also build your own `.deb` file by following [these instructions](/create-debian).
@@ -71,9 +73,15 @@ ssh raspberrypi.local
 
 ## Manage GISNav Compose Services
 
+### Enable
+
+```bash
+sudo systemctl enable gisnav.service
+```
+
 ### Start
 
-The `gisnav.service` should start automatically when the system is started. Restart the system or start the `gisnav` service manually to make it active:
+Once enabled, the `gisnav.service` should start automatically when the system is started. Restart the system or start the `gisnav` service manually to make it active:
 
 ```bash
 sudo systemctl start gisnav.service
@@ -124,11 +132,12 @@ sudo apt-get remove gisnav
 You can also try using the `gnc` command line client that comes with the Debian package to start and stop the services:
 
 ```bash
-gnc start gisnav
+gnc start px4 gisnav@raspberrypi.local
 ```
 
 ```bash
-gnc stop
+# In this case we need the "" to also stop on localhost, could also use @localhost
+gnc stop "" @raspberrypi.local
 ```
 
 ## Connect Raspberry Pi 5 and Pixhawk

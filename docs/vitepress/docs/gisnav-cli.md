@@ -8,11 +8,15 @@ This page contains a quick intro to using `gnc`.
 
 You must have installed the [Debian package](/install-from-debian-package).
 
-You must also have installed `gnc` on any remote systems you wish to deploy on (e.g. `raspberrypi.local`, see examples below).
+You must also have installed `gnc` on any remote systems you wish to deploy on (e.g. `raspberrypi.local`, see examples below), and setup a local network with `ssh` server enabled and your public key authorized on the Raspberry Pi 5.
 
 ## Using the CLI
 
-Prepare services on localhost:
+If you are experienced with `docker compose`, using `gnc` should be intuitive. A feature that is provided by `gnc` but not by `docker compose` is the ability to specify remote hosts individually for each service in a single command which streamlines multi-host deployment of services. Please see the examples below.
+
+### Examples
+
+Prepare services on `localhost`:
 
 ```bash
 gnc build gisnav px4 --with-dependencies
@@ -26,23 +30,46 @@ gnc build gisnav@raspberrypi.local --with-dependencies
 gnc create gisnav@raspberrypi.local
 ```
 
-
-Start both simulation and `gisnav` services on localhost:
+Start both simulation and `gisnav` services on `localhost`:
 
 ```bash
 gnc start px4 gisnav
 ```
 
-Start simulation on localhost and `gisnav` on `raspberrypi.local`:
+Start simulation on `localhost` and `gisnav` on `raspberrypi.local`:
 
 ```bash
 gnc start px4 gisnav@raspberrypi.local
 ```
 
-Stop all services on localhost:
+Attach to the container to see the logs output:
+
+```bash
+gnc up nginx
+```
+
+Run in background:
+
+```bash
+gnc up nginx -d
+```
+
+Stop all services on `localhost`:
 
 ```bash
 gnc stop
+```
+
+Stop all services on both `localhost` and remote host `raspberrypi.local`:
+
+```bash
+gnc stop @localhost @raspberrypi.local
+```
+
+The below is a more sophisticated alternative for stopping all services on both `localhost` and remote host `raspberrypi.local`:
+
+```bash
+gnc stop "" @raspberrypi.local
 ```
 
 List running service containers:
@@ -57,8 +84,20 @@ View logs for the `gisnav` service running on `raspberrypi.local`:
 gnc logs gisnav@raspberrypi.local
 ```
 
-See command line help:
+See `gnc` command line help:
 
 ```bash
 gnc help
+```
+
+See `docker compose` command line help:
+
+```bash
+gnc --help
+```
+
+Inspect the canonical format Compose configuration layered by `gnc` and parsed by `docker compose` for your system:
+
+```bash
+gnc config
 ```

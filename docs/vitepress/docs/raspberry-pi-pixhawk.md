@@ -51,11 +51,11 @@ The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as De
 ## Install GISNav Compose Services
 
 ::: info Building your own `.deb`
-Instead of installing the `gisnav-compose` Debian package from the public registry, you can also build your own `.deb` file by following [these instructions](/create-debian).
+Instead of installing the `gisnav` Debian package from the public registry, you can also build your own `.deb` file by following [these instructions](/create-debian).
 
-Once you have the `.deb` file built locally or built remotely and moved to the Raspberry Pi 5 (e.g. using `ssh`), you can install `gisnav-compose` using the following command:
+Once you have the `.deb` file built locally or built remotely and moved to the Raspberry Pi 5 (e.g. using `ssh`), you can install `gisnav` using the following command:
 ```bash
-sudo apt-get -y install ./gisnav-compose-*_all.deb
+sudo apt-get -y install ./gisnav_*_all.deb
 
 ```
 :::
@@ -73,18 +73,18 @@ ssh raspberrypi.local
 
 ### Start
 
-The `gisnav-compose.service` should start automatically when the system is started. Restart the system or start the `gisnav-compose` service manually to make it active:
+The `gisnav.service` should start automatically when the system is started. Restart the system or start the `gisnav` service manually to make it active:
 
 ```bash
-sudo systemctl start gisnav-compose.service
+sudo systemctl start gisnav.service
 ```
 
-The below example shows how you can check that the `gisnav-compose` service is active:
+The below example shows how you can check that the `gisnav` service is active:
 
 ```console
-hmakelin@hmakelin-MS-7D48:~$ sudo systemctl status gisnav-compose.service
-● gisnav-compose.service - GISNav Docker Compose Services
-     Loaded: loaded (/etc/systemd/system/gisnav-compose.service; enabled; vendor preset: enabled)
+hmakelin@hmakelin-MS-7D48:~$ sudo systemctl status gisnav.service
+● gisnav.service - GISNav Docker Compose Services
+     Loaded: loaded (/etc/systemd/system/gisnav.service; enabled; vendor preset: enabled)
      Active: active (exited) since Wed 2024-05-15 15:10:21 BST; 3min 35s ago
    Main PID: 241948 (code=exited, status=0/SUCCESS)
         CPU: 354ms
@@ -108,7 +108,7 @@ You can also see the service status from the onboard [Admin portal](/admin-porta
 
 You can use the below commands to stop the service (and the related Docker Compose services):
 ```bash
-sudo systemctl stop gisnav-compose.service
+sudo systemctl stop gisnav.service
 ```
 
 ### Uninstall
@@ -116,7 +116,7 @@ sudo systemctl stop gisnav-compose.service
 If you want to uninstall the service, use the below command:
 
 ```bash
-sudo apt-get remove gisnav-compose
+sudo apt-get remove gisnav
 ```
 
 ### GSINav CLI
@@ -237,11 +237,11 @@ After deploying the HIL simulation, adjust the settings via the QGC application 
 
 ### Onboard services
 
-Ensure that you have started the `gisnav-compose` systemd service:
+Ensure that you have started the `gisnav.service` systemd service:
 
 ```bash
 # on Raspberry Pi 5
-sudo systemctl start gisnav-compose
+sudo systemctl start gisnav
 ```
 
 You can also use Docker to check that the GISNav containers are running:

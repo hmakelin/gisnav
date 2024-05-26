@@ -29,14 +29,14 @@ After installing the package, you may want to check out the [CLI intro page](/gi
 
 ## Enable on startup
 
-Enable the `gisnav-compose.service` that was installed with the Debian package to automatically start on system startup.
+Enable the `gisnav.service` that was installed with the Debian package to automatically start on system startup.
 
 ::: warning Warning: Resource constrained systems
-Assuming you are installing this on a resource constrained companion computer, enabling the `gisnav-compose.service` will significantly slow down your system on startup.
+Assuming you are installing this on a resource constrained companion computer, enabling the `gisnav.service` will significantly slow down your system on startup.
 
 :::
 
 ```bash
-sudo systemctl enable gisnav-compose.service
-sudo systemctl start gisnav-compose.service
+sudo systemctl enable gisnav.service
+sudo systemctl start gisnav.service
 ```

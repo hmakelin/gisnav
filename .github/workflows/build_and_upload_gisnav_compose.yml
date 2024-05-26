@@ -1,4 +1,4 @@
-name: Build and upload gisnav-compose
+name: Build and upload gisnav service
 
 on:
   #push:
@@ -11,7 +11,7 @@ on:
 
 
 jobs:
-  build-gisnav-compose:
+  build-gisnav-service:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,8 +20,8 @@ jobs:
       - name: Build .deb inside container
         run: |
           docker pull ghcr.io/${{ github.repository }}:latest
-          docker run --name gisnav-build ghcr.io/${{ github.repository }}:latest cd /systemd/gisnav-compose && make dist
-          docker cp $(docker ps -q -l):opt/colcon_ws/src/gisnav/systemd/gisnav-compose/build/gisnav-compose /tmp/build-output
+          docker run --name gisnav-build ghcr.io/${{ github.repository }}:latest cd /systemd/gisnav && make dist
+          docker cp $(docker ps -q -l):opt/colcon_ws/src/gisnav/systemd/gisnav/dist/ /tmp/build-output
 
       - name: Find .deb file and set env
         run: |
@@ -31,17 +31,17 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
-          name: gisnav-compose-deb
+          name: gisnav-deb
           path: ${{ env.DEB_FILE }}
 
-  upload-gisnav-compose:
-    needs: build-gisnav-compose
+  upload-gisnav-service:
+    needs: build-gisnav-service
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v2
         with:
-          name: gisnav-compose-deb
+          name: gisnav-deb
 
       # Use GitHub releases as apt repository
       - name: Upload .deb package as release artifact

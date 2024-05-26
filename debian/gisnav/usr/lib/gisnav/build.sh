@@ -21,6 +21,8 @@ create_temp_swapfile() {
     # Check existing swap space
     existing_swap=$(free -g | awk '/Swap:/ {print $2}')
 
+    # TODO: check if we have enough total memory (8GB enough?) before creating
+    # swapfile
     if [ "$existing_swap" -lt "$REQUIRED_SWAP" ]; then
         echo "Insufficient swap space. Creating temporary swap file..."
         sudo fallocate -l $TEMP_SWAPSIZE $TEMP_SWAPFILE

@@ -206,15 +206,14 @@ To find the `make` target for your specific board, list all options with the `ma
 ```bash
 # on development host (not on Raspberry Pi)
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav run px4 make list_config_targets
+gnc run --no-deps px4 make list_config_targets
 ```
 
 Then choose your appropriate board for the following examples. We are going to choose `nxp_fmuk66-e_default` for this example:
 
 ```bash
 # on development host (not on Raspberry Pi)
-docker compose -p gisnav run px4 make distclean
-docker compose -p gisnav run px4 make nxp_fmuk66-e_default upload
+gnc run --no-deps px4 make nxp_fmuk66-e_default upload
 ```
 
 ## Deploy HIL simulation
@@ -230,13 +229,12 @@ Update the commands below to start the HIL simulation offboard services (need to
 
 ```bash
 # on development host (not on Raspberry Pi)
-docker compose -p gisnav run -e DONT_RUN=1 px4 make px4_sitl_default gazebo-classic
-docker compose -p gisnav run px4 source Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default
-docker compose -p gisnav run px4 gazebo Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world
-
-# Important: Start QGroundControl last
-docker compose up qgc
+gnc run -e DONT_RUN=1 px4 "make px4_sitl_default gazebo-classic \
+    && source Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default \
+    && gazebo Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world"
 ```
+
+## QGroundControl
 
 After deploying the HIL simulation, adjust the settings via the QGC application as follows:
 

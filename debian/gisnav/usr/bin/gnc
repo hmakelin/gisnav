@@ -15,6 +15,20 @@ print_usage() {
     echo "  gnc stop @raspberrypi.local"
 }
 
+# Fetch the list of valid services - cannot use gnc itself here to avoid recursion
+valid_services=$(docker compose -p gisnav -f /etc/gisnav/docker/docker-compose.yaml config --services)
+
+# Function to check if a given token is a valid service
+is_valid_service() {
+    local token="$1"
+    for service in $valid_services; do
+        if [[ "$token" == "$service" ]]; then
+            return 0  # Token is a valid service
+        fi
+    done
+    return 1  # Token is not a valid service
+}
+
 # Function to manage tasks
 manage_tasks() {
     local deployment_mode=$1
@@ -40,11 +54,14 @@ manage_tasks() {
     BLANK_SERVICE=" "  # Variable for blank space service
     command=""
     command_args=()
+    container_command_args=()
+    seen_service=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
             *@localhost|*@127.0.0.1)
                 service="${1%@*}"
+                seen_service=true  # Set flag indicating we've seen a valid service
                 # If service is empty, replace it with a blank space
                 if [ -z "$service" ]; then
                     service="$BLANK_SERVICE"
@@ -58,6 +75,7 @@ manage_tasks() {
             *@*)
                 service="${1%@*}"
                 # If service is empty, replace it with a blank space
+                seen_service=true  # Set flag indicating we've seen a valid service
                 if [ -z "$service" ]; then
                     service="$BLANK_SERVICE"
                 fi
@@ -74,8 +92,20 @@ manage_tasks() {
                     command="$1"
                 elif [[ "$1" == -* || "$1" == --* ]]; then
                     command_args+=("$1")
+                elif ! is_valid_service "$1"; then
+                    echo $1
+                    if $seen_service; then
+                        container_command_args+=("$1")
+                    else
+                        if ! [ -z "$1" ]; then
+                            # We ignore blank space here, we could have e.g.
+                            # gnc stop "" @localhost
+                            command_args+=("$1")
+                        fi
+                    fi
                 else
                     service="$1"
+                    seen_service=true  # Set flag indicating we've seen a valid service
                     #service="${1%@*}"
                     # If service is empty, replace it with a blank space
                     if [ -z "$service" ]; then
@@ -103,10 +133,10 @@ manage_tasks() {
         services=${remote_services[$remote]}
         if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
             echo "Executing '$command' on remote '$remote'"
-            ssh "$remote" "gnc $deployment_mode $command ${command_args[*]}"
+            ssh "$remote" "gnc $deployment_mode $command ${command_args[*]}  $container_command_args"
         else
             echo "Executing '$command' for services '$services' on remote '$remote'"
-            ssh "$remote" "gnc $deployment_mode $command $services ${command_args[*]}"
+            ssh "$remote" "gnc $deployment_mode $command $services ${command_args[*]}  $container_command_args"
         fi
     done
 
@@ -117,18 +147,18 @@ manage_tasks() {
         case "$command" in
             build)
                 # Custom handling for building images on resource constrained systems
-                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" $local_services
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
                 ;;
             create)
                 # Custom handling for creating images to enable GUI apps
-                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" $local_services
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
                 ;;
             help)
                 print_usage
                 ;;
             *)
                 # Default script
-                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]}
                 ;;
         esac
     fi

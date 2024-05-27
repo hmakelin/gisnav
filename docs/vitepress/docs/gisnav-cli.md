@@ -42,6 +42,22 @@ Start simulation on `localhost` and `gisnav` on `raspberrypi.local`:
 gnc start px4 gisnav@raspberrypi.local
 ```
 
+Start simulation on `localhost` and `gisnav` on multiple remote hosts:
+
+::: warning Multi-vehicle simulation not supported
+The `px4` service does not (yet) support multi-vehicle simulation
+
+:::
+
+::: info Todo
+- `gnc` does not currently support parallel execution so this command can take a long time if you have a large number of remotes.
+- Consider using Docker Swarm and/or contexts for multi-host orchestration
+:::
+
+```bash
+gnc start px4 gisnav@raspberrypi1.local gisnav@raspberrypi2.local
+```
+
 Attach to the container to see the logs output:
 
 ```bash

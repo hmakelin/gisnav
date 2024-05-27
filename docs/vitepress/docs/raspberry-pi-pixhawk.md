@@ -213,7 +213,8 @@ Then choose your appropriate board for the following examples. We are going to c
 
 ```bash
 # on development host (not on Raspberry Pi)
-gnc run --no-deps px4 make nxp_fmuk66-e_default upload
+# "hil" command needed here to expose USB device (Pixhawk)
+gnc hil run --no-deps px4 make nxp_fmuk66-e_default upload
 ```
 
 ## Deploy HIL simulation
@@ -229,9 +230,9 @@ Update the commands below to start the HIL simulation offboard services (need to
 
 ```bash
 # on development host (not on Raspberry Pi)
-gnc run -e DONT_RUN=1 px4 "make px4_sitl_default gazebo-classic \
-    && source Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default \
-    && gazebo Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world"
+gnc hil run -e DONT_RUN=1 px4 "make px4_sitl_default gazebo-classic \
+    && ./Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default \
+    && gazebo ./Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world"
 ```
 
 ## QGroundControl

@@ -93,7 +93,6 @@ manage_tasks() {
                 elif [[ "$1" == -* || "$1" == --* ]]; then
                     command_args+=("$1")
                 elif ! is_valid_service "$1"; then
-                    echo $1
                     if $seen_service; then
                         container_command_args+=("$1")
                     else

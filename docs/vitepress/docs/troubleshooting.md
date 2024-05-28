@@ -129,11 +129,53 @@ sudo apt-get remove gisnav
 sudo apt-get clean
 ```
 
-## Cannot build `mavros` or X on Raspberry Pi
+## Cannot upload firmware via Docker containers
+
+### Serial port not available
+
+You can upload firmware to your Pixhawk board connected via USB from the `qgc` and `px4` service containers.
+
+Ensure you are running the services using the `gnc hil` command.
+
+Check that the `/dev/ttyACM0` device is available:
+
+```bash
+gnc hil run qgc bash
+# inside qgc or px4 container
+ls -l /dev/ttyACM0
+```
+
+Ensure that the user is in the `dialout` group which should have permission to access the USB device:
+
+```bash
+# inside qgc or px4 container
+groups $(whoami) | grep dialout
+```
+
+### Check that your bootloader is matched by the upload make target
+
+Check that your board bootloader is found here and take note of the name:
+
+```bash
+gnc exec px4 bash
+ls /dev/serial/by-id
+```
+
+Check that the pattern is matched by the PX4 `upload.cmake` target:
+
+```
+cat PX4-Autopilot/platforms/nuttx/cmake/upload.cmake | grep -20 APPEND serial_ports
+```
+
+## Cannot build `mavros` or X on Raspberry Pi, Raspberry Pi freezes
 
 ### CPU overheating
 
 The CPU might be overheating. You can get a case for your Pi that has a fan to improve heat dissipation.
+
+### Power supply
+
+Ensure you have a sufficient power supply for your Raspberry Pi.
 
 ### Out of memory
 

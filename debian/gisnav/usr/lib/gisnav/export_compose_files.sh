@@ -1,6 +1,7 @@
 #!/bin/bash
 # Determines what Docker Compose overrides should be used based on environment
 # (most likely based on GPU type). Exports GISNAV_COMPOSE_FILES.
+set -e
 
 # Check for verbose flag
 verbose=0
@@ -63,5 +64,34 @@ case $GISNAV_GPU_TYPE in
         ;;
 esac
 
+# Add HIL layer if we are in HIL mode
+if [[ "${GISNAV_MODE:?empty or not set}" == "hil" ]]; then
+    # TODO: support devices that do not have "PX4" in here - this is brittle
+    # Find the Pixhawk device path
+    gisnav_serial_device_name=$(ls /dev/serial/by-id/ | grep PX4)
+
+    # Check if a device was found
+    if [ -z "$gisnav_serial_device_name" ]; then
+        echo "No PX4 device found"
+        exit 1
+    fi
+
+    gisnav_serial_device="/dev/serial/by-id/$gisnav_serial_device_name"
+
+    # Create the /tmp/.gnc.env file
+    temp_env=/tmp/.gnc.env
+    cp $gisnav_docker_home/.env $temp_env
+
+    # Append the Pixhawk device path to the /tmp/.gnc.env file
+    echo "GISNAV_SERIAL_DEVICE=$gisnav_serial_device" >> $temp_env
+
+    compose_files="$compose_files -f $gisnav_docker_home/docker-compose.hil.yaml"
+    compose_files="$compose_files -f $gisnav_docker_home/docker-compose.commands.hil.yaml"
+
+    compose_files="--env-file $temp_env $compose_files"
+else
+    compose_files="--env-file $gisnav_docker_home/.env $compose_files"
+fi
+
 # Export the Docker Compose overrides as an environment variable
-export GISNAV_COMPOSE_FILES="--env-file $gisnav_docker_home/.env $compose_files"
+export GISNAV_COMPOSE_FILES=$compose_files

@@ -47,6 +47,8 @@ services:
   qgc:
     build:
       context: qgc
+      args:
+        USERNAME: ${USER:?empty or not set}
     privileged: true  # TODO: remove this flag?
 
   # Note: build context is repository root

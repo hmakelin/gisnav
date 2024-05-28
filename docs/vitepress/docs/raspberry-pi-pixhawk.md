@@ -214,26 +214,20 @@ Then choose your appropriate board for the following examples. We are going to c
 ```bash
 # on development host (not on Raspberry Pi)
 # "hil" command needed here to expose USB device (Pixhawk)
-gnc hil run --no-deps px4 make nxp_fmuk66-e_default upload
+gnc hil run --no-deps -e DONT_RUN=1 px4 make nxp_fmuk66-e_default upload
 ```
 
 ## Deploy HIL simulation
 
-### Offboard services
-
-The following steps to deploy the offboard services are based on the [PX4 HIL simulation instructions](https://docs.px4.io/main/en/simulation/hitl.html). The `px4` Docker compose service has a custom `iris_hitl` model and a `hitl_iris_ksql_airport.world` Gazebo world that we are going to use in this example:
-
-::: info TODO
-Update the commands below to start the HIL simulation offboard services (need to update override file)
-
-:::
-
 ```bash
 # on development host (not on Raspberry Pi)
-gnc hil run -e DONT_RUN=1 px4 "make px4_sitl_default gazebo-classic \
-    && ./Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default \
-    && gazebo ./Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris_ksql_airport.world"
+gnc hil up px4 gisnav@raspberrypi.local
 ```
+
+::: tip Admin portal
+You can also use the [Admin portal](/admin-portal) hosted on the Raspberry Pi 5 to see that the core services are running.
+
+:::
 
 ## QGroundControl
 
@@ -242,25 +236,3 @@ After deploying the HIL simulation, adjust the settings via the QGC application 
 - Precisely match the `COM_RC_IN_MODE` parameter setting if mentioned in the instructions.
 - Ensure that you have HITL enabled in QGC Safety settings.
 - You may also need to enable the virtual joystick enabled in QGC General settings to prevent failsafes from triggering.
-
-### Onboard services
-
-Ensure that you have started the `gisnav.service` systemd service:
-
-```bash
-# on Raspberry Pi 5
-sudo systemctl start gisnav
-```
-
-You can also use Docker to check that the GISNav containers are running:
-
-```bash
-# on Raspberry Pi 5
-# may require sudo depending on how you have setup docker on your Pi
-docker ps
-```
-
-::: tip Admin portal
-You can also use the [Admin portal](/admin-portal) hosted on the Raspberry Pi 5 to see that the core services are running.
-
-:::

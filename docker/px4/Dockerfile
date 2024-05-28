@@ -14,8 +14,8 @@ RUN git clone --branch v1.14.2 --single-branch --depth 1 \
     git -c submodule."Tools/simulation/jmavsim/jMAVSim".update=none \
         -c submodule."Tools/flightgear_bridge".update=none \
         -c submodule."Tools/simulation/jsbsim/jsbsim_bridge".update=none \
-        -c submodule."platforms/nuttx/NuttX/apps".update=none \
-        -c submodule."platforms/nuttx/NuttX/nuttx".update=none \
+        #-c submodule."platforms/nuttx/NuttX/apps".update=none \
+        #-c submodule."platforms/nuttx/NuttX/nuttx".update=none \
         submodule update --init --recursive && \
     bash Tools/setup/ubuntu.sh
 
@@ -37,10 +37,8 @@ WORKDIR PX4-Autopilot
 COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world etc .
 
 # Setup ksql_airport.world for HIL
-# empy must be version 3.3.4, see below commit
-# https://github.com/PX4/PX4-containers/commit/80df74db476adbf7a71d08c9b392023756cc1bb0
 RUN pip install --no-cache-dir lxml empy==3.3.4 && \
-    python3 merge_xml.py iris_hitl_ksql_airport.world Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world
+    python3 merge_xml.py Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world iris_hitl_ksql_airport.world
 
 # Configure XRCE-DDS bridge
 # Increase ping timeout and retries to ensure we do not disconnect too
@@ -71,6 +69,14 @@ RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
 # Fix uXRCE-DDS bridge host (uXRCE-DDS middleware not on localhost)
 # GISNAV_COMPANION_IP needs to be set in entrypoint.sh
 RUN sed -i "s/127\.0\.0\.1/\$GISNAV_COMPANION_IP/" ROMFS/px4fmu_common/init.d-posix/rcS
+
+# Support building firmware for pixhawk and FMUK66 board specifically
+RUN sudo apt-get update && \
+    apt-get -y install gcc-arm-none-eabi && \
+    sed -i '/if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")/{ \
+        N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;a \
+        /dev/serial/by-id/*PX4_FMUK66* \
+        }' platforms/nuttx/cmake/upload.cmake
 
 COPY entrypoint.sh .
 RUN mkdir -p /etc/mavlink-router && \

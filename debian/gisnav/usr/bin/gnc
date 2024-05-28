@@ -37,10 +37,10 @@ manage_tasks() {
     # Handle submode
     case "$deployment_mode" in
         sitl)
+            export GISNAV_MODE=sitl
             ;;
         hil)
-            echo "WARNING: HIL mode is unsupported."
-            exit 1
+            export GISNAV_MODE=hil
             ;;
         *)
             echo "Unknown mode: $deployment_mode"

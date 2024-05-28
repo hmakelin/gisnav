@@ -1,0 +1,36 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that enables HIL simulation.
+
+name: gisnav
+
+x-hil: &hil
+  # for low-level hardware access required by Pixhawk
+  privileged: true
+
+  # allow the container to communicate with Pixhawk
+  volumes:
+    - "/dev/ttyACM0:/dev/ttyACM0"
+    - "${GISNAV_SERIAL_DEVICE:?empty or not set}:${GISNAV_SERIAL_DEVICE:?empty or not set}"
+  devices:
+    - "/dev/ttyACM0:/dev/ttyACM0"
+    - "${GISNAV_SERIAL_DEVICE:?empty or not set}:${GISNAV_SERIAL_DEVICE:?empty or not set}"
+  # 'dialout' group typically has permissions to access serial ports like /dev/ttyACM0.
+  group_add:
+    - "dialout"
+  # ensure that the user inside the container matches the host's user
+  environment:
+    USER: ${USER}
+
+# Define the services that will inherit the HIL configuration.
+services:
+
+  px4:
+    <<: *hil
+
+  # QGroundControl can also be used to upload firmware via GUI
+  qgc:
+    <<: *hil
+
+  # ArduPilot service configuration (placeholder/not tested)
+  ardupilot:
+    <<: *hil

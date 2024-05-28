@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 ARG USERNAME=qgroundcontrol
 ARG UID=1000

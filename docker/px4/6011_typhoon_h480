@@ -30,3 +30,6 @@ param set-default GPS_1_CONFIG 201
 param set-default GPS_1_GNSS 1
 param set-default GPS_1_PROTOCOL 6  # NMEA
 param set-default SER_GPS2_BAUD 115200  # 0 := auto
+
+# HIL simulation
+param set-default COM_RC_IN_MODE 1

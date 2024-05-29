@@ -34,11 +34,12 @@ WORKDIR PX4-Autopilot
 
 # Do not copy Dockerfile so that it can be edited without invalidating this
 # layer
-COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world etc .
+COPY 6011_typhoon_h480 merge_xml.py merge_yaml.py dds_topics.yaml iris_hitl_ksql_airport.world iris_hitl_camera.xml etc .
 
-# Setup ksql_airport.world for HIL
-RUN pip install --no-cache-dir lxml empy==3.3.4 && \
-    python3 merge_xml.py Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world iris_hitl_ksql_airport.world
+# Setup ksql_airport.world for HIL, and add camera plugin for hitl_iris model
+RUN pip install --no-cache-dir lxml empy==3.3.4 \
+    && python3 merge_xml.py Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world iris_hitl_ksql_airport.world \
+    && python3 merge_xml.py Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/iris_hitl/iris_hitl.sdf iris_hitl_camera.xml --camera
 
 # Configure XRCE-DDS bridge
 # Increase ping timeout and retries to ensure we do not disconnect too
@@ -50,7 +51,6 @@ RUN python3 merge_yaml.py dds_topics.yaml src/modules/uxrce_dds_client/dds_topic
 # Apply configuration files
 RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gazebo-classic_typhoon_h480
 
-
 # Look for secondary GPS i.e. GISNav (GPS 2)
 # Use first unassigned available serial port, i.e. /dev/ttyS4
 # baudrate 9600 default
@@ -61,26 +61,24 @@ RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gaz
 RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
     && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
 
-# Make initial builds (for faster startup in the future)
-RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
-
-# No health check - if simulation dies makes no sense to restart via autoheal
-
 # Fix uXRCE-DDS bridge host (uXRCE-DDS middleware not on localhost)
 # GISNAV_COMPANION_IP needs to be set in entrypoint.sh
 RUN sed -i "s/127\.0\.0\.1/\$GISNAV_COMPANION_IP/" ROMFS/px4fmu_common/init.d-posix/rcS
 
 # Support building firmware for pixhawk and FMUK66 board specifically
-RUN sudo apt-get update && \
-    apt-get -y install gcc-arm-none-eabi && \
-    sed -i '/if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")/{ \
-        N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;a \
-        /dev/serial/by-id/*PX4_FMUK66* \
-        }' platforms/nuttx/cmake/upload.cmake
+COPY support_fmuk_nuttx_upload.sed .
+RUN sudo apt-get update \
+    && apt-get -y install gcc-arm-none-eabi \
+    && sed -i -f support_fmuk_nuttx_upload.sed platforms/nuttx/cmake/upload.cmake
 
 COPY entrypoint.sh .
 RUN mkdir -p /etc/mavlink-router && \
     mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
     chmod +x ./entrypoint.sh
 
+# Make initial builds (for faster startup in the future)
+RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport \
+    && DONT_RUN=1 make px4_sitl_default gazebo-classic
+
+# No health check - if simulation dies makes no sense to restart via autoheal
 ENTRYPOINT ["./entrypoint.sh"]

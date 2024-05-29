@@ -11,9 +11,9 @@ x-hil: &hil
   volumes:
     - "/dev/ttyACM0:/dev/ttyACM0"
     - "${GISNAV_SERIAL_DEVICE:?empty or not set}:${GISNAV_SERIAL_DEVICE:?empty or not set}"
-  devices:
-    - "/dev/ttyACM0:/dev/ttyACM0"
-    - "${GISNAV_SERIAL_DEVICE:?empty or not set}:${GISNAV_SERIAL_DEVICE:?empty or not set}"
+  #devices:
+  #  - "/dev/ttyACM0:/dev/ttyACM0"
+  #  - "${GISNAV_SERIAL_DEVICE:?empty or not set}:${GISNAV_SERIAL_DEVICE:?empty or not set}"
   # 'dialout' group typically has permissions to access serial ports like /dev/ttyACM0.
   group_add:
     - "dialout"

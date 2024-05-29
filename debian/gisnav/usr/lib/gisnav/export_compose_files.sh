@@ -74,6 +74,8 @@ if [[ "${GISNAV_MODE:?empty or not set}" == "hil" ]]; then
     if [ -z "$gisnav_serial_device_name" ]; then
         echo "No PX4 device found"
         exit 1
+    else
+        echo "Found PX4 device $gisnav_serial_device_name"
     fi
 
     gisnav_serial_device="/dev/serial/by-id/$gisnav_serial_device_name"

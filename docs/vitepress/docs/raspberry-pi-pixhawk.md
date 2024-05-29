@@ -12,7 +12,7 @@ If your autopilot is connected to a vehicle, it is highly recommended to disable
 This page uses the below terminology:
 
 - **Simulation host**: Computer that hosts the HIL simulation world (Gazebo in this case)
-- **Development host**: Computer that optionally builds (potentially cross-platform) Docker images and hosts a private Docker registry for the Raspberry Pi 5 companion computer to pull (potentially non-distributable) Docker images from.
+- **Development host**: Computer that optionally builds (potentially cross-platform) Docker images and hosts a private Docker registry for the Raspberry Pi 5 companion computer to pull (potentially non-distributable) Docker images from. Builds and uploads FCU firmware.
 
 ## Prerequisites
 
@@ -188,7 +188,7 @@ graph TB
     FMU_TELEM1_TX --- Converter_RX
     FMU_TELEM1_RX --- Converter_TX
     FMU_TELEM1_GND --- Converter_GND
-    FMU_USB ---|Upload PX4 firmware| Laptop_USB
+    FMU_USB ---|Upload PX4 firmware\n/dev/ttyACM0\n/dev/serial/by-id/usb-NXP_SEMICONDUCTORS_PX4_FMUK66_E_0-if00| Laptop_USB
     Converter_USB ---|NMEA 0183| Pi_USB
     Pi_USB_C --- Socket
     Pi_HDMI --- Display

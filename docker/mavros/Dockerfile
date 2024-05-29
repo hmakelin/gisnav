@@ -13,8 +13,10 @@ SHELL ["/bin/bash", "-c"]
 WORKDIR /opt/colcon_ws/src/
 
 # Install GeographicLib related dependencies
+# Also add universe repository for ROS packages
 RUN apt-get -y install software-properties-common wget curl && \
     add-apt-repository ppa:ubuntugis/ppa && \
+    add-apt-repository universe && \
     apt-get update && \
     apt-get -y install gdal-bin libgdal-dev geographiclib-tools && \
     geographiclib-get-geoids egm96-5

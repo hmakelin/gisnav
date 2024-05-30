@@ -136,37 +136,39 @@ manage_tasks() {
         exit 1
     fi
 
-    # Array to store PIDs of background jobs started by this script
-    pids=()
+	# Array to store PIDs of background jobs
+	pids=()
 
-    # Function to execute command on remote and handle output
-    execute_command() {
-        local remote=$1
-        local services=$2
-        local command=$3
-        local deployment_mode=$4
-        local command_args=("${!5}")
-        local container_command_args=$6
+	# Function to execute command on remote and handle output
+	execute_command() {
+	    local remote=$1
+	    local services=$2
+	    local command=$3
+	    local deployment_mode=$4
+	    local command_args=("${!5}")
+	    local container_command_args=$6
 
-        # Allocate pseudo-terminal -t to ensure SIGINT is forwarded correctly
-        if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
-            echo "Executing '$command' on remote '$remote'"
-            ssh -t "$remote" "trap 'exit' SIGINT; gnc $deployment_mode $command ${command_args[*]} $container_command_args" &
-        else
-            echo "Executing '$command' for services '$services' on remote '$remote'"
-            ssh -t "$remote" "trap 'exit' SIGINT; gnc $deployment_mode $command $services ${command_args[*]} $container_command_args" &
-        fi
-        pids+=($!)  # Store the PID of the last background job
-    }
+		# Allocate pseudo-terminal -t to ensure SIGINT is forwarded correctly
+	    if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
+		echo "Executing '$command' on remote '$remote'"
+		ssh -tt "$remote" "tty | sed 's/\/dev\///' > /tmp/gnc_ttyfile_$$; gnc $deployment_mode $command ${command_args[*]} $container_command_args" &
+	    else
+		echo "Executing '$command' for services '$services' on remote '$remote'"
+		ssh -tt "$remote" "tty | sed 's/\/dev\///' > /tmp/gnc_ttyfile_$$; gnc $deployment_mode $command $services ${command_args[*]} $container_command_args" &
+	    fi
 
-    # Trap SIGINT to ensure cleanup of background processes
-    trap 'echo "Terminating..."; for pid in "${pids[@]}"; do kill -SIGTERM $pid 2>/dev/null; done; wait' SIGINT
+	    pids+=($!)  # Store the PID of the last background job
+	}
 
-    # Execute command for each remote and its services in parallel
-    for remote in "${!remote_services[@]}"; do
-        services=${remote_services[$remote]}
-        execute_command "$remote" "$services" "$command" "$deployment_mode" command_args[@] "$container_command_args"
-    done
+	# Kill docker-compose matching the pseudo-terminal opened by this script
+	# This is a roundabout way of getting the same results as hitting Ctrl-C on the shell that is attached to the running container
+	trap 'echo "Terminating..."; for pid in "${pids[@]}"; do kill -SIGINT $pid 2>/dev/null; done; for remote in "${!remote_services[@]}"; do ssh -tt "$remote" "pkill -t \$(cat /tmp/gnc_ttyfile_$$) docker-compose"; done; wait' SIGINT
+
+	# Execute command for each remote and its services in parallel
+	for remote in "${!remote_services[@]}"; do
+	    services=${remote_services[$remote]}
+	    execute_command "$remote" "$services" "$command" "$deployment_mode" command_args[@] "$container_command_args"
+	done
 
     # Handle command for local services. Either we have collected local services
     # earlier (gnc start px4, gnc start px4 gisnav@raspberrypi.local) and it's not empty,

@@ -50,8 +50,7 @@ The `px4` service does not (yet) support multi-vehicle simulation
 :::
 
 ::: info Todo
-- `gnc` does not currently support parallel execution so this command can take a long time if you have a large number of remotes.
-- Consider using Docker Swarm and/or contexts for multi-host orchestration
+- Container orchestration tool for multi-vehicle simulation
 :::
 
 ```bash

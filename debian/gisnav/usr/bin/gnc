@@ -136,16 +136,36 @@ manage_tasks() {
         exit 1
     fi
 
-    # Execute command for each remote and its services
-    for remote in "${!remote_services[@]}"; do
-        services=${remote_services[$remote]}
+    # Array to store PIDs of background jobs started by this script
+    pids=()
+
+    # Function to execute command on remote and handle output
+    execute_command() {
+        local remote=$1
+        local services=$2
+        local command=$3
+        local deployment_mode=$4
+        local command_args=("${!5}")
+        local container_command_args=$6
+
+        # Allocate pseudo-terminal -t to ensure SIGINT is forwarded correctly
         if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
             echo "Executing '$command' on remote '$remote'"
-            ssh "$remote" "gnc $deployment_mode $command ${command_args[*]}  $container_command_args"
+            ssh -t "$remote" "trap 'exit' SIGINT; gnc $deployment_mode $command ${command_args[*]} $container_command_args" &
         else
             echo "Executing '$command' for services '$services' on remote '$remote'"
-            ssh "$remote" "gnc $deployment_mode $command $services ${command_args[*]}  $container_command_args"
+            ssh -t "$remote" "trap 'exit' SIGINT; gnc $deployment_mode $command $services ${command_args[*]} $container_command_args" &
         fi
+        pids+=($!)  # Store the PID of the last background job
+    }
+
+    # Trap SIGINT to ensure cleanup of background processes
+    trap 'echo "Terminating..."; for pid in "${pids[@]}"; do kill -SIGTERM $pid 2>/dev/null; done; wait' SIGINT
+
+    # Execute command for each remote and its services in parallel
+    for remote in "${!remote_services[@]}"; do
+        services=${remote_services[$remote]}
+        execute_command "$remote" "$services" "$command" "$deployment_mode" command_args[@] "$container_command_args"
     done
 
     # Handle command for local services. Either we have collected local services
@@ -155,22 +175,27 @@ manage_tasks() {
         case "$command" in
             build)
                 # Custom handling for building images on resource constrained systems
-                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}" &
+                pids+=($!)  # Store the PID of the last background job
                 ;;
             create)
                 # Custom handling for creating images to enable GUI apps
-                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}" &
+                pids+=($!)  # Store the PID of the last background job
                 ;;
             help)
                 print_usage
                 ;;
             *)
                 # Default script
-                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]}
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]} &
+                pids+=($!)  # Store the PID of the last background job
                 ;;
         esac
     fi
 
+    # Wait for all background processes to complete
+    wait
 }
 
 # Check if enough arguments are provided

@@ -1,13 +1,4 @@
 #!/bin/bash
-# This script automatically manages raster files (such as TIFF, JP2, ECW, and IMG formats)
-# within a specified download directory (/etc/mapserver) for use with MapServer. It listens
-# for file creation, movement, and deletion events in the imagery and dem directories. When
-# a new ZIP file is added to either directory, the script unzips its contents into the same
-# directory and then removes the original ZIP file. If a raster file is added directly or
-# extracted from a ZIP file, the script regenerates a Virtual Raster (VRT) file to include
-# all raster files present in the directory.The script cleans up by removing the original
-# potential .zip files from the directories after extraction. This process ensures that
-# MapServer always serves the latest raster data available in the directories.
 set -e
 
 # Remove any stale PID or socket files before starting Apache
@@ -19,14 +10,75 @@ IMAGERY_DIR="/etc/mapserver/maps/imagery"
 DEM_DIR="/etc/mapserver/maps/dem"
 IMAGERY_VRT_FILE="imagery.vrt"
 DEM_VRT_FILE="dem.vrt"
+LOCK_FILE="/tmp/process_directory_change.lock"
+
+# Remove any stale lock file on startup
+rm -f $LOCK_FILE
 
 mkdir -p $IMAGERY_DIR
 mkdir -p $DEM_DIR
+
+wait_for_file_completion() {
+    local file=$1
+    local prev_size=-1
+    local size=0
+
+    while true; do
+        if [[ -f "$file" ]]; then
+            size=$(stat -c%s "$file")
+            if [[ $size -eq $prev_size ]]; then
+                echo "File $file size is stable at $size bytes."
+                return 0
+            else
+                prev_size=$size
+                echo "Waiting for file $file to stabilize. Current size: $size bytes."
+            fi
+        else
+            echo "File $file does not exist."
+            return 0
+        fi
+        sleep 2
+    done
+}
+
+unzip_with_retry() {
+    local file=$1
+    local dir_path=$2
+    local max_retries=3
+    local attempt=1
+
+    wait_for_file_completion $file
+
+    while (( attempt <= max_retries )); do
+        echo "Unzipping attempt $attempt for $file..."
+        if unzip -o "$file" -d "$dir_path"; then
+            echo "Unzipped successfully: $file"
+            rm "$file"
+            return 0
+        else
+            echo "Unzip attempt $attempt failed for $file. Retrying..."
+            sleep 2.0
+        fi
+        ((attempt++))
+    done
+
+    echo "Failed to unzip $file after $max_retries attempts. Will retry on next trigger."
+    return 1
+}
 
 process_directory_change() {
     DIR_PATH=$1
     VRT_FILE=$2
     FILE=$3
+
+    # Skip if locked to avoid recursion
+    if [ -f $LOCK_FILE ]; then
+        echo "Skipping processing of $FILE due to lock file."
+        return
+    fi
+
+    touch $LOCK_FILE
+    trap "rm -f $LOCK_FILE" EXIT
 
     echo "Detected change in file: $FILE"
     BASENAME=$(basename "$FILE")
@@ -34,27 +86,15 @@ process_directory_change() {
     # Skip temporary download files
     if [[ "$BASENAME" =~ \.part$|\.download$ ]]; then
         echo "Ignoring partial download file: $FILE"
-        return
-    fi
-
-    if [[ "$BASENAME" =~ \.zip$ ]]; then
-        echo "Attempting to unzip $FILE..."
-        sleep 0.5  # completed .zip downloads might not be processed correctly without this sleep
-        if ! unzip -o "$FILE" -d "$DIR_PATH" > /dev/null 2>&1; then
-            echo "Unzip failed, possibly due to incomplete download: $FILE. Will retry on next trigger."
-            return
-        else
-            echo "Unzipped successfully: $FILE"
-            rm "$FILE"
-        fi
-    fi
-
-    sleep 0.5
-
-    if [[ "$BASENAME" =~ \.(tif|tiff|jp2|ecw|img)$ ]]; then
+    elif [[ "$BASENAME" =~ \.zip$ ]]; then
+        echo "Scheduling unzip of $FILE..."
+        unzip_with_retry $FILE $DIR_PATH
+    elif [[ "$BASENAME" =~ \.(tif|tiff|jp2|ecw|img)$ ]]; then
         echo "Raster file detected, regenerating VRT."
         cd /etc/mapserver && gdalbuildvrt "$VRT_FILE" "$DIR_PATH"/*.tif "$DIR_PATH"/*.tiff "$DIR_PATH"/*.jp2 "$DIR_PATH"/*.ecw "$DIR_PATH"/*.img
     fi
+    rm -f $LOCK_FILE
+    return
 }
 
 # Monitor IMAGERY_DIR

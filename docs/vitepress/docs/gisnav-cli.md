@@ -38,14 +38,22 @@ gnc start px4 gisnav
 
 Start simulation on `localhost` and `gisnav` on `raspberrypi.local`:
 
+::: info Companion computer hostname
+The `GISNAV_COMPANION_HOST` and `PX4_VIDEO_HOST_IP` environment variables are set below to tell the `px4` service where to find the middleware. `gnc` does not set these automatically and assumes the defaults from the `.env` file.
+
+:::
+
 ```bash
+companion_host=raspberrypi.local
+export GISNAV_COMPANION_HOST=$companion_host
+export PX4_VIDEO_HOST_IP=$companion_host
 gnc start px4 gisnav@raspberrypi.local
 ```
 
 Start simulation on `localhost` and `gisnav` on multiple remote hosts:
 
 ::: warning Multi-vehicle simulation not supported
-The `px4` service does not (yet) support multi-vehicle simulation
+The `px4` service does not (currently) support multi-vehicle simulation
 
 :::
 

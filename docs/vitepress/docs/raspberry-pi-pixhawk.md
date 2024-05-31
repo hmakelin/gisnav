@@ -132,6 +132,9 @@ sudo apt-get remove gisnav
 You can also try using the `gnc` command line client that comes with the Debian package to start and stop the services:
 
 ```bash
+companion_host=raspberrypi.local
+export GISNAV_COMPANION_HOST=$companion_host
+export PX4_VIDEO_HOST_IP=$companion_host
 gnc start px4 gisnav@raspberrypi.local
 ```
 
@@ -144,7 +147,7 @@ gnc stop "" @raspberrypi.local
 
 - We connect our development computer to the Raspberry Pi 5 over Ethernet. This is so that we can upload the containers implementing required onboard services.
 
-- We connect the Raspberry Pi 5 as a secondary NMEA GPS device over the GPS 2 serial port.
+- This board does not have a `GPS 2` port, so we use the `TELEM 1` port typically reserved for MAVLink communication with GCS for the uORB mock GPS messages.
 
 - We connect the simulation host computer (assumed to be the same as the development computer but strictly speaking these could be separate computers.)
 
@@ -154,30 +157,44 @@ gnc stop "" @raspberrypi.local
 ```mermaid
 graph TB
     subgraph "FMUK66-E (Pixhawk FMUv4)"
-        subgraph "GPS 2"
+        subgraph "TELEM 1"
             FMU_TELEM1_RX[RX]
             FMU_TELEM1_TX[TX]
             FMU_TELEM1_GND[GND]
         end
-        FMU_USB[micro-USB]
+        subgraph "TELEM 2"
+            FMU_TELEM2_RX[RX]
+            FMU_TELEM2_TX[TX]
+            FMU_TELEM2_GND[GND]
+        end
+        FMU_USB[USB Micro-B]
     end
     subgraph "Development host"
         Laptop_ETH[Ethernet]
         Laptop_USB[USB]
     end
     subgraph "Raspberry Pi 5"
-        subgraph USB["USB ports (interchangeable)"]
-            Pi_USB[USB x3]
-            Pi_USB_C["USB-C"]
+        subgraph USB["USB-A (x4)"]
+            Pi_USB_MAVLink[USB-A]
+            Pi_USB_Mouse[USB-A]
+            Pi_USB_Keyboard[USB-A]
+            Pi_USB_NMEA[USB-A]
         end
+        Pi_USB_C["USB-C"]
         Pi_HDMI[HDMI]
         Pi_ETH[Ethernet]
     end
-    subgraph "USB to UART Converter"
-        Converter_RX[RX]
-        Converter_TX[TX]
-        Converter_GND[GND]
-        Converter_USB[USB]
+    subgraph "USB to UART NMEA"
+        Converter_RX_NMEA[RX]
+        Converter_TX_NMEA[TX]
+        Converter_GND_NMEA[GND]
+        Converter_USB_NMEA[USB-A]
+    end
+    subgraph "USB to UART MAVLink"
+        Converter_RX_MAVLink[RX]
+        Converter_TX_MAVLink[TX]
+        Converter_GND_MAVLink[GND]
+        Converter_USB_MAVLink[USB-A]
     end
     Socket[Power Supply]
     subgraph "Peripherals (optional)"
@@ -185,15 +202,19 @@ graph TB
         Mouse[USB Mouse]
         Keyboard[USB Keyboard]
     end
-    FMU_TELEM1_TX --- Converter_RX
-    FMU_TELEM1_RX --- Converter_TX
-    FMU_TELEM1_GND --- Converter_GND
-    FMU_USB ---|Upload PX4 firmware\n/dev/ttyACM0\n/dev/serial/by-id/usb-NXP_SEMICONDUCTORS_PX4_FMUK66_E_0-if00| Laptop_USB
-    Converter_USB ---|NMEA 0183| Pi_USB
+    FMU_TELEM2_TX --- Converter_RX_MAVLink
+    FMU_TELEM2_RX --- Converter_TX_MAVLink
+    FMU_TELEM2_GND --- Converter_GND_MAVLink
+    FMU_TELEM1_TX --- Converter_RX_NMEA
+    FMU_TELEM1_RX --- Converter_TX_NMEA
+    FMU_TELEM1_GND --- Converter_GND_NMEA
+    FMU_USB ---|PX4 firmware\n/dev/ttyACM0\n/dev/serial/by-id/usb-NXP_SEMICONDUCTORS_PX4_FMUK66_E_0-if00| Laptop_USB
+    Converter_USB_MAVLink ---|MAVLink| Pi_USB_MAVLink
+    Converter_USB_NMEA ---|NMEA 0183| Pi_USB_NMEA
     Pi_USB_C --- Socket
     Pi_HDMI --- Display
-    Pi_USB --- Mouse
-    Pi_USB --- Keyboard
+    Pi_USB_Mouse --- Mouse
+    Pi_USB_Keyboard --- Keyboard
     Pi_ETH ---|ssh| Laptop_ETH
 ```
 

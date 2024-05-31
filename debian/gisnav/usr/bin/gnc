@@ -11,7 +11,7 @@ print_usage() {
     echo "Examples:"
     echo "  gnc start"
     echo "  gnc logs gisnav"
-    echo "  gnc start px4 gisnav@raspberrypi.local"
+    echo "  GISNAV_COMPANION_HOST=raspberrypi.local PX4_VIDEO_HOST_IP=raspberrypi.local gnc start px4 gisnav@raspberrypi.local"
     echo "  gnc stop @raspberrypi.local"
 }
 

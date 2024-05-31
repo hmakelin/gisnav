@@ -7,6 +7,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 
+# todo: Might be able to move setting PX4_VIDEO_HOST_IP more downstream
+ARG PX4_VIDEO_HOST_IP
+ENV PX4_VIDEO_HOST_IP=${PX4_VIDEO_HOST_IP}
+
 # Clone and setup PX4-Autopilot
 RUN git clone --branch v1.14.2 --single-branch --depth 1 \
         https://github.com/PX4/PX4-Autopilot.git && \
@@ -75,6 +79,9 @@ COPY entrypoint.sh .
 RUN mkdir -p /etc/mavlink-router && \
     mv mavlink-router/main.conf /etc/mavlink-router/main.conf && \
     chmod +x ./entrypoint.sh
+
+# Stream video to PX4_VIDEO_HOST_IP instead of hard-coded 127.0.0.1
+RUN echo $PX4_VIDEO_HOST_IP && sed -i "s/<udpHost>127.0.0.1<\/udpHost>/<udpHost>${PX4_VIDEO_HOST_IP}<\/udpHost>/g" Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/typhoon_h480/typhoon_h480.sdf.jinja
 
 # Make initial builds (for faster startup in the future)
 RUN DONT_RUN=1 make px4_sitl gazebo-classic_typhoon_h480__ksql_airport \

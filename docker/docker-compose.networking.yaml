@@ -34,6 +34,10 @@ services:
 
   px4:
     network_mode: host
+    build:
+      args:
+        # PX4_VIDEO_HOST_IP must be available at build-time
+        PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
     environment:
       PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}

@@ -1,3 +1,23 @@
 title: GISNav admin portal
 language: en
 showStats: true
+
+layout:
+  Admin services:
+    tab: Companion computer
+  Application services:
+    tab: Companion computer
+  GIS services:
+    tab: Companion computer
+  Dev services:
+    tab: Simulation host
+  Middleware services:
+    tab: Companion computer
+  Ground services:
+    tab: Simulation host
+  Simulation services:
+    tab: Simulation host
+  Download maps:
+    tab: External resources
+  Bookmarks:
+    tab: External resources

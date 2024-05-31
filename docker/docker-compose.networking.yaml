@@ -41,6 +41,10 @@ services:
       GISNAV_CMP_MAVROS_BIND_PORT: ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Expose avahi-daemon socket to find .local devices (e.g. raspberrypi.local)
+      # from inside the container
+      - /run/avahi-daemon/socket:/run/avahi-daemon/socket
 
   # TODO: Define and expose necessary ports for ArduPilot.
   ardupilot:

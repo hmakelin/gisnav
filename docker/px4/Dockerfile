@@ -3,7 +3,7 @@ FROM ubuntu:focal
 # Update and upgrade packages, then install required packages
 RUN apt-get update && \
     apt-get -y upgrade && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install git socat python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
+    DEBIAN_FRONTEND=noninteractive apt-get -y install git libnss-mdns socat python3-pip lsb-release sudo wget gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 

@@ -177,12 +177,12 @@ manage_tasks() {
         case "$command" in
             build)
                 # Custom handling for building images on resource constrained systems
-                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}" &
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
                 pids+=($!)  # Store the PID of the last background job
                 ;;
             create)
                 # Custom handling for creating images to enable GUI apps
-                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}" &
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" "$local_services" "${container_command_args[@]}"
                 pids+=($!)  # Store the PID of the last background job
                 ;;
             help)
@@ -190,7 +190,7 @@ manage_tasks() {
                 ;;
             *)
                 # Default script
-                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]} &
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]}
                 pids+=($!)  # Store the PID of the last background job
                 ;;
         esac

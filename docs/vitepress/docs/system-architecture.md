@@ -137,6 +137,7 @@ Some notes on the service topography:
 - GISnav uses `gscam` to publish the ROS `sensor_msgs.msg.CameraInfo` and `sensor_msgs.msg.Image` messages. The camera topics are not published over the MAVROS middleware.
 - ROS middleware does not have to be in the same network as `gisnav`. The shared memory device is used instead of going through the network stack since we will be passing a lot of (pointers to) images around.
 - `qgis` is a GUI app that is part of the companion computer grouping but should probably only be run on the simulation host during development i.e. when using the simulation host to also run the companion computer services.
+- `leaflet` is a static web app hosted on nginx. The client makes requests to mapserver, which are proxied by `nginx`, which means `nginx` must also be in the `gis` network (shown with dotted line in diagram).
 
 ::: info Todo
 - `docs-volume` not yet implemented, but is intended to contain static documentation.
@@ -189,6 +190,7 @@ graph TB
                 homepage[homepage]
                 fileserver["fileserver\n(FileGator)"]
                 monitoring["monitoring\n(Glances)"]
+                leaflet
             end
             nginx
         end
@@ -220,10 +222,12 @@ graph TB
     nginx ---|80/tcp| fileserver
     nginx ---|61208/tcp| monitoring
     nginx ---|/path/to/built/docs| application_docs_volume
+    nginx ---|/var/www/html/static/leaflet| leaflet
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
     dds -.-|dds| application_gisnav
+    nginx -.-|gis\n/cgi-bin/-->mapserver| gis
 
     classDef network fill:transparent,stroke-dasharray:10 5;
     class mavlink,gis,admin,dds network

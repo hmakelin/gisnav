@@ -207,8 +207,8 @@ graph TB
     simulation_px4 ----->|14540/udp\nMAVLink| middleware_mavros
     simulation_px4 ----->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
     simulation_px4 ----->|5600/udp\nRTP H.264 Video| middleware_gscam
-    middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+    middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     application_gisnav -->|5432/tcp| gis_postgres
 
@@ -221,13 +221,13 @@ graph TB
     nginx ---|3000/tcp| homepage
     nginx ---|80/tcp| fileserver
     nginx ---|61208/tcp| monitoring
+    nginx -.-|"gis\nHTTP(S)\n/cgi-bin/-->mapserver"| gis
     nginx ---|/path/to/built/docs| application_docs_volume
     nginx ---|/var/www/html/static/leaflet| leaflet
     fileserver ---|"/var/www/filegator/"| volumes
     gscam_volume ---|/etc/gscam| middleware_gscam
 
-    dds -.-|dds| application_gisnav
-    nginx -.-|gis\n/cgi-bin/-->mapserver| gis
+    dds -.-|dds\nUDP| application_gisnav
 
     classDef network fill:transparent,stroke-dasharray:10 5;
     class mavlink,gis,admin,dds network

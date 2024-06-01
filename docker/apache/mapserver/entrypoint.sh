@@ -10,10 +10,6 @@ IMAGERY_DIR="/etc/mapserver/maps/imagery"
 DEM_DIR="/etc/mapserver/maps/dem"
 IMAGERY_VRT_FILE="imagery.vrt"
 DEM_VRT_FILE="dem.vrt"
-LOCK_FILE="/tmp/process_directory_change.lock"
-
-# Remove any stale lock file on startup
-rm -f $LOCK_FILE
 
 mkdir -p $IMAGERY_DIR
 mkdir -p $DEM_DIR
@@ -66,19 +62,18 @@ unzip_with_retry() {
     return 1
 }
 
+generate_vrt() {
+    DIR_PATH=$1
+    VRT_FILE=$2
+
+    echo "Generating VRT file: $VRT_FILE"
+    cd /etc/mapserver && gdalbuildvrt "$VRT_FILE" "$DIR_PATH"/*.tif "$DIR_PATH"/*.tiff "$DIR_PATH"/*.jp2 "$DIR_PATH"/*.ecw "$DIR_PATH"/*.img
+}
+
 process_directory_change() {
     DIR_PATH=$1
     VRT_FILE=$2
     FILE=$3
-
-    # Skip if locked to avoid recursion
-    if [ -f $LOCK_FILE ]; then
-        echo "Skipping processing of $FILE due to lock file."
-        return
-    fi
-
-    touch $LOCK_FILE
-    trap "rm -f $LOCK_FILE" EXIT
 
     echo "Detected change in file: $FILE"
     BASENAME=$(basename "$FILE")
@@ -91,9 +86,8 @@ process_directory_change() {
         unzip_with_retry $FILE $DIR_PATH
     elif [[ "$BASENAME" =~ \.(tif|tiff|jp2|ecw|img)$ ]]; then
         echo "Raster file detected, regenerating VRT."
-        cd /etc/mapserver && gdalbuildvrt "$VRT_FILE" "$DIR_PATH"/*.tif "$DIR_PATH"/*.tiff "$DIR_PATH"/*.jp2 "$DIR_PATH"/*.ecw "$DIR_PATH"/*.img
+        generate_vrt $DIR_PATH $VRT_FILE
     fi
-    rm -f $LOCK_FILE
     return
 }
 
@@ -114,8 +108,8 @@ done &
 mv /etc/mapserver/$NAIP_ZIP_FILENAME $IMAGERY_DIR || echo "NAIP imagery not found on container - likely already moved to shared volume"
 mv /etc/mapserver/$DEM_FILENAME $DEM_DIR || echo "USGS DEM not found on container - likely already moved to shared volume"
 
-# Process directory change once on startup in case .vrt files have been destroyed
-process_directory_change "$DEM_DIR" "$DEM_VRT_FILE" "does-not-exist-dem.tif"
-process_directory_change "$IMAGERY_DIR" "$IMAGERY_VRT_FILE" "does-not-exist-imagery.tif"
+# Regenerate .vrt files on startup in case they have been destroyed for some reason
+generate_vrt "$DEM_DIR" "$DEM_VRT_FILE"
+generate_vrt "$IMAGERY_DIR" "$IMAGERY_VRT_FILE"
 
 exec "$@"

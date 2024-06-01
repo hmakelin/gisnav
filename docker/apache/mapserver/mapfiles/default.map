@@ -23,7 +23,7 @@ MAP
     END
     METADATA
       "wms_title"       "GISNav orthoimagery"
-      "wms_abstract"    "Aggregated orthoimagery from shared volume orthoimagery folder"
+      "wms_abstract"    "Orthoimagery from USGS"
     END
     TOLERANCE 1
   END
@@ -35,9 +35,25 @@ MAP
       "init=epsg:4326"
     END
     METADATA
-      "wms_title"       "GISNav digital elevation models (DEM)"
-      "wms_abstract"    "Aggregated Digital Elevation Model (DEM) from shared volume dem folder"
+      "wms_title"       "GISNav elevation"
+      "wms_abstract"    "Digital Elevation Model (DEM) from USGS"
     END
     TOLERANCE 1
+  END
+  LAYER
+    NAME          "position"
+    TYPE POINT
+    CONNECTIONTYPE POSTGIS
+    CONNECTION "dbname=gisnav user=gisnav password=gisnav host=gisnav-postgres-1"
+    DATA "geom FROM gps_table USING UNIQUE id USING SRID=4326"
+    STATUS ON
+    CLASS
+      NAME      "position"
+      STYLE
+        COLOR 255 0 0
+        SYMBOL "circle"
+        SIZE 6
+      END
+    END
   END
 END

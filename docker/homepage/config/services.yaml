@@ -11,3 +11,7 @@
     - Maxar:
         href: https://maxar.com/maxar-intelligence/products/satellite-imagery
         description: Commercial high-resolution satellite imagery
+- Admin services:
+    - Leaflet:
+        href: http://localhost/leaflet/index.html
+        description: Leaflet web browser client for viewing onboard maps

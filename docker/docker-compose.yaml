@@ -125,5 +125,7 @@ services:
     pid: host
 
   nginx:
-    image: nginx:latest
-    container_name: nginx
+    build:
+      context: nginx
+    #image: nginx:latest
+    #container_name: nginx

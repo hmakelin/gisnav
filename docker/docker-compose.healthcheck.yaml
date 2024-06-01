@@ -48,7 +48,7 @@ services:
 
   mapserver:
     healthcheck:
-      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&SERVICE=WMS&REQUEST=GetCapabilities"]
+      test: ["CMD", "sh", "-c", "wget -q --spider http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&SERVICE=WMS&REQUEST=GetCapabilities"]
       <<: *settings
 
   nginx:
@@ -63,7 +63,7 @@ services:
 
   fileserver:
     healthcheck:
-      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:80"]
+      test: ["CMD", "sh", "-c", "wget -q --spider http://localhost:80"]
       <<: *settings
 
   homepage:

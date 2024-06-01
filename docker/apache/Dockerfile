@@ -1,7 +1,6 @@
 FROM ubuntu:jammy AS apache
 
 # Update apt repository and install necessary packages
-# healthcheck uses curl
 RUN apt-get update && apt-get install -y \
     cgi-mapserver \
     mapserver-bin \
@@ -12,7 +11,6 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     unzip \
     wget \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 FROM apache AS mapserver

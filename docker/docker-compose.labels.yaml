@@ -108,7 +108,7 @@ services:
       <<: *labels
       homepage.group: Middleware services
       homepage.name: gscam
-      homepage.description: GStreamer camera middleware
+      homepage.description: GStreamer to ROS video middleware
 
   autoheal:
     labels:
@@ -129,7 +129,7 @@ services:
       <<: *labels
       homepage.group: GIS services
       homepage.name: Postgres
-      homepage.description: PostGIS relational database for efficiently storing geographical information
+      homepage.description: PostGIS relational database for storing geographical information
 
   fileserver:
     labels:

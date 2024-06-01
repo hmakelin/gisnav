@@ -13,5 +13,5 @@
         description: Commercial high-resolution satellite imagery
 - Admin services:
     - Leaflet:
-        href: http://localhost/leaflet/index.html
-        description: Leaflet web browser client for viewing onboard maps
+        href: /leaflet/index.html
+        description: View onboard maps via browser-based client

@@ -2,11 +2,10 @@
 # For ROS topic related checks, see ROS topography diagram.
 # For networking related checks, see system architecture diagram.
 
-# If a service is unhealthy we check every 10 seconds, if healthy, every 1 min
 x-settings: &settings
   interval: 1m
   timeout: 10s
-  retries: 5
+  retries: 1
 
 services:
   gscam:

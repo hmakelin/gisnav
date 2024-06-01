@@ -97,6 +97,9 @@ services:
     restart: always
     environment:
       AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 10
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
 
   qgis:
     build:

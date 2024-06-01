@@ -29,6 +29,7 @@ compose_files="-f $gisnav_docker_home/docker-compose.yaml \
                -f $gisnav_docker_home/docker-compose.socket.yaml \
                -f $gisnav_docker_home/docker-compose.tty.yaml \
                -f $gisnav_docker_home/docker-compose.volumes.yaml \
+               -f $gisnav_docker_home/docker-compose.healthcheck.yaml \
                -f $gisnav_docker_home/docker-compose.x11.yaml"
 
 # Load the GPU type from the export_gpu_type.sh script, pass verbose flag if set

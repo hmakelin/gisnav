@@ -1,0 +1,80 @@
+# This file contains healthcheck definitions for the Compose services
+# For ROS topic related checks, see ROS topography diagram.
+# For networking related checks, see system architecture diagram.
+
+# If a service is unhealthy we check every 10 seconds, if healthy, every 1 min
+x-settings: &settings
+  interval: 1m
+  timeout: 10s
+  retries: 5
+
+services:
+  gscam:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "
+        timeout 5 tcpdump -i any udp port 5600 | grep 'UDP' &&
+        timeout 5 ros2 topic echo camera/image_raw > /dev/null 2>&1"
+      ]
+      <<: *settings
+
+  mavros:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "
+        timeout 5 tcpdump -i any udp port ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set} | grep 'UDP' &&
+        timeout 5 ros2 topic echo mavros/global_position/global > /dev/null 2>&1 &&
+        timeout 5 ros2 topic echo mavros/local_position/pose > /dev/null 2>&1 &&
+        timeout 5 ros2 topic echo mavros/gimbal_controller/device/attitude_status > /dev/null 2>&1"
+      ]
+      <<: *settings
+
+  micro-ros-agent:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "
+        timeout 5 tcpdump -i any 'udp port ${UXRCE_DDS_PRT:?empty or not set} and ((udp[8:2] != 0) or (udp[10:2] != 0))' > /tmp/udp_check.log 2>&1 &&
+        grep -q 'UDP' /tmp/udp_check.log &&
+        timeout 5 ros2 topic echo /fmu/in/sensor_gps > /dev/null 2>&1"
+      ]
+      <<: *settings
+
+  gisnav:
+    healthcheck:
+      test: ["CMD", "bash", "-c", "
+        timeout 5 ros2 topic echo camera/image_raw > /dev/null 2>&1 &&
+        timeout 5 ros2 topic echo mavros/global_position/global > /dev/null 2>&1 &&
+        timeout 5 ros2 topic echo mavros/local_position/pose > /dev/null 2>&1 &&
+        timeout 5 ros2 topic echo mavros/gimbal_controller/device/attitude_status > /
+        timeout 5 ros2 topic echo /fmu/in/sensor_gps > /dev/null 2>&1"
+      ]
+      <<: *settings
+
+  mapserver:
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&SERVICE=WMS&REQUEST=GetCapabilities"]
+      <<: *settings
+
+  nginx:
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost"]
+      <<: *settings
+
+  monitoring:
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:61208"]
+      <<: *settings
+
+  fileserver:
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "http://localhost:80"]
+      <<: *settings
+
+  homepage:
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -q --spider http://localhost:3000"]
+      <<: *settings
+
+  postgres:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h localhost"]
+      interval: 1m
+      timeout: 10s
+      retries: 3

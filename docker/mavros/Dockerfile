@@ -14,7 +14,8 @@ WORKDIR /opt/colcon_ws/src/
 
 # Install GeographicLib related dependencies
 # Also add universe repository for ROS packages
-RUN apt-get -y install software-properties-common wget curl && \
+# tcpdump for health checks
+RUN apt-get -y install software-properties-common wget curl tcpdump && \
     add-apt-repository ppa:ubuntugis/ppa && \
     add-apt-repository universe && \
     apt-get update && \

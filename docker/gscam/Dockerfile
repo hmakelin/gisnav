@@ -4,11 +4,13 @@ FROM ros:${ROS_VERSION}
 ARG ROS_VERSION
 ENV ROS_VERSION=${ROS_VERSION}
 
+# tcpdump for health checks
 RUN apt-get update && \
     apt-get -y dist-upgrade && \
     apt-get -y install gstreamer1.0-tools libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
       libgstreamer-plugins-good1.0-dev gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
     apt-get -y install ros-${ROS_VERSION}-gscam && \
+    apt-get -y install tcpdump && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

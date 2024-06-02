@@ -124,3 +124,9 @@ Inspect the canonical format Compose configuration layered by `gnc` and parsed b
 ```bash
 gnc config
 ```
+
+Inspect parsed environment variables <Badge type="info" text="yq required"/>:
+
+```bash
+gnc config | yq '.services[] | .environment' | sort | uniq
+```

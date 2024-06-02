@@ -75,10 +75,13 @@ generate_vrt() {
     # Add file paths to the list if they exist
     for ext in "${SUPPORTED_FORMATS[@]}"; do
         files=("$DIR_PATH"/*.$ext)
-        if [ -e "${files[0]}" ]; then
-            echo $ext found
-            FILE_LIST+=("${files[@]}")
-        fi
+        for file in "${files[@]}"; do
+            if [ -e "$file" ]; then
+                wait_for_file_completion "$file"
+                echo "$ext found: $file"
+                FILE_LIST+=("$file")
+            fi
+        done
     done
 
     # Check if any supported files were found

@@ -10,6 +10,7 @@ volumes:
   maps-volume:
   gscam-volume:
   gisnav-volume:
+  pgdata-volume:
 
 # Define networks for segregating services based on their functionality.
 networks:
@@ -93,16 +94,11 @@ services:
       AUTOHEAL_START_PERIOD: 30
       AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
 
-  qgis:
-    build:
-      context: qgis
-    command: qgis
-
   postgres:
     build:
       context: postgres
     environment:
-      POSTGRES_DB: gisnav
+      GISNAV_DB: gisnav
       POSTGRES_USER: gisnav
       POSTGRES_PASSWORD: gisnav
 

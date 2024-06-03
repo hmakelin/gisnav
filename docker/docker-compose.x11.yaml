@@ -39,6 +39,3 @@ services:
 
   rviz:
     <<: *x11
-
-  qgis:
-    <<: *x11

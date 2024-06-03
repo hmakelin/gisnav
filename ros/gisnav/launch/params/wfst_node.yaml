@@ -1,0 +1,4 @@
+gisnav:
+  wfst_node:
+    ros__parameters:
+      wms_url: 'http://host.docker.internal/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map'

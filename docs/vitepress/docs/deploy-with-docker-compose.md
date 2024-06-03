@@ -86,26 +86,21 @@ Remember to [expose your X server to your containers](#expose-x-server-to-contai
 cd ~/colcon_ws/src/gisnav/docker
 docker compose $GISNAV_COMPOSE_FILES -p gisnav create --build \
     px4 \
-    rviz \
-    qgis
-
+    rviz
 ```
 
 ```bash [Start containers]
 cd ~/colcon_ws/src/gisnav/docker
 docker compose $GISNAV_COMPOSE_FILES -p gisnav start \
     px4 \
-    rviz \
-    qgis
-
+    rviz
 ```
 
 ```bash [Stop containers]
 cd ~/colcon_ws/src/gisnav/docker
 docker compose -p gisnav stop \
     px4 \
-    rviz \
-    qgis
+    rviz
 ```
 
 :::

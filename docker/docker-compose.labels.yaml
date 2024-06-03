@@ -117,13 +117,6 @@ services:
       homepage.name: Autoheal
       homepage.description: Monitors and maintains health of other services.
 
-  qgis:
-    labels:
-      <<: *labels
-      homepage.group: Dev services
-      homepage.name: QGIS
-      homepage.description: GIS client for viewing map rasters
-
   postgres:
     labels:
       <<: *labels

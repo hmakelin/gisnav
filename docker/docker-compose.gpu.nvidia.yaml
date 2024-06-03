@@ -31,8 +31,5 @@ services:
   qgc:
     <<: *nvidia
 
-  qgis:
-    <<: *nvidia
-
   rviz:
     <<: *nvidia

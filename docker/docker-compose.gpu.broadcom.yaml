@@ -29,8 +29,5 @@ services:
   qgc:
     <<: *broadcom
 
-  qgis:
-    <<: *broadcom
-
   rviz:
     <<: *broadcom

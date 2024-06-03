@@ -27,3 +27,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       #- ./nginx/var/www/html/static/leaflet:/var/www/html/static/leaflet
+
+  postgres:
+    volumes:
+      - pgdata-volume:/var/lib/postgresql/data

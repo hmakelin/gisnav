@@ -1,7 +1,7 @@
 gisnav:
   gis_node:
     ros__parameters:
-      wms_url: 'http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map'
+      wms_url: 'http://host.docker.internal/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map'
       wms_layers: ['imagery']
       wms_dem_layers: ['dem']
       wms_format: 'image/jpeg'

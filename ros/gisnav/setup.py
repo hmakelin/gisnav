@@ -121,7 +121,6 @@ setup(
     tests_require=["pytest"],
     extras_require={
         "nmea_node": ["pynmea2"],
-        "qgis_node": ["psycopg2"],
         "dev": [
             "aiohttp",
             "autodocsumm",
@@ -153,7 +152,7 @@ setup(
             "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",
             "bbox_node = gisnav:run_bbox_node",
-            "qgis_node = gisnav:run_qgis_node",
+            "wfst_node = gisnav:run_wfst_node",
         ],
     },
 )

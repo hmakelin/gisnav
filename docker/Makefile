@@ -162,13 +162,13 @@ $(eval $(call compose_template,offboard-sitl,dummy-dependency,,$$* qgc))
 $(eval $(call compose_template,offboard-sitl-test,offboard-sitl-middleware,docker-compose.headless.yaml,$$* gscam mapserver))
 
 # SITL development services: Gazebo simulation, ROS middleware, mapserver, QGC, gscam rviz, but excluding GISNav
-$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc gscam mapserver rviz qgis))
+$(eval $(call compose_template,offboard-sitl-dev,offboard-sitl-middleware,,$$* qgc gscam mapserver rviz))
 
 # All SITL services offboard: GIS server, ROS middleware, Gazebo simulation, QGC, gscam, gisnav
 $(eval $(call compose_template,demo,offboard-sitl-dev,,gisnav))
 
 # List of Docker Compose service names that need GUI access
-GUI_SERVICES = px4 ardupilot qgc rviz qgis gisnav fileserver
+GUI_SERVICES = px4 ardupilot qgc rviz gisnav fileserver
 
 # Expose xhost to containers that need GUI (see x11 extension in docker-compose.yaml)
 expose-xhost:
@@ -218,7 +218,7 @@ build:
 .PHONY: base-dev-setup
 base-dev-setup:
 	# Recreate containers
-	docker compose -p gisnav create mapserver px4 qgis gscam postgres rviz
+	docker compose -p gisnav create mapserver px4 gscam postgres rviz
 	$(MAKE) expose-xhost
 
 	# Start the mapserver container
@@ -246,7 +246,7 @@ base-dev-setup:
 	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
 
 	# Start the other development services
-	@docker compose -p gisnav start px4 qgis gscam rviz
+	@docker compose -p gisnav start px4 gscam rviz
 
 .PHONY: dev-nmea
 dev-nmea: base-dev-setup

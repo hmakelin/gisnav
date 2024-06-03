@@ -20,14 +20,13 @@ services:
     depends_on:
       - qgc
 
-  qgis:
-    depends_on:
-      - postgres
-      - mapserver
-
   nginx:
     depends_on:
       - fileserver
       - homepage
       - monitoring
       - mapserver
+
+  mapserver:
+    depends_on:
+      - postgres

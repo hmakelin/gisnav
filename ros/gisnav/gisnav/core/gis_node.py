@@ -56,6 +56,9 @@ class GISNode(Node):
     used in the URL. This should already be configured in the `default launch parameter
     file <https://github.com/hmakelin/gisnav/blob/master/gisnav/launch/params/gis_node.
     yaml>`_ which overrides this default value.
+
+    Alternatively, if the service is on a different network, use the Docker host URL,
+    or the URL of the reverse proxy.
     """
 
     ROS_D_VERSION = "1.3.0"

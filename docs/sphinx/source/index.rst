@@ -22,7 +22,7 @@ Here you can find the automatically generated API reference for the GISNav ROS 2
 
     public/uorb_node
     public/nmea_node
-    public/qgis_node
+    public/wfst_node
 
 .. toctree::
     :caption: Static API

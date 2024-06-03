@@ -67,7 +67,6 @@ It is important to share layers to keep the overall size of the system down.
 - Update simulation services to use `ubuntu:jammy` and `ros:humble` instead of the older `ubuntu:focal` and `ros:foxy`.
 - Ensure we use the same ubuntu base image for `glances` (and not e.g. alpine)
 - Update `qgc` from `focal` to `jammy`
-- Ensure we use our ubuntu base image also for `qgis`
 :::
 
 ```mermaid
@@ -82,7 +81,6 @@ graph TD
         nginx
         micro-ros-agent
         glances
-        qgis
     end
 
     subgraph built_images ["Built GISNav images"]
@@ -122,6 +120,8 @@ graph TD
 
 Isolation of groups of directly unrelated services is provided by allocating dedicated Docker bridge networks to groups of related services. Docker bridge networks have in-built DNS which means the container names resolve to their respective IP addresses on the bridge networks. The container name will equal the service name prefixed with `gisnav-` and suffixed with `-1`. For example, deploying the `mapserver` service using the Compose file will thereby start a container that can be found by any other container on the same network by its hostname `gisnav-mapserver-1`.
 
+If a service wants to talk to a service in another network, the requests must go through the `nginx` reverse proxy. Only specific routes are allowed to enable important features - these are shown in the [service topography diagram](#service-topography).
+
 ### Shared volumes
 
 Configuration files, orthoimagery and DEM rasters and other data that is intended to be managed by end users are bind-mounted via separate volumes that are exposed to end-user administration tools.
@@ -132,16 +132,12 @@ The diagram below depicts the GISNav services topography for SITL simulation tha
 
 Some notes on the service topography:
 
-- The Application services, Simulation services, Middleware services, GIS services, Dev services, and Admin services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description besides that only neighboring layers should talk to each other - there should be no jumps across layers in communication.
+- The Application services, Simulation services, Middleware services, GIS services, and Admin services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description besides that only neighboring layers should talk to each other - there should be no jumps across layers in communication.
 - `socat` could also be considered a middleware service but runs non-containerized on the Docker host so it is not included in the Middleware services in the diagram.
 - GISnav uses `gscam` to publish the ROS `sensor_msgs.msg.CameraInfo` and `sensor_msgs.msg.Image` messages. The camera topics are not published over the MAVROS middleware.
-- ROS middleware does not have to be in the same network as `gisnav`. The shared memory device is used instead of going through the network stack since we will be passing a lot of (pointers to) images around.
-- `qgis` is a GUI app that is part of the companion computer grouping but should probably only be run on the simulation host during development i.e. when using the simulation host to also run the companion computer services.
-- `leaflet` is a static web app hosted on nginx. The client makes requests to mapserver, which are proxied by `nginx`, which means `nginx` must also be in the `gis` network (shown with dotted line in diagram).
 
 ::: info Todo
-- `docs-volume` not yet implemented, but is intended to contain static documentation.
-- There will probably be need for a web based viewer (=not QGIS) for the maps in the GIS server that can be accessed from the admin network / via nginx
+- Serve static documentation.
 - Make shared memory transport work. It does not work possibly because of the note on privileged uses [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
 - `px4` shares the host network stack (along with `qgc`) because receiving communication from `uxrce_dds_agent` seems to depend on ephemeral ports  (unverified) -> try to isolate the simulator and QGC in a `mavlink` network
 :::
@@ -160,9 +156,14 @@ graph TB
     end
     simulation_px4 ----->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
 
-    browser["Web browser"] -->|"80/http (443/https not currently supported)"| nginx
+    browser["Web browser"] -->|"80/http\n(443/https not currently supported)"| nginx
 
     subgraph companion["Companion computer (or simulation host)"]
+
+        nginx -.-|admin| admin
+        nginx -.-|gis| gis
+        nginx -.-|dds| dds
+
         application_autoheal[autoheal]
 
         subgraph dds
@@ -171,69 +172,70 @@ graph TB
                 middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
                 middleware_gscam[gscam]
             end
-        end
-        subgraph gis
             subgraph application ["Application Services"]
                 application_gisnav[gisnav]
             end
+        end
+        subgraph gis
+
             subgraph gis_services ["GIS Services"]
-                gis_postgres["postgres\n(PostGIS)"]
                 gis_mapserver[mapserver]
-            end
-            subgraph dev_services ["Dev Services"]
-                gis_qgis["qgis"]
+                gis_postgres["postgres\n(PostGIS)"]
             end
         end
 
         subgraph admin
             subgraph admin_services ["Admin services"]
                 homepage[homepage]
-                fileserver["fileserver\n(FileGator)"]
+                openlayers
                 monitoring["monitoring\n(Glances)"]
-                leaflet
+                fileserver["fileserver\n(FileGator)"]
             end
-            nginx
         end
 
-        subgraph volumes ["User managed\nshared volumes"]
+        subgraph volumes[User managed volumes]
             gscam_volume[gscam-volume]
-            gis_maps_volume[maps-volume]
             application_gisnav_volume[gisnav-volume]
+            gis_maps_volume[maps-volume]
         end
-        application_docs_volume[docs-volume]
     end
 
     mw_qgc -->|14550/udp\nMAVLink| simulation_px4
-    simulation_px4 ----->|14540/udp\nMAVLink| middleware_mavros
-    simulation_px4 ----->|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
-    simulation_px4 ----->|5600/udp\nRTP H.264 Video| middleware_gscam
+    simulation_px4 ------>|14540/udp\nMAVLink| middleware_mavros
+    simulation_px4 ------>|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
+    simulation_px4 ------>|5600/udp\nRTP H.264 Video| middleware_gscam
     middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
-    application_gisnav -->|5432/tcp| gis_postgres
 
-    application_gisnav -->|80/tcp\nHTTP WMS| gis_mapserver
-    gis_postgres -->|5432/tcp| gis_qgis
-    gis_mapserver -->|80/tcp\nHTTP WMS| gis_qgis
-    gis_mapserver ---|/etc/mapserver| gis_maps_volume
+    application_gisnav -.->|80/tcp\nHTTP WMS/WFS-T\nvia nginx| gis_mapserver
     application_gisnav_volume ---|/etc/gisnav| application_gisnav
-    application_docs_volume ---|/path/to/built/docs| application_gisnav
-    nginx ---|3000/tcp| homepage
-    nginx ---|80/tcp| fileserver
-    nginx ---|61208/tcp| monitoring
-    nginx -.-|"gis\nHTTP(S)\n/cgi-bin/-->mapserver"| gis
-    nginx ---|/path/to/built/docs| application_docs_volume
-    nginx ---|/var/www/html/static/leaflet| leaflet
-    fileserver ---|"/var/www/filegator/"| volumes
+
+    fileserver ----|"/var/www/filegator/repository\n/mapserver"| gis_maps_volume
+    gis_maps_volume---|/etc/mapserver| gis_mapserver
+
+    openlayers -.->|80/tcp\nHTTP WMS/WFS-T\nvia nginx| gis_mapserver
+    fileserver ----|"/var/www/filegator/repository\n/gscam"| gscam_volume
+    fileserver ----|"/var/www/filegator/repository\n/gisnav"| application_gisnav_volume
+
     gscam_volume ---|/etc/gscam| middleware_gscam
 
-    dds -.-|dds\nUDP| application_gisnav
+    gis_mapserver --- gis_postgres
+
+    nginx -->|80/tcp\nHTTP| homepage
+    nginx -->|80/tcp\nHTTP| monitoring
+    nginx -->|80/tcp\nHTTP| fileserver
+    nginx -->|80/tcp\nHTTP| gis_mapserver
+    nginx -->|/var/www/html/static\n/openlayers| openlayers
 
     classDef network fill:transparent,stroke-dasharray:10 5;
     class mavlink,gis,admin,dds network
 
     classDef host fill:transparent,stroke:10;
     class simulation_host,companion host
+
+    classDef volume fill:transparent;
+    class volumes,gscam_volume,gis_maps_volume,application_gisnav_volume volume
 ```
 
 ### Service descriptions

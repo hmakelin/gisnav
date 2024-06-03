@@ -18,7 +18,7 @@ px4-1  | [Err] [GuiIface.cc:118] This application failed to start because no Qt 
 
 ### Expose X server
 
-If the Gazebo, QGroundControl, RViz, or QGIS windows do not appear on your screen soon after [deploying your Docker Compose services](#deploy-with-docker-compose), you may need to expose your X server to your containers.
+If the Gazebo, QGroundControl or RViz windows do not appear on your screen soon after [deploying your Docker Compose services](#deploy-with-docker-compose), you may need to expose your X server to your containers.
 
 ::: info `gisnav` required in container names
 The scripts here look for containers that have the string `gisnav` in their names. It is important that you use the `-p gisnav` option or `COMPOSE_PROJECT_NAME=gisnav` environment variable when building and creating your containers.

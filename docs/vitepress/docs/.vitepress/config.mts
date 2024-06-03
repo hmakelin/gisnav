@@ -75,7 +75,7 @@ export default withMermaid({
           items: [
             { text: 'UORBNode', link: '/reference/public/uorb_node' },
             { text: 'NMEANode', link: '/reference/public/nmea_node' },
-            { text: 'QGISNode', link: '/reference/public/qgis_node' },
+            { text: 'WFSTNode', link: '/reference/public/wfst_node' },
           ]
         },
         {

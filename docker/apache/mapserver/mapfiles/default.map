@@ -12,8 +12,24 @@ MAP
         "wms_srs"             "EPSG:3857 EPSG:4326"
         "wms_enable_request"  "GetMap GetCapabilities"
         "wms_feature_info_mime_type" "text/plain"
+
+        "wfs_title"           "GISNav WFS"
+        "wfs_abstract"        "GISNav WFS service for feature layers"
+        "wfs_onlineresource"  "http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wfs_srs"             "EPSG:4326"
+        "wfs_enable_request"  "*"
+        "wfs_feature_info_mime_type" "text/xml; subtype=gml/3.1.1"
+        "wfs_getfeature_formatlist" "GML2,GML3,application/json"
     END
   END
+
+  OUTPUTFORMAT
+    NAME "geojson"
+    DRIVER "OGR/GEOJSON"
+    MIMETYPE "application/json"
+    FORMATOPTION "FORM=SIMPLE"
+  END
+
   LAYER
     NAME          "imagery"
     DATA          "/etc/mapserver/imagery.vrt"
@@ -27,6 +43,7 @@ MAP
     END
     TOLERANCE 1
   END
+
   LAYER
     NAME          "dem"
     DATA          "/etc/mapserver/dem.vrt"
@@ -40,6 +57,7 @@ MAP
     END
     TOLERANCE 1
   END
+
   LAYER
     NAME          "position"
     TYPE POINT
@@ -47,6 +65,14 @@ MAP
     CONNECTION "dbname=gisnav user=gisnav password=gisnav host=gisnav-postgres-1"
     DATA "geom FROM gps_table USING UNIQUE id USING SRID=4326"
     STATUS ON
+    METADATA
+      "wfs_title"       "Position"
+      "wfs_abstract"    "Position data as WFS"
+      "gml_include_items" "all"
+      "wfs_enable_request" "*"
+      "wfs_getfeature_formatlist" "GML2,GML3,geojson"
+      "gml_featureid"    "id"
+    END
     CLASS
       NAME      "position"
       STYLE

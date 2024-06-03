@@ -1,3 +1,3 @@
-QGISNode
+WFSTNode
 ____________________________________________________
-.. automodule:: gisnav.extensions.qgis_node
+.. automodule:: gisnav.extensions.wfst_node

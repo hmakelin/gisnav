@@ -30,8 +30,8 @@ NMEA_NODE_NAME: Final = "nmea_node"
 UORB_NODE_NAME: Final = "uorb_node"
 """Name of :class:`.UORBNode` spun up by :func:`.run_uorb_node`"""
 
-QGIS_NODE_NAME: Final = "qgis_node"
-"""Name of :class:`.QGISNode` spun up by :func:`.run_qgis_node`"""
+WFST_NODE_NAME: Final = "wfst_node"
+"""Name of :class:`.WFSTNode` spun up by :func:`.run_wfst_node`"""
 
 ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 """Relative topic into which :class:`.GISNode` publishes :attr:`.GISNode.orthoimage`."""

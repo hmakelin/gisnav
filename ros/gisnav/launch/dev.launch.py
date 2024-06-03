@@ -28,11 +28,11 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
-            name="qgis_node",
+            name="wfst_node",
             namespace=_PACKAGE_NAME,
-            executable="qgis_node",
+            executable="wfst_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/qgis_node.yaml")
+                os.path.join(package_share_dir, "launch/params/wfst_node.yaml")
             ],
         )
     )

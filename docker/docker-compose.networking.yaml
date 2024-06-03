@@ -55,10 +55,6 @@ services:
     networks:
       - dds
 
-  qgis:
-    networks:
-      - gis
-
   postgres:
     networks:
       - gis

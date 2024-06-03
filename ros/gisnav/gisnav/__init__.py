@@ -20,32 +20,32 @@ from .constants import (
     GIS_NODE_NAME,
     NMEA_NODE_NAME,
     POSE_NODE_NAME,
-    QGIS_NODE_NAME,
     ROS_NAMESPACE,
     STEREO_NODE_NAME,
     UORB_NODE_NAME,
+    WFST_NODE_NAME,
 )
 from .core import BBoxNode, GISNode, PoseNode, StereoNode
 
 try:
-    from .extensions.qgis_node import QGISNode
+    from .extensions.wfst_node import WFSTNode
 
-    def run_qgis_node():
-        """Spins up a :class:`.QGISNode`
+    def run_wfst_node():
+        """Spins up a :class:`.WFSTNode`
 
         > [!NOTE] Must install extra
-        > Not available if the ``ggis_node`` Python extra has not been installed.
+        > Not available if the ``wfst_node`` Python extra has not been installed.
 
         .. code-block:: bash
-            :caption: Install QGISNode
+            :caption: Install WFSTNode
 
             cd ~/colcon_ws/src/gisnav/gisnav
-            pip install .[qgis_node]
+            pip install .[wfst_node]
         """
-        _run(QGISNode, QGIS_NODE_NAME, **_rclpy_node_kwargs)
+        _run(WFSTNode, WFST_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
-    print(f"Could not import QGISNode because a module was not found: {e}")
+    print(f"Could not import WFSTNode because a module was not found: {e}")
 
 try:
     from .extensions.nmea_node import NMEANode

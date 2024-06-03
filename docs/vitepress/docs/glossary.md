@@ -655,9 +655,6 @@ A popular SBC: [raspberrypi.com/products/raspberry-pi-5](https://www.raspberrypi
 ### QEMU
 A FOSS full-system emulator: [qemu.org](https://www.qemu.org/)
 
-### QGIS
-A GIS client (and server): [qgis.org/en/site](https://qgis.org/en/site/)
-
 ### QGroundControl
 GCS software: [qgroundcontrol.com](http://qgroundcontrol.com/)
 

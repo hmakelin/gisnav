@@ -30,3 +30,4 @@ services:
       - fileserver
       - homepage
       - monitoring
+      - mapserver

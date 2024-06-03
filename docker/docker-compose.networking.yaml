@@ -22,6 +22,8 @@ services:
       - dds
     ports:
       - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
+    environment:
+      UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
 
   qgc:
     network_mode: host

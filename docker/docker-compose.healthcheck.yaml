@@ -6,7 +6,7 @@
 x-settings: &settings
   interval: 30s
   timeout: 10s
-  retries: 1
+  retries: 3
 
 services:
   gscam:
@@ -33,7 +33,7 @@ services:
   micro-ros-agent:
     healthcheck:
       test: ["CMD", "bash", "-c", "
-        timeout 30 tcpdump -i any 'udp port ${UXRCE_DDS_PRT:?empty or not set} and ((udp[8:2] != 0) or (udp[10:2] != 0))' > /tmp/udp_check.log 2>&1 &&
+        timeout 30 tcpdump -i any -c 1 udp src port ${UXRCE_DDS_PRT:?empty or not set} > /tmp/udp_check.log 2>&1 &&
         grep -q 'UDP' /tmp/udp_check.log"
       ]
       <<: *settings

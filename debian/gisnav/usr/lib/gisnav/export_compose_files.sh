@@ -25,6 +25,7 @@ compose_files="-f $gisnav_docker_home/docker-compose.yaml \
                -f $gisnav_docker_home/docker-compose.dependencies.yaml \
                -f $gisnav_docker_home/docker-compose.labels.yaml \
                -f $gisnav_docker_home/docker-compose.networking.yaml \
+               -f $gisnav_docker_home/docker-compose.video.yaml \
                -f $gisnav_docker_home/docker-compose.ros.yaml \
                -f $gisnav_docker_home/docker-compose.socket.yaml \
                -f $gisnav_docker_home/docker-compose.tty.yaml \

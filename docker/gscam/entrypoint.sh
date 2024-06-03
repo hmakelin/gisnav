@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-source "/opt/ros/$ROS_VERSION/setup.bash"
+source "/opt/ros/$ROS_DISTRO/setup.bash"
 
 # Move config files to shared volume if not yet done
 mv /gscam_params.yaml /etc/gscam || echo "INFO: gscam_params.yaml not found on container - likely already moved to shared volume"

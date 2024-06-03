@@ -1,12 +1,12 @@
-ARG ROS_VERSION
-FROM ros:${ROS_VERSION}
+ARG ROS_DISTRO
+FROM ros:${ROS_DISTRO}
 
-ARG ROS_VERSION
-ENV ROS_VERSION=${ROS_VERSION}
+ARG ROS_DISTRO
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 RUN apt-get update && \
     apt-get -y dist-upgrade && \
-    apt-get -y install ros-${ROS_VERSION}-rviz2 && \
+    apt-get -y install ros-${ROS_DISTRO}-rviz2 && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 

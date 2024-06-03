@@ -34,12 +34,7 @@ services:
 
   px4:
     network_mode: host
-    build:
-      args:
-        # PX4_VIDEO_HOST_IP must be available at build-time
-        PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
     environment:
-      PX4_VIDEO_HOST_IP: ${PX4_VIDEO_HOST_IP:?empty or not set}
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
       GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?empty or not set}
       GISNAV_CMP_MAVROS_BIND_PORT: ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}
@@ -54,14 +49,9 @@ services:
   ardupilot:
     network_mode: host
 
-
   gscam:
     networks:
       - dds
-    ports:
-      # Not needed if a local device is used as video source instead of network stream
-      # see gscam_params.yaml file
-      - "5600:5600/udp"
 
   qgis:
     networks:

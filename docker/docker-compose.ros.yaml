@@ -22,17 +22,32 @@ x-ros: &ros
 # Define the services that will inherit the ros configuration
 services:
   mavros:
+    build:
+      args:
+        ROS_DISTRO: humble
     # Merge the configuration into the service
     <<: *ros
 
   micro-ros-agent:
+    build:
+      args:
+        ROS_DISTRO: foxy
     <<: *ros
 
   gisnav:
+    build:
+      args:
+        ROS_DISTRO: humble
     <<: *ros
 
   rviz:
+    build:
+      args:
+        ROS_DISTRO: humble
     <<: *ros
 
   gscam:
+    build:
+      args:
+        ROS_DISTRO: humble
     <<: *ros

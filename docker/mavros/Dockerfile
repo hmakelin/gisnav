@@ -1,8 +1,8 @@
-ARG ROS_VERSION
-FROM ros:${ROS_VERSION} as mavros-msgs
+ARG ROS_DISTRO
+FROM ros:${ROS_DISTRO} as mavros-msgs
 
-ARG ROS_VERSION
-ENV ROS_VERSION=${ROS_VERSION}
+ARG ROS_DISTRO
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 # Combine apt update, upgrade and cleaning up in one layer
 RUN apt update --fix-missing && \
@@ -25,7 +25,7 @@ RUN apt-get -y install software-properties-common wget curl tcpdump && \
 # Get mavros with gimbal protocol v2 plugin and build mavros_msgs only
 # mavros_msgs is needed by both downstream images so it is already built here
 # adds an additional custom patch to gps_input.cpp
-RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     git clone --branch gimbal-protocol-v2-plugin \
       https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
     rosdep update && \
@@ -37,7 +37,7 @@ RUN source /opt/ros/${ROS_VERSION}/setup.bash && \
 
 
 FROM mavros-msgs AS mavros
-ARG ROS_VERSION
+ARG ROS_DISTRO
 
 WORKDIR /opt/colcon_ws/
 
@@ -47,7 +47,7 @@ COPY mavros/filter_plugins.sh /opt/colcon_ws/src/mavros
 # We use the filter_plugins.sh script to disable unneeded plugins to significantly
 # speed up build time and use of memory.
 # mavros_msgs was built earlier so we ignore it here
-RUN source /opt/ros/${ROS_VERSION}/setup.bash \
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && source install/setup.bash \
     && cd src/mavros \
     && ./filter_plugins.sh \
@@ -65,8 +65,8 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 FROM mavros-msgs AS gisnav
 
-ARG ROS_VERSION
-ENV ROS_VERSION=${ROS_VERSION}
+ARG ROS_DISTRO
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 WORKDIR /opt/colcon_ws/src/
 
@@ -84,7 +84,7 @@ RUN cd gisnav/ros/gisnav && \
 # Build px4_msgs, add custom patch to only get SensorGps message
 RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     sed -i 's/\*\.msg/SensorGps.msg/g' px4_msgs/CMakeLists.txt && \
-    source /opt/ros/${ROS_VERSION}/setup.bash && \
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
     cd .. && \
     colcon build --packages-select px4_msgs
 
@@ -98,7 +98,7 @@ WORKDIR /opt/colcon_ws/src/gisnav/
 RUN cd ros/gisnav && \
     pip install . .[nmea_node] .[uorb_node] .[qgis_node] .[dev] && \
     cd /opt/colcon_ws && \
-    source /opt/ros/${ROS_VERSION}/setup.bash && \
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
     source install/setup.bash && \
     colcon build --packages-select gisnav gisnav_msgs
 
@@ -127,9 +127,3 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && npm install
 
 ENTRYPOINT ["/entrypoint.sh"]
-
-# TODO: proper health check - check that public facing topics are publishing
-HEALTHCHECK --interval=10s --timeout=3s \
-  CMD /bin/bash -c "source /opt/ros/${ROS_VERSION}/setup.bash && \
-  ros2 node list | grep -q pose_node && \
-  ros2 node list | grep -q gis_node" || exit 1

@@ -37,8 +37,6 @@ services:
     build:
       context: mavros
       target: mavros
-      args:
-        ROS_VERSION: humble
 
   micro-ros-agent:
     build:
@@ -65,8 +63,6 @@ services:
       context: ..
       dockerfile: docker/mavros/Dockerfile
       target: gisnav
-      args:
-        ROS_VERSION: humble
 
   # The px4 service depends on mavros, mapserver and micro-ros-agent because
   # their IP addresses are used in the px4 service entrypoint.sh script
@@ -83,14 +79,10 @@ services:
   rviz:
     build:
       context: rviz
-      args:
-        ROS_VERSION: humble
 
   gscam:
     build:
       context: gscam
-      args:
-        ROS_VERSION: humble
 
   autoheal:
     image: willfarrell/autoheal

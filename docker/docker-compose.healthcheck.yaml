@@ -1,9 +1,10 @@
 # This file contains healthcheck definitions for the Compose services
 # For ROS topic related checks, see ROS topography diagram.
 # For networking related checks, see system architecture diagram.
+# TODO: many hard coded ROS topic names here - remapping will break health checks
 
 x-settings: &settings
-  interval: 1m
+  interval: 30s
   timeout: 10s
   retries: 1
 
@@ -11,38 +12,38 @@ services:
   gscam:
     healthcheck:
       test: ["CMD", "bash", "-c", "
-        timeout 5 tcpdump -i any udp port 5600 | grep 'UDP' &&
-        timeout 5 ros2 topic echo camera/image_raw > /dev/null 2>&1"
-      ]
+          source /opt/ros/$ROS_DISTRO/setup.bash &&
+          timeout 3 ros2 topic echo --once camera/image_raw > /dev/null 2>&1 &&
+          timeout 3 ros2 topic echo --once camera/camera_info > /dev/null 2>&1"
+
+        ]
       <<: *settings
 
   mavros:
     healthcheck:
       test: ["CMD", "bash", "-c", "
-        timeout 5 tcpdump -i any udp port ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set} | grep 'UDP' &&
-        timeout 5 ros2 topic echo mavros/global_position/global > /dev/null 2>&1 &&
-        timeout 5 ros2 topic echo mavros/local_position/pose > /dev/null 2>&1 &&
-        timeout 5 ros2 topic echo mavros/gimbal_controller/device/attitude_status > /dev/null 2>&1"
+        source /opt/ros/$ROS_DISTRO/setup.bash &&
+        source install/setup.bash &&
+        timeout 30 ros2 topic echo --once mavros/global_position/global > /dev/null 2>&1 &&
+        timeout 3 ros2 topic echo --once mavros/local_position/pose > /dev/null 2>&1 &&
+        timeout 3 ros2 topic echo --once mavros/gimbal_control/device/attitude_status > /dev/null 2>&1"
       ]
       <<: *settings
 
   micro-ros-agent:
     healthcheck:
       test: ["CMD", "bash", "-c", "
-        timeout 5 tcpdump -i any 'udp port ${UXRCE_DDS_PRT:?empty or not set} and ((udp[8:2] != 0) or (udp[10:2] != 0))' > /tmp/udp_check.log 2>&1 &&
-        grep -q 'UDP' /tmp/udp_check.log &&
-        timeout 5 ros2 topic echo /fmu/in/sensor_gps > /dev/null 2>&1"
+        timeout 30 tcpdump -i any 'udp port ${UXRCE_DDS_PRT:?empty or not set} and ((udp[8:2] != 0) or (udp[10:2] != 0))' > /tmp/udp_check.log 2>&1 &&
+        grep -q 'UDP' /tmp/udp_check.log"
       ]
       <<: *settings
 
   gisnav:
     healthcheck:
       test: ["CMD", "bash", "-c", "
-        timeout 5 ros2 topic echo camera/image_raw > /dev/null 2>&1 &&
-        timeout 5 ros2 topic echo mavros/global_position/global > /dev/null 2>&1 &&
-        timeout 5 ros2 topic echo mavros/local_position/pose > /dev/null 2>&1 &&
-        timeout 5 ros2 topic echo mavros/gimbal_controller/device/attitude_status > /
-        timeout 5 ros2 topic echo /fmu/in/sensor_gps > /dev/null 2>&1"
+        source /opt/ros/$ROS_DISTRO/setup.bash &&
+        source install/setup.bash &&
+        timeout 30 ros2 topic echo --once /fmu/in/sensor_gps > /dev/null 2>&1"
       ]
       <<: *settings
 

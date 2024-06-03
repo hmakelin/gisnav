@@ -42,7 +42,7 @@ services:
     healthcheck:
       test: ["CMD", "bash", "-c", "
         source /opt/ros/$ROS_DISTRO/setup.bash &&
-        source install/setup.bash &&
+        source /opt/colcon_ws/install/setup.bash &&
         timeout 30 ros2 topic echo --once /fmu/in/sensor_gps > /dev/null 2>&1"
       ]
       <<: *settings

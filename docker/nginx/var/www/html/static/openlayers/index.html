@@ -75,20 +75,19 @@
         map.addLayer(demLayer);
 
         // Fetch and add WFS layer
-        var wfsUrl = wmsUrl + '&service=WFS&version=1.0.0&request=GetFeature&typeName=position&outputFormat=application/json';
+        var wfsUrl = '/cgi-bin/tinyows.cgi?map=/etc/mapserver/default.map&SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=feature:position';
 
         fetch(wfsUrl)
-            .then(response => response.text())  // Use .text() to inspect the raw response
+            .then(response => response.text())
             .then(data => {
                 console.log(data); // Log the raw response to inspect it
                 try {
-                    const jsonData = JSON.parse(data);
-                    var features = new ol.format.GeoJSON().readFeatures(jsonData, {
+                    const jsonData = new ol.format.GeoJSON().readFeatures(data, {
                         featureProjection: 'EPSG:3857'
                     });
 
                     var vectorSource = new ol.source.Vector({
-                        features: features
+                        features: jsonData
                     });
 
                     var vectorLayer = new ol.layer.Vector({

@@ -63,6 +63,16 @@ def launch_setup(context, *args, **kwargs):
             f"Unsupported protocol {protocol}. Choose either 'uorb' or 'nmea'."
         )
 
+    actions.add_action(
+        Node(
+            package=_PACKAGE_NAME,
+            name="gis_node",
+            namespace=_PACKAGE_NAME,
+            executable="gis_node",
+            parameters=[os.path.join(package_share_dir, "launch/params/gis_node.yaml")],
+        )
+    )
+
     return actions
 
 

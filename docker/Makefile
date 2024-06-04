@@ -209,59 +209,17 @@ stop:
 build:
 	@docker compose -p $(PROJECT_NAME) build
 
-# Use this target to start supporting services when using a local installation
-# of GISNav. The mapserver needs to be started first and the local /etc/hosts
-# file updated so that the gisnav-mapserver-1 hostname resolves to the mapserver
-# container ID on your local host. socat is used to create a virtual serial port
-# (a pseudo-tty) and to bridge it to the TCP port which the px4 container
-# is listening on.
-.PHONY: base-dev-setup
-base-dev-setup:
-	# Recreate containers
-	docker compose -p gisnav create mapserver px4 gscam postgres rviz
-	$(MAKE) expose-xhost
-
-	# Start the mapserver container
-	docker compose -p gisnav start mapserver postgres
-
-	# Extract the IP address of the mapserver and postgres containers
-	$(eval MAPSERVER_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1`)
-	@echo "Debug: MAPSERVER_IP is '$(MAPSERVER_IP)'"
-	$(eval POSTGRES_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-postgres-1`)
-	@echo "Debug: POSTGRES_IP is '$(POSTGRES_IP)'"
-
-	# Check if the entry already exists and update the /etc/hosts file
-	@if grep -q "gisnav-mapserver-1" /etc/hosts; then \
-		sudo sed -i'' -e "s/.*gisnav-mapserver-1/$(MAPSERVER_IP) gisnav-mapserver-1/" /etc/hosts; \
-	else \
-		echo "$(MAPSERVER_IP) gisnav-mapserver-1" | sudo tee -a /etc/hosts; \
-	fi
-	@echo "Updated /etc/hosts with IP $(MAPSERVER_IP) for gisnav-mapserver-1"
-
-	@if grep -q "gisnav-postgres-1" /etc/hosts; then \
-		sudo sed -i'' -e "s/.*gisnav-postgres-1/$(POSTGRES_IP) gisnav-postgres-1/" /etc/hosts; \
-	else \
-		echo "$(POSTGRES_IP) gisnav-postgres-1" | sudo tee -a /etc/hosts; \
-	fi
-	@echo "Updated /etc/hosts with IP $(POSTGRES_IP) for gisnav-postgres-1"
-
-	# Start the other development services
-	@docker compose -p gisnav start px4 gscam rviz
-
 .PHONY: dev-nmea
-dev-nmea: base-dev-setup
-	# Specific setup for NMEA output
+dev-nmea:
 	@echo "Setting up NMEA output..."
-	$(eval PX4_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1`)
-	@echo "Debug: PX4_IP is '$(PX4_IP)'"
-	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000 || echo "Could not establish serial-to-TCP bridge" &
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:localhost:15000 || echo "Could not establish serial-to-TCP bridge" &
 	@sleep 3  # Give socat time to create the pty
 	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
-	@ros2 launch gisnav default.launch.py protocol:=nmea port:=`readlink /tmp/gisnav-pty-link` baudrate:=115200
+	@ros2 launch gisnav local.launch.py protocol:=nmea port:=`readlink /tmp/gisnav-pty-link` baudrate:=9600
 
 .PHONY: dev-uorb
-dev-uorb: base-dev-setup
-	@ros2 launch gisnav dev.launch.py protocol:=uorb
+dev-uorb:
+	@ros2 launch gisnav local.launch.py protocol:=uorb
 
 # shortcut for demo
 .PHONY: demo

@@ -18,9 +18,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$GISNAV_DB" <<-EOS
       CREATE EXTENSION IF NOT EXISTS postgis;
 EOSQL
 
-# Create gps_table if it does not exist
+# Create feature.position if it does not exist
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$GISNAV_DB" <<-EOSQL
-      CREATE TABLE IF NOT EXISTS gps_table (
+      CREATE TABLE IF NOT EXISTS feature.position (
           id SERIAL PRIMARY KEY,
           geom GEOMETRY(Point, 4326),
           timestamp TIMESTAMPTZ DEFAULT NOW()

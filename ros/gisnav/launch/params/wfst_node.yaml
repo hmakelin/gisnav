@@ -1,4 +1,4 @@
 gisnav:
   wfst_node:
     ros__parameters:
-      wms_url: 'http://host.docker.internal/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map'
+      wfst_url: 'http://localhost/cgi-bin/tinyows.cgi'  # host.docker.internal

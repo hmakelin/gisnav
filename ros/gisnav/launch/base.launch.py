@@ -43,15 +43,6 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
-            name="gis_node",
-            namespace=_PACKAGE_NAME,
-            executable="gis_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/gis_node.yaml")],
-        )
-    )
-    ld.add_action(
-        Node(
-            package=_PACKAGE_NAME,
             name="stereo_node",
             namespace=_PACKAGE_NAME,
             executable="stereo_node",

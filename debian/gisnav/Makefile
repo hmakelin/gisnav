@@ -79,6 +79,7 @@ $(BUILD_DIR)/etc/gisnav: $(BUILD_DIR)/etc/gisnav/ros $(BUILD_DIR)/etc/gisnav/doc
 $(BUILD_DIR)/etc/gisnav/ros:
 	@dest=debian/gisnav/$@ && \
 	mkdir -p $@ && \
+	touch $(BUILD_DIR)/etc/gisnav/ros/COLCON_IGNORE && \
 	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' ros/ $$dest
 	@echo -e "\033[1;33;40mWarning! Check the file list above that no unintended files were copied over to the distributable.\033[0m"
 

@@ -28,11 +28,26 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package=_PACKAGE_NAME,
+            name="gis_node",
+            namespace=_PACKAGE_NAME,
+            executable="gis_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/gis_node.yaml"),
+                {
+                    "wms_url": "http://localhost/cgi-bin/mapserv.cgi?"
+                    "map=/etc/mapserver/default.map"
+                },
+            ],
+        )
+    )
+    ld.add_action(
+        Node(
+            package=_PACKAGE_NAME,
             name="wfst_node",
             namespace=_PACKAGE_NAME,
             executable="wfst_node",
             parameters=[
-                os.path.join(package_share_dir, "launch/params/wfst_node.yaml")
+                os.path.join(package_share_dir, "launch/params/wfst_node.yaml"),
             ],
         )
     )

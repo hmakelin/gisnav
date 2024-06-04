@@ -18,7 +18,7 @@ services:
     command: udp4 -p ${UXRCE_DDS_PRT:?empty or not set}
 
   gisnav:
-    command: ros2 launch gisnav dev.launch.py protocol:=uorb
+    command: ros2 launch gisnav container.launch.py protocol:=uorb
     #command: ros2 launch gisnav default.launch.py protocol:=uorb
     #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
 

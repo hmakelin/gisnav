@@ -8,18 +8,20 @@ MAP
     METADATA
         "wms_title"           "GISNav WMS"
         "wms_abstract"        "GISNav orthoimagery and digital elevation model (DEM) WMS service"
-        "wms_onlineresource"  "http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wms_onlineresource"  "http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
         "wms_srs"             "EPSG:3857 EPSG:4326"
         "wms_enable_request"  "GetMap GetCapabilities"
         "wms_feature_info_mime_type" "text/plain"
 
         "wfs_title"           "GISNav WFS"
         "wfs_abstract"        "GISNav WFS service for feature layers"
-        "wfs_onlineresource"  "http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wfs_onlineresource"  "http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
         "wfs_srs"             "EPSG:4326"
         "wfs_enable_request"  "*"
         "wfs_feature_info_mime_type" "text/xml; subtype=gml/3.1.1"
         "wfs_getfeature_formatlist" "GML2,GML3,application/json"
+        "tinyows_schema_dir" "/usr/local/share/tinyows/schema/"
+        "tinyows_onlineresource" "http://localhost/cgi-bin/tinyows.cgi"
     END
   END
 
@@ -63,7 +65,7 @@ MAP
     TYPE POINT
     CONNECTIONTYPE POSTGIS
     CONNECTION "dbname=gisnav user=gisnav password=gisnav host=gisnav-postgres-1"
-    DATA "geom FROM gps_table USING UNIQUE id USING SRID=4326"
+    DATA "geom FROM feature.position USING UNIQUE id USING SRID=4326"
     STATUS ON
     METADATA
       "wfs_title"       "Position"
@@ -72,6 +74,13 @@ MAP
       "wfs_enable_request" "*"
       "wfs_getfeature_formatlist" "GML2,GML3,geojson"
       "gml_featureid"    "id"
+
+      "wfs_namespace_prefix" "feature"
+      "wfs_namespace_uri" "http://www.mapserver.org/tinyows/"
+      "wfs_srs" "EPSG:4326"
+      "tinyows_table"  "feature.position"
+      "tinyows_writable" "1"
+      "tinyows_retrievable" "1"
     END
     CLASS
       NAME      "position"

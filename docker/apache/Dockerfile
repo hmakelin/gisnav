@@ -1,4 +1,5 @@
 FROM ubuntu:jammy AS apache
+ARG TINYOWS_MAPFILE
 
 # Update apt repository and install necessary packages
 RUN apt-get update && apt-get install -y \
@@ -14,6 +15,34 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 FROM apache AS mapserver
+
+# Install TinyOWS dependencies
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    libxml2-dev \
+    libgeos-dev \
+    postgresql-server-dev-all \
+    postgis \
+    libfcgi-dev \
+    libfcgi0ldbl \
+    libpq-dev \
+    flex \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone, build, and install TinyOWS
+# Need to copy postgis3.2 contrib to new location
+RUN git clone https://github.com/MapServer/tinyows.git \
+    && cd tinyows \
+    && autoconf \
+    && ./configure \
+    && make \
+    && make install \
+    && cp tinyows /usr/lib/cgi-bin
 
 ARG NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
 ARG OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
@@ -49,19 +78,20 @@ COPY mapserver/mapfiles/ /etc/mapserver/
 # Enable Apache modules
 RUN a2enmod rewrite && a2enmod fcgid && a2enmod cgi
 
-# Configure Apache to serve the MapServer CGI
-# Add .cgi suffix to the executable to make Apache correctly handle the
-# requests
+# Configure Apache to serve the MapServer CGI and TinyOWS
 RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver.conf \
     && echo "    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    AddHandler fcgid-script .fcgi" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    AddHandler cgi-script .cgi .pl" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    Require all granted" >> /etc/apache2/conf-available/mapserver.conf \
+    && echo "    SetEnv TINYOWS_MAPFILE $TINYOWS_MAPFILE" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "</Directory>" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/" >> /etc/apache2/conf-available/mapserver.conf \
     && a2enconf mapserver \
     && mv /usr/lib/cgi-bin/mapserv /usr/lib/cgi-bin/mapserv.cgi \
-    && chmod +x /usr/lib/cgi-bin/mapserv.cgi
+    && mv /usr/lib/cgi-bin/tinyows /usr/lib/cgi-bin/tinyows.cgi \
+    && chmod +x /usr/lib/cgi-bin/mapserv.cgi \
+    && chmod +x /usr/lib/cgi-bin/tinyows.cgi
 
 # Setup complete, start MapServer with default mapfile
 COPY mapserver/entrypoint.sh /

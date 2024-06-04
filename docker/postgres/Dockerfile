@@ -6,5 +6,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && apt clean
 
-# Copy the initialization script to the entrypoint directory
+# Copy the initialization scripts to the entrypoint directory
 COPY init-gisnav-db.sh /docker-entrypoint-initdb.d/
+COPY clear-feature-position.sql /docker-entrypoint-initdb.d/

@@ -19,8 +19,8 @@ class WFSTNode(Node):
     :attr:`.UORBNode.sensor_gps` messages using WFS-T.
     """
 
-    ROS_D_URL = "http://127.0.0.1:80/wms"
-    """Default value for :attr:`.wms_url`
+    ROS_D_URL = "http://127.0.0.1:80/wfst"
+    """Default value for :attr:`.wfst_url`
 
     When :ref:`deploying Docker Compose services <Deploy with Docker Compose>` the
     Docker DNS host name of the MapServer container ``gisnav-mapserver-1`` should be
@@ -51,8 +51,8 @@ class WFSTNode(Node):
 
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def wms_url(self) -> Optional[str]:
-        """ROS WMS client endpoint URL parameter"""
+    def wfst_url(self) -> Optional[str]:
+        """ROS parameter value for WFS-T endpoint URL"""
 
     def _construct_wfst_insert(self, lon: float, lat: float, alt: float) -> str:
         """Constructs a WFS-T Insert XML request
@@ -91,8 +91,8 @@ class WFSTNode(Node):
         :return: True if request was successful, False otherwise
         """
         headers = {"Content-Type": "text/xml"}
-        assert isinstance(self.wms_url, str)
-        response = requests.post(self.wms_url, data=xml_data, headers=headers)
+        assert isinstance(self.wfst_url, str)
+        response = requests.post(self.wfst_url, data=xml_data, headers=headers)
         if response.status_code == 200:
             return True
         else:

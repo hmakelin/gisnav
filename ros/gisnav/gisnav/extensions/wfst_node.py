@@ -49,6 +49,9 @@ class WFSTNode(Node):
         # Initialize ROS subscriptions by calling the decorated properties once
         self.sensor_gps
 
+        # Delete all features on startup
+        self._delete_all_features()
+
     @property
     @ROS.parameter(ROS_D_URL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def wfst_url(self) -> Optional[str]:
@@ -86,6 +89,31 @@ class WFSTNode(Node):
         # <gisnav:altitude>{alt}</gisnav:altitude>
         return wfst_template
 
+    def _construct_wfst_delete_all(self) -> str:
+        """Constructs a WFS-T Delete XML request to delete all gisnav:feature rows
+
+        :return: XML string for WFS-T Delete request
+        """
+        wfst_template = """
+            <wfs:Transaction service="WFS" version="1.1.0"
+                xmlns:wfs="http://www.opengis.net/wfs"
+                xmlns:ogc="http://www.opengis.net/ogc"
+                xmlns:gisnav="http://www.mapserver.org/tinyows/"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://www.opengis.net/wfs
+                                    http://schemas.opengis.net/wfs/1.1.0/wfs.xsd">
+                <wfs:Delete typeName="gisnav:position">
+                    <ogc:Filter>
+                        <ogc:PropertyIsLike wildCard="%" singleChar="_" escapeChar="\\">
+                            <ogc:PropertyName>gisnav:geom</ogc:PropertyName>
+                            <ogc:Literal>%</ogc:Literal>
+                        </ogc:PropertyIsLike>
+                    </ogc:Filter>
+                </wfs:Delete>
+            </wfs:Transaction>
+        """
+        return wfst_template
+
     def _send_wfst_request(self, xml_data: str) -> bool:
         """Sends the WFS-T request to the WFS-T service
 
@@ -98,11 +126,19 @@ class WFSTNode(Node):
             response = requests.post(self.wfst_url, data=xml_data, headers=headers)
         except requests.exceptions.ConnectionError as e:
             self.get_logger().error(f"Error sending data to back-end {e}")
+            return False
         if response.status_code == 200:
             return True
         else:
             self.get_logger().error(f"WFS-T request failed: {response.text}")
             return False
+
+    def _delete_all_features(self) -> None:
+        """Deletes all gisnav:feature rows on startup"""
+        wfst_xml = self._construct_wfst_delete_all()
+        success = self._send_wfst_request(wfst_xml)
+        if not success:
+            self.get_logger().error("Failed to delete all features on startup")
 
     def _update_database(self, msg: SensorGps) -> None:
         """Updates the database using WFS-T with the received ROS 2 message data

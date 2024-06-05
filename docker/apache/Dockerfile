@@ -84,17 +84,19 @@ RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver
     && echo "    AddHandler fcgid-script .fcgi" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    AddHandler cgi-script .cgi .pl" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    Require all granted" >> /etc/apache2/conf-available/mapserver.conf \
-    && echo "    SetEnv TINYOWS_MAPFILE $TINYOWS_MAPFILE" >> /etc/apache2/conf-available/mapserver.conf \
+    #&& echo "    SetEnv TINYOWS_MAPFILE $TINYOWS_MAPFILE" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "</Directory>" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/" >> /etc/apache2/conf-available/mapserver.conf \
     && a2enconf mapserver \
     && mv /usr/lib/cgi-bin/mapserv /usr/lib/cgi-bin/mapserv.cgi \
     && mv /usr/lib/cgi-bin/tinyows /usr/lib/cgi-bin/tinyows.cgi \
+    && ln -s /usr/lib/cgi-bin/tinyows.cgi /usr/lib/cgi-bin/tinyows \
     && chmod +x /usr/lib/cgi-bin/mapserv.cgi \
     && chmod +x /usr/lib/cgi-bin/tinyows.cgi
 
 # Setup complete, start MapServer with default mapfile
 COPY mapserver/entrypoint.sh /
+COPY mapserver/etc/ /etc/
 
 RUN chmod +x /entrypoint.sh
 

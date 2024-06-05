@@ -54,7 +54,7 @@ class WFSTNode(Node):
     def wfst_url(self) -> Optional[str]:
         """ROS parameter value for WFS-T endpoint URL"""
 
-    def _construct_wfst_insert(self, lon: float, lat: float, alt: float) -> str:
+    def _construct_wfst_insert(self, lon: float, lat: float) -> str:
         """Constructs a WFS-T Insert XML request
 
         :param lon: Longitude of the GPS point
@@ -63,25 +63,27 @@ class WFSTNode(Node):
         :return: XML string for WFS-T Insert request
         """
         wfst_template = f"""
-        <wfs:Transaction service="WFS" version="1.1.0"
-            xmlns:wfs="http://www.opengis.net/wfs"
-            xmlns:gml="http://www.opengis.net/gml"
-            xmlns:ogc="http://www.opengis.net/ogc"
-            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-            xsi:schemaLocation="http://www.opengis.net/wfs
-                                http://schemas.opengis.net/wfs/1.1.0/wfs.xsd">
-            <wfs:Insert>
-                <feature:position xmlns:feature="http://www.your_namespace.org">
-                    <feature:geom>
-                        <gml:Point srsName="EPSG:4326">
-                            <gml:coordinates>{lon},{lat}</gml:coordinates>
-                        </gml:Point>
-                    </feature:geom>
-                    <feature:altitude>{alt}</feature:altitude>
-                </feature:position>
-            </wfs:Insert>
-        </wfs:Transaction>
+            <wfs:Transaction service="WFS" version="1.1.0"
+                xmlns:wfs="http://www.opengis.net/wfs"
+                xmlns:gml="http://www.opengis.net/gml"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:gisnav="http://www.mapserver.org/tinyows/"
+                xsi:schemaLocation="http://www.opengis.net/wfs
+                                    http://schemas.opengis.net/wfs/1.1.0/wfs.xsd">
+                <wfs:Insert>
+                    <gisnav:position>
+                        <gisnav:geom>
+                            <gml:Point srsName="EPSG:4326">
+                                <gml:coordinates>{lon},{lat}</gml:coordinates>
+                            </gml:Point>
+                        </gisnav:geom>
+                    </gisnav:position>
+                </wfs:Insert>
+            </wfs:Transaction>
         """
+        # TODO: add timestamp and altitude to schema?
+        # <gisnav:timestamp>{timestamp}</gisnav:timestamp>
+        # <gisnav:altitude>{alt}</gisnav:altitude>
         return wfst_template
 
     def _send_wfst_request(self, xml_data: str) -> bool:
@@ -106,8 +108,8 @@ class WFSTNode(Node):
         """
         lon = msg.lon * 1e-7
         lat = msg.lat * 1e-7
-        alt = msg.alt * 1e-3
-        wfst_xml = self._construct_wfst_insert(lon, lat, alt)
+        # alt = msg.alt * 1e-3
+        wfst_xml = self._construct_wfst_insert(lon, lat)
         success = self._send_wfst_request(wfst_xml)
         if not success:
             self.get_logger().error(f"Failed to insert GPS data: {msg}")

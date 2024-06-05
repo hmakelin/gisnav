@@ -8,7 +8,6 @@ if [ "$DB_EXISTS" != "1" ]; then
   psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
       CREATE DATABASE $GISNAV_DB;
 EOSQL
-
 else
   echo "Database $GISNAV_DB already exists"
 fi
@@ -16,6 +15,11 @@ fi
 # Enable PostGIS extension on the gisnav database
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$GISNAV_DB" <<-EOSQL
       CREATE EXTENSION IF NOT EXISTS postgis;
+EOSQL
+
+# Create the feature schema if it doesn't exist
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$GISNAV_DB" <<-EOSQL
+      CREATE SCHEMA IF NOT EXISTS feature;
 EOSQL
 
 # Create feature.position if it does not exist

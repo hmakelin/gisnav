@@ -74,7 +74,7 @@ services:
 
   postgres:
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${GISNAV_DB} -h localhost &&
-        psql -U ${POSTGRES_USER} -d ${GISNAV_DB} -c 'SELECT postgis_version();' &&
-        psql -U ${POSTGRES_USER} -d ${GISNAV_DB} -c \"SELECT 1 FROM information_schema.tables WHERE table_schema = 'feature' LIMIT 1\""]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d ${GISNAV_DB} -h localhost &&
+        psql -U $${POSTGRES_USER} -d $${GISNAV_DB} -c 'SELECT postgis_version();' &&
+        psql -U $${POSTGRES_USER} -d $${GISNAV_DB} -c \"SELECT 1 FROM information_schema.tables WHERE table_schema = 'feature' LIMIT 1\""]
       <<: *settings

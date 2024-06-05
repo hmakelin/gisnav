@@ -75,7 +75,7 @@
         map.addLayer(demLayer);
 
         // Fetch and add WFS layer
-        var wfsUrl = '/cgi-bin/tinyows&SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=gisnav:position';
+        var wfsUrl = '/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&SERVICE=WFS&VERSION=1.0.0&REQUEST=GetFeature&TYPENAME=gml:position';
 
         fetch(wfsUrl)
             .then(response => response.text())

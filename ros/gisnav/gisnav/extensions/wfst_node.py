@@ -94,7 +94,10 @@ class WFSTNode(Node):
         """
         headers = {"Content-Type": "text/xml"}
         assert isinstance(self.wfst_url, str)
-        response = requests.post(self.wfst_url, data=xml_data, headers=headers)
+        try:
+            response = requests.post(self.wfst_url, data=xml_data, headers=headers)
+        except requests.exceptions.ConnectionError as e:
+            self.get_logger().error(f"Error sending data to back-end {e}")
         if response.status_code == 200:
             return True
         else:

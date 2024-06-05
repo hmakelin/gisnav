@@ -32,7 +32,7 @@ After installing the package, you may want to check out the [CLI intro page](/gi
 Enable the `gisnav.service` that was installed with the Debian package to automatically start on system startup.
 
 ::: warning Warning: Resource constrained systems
-Assuming you are installing this on a resource constrained companion computer, enabling the `gisnav.service` will significantly slow down your system on startup.
+Assuming you are installing this on a resource constrained companion computer, enabling the `gisnav.service` on startup will slow down your system.
 
 :::
 
@@ -40,3 +40,7 @@ Assuming you are installing this on a resource constrained companion computer, e
 sudo systemctl enable gisnav.service
 sudo systemctl start gisnav.service
 ```
+
+## Quick start
+
+After installing, try [simulating GPS failure](/sitl-local) in a local SITL simulation.

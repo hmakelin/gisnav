@@ -25,23 +25,25 @@ export default withMermaid({
           text: 'Getting started',
           items: [
             { text: 'Introduction', link: '/introduction' },
+            { text: 'System requirements', link: '/system-requirements' },
             { text: 'Install from Debian package', link: '/install-from-debian-package' },
             { text: 'GISNav CLI', link: '/gisnav-cli' },
             { text: 'Admin portal', link: '/admin-portal' },
-            { text: 'Mock GPS demo', link: '/README' },
           ]
         },
         {
           text: 'Simulation',
           items: [
-            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
-            { text: 'Raspberry Pi 5 & Pixhawk FMUv4', link: '/raspberry-pi-pixhawk' },
+            { text: 'SITL Simulate GPS failure', link: '/sitl-local' },
+            { text: 'SITL Companion computer', link: '/sitl-remote' },
+            { text: 'HIL Pixhawk FMU', link: '/hil-pixhawk' },
           ]
         },
         {
           text: 'Development',
           items: [
             { text: 'Install locally', link: '/install-locally' },
+            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
             { text: 'Deploy for development', link: '/deploy-for-development' },
             { text: 'System architecture', link: '/system-architecture' },
             { text: 'Run ROS nodes', link: '/ros-run-node' },

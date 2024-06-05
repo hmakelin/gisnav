@@ -1,17 +1,9 @@
-# Run mock GPS demo
-
-<!--@include: ./shared/warning-simulation-use-only.md-->
+# Simulate GPS failure
 
 <video width="100%" height="auto" controls>
   <source src="https://user-images.githubusercontent.com/22712178/187902004-480397cc-460f-4d57-8ed7-13f4e9bb3757.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
-
-## Introduction
-
-GISNav is a ROS 2 package that accurately determines UAV global position by aligning real-time video with maps from an onboard GIS server.
-
-GISNav provides a precise global position by visually comparing frames from the vehicle's nadir-facing camera to a map of the UAVs approximate global position retrieved from an onboard GIS server.
 
 ## Example walkthrough
 

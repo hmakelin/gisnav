@@ -1,46 +1,42 @@
 # Admin portal
 
-::: warning Warning: Experimental feature
-The admin portal is very much untested and is intended for exploring how to provide ways of managing configuration parameters and onboard maps without coding or GIS expertise.
+GISNav includes a captive (self-hosted) admin portal that can be accessed via a web browser. Some of the functionality available via the portal includes but is not limited to:
 
-:::
-
-GISNav includes a captive or self-hosted Homepage admin portal with links to relevant resources. A FileGator file server for editing configuration files without need for programming knowledge or commandline work. A Glances instance is available to monitor the system.
-
+- Editing configuration files and managing maps via FileGator fileserver
+- Monitoring system status via Glances
+- Viewing uploaded maps via OpenLayers
+- Monitoring health of Docker Compose services
+- Downloading more maps using [links to external imagery](/setup-gis-server#orthoimagery-and-dems)
 
 ## Serve admin portal
 
-You can use the [CLI tool](/gisnav-cli) or [Docker Compose](/deploy-with-docker-compose) to serve the admin portal.
-
-### GISNav CLI
-
-The admin portal is automatically served when starting `gisnav` using the CLI:
+The admin portal is automatically served when starting `gisnav` using [GISNav CLI](/gisnav-cli):
 
 ```bash
+gnc create --build gisnav
 gnc start gisnav
 ```
 
-You can also only start the admin tools:
+You can also only start the admin tools by starting `nginx` which `gisnav` depends on:
 
 ```bash
+gnc create --build nginx
 gnc start nginx
 ```
 
-### Docker Compose
+## Access admin portal
 
-To launch the admin portal along with any required supporting services, use the following command:
+You can access the admin portal at port `80` on the host machine such as `localhost`, or e.g. `jetsonnano.local` if using [a separate companion computer on a local network](/hil-pixhawk). Use the below example commands to open the admin portal with your default web browser.
 
-```bash
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav up nginx
-```
+::: info SSL/TLS not yet supported
+SSL/TLS i.e. HTTPS over port `443` is not yet supported.
+:::
 
-Once the services are running, you can open the admin portal in a web browser using the hostname of the server hosting the homepage on port `80`. Below are examples for accessing the homepage hosted on the `localhost` as well as on an external [Raspberry Pi](/raspberry-pi-pixhawk) with the default hostname `raspberrypi.local`:
+::: tip Edit hostname
+Edit the hostname to match your companion computer hostname if not running on `localhost`.
 
-
-## Visit admin portal
-
-You can find the admin portal at port `80` on the host machine (e.g. `localhost`, or a [Raspberry Pi](/raspberry-pi-pixhawk)). Use the below commands to open the web page with your default web browser:
+These examples assume your network stack supports mDNS i.e. can resolve the `.local` top-level domain. This is likely if you are running Ubuntu and connecting to your companion computer directly via Ethernet cable.
+:::
 
 ::: code-group
 
@@ -48,8 +44,12 @@ You can find the admin portal at port `80` on the host machine (e.g. `localhost`
 xdg-open http://localhost
 ```
 
-```bash [raspberrypi.local]
-xdg-open http://raspberrypi.local
+```bash [jetsonnano.local]
+xdg-open http://jetsonnano.local
 ```
 
+```bash [raspberrypi.local]
+# not verified to work - 4GB memory may be too little on RPi
+xdg-open http://raspberrypi.local
+```
 :::

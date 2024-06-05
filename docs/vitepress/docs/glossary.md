@@ -286,7 +286,6 @@ Used to refer to the [vehicle](#vehicle), typically in a [ROS](#ros-ros-2) conte
 
 Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [vehicle](#heading). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
 
-
 ### Service
 - A [Docker Compose](#docker-compose) service
 - A [ROS](#ros-ros-2) service
@@ -294,6 +293,9 @@ Most likely rotation of the [reference raster](#reference-reference-image-refere
 
 ### Service orchestration
 Deploying and managing [Docker Compose](#docker-compose) [services](#service) that constitute a GISNav [deployment](#deploy-deployment). Currently done using [Make](#make-make) (Makefiles).
+
+### Simulation host
+Computer that hosts the (Gazebo) simulation world. Typically a more powerful server, or a desktop or laptop personal computer.
 
 ### Subscribe, subscriber, subscription
 A [ROS](#ros-ros-2) subscription, to subscribe to a ROS [topic](#topic).
@@ -466,8 +468,14 @@ Graphical User Interface
 ### HIL, HITL
 Hardware In The Loop simulation
 
+### HTTP(S)
+Hypertext Transfer Protocol (Secure)
+
 ### IDE
 Integrated/Interactive Development Environment
+
+### mDNS
+Multicas DNS
 
 ### NAIP
 National Agriculture Imagery Program
@@ -528,6 +536,9 @@ Software In The Loop simulation
 ### SQL
 Structured Query Language: [SQL](https://en.wikipedia.org/wiki/SQL)
 
+### SSL/TLS
+Secure Sockets Layer / Transport Layer Security
+
 ### TCP, TCP/IP, IP
 Transmission Control Protocol/Internet Protocol
 
@@ -548,6 +559,14 @@ Virtual Network Computing
 
 ### VO
 Visual Odometry
+
+### WFS, WFS-T
+Web Feature Service (Transactional)
+
+::: info See also
+- [WFS Standard](https://www.ogc.org/standards/wfs)
+
+:::
 
 ### WGS, WGS 84
 A World Geodetic System coordinate system: [World Geodetic System](https://en.wikipedia.org/wiki/World_Geodetic_System)

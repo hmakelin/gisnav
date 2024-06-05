@@ -1,18 +1,13 @@
-# Raspberry Pi 5 & Pixhawk FMUv4
+# Pixhawk FMU HIL
 
-This page describes how to run HIL simulation on a Pixhawk board using the Raspberry Pi 5 as a companion computer.
+<!--@include: ./shared/warning-simulation-use-only.md-->
 
 ::: warning Warning: Propellers off
 If your autopilot is connected to a vehicle, it is highly recommended to disable the propellers or take other necessary precautions to ensure the vehicle remains grounded.
 
 :::
 
-## Concepts
-
-This page uses the below terminology:
-
-- **Simulation host**: Computer that hosts the HIL simulation world (Gazebo in this case)
-- **Development host**: Computer that optionally builds (potentially cross-platform) Docker images and hosts a private Docker registry for the Raspberry Pi 5 companion computer to pull (potentially non-distributable) Docker images from. Builds and uploads FCU firmware.
+This page describes how to run HIL simulation on a Pixhawk board and a companion computer.
 
 ## Prerequisites
 

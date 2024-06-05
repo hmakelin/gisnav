@@ -1,14 +1,18 @@
 # GISNav CLI
 
-The [Debian package](/install-from-debian-package) comes with the GISNav CLI (`gnc`) command line interface that streamlines deployment of Compose services. `gnc` is a light wrapper around Docker Compose that eliminates the need for specifying which Compose files or overrides should be used and which services to build, create or deploy on any supported platform.
+The [Debian package](/install-from-debian-package) installs the GISNav CLI (`gnc`), a command line interface used to deploy GISNav services.
 
-This page contains a quick intro to using `gnc`.
+`gnc` is a lightweight wrapper around Docker Compose. It simplifies the deployment process by automatically handling the selection of Compose files and overrides, as well as managing the building, creation, and deployment of services on any supported platform.
+
+This page provides a quick introduction to using `gnc`.
 
 ## Prerequisites
 
-You must have installed the [Debian package](/install-from-debian-package).
+- Installed the [Debian package](/install-from-debian-package).
 
-You must also have installed `gnc` on any remote systems you wish to deploy on (e.g. `raspberrypi.local`, see examples below), and setup a local network with `ssh` server enabled and your public key authorized on the Raspberry Pi 5.
+- Installed `gnc` on any remote companion computers you wish to deploy on (e.g. `jetsonnano.local`, see examples below)
+
+- Setup a local network with `ssh` server enabled and your public key authorized on the companion computers.
 
 ## Using the CLI
 

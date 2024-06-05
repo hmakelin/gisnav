@@ -32,9 +32,6 @@ class WFSTNode(Node):
     or the URL of the reverse proxy.
     """
 
-    ROS_D_SQL_POLL_RATE = 0.1
-    """Default for :attr:`.sql_poll_rate`"""
-
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
 
@@ -152,11 +149,6 @@ class WFSTNode(Node):
         success = self._send_wfst_request(wfst_xml)
         if not success:
             self.get_logger().error(f"Failed to insert GPS data: {msg}")
-
-    @property
-    @ROS.parameter(ROS_D_SQL_POLL_RATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def sql_poll_rate(self) -> Optional[float]:
-        """SQL connection attempt poll rate in Hz"""
 
     @property
     @ROS.subscribe(

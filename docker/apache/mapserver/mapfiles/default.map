@@ -5,10 +5,14 @@ MAP
   END
   EXTENT -180 -90 180 90
   WEB
+    VALIDATION
+        "mapserver_hostname" "^localhost|gisnav-mapserver-1$"
+        "default_mapserver_hostname" "localhost"
+    END
     METADATA
         "wms_title"           "GISNav WMS"
         "wms_abstract"        "GISNav orthoimagery and digital elevation model (DEM) WMS service"
-        "wms_onlineresource"  "http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wms_onlineresource"  "http://%mapserver_hostname%/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
         "wms_srs"             "EPSG:3857 EPSG:4326"
         "wms_enable_request"  "GetMap GetCapabilities"
         "wms_feature_info_mime_type" "text/plain"

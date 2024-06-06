@@ -1,7 +1,10 @@
 gisnav:
   gis_node:
     ros__parameters:
-      wms_url: 'http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/container.map'
+      # We use MapServer runtime substitution to edit the online_resource hostname
+      # in a containerized deployment (default localhost will not point to nginx
+      # in this case).
+      wms_url: 'http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&mapserver_hostname=gisnav-mapserver-1'
       wms_layers: ['imagery']
       wms_dem_layers: ['dem']
       wms_format: 'image/jpeg'

@@ -1,5 +1,11 @@
 # Simulate GPS failure
 
+This page describes how to prepare and deploy a local SITL simulation environment. The below video shows what the local SITL simulation should look like.
+
+::: details Note on Docker commands seen on video
+Unlike in the video, the simulation environment is no longer provided in a single container and is managed by `gnc` instead. The `gisnav-docker` repository seen in the beginning of the video is no longer maintained, and all the Docker source files have been moved over to the main `gisnav` repository.
+:::
+
 <video width="100%" height="auto" controls>
   <source src="https://user-images.githubusercontent.com/22712178/187902004-480397cc-460f-4d57-8ed7-13f4e9bb3757.mp4" type="video/mp4">
   Your browser does not support the video tag.
@@ -13,23 +19,26 @@ The below steps demonstrate how GISNav enables GNSS-free flight with PX4 Autopil
 
 ### Prerequisites
 
-You will need to have the [Docker Compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
+- Install the GISNav CLI via the [Debian package](/install-from-debian-package).
 
-[2]: https://docs.docker.com/compose/install/linux/
-[3]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+### Build and start SITL simulation
 
-### Build and run SITL simulation
-
-Build the Docker images and create and run the containers (downloading and building everything will take a long time):
-
-> [!WARNING] Warning: Exposed X server
-> This script will expose your X server to the Docker containers to make GUI applications work.
+Prepare the containers for the SITL simulation environment:
 
 ```bash
-git clone https://github.com/hmakelin/gisnav.git
-cd gisnav
-make -C docker demo
+gnc create --build px4 gisnav
 ```
+
+Start your simulation:
+
+::: info Slow startup on first run
+Gazebo in the `px4` container will download some models on first startup which may take several minutes with slower internet. You may not see the Gazebo GUI pop up until after the models are downloaded.
+:::
+
+```bash
+gnc start px4 gisnav
+```
+
 
 ### Upload flight plan via QGroundControl
 

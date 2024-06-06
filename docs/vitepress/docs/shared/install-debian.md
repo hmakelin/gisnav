@@ -1,10 +1,5 @@
 Download the `gisnav` Debian package and install it using the below commands. You can edit the release string to match your needs.
 
-::: warning Warning: Long build time
-The `postinst` script of the Debian package will attempt to pull and build all required Docker images and then create the containers. If the images are not available to be pulled, be prepared for a very long build time.
-
-:::
-
 ::: tip Private Docker registry
 You can make this process quicker by building your own (potentially cross-platform) images on your development host and pulling them onto your Raspberry Pi 5 using a [private container registry](/deploy-with-docker-compose#private-registry).
 
@@ -16,13 +11,17 @@ wget https://github.com/hmakelin/gisnav/releases/download/${GISNAV_RELEASE}/gisn
 sudo dpkg -i gisnav-${GISNAV_RELEASE}_all.deb
 ```
 
-After installing you can fix any missing dependencies using `apt-get`:
-
-```bash
-sudo apt-get install -f
-```
-
 ::: info Create Debian
 See the [Create Debian](/create-debian) page if you want to create your own Debian package instead of using the hosted version.
 
 :::
+
+After installing, you may want to prepare the key Docker containers before trying to deploy your services.
+
+::: warning Warning: Long build time
+Building the images will take a long time and use a lot of network bandwidth and storage space.
+:::
+
+```bash
+gnc create --build px4 gisnav
+```

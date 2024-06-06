@@ -1,21 +1,14 @@
 # Install from Debian package
 
-> [!WARNING] Warning: Simulation use only
-> Do not use this software for real flight missions. GISNav is untested and has only been demonstrated in a simulation environment.
+This page describes how to install GISNav from a Debian package. The Debian package includes the [GISNav CLI](/gisnav-cli) and the `gisnav.service` systemd service.
 
-This page describes how you can a install containerized version of GISNav for HIL simulation on your companion computer from a Debian package.
+::: tip Install locally
+GISNav CLI installs a containerized version of GISNav. For development you may want to install [GISNav locally](/install-locally) instead.
+:::
 
-- For a SITL mock GPS demo, see [here](/README) instead. Eventually the [GISNav CLI](/gisnav-cli) that comes with the Debian package should be able to run the demo as well, but currently that is not the case.
-
-    ::: info Todo
-    Run demo from CLI, e.g. `gnc sim start` or `gnc sim sitl start`
-
-    :::
-
-- For development you may want to install a [non-containerized version of GISNav](/install-locally) instead.
-
-
-
+::: info Todo
+Separate CLI and service into dedicated Debian packages.
+:::
 
 ## Prerequisites
 
@@ -27,7 +20,7 @@ This page describes how you can a install containerized version of GISNav for HI
 
 After installing the package, you may want to check out the [CLI intro page](/gisnav-cli).
 
-## Enable on startup
+## Enable on startup <Badge type="info" text="Optional"/>
 
 Enable the `gisnav.service` that was installed with the Debian package to automatically start on system startup.
 

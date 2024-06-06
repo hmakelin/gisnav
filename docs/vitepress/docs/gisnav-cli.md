@@ -8,11 +8,14 @@ This page provides a quick introduction to using `gnc`.
 
 ## Prerequisites
 
-- Installed the [Debian package](/install-from-debian-package).
+- Install the [Debian package](/install-from-debian-package) on your `localhost`.
 
-- Installed `gnc` on any remote companion computers you wish to deploy on (e.g. `jetsonnano.local`, see examples below)
+- Install the [Debian package](/install-from-debian-package) on any remote companion computers you wish to deploy on (e.g. `jetsonnano.local`, see examples below)
+    ::: info Todo
+    Use a container orchestration tool, possibly wrapped by the CLI, for multi-vehicle simulation
+    :::
 
-- Setup a local network with `ssh` server enabled and your public key authorized on the companion computers.
+- Setup a local network with `ssh` server enabled and your public key authorized on any remote companion computers.
 
 ## Using the CLI
 
@@ -23,15 +26,13 @@ If you are experienced with `docker compose`, using `gnc` should be intuitive. A
 Prepare services on `localhost`:
 
 ```bash
-gnc build gisnav px4 --with-dependencies
-gnc create gisnav px4
+gnc create --build gisnav px4
 ```
 
-Prepare `gisnav` on remote host `raspberrypi.local`:
+Prepare `gisnav` on remote host `jetsonnano.local`:
 
 ```bash
-gnc build gisnav@raspberrypi.local --with-dependencies
-gnc create gisnav@raspberrypi.local
+gnc create --build gisnav@jetsonnano.local
 ```
 
 Start both simulation and `gisnav` services on `localhost`:
@@ -40,18 +41,17 @@ Start both simulation and `gisnav` services on `localhost`:
 gnc start px4 gisnav
 ```
 
-Start simulation on `localhost` and `gisnav` on `raspberrypi.local`:
+Start simulation on `localhost`, and `gisnav` on `jetsonnano.local`:
 
 ::: info Companion computer hostname
-The `GISNAV_COMPANION_HOST` and `PX4_VIDEO_HOST_IP` environment variables are set below to tell the `px4` service where to find the middleware. `gnc` does not set these automatically and assumes the defaults from the `.env` file.
+The `GISNAV_COMPANION_HOST` environment variable is set below to tell the `px4` service where to find the middleware. `gnc` does not set these automatically and assumes the defaults from the `docker/.env` file.
 
 :::
 
 ```bash
-companion_host=raspberrypi.local
+companion_host=jetsonnano.local
 export GISNAV_COMPANION_HOST=$companion_host
-export PX4_VIDEO_HOST_IP=$companion_host
-gnc start px4 gisnav@raspberrypi.local
+gnc start px4 gisnav@$companion_host
 ```
 
 Start simulation on `localhost` and `gisnav` on multiple remote hosts:
@@ -62,11 +62,11 @@ The `px4` service does not (currently) support multi-vehicle simulation
 :::
 
 ::: info Todo
-- Container orchestration tool for multi-vehicle simulation
+Container orchestration tool for multi-vehicle simulation
 :::
 
 ```bash
-gnc start px4 gisnav@raspberrypi1.local gisnav@raspberrypi2.local
+gnc start px4 gisnav@jetsonnano1.local gisnav@jetsonnano2.local
 ```
 
 Attach to the container to see the logs output:
@@ -87,16 +87,16 @@ Stop all services on `localhost`:
 gnc stop
 ```
 
-Stop all services on both `localhost` and remote host `raspberrypi.local`:
+Stop all services on both `localhost` and remote host `jetsonnano.local`:
 
 ```bash
-gnc stop @localhost @raspberrypi.local
+gnc stop @localhost @jetsonnano.local
 ```
 
-The below is a more sophisticated alternative for stopping all services on both `localhost` and remote host `raspberrypi.local`:
+The below is a more sophisticated alternative for stopping all services on both `localhost` and remote host `jetsonnano.local`:
 
 ```bash
-gnc stop "" @raspberrypi.local
+gnc stop "" @jetsonnano.local
 ```
 
 List running service containers:
@@ -105,10 +105,10 @@ List running service containers:
 gnc ps
 ```
 
-View logs for the `gisnav` service running on `raspberrypi.local`:
+View logs for the `gisnav` service running on `jetsonnano.local`:
 
 ```bash
-gnc logs gisnav@raspberrypi.local
+gnc logs gisnav@jetsonnano.local
 ```
 
 See `gnc` command line help:
@@ -117,19 +117,23 @@ See `gnc` command line help:
 gnc help
 ```
 
-See `docker compose` command line help:
+See `docker compose` command line help (`help` without the preceding `--` is not used by Compose and thereby taken by `gnc`):
 
 ```bash
 gnc --help
 ```
 
-Inspect the canonical format Compose configuration layered by `gnc` and parsed by `docker compose` for your system:
+Inspect the Compose configuration layered by `gnc` and parsed by `docker compose` for your system in canonical format :
 
 ```bash
 gnc config
 ```
 
 Inspect parsed environment variables <Badge type="info" text="yq required"/>:
+
+::: info Todo
+Support inspecting environment directly in `gnc`
+:::
 
 ```bash
 gnc config | yq '.services[] | .environment' | sort | uniq

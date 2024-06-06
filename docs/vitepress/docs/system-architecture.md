@@ -138,8 +138,9 @@ Some notes on the service topography:
 
 ::: info Todo
 - Serve static documentation.
-- Make shared memory transport work. It does not work possibly because of the note on privileged uses [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
+- Make shared memory transport work. It does not work possibly because of what's described in the note on privileged users [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
 - `px4` shares the host network stack (along with `qgc`) because receiving communication from `uxrce_dds_agent` seems to depend on ephemeral ports  (unverified) -> try to isolate the simulator and QGC in a `mavlink` network
+- Show `gis` network, which connects `nginx`, `mapserver`, and `gisnav` (not in diagram)
 :::
 
 ```mermaid
@@ -161,7 +162,6 @@ graph TB
     subgraph companion["Companion computer (or simulation host)"]
 
         nginx -.-|admin| admin
-        nginx -.-|gis| gis
         nginx -.-|dds| dds
 
         application_autoheal[autoheal]
@@ -176,7 +176,7 @@ graph TB
                 application_gisnav[gisnav]
             end
         end
-        subgraph gis
+        subgraph data
 
             subgraph gis_services ["GIS Services"]
                 gis_mapserver[mapserver]
@@ -208,7 +208,7 @@ graph TB
     middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
-    application_gisnav -.->|80/tcp\nHTTP WMS/WFS-T\nvia nginx| gis_mapserver
+    application_gisnav -->|"80/tcp\nHTTP WMS/WFS-T\nvia nginx (local)\ndirectly (containerized)"| gis_mapserver
     application_gisnav_volume ---|/etc/gisnav| application_gisnav
 
     fileserver ----|"/var/www/filegator/repository\n/mapserver"| gis_maps_volume
@@ -229,7 +229,7 @@ graph TB
     nginx -->|/var/www/html/static\n/openlayers| openlayers
 
     classDef network fill:transparent,stroke-dasharray:10 5;
-    class mavlink,gis,admin,dds network
+    class mavlink,gis,admin,dds,data network
 
     classDef host fill:transparent,stroke:10;
     class simulation_host,companion host

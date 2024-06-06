@@ -11,8 +11,8 @@ print_usage() {
     echo "Examples:"
     echo "  gnc start"
     echo "  gnc logs gisnav"
-    echo "  GISNAV_COMPANION_HOST=raspberrypi.local PX4_VIDEO_HOST_IP=raspberrypi.local gnc start px4 gisnav@raspberrypi.local"
-    echo "  gnc stop @raspberrypi.local"
+    echo "  GISNAV_COMPANION_HOST=jetsonnano.local gnc start px4 gisnav@jetsonnano.local"
+    echo "  gnc stop @jetsonnano.local"
 }
 
 # Fetch the list of valid services - cannot use gnc itself here to avoid recursion
@@ -171,7 +171,7 @@ manage_tasks() {
 	done
 
     # Handle command for local services. Either we have collected local services
-    # earlier (gnc start px4, gnc start px4 gisnav@raspberrypi.local) and it's not empty,
+    # earlier (gnc start px4, gnc start px4 gisnav@jetsonnano.local) and it's not empty,
     # or both remote services and local services are empty (gnc start)
     if [ ! -z "$local_services" ] || ( [ -z "$local_services" ] && [ ! ${#remote_services[@]} -gt 0 ] ); then
         case "$command" in

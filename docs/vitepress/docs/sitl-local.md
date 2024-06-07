@@ -31,9 +31,7 @@ gnc create --build px4 gisnav
 
 Start your simulation:
 
-::: info Slow startup on first run
-Gazebo in the `px4` container will download some models on first startup which may take several minutes with slower internet. You may not see the Gazebo GUI pop up until after the models are downloaded.
-:::
+<!--@include: ./shared/slow-gazebo-startup-on-first-run.md-->
 
 ```bash
 gnc start px4 gisnav

@@ -18,22 +18,14 @@ Separate CLI and service into dedicated Debian packages.
 
 <!--@include: ./shared/install-debian.md-->
 
-After installing the package, you may want to check out the [CLI intro page](/gisnav-cli).
+## Uninstall
 
-## Enable on startup <Badge type="info" text="Optional"/>
-
-Enable the `gisnav.service` that was installed with the Debian package to automatically start on system startup.
-
-::: warning Warning: Resource constrained systems
-Assuming you are installing this on a resource constrained companion computer, enabling the `gisnav.service` on startup will slow down your system.
-
-:::
+If you want to uninstall the service, use the below command:
 
 ```bash
-sudo systemctl enable gisnav.service
-sudo systemctl start gisnav.service
+sudo apt-get remove gisnav
 ```
 
 ## Quick start
 
-After installing, try [simulating GPS failure](/sitl-local) in a local SITL simulation.
+After installing, you may want to check out the [CLI intro page](/gisnav-cli), or try [simulating GPS failure](/sitl-local) in a local SITL simulation.

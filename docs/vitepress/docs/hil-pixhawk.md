@@ -13,141 +13,27 @@ This page describes how to run HIL simulation on a Pixhawk board and a companion
 
 ### Simulation host
 
-<!--@include: ./shared/clone-to-colcon-workspace.md-->
+- Install the GISNav CLI via the [Debian package](/install-from-debian-package).
 
-::: info todo
-Instructions to clone only the docker part (e.g. as a submodule).
+### Companion computer
 
-:::
-
-### Raspberry Pi 5
-
-#### Docker Compose plugin
-
-<!--@include: ./shared/docker-compose-required.md-->
-
-::: tip Install Docker Engine on Debian
-Take a look at Docker's [official instructions](https://docs.docker.com/engine/install/debian/) for installing Docker Engine on a Debian-based system.
-
-:::
-
-Make sure you have added your user to the `docker` group as described in the [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/) to ensure you can run `docker` without `sudo`.
-
-#### systemd
-
-The Raspberry Pi 5 must be running a Linux distro that uses `systemd` such as Debian or one of its derivatives like Raspberry Pi OS or Ubuntu.
+- Install the GISNav CLI via the [Debian package](/install-from-debian-package).
 
 ### Connectivity & networking
 
-- You need the `ssh` server enabled on your Raspberry Pi 5. Include your own `ssh` public key in the `~/.ssh/authorized_keys` file on the Pi to ensure you can `ssh` in.
+- You need the `ssh` server enabled on your companion computer. Include your own `ssh` public key in the `~/.ssh/authorized_keys` file on the companion computer to ensure you can `ssh` in.
 
-- These instructions assume you are using the default hostname `raspberrypi.local` from the `rpi-imager` tool.
+- These instructions assume you are using the hostname `jetsonnano` and that your network stack supports mDNS (`.local` domain). You can edit your companion computer hostname by editing the `/etc/hostname` file.
 
-- Your development host and Raspberry Pi 5 must be on the same local network. You can e.g. connect them with an Ethernet cable. You may want to share Internet connection to the Raspberry Pi 5 if you want to download the Debian package directly from the Internet onto the Pi.
+- Your simulation host and companion computer must be on the same local network. You can e.g. connect them directly with an Ethernet cable. You should share internet connection to your companion computer if you connect directly via Ethernet cable and not e.g. via a router.
 
-## Install GISNav CLI
+#### Connect NVIDIA Jetson Nano and NXP RDDRONE-FMUK66
 
-::: info Building your own `.deb`
-Instead of installing the `gisnav` Debian package from the public registry, you can also build your own `.deb` file by following [these instructions](/create-debian).
-
-Once you have the `.deb` file built locally or built remotely and moved to the Raspberry Pi 5 (e.g. using `ssh`), you can install `gisnav` using the following command:
-```bash
-sudo apt-get -y install ./gisnav_*_all.deb
-
-```
-:::
-
-Open an `ssh` shell to your Raspberry Pi 5:
-
-```bash
-ssh raspberrypi.local
-```
-
-<!--@include: ./shared/install-debian.md-->
-
-
-## Manage GISNav Compose Services
-
-### Enable
-
-```bash
-sudo systemctl enable gisnav.service
-```
-
-### Start
-
-Once enabled, the `gisnav.service` should start automatically when the system is started. Restart the system or start the `gisnav` service manually to make it active:
-
-```bash
-sudo systemctl start gisnav.service
-```
-
-The below example shows how you can check that the `gisnav` service is active:
-
-```console
-hmakelin@hmakelin-MS-7D48:~$ sudo systemctl status gisnav.service
-● gisnav.service - GISNav Docker Compose Services
-     Loaded: loaded (/etc/systemd/system/gisnav.service; enabled; vendor preset: enabled)
-     Active: active (exited) since Wed 2024-05-15 15:10:21 BST; 3min 35s ago
-   Main PID: 241948 (code=exited, status=0/SUCCESS)
-        CPU: 354ms
-
-May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-mavros-1  Started
-May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gscam-1  Started
-May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-micro-ros-agent-1  Started
-May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-px4-1  Starting
-May 15 15:10:18 hmakelin-MS-7D48 docker[241971]:  Container gisnav-mapserver-1  Started
-May 15 15:10:19 hmakelin-MS-7D48 docker[241971]:  Container gisnav-postgres-1  Started
-May 15 15:10:20 hmakelin-MS-7D48 docker[241971]:  Container gisnav-px4-1  Started
-May 15 15:10:20 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gisnav-1  Starting
-May 15 15:10:21 hmakelin-MS-7D48 docker[241971]:  Container gisnav-gisnav-1  Started
-May 15 15:10:21 hmakelin-MS-7D48 systemd[1]: Finished GISNav Docker Compose Services.
-
-```
-
-You can also see the service status from the onboard [Admin portal](/admin-portal).
-
-### Stop
-
-You can use the below commands to stop the service (and the related Docker Compose services):
-```bash
-sudo systemctl stop gisnav.service
-```
-
-### Uninstall
-
-If you want to uninstall the service, use the below command:
-
-```bash
-sudo apt-get remove gisnav
-```
-
-### GSINav CLI
-
-You can also try using the `gnc` command line client that comes with the Debian package to start and stop the services:
-
-```bash
-companion_host=raspberrypi.local
-export GISNAV_COMPANION_HOST=$companion_host
-export PX4_VIDEO_HOST_IP=$companion_host
-gnc start px4 gisnav@raspberrypi.local
-```
-
-```bash
-# In this case we need the "" to also stop on localhost, could also use @localhost
-gnc stop "" @raspberrypi.local
-```
-
-## Connect Raspberry Pi 5 and Pixhawk
-
-- We connect our development computer to the Raspberry Pi 5 over Ethernet. This is so that we can upload the containers implementing required onboard services.
+- We connect our development computer to the Jetson Nano over Ethernet. This is so that we can upload the containers implementing required onboard services.
 
 - This board does not have a `GPS 2` port, so we use the `TELEM 1` port typically reserved for MAVLink communication with GCS for the uORB mock GPS messages.
 
 - We connect the simulation host computer (assumed to be the same as the development computer but strictly speaking these could be separate computers.)
-
-
-### Connection diagram
 
 ```mermaid
 graph TB
@@ -168,7 +54,7 @@ graph TB
         Laptop_ETH[Ethernet]
         Laptop_USB[USB]
     end
-    subgraph "Raspberry Pi 5"
+    subgraph "NVIDIA Jetson Nano"
         subgraph USB["USB-A (x4)"]
             Pi_USB_MAVLink[USB-A]
             Pi_USB_Mouse[USB-A]
@@ -220,32 +106,51 @@ See the [PX4 uploading firmware instructions](https://docs.px4.io/main/en/dev_se
 To find the `make` target for your specific board, list all options with the `make list_config_targets` command on your development host computer:
 
 ```bash
-# on development host (not on Raspberry Pi)
-cd ~/colcon_ws/src/gisnav/docker
-gnc run --no-deps px4 make list_config_targets
+# on development host (not on companion computer)
+gnc hil run --no-deps px4 make list_config_targets
 ```
 
 Then choose your appropriate board for the following examples. We are going to choose `nxp_fmuk66-e_default` for this example:
 
 ```bash
-# on development host (not on Raspberry Pi)
+# on development host (not on companion computer)
 # "hil" command needed here to expose USB device (Pixhawk)
 gnc hil run --no-deps -e DONT_RUN=1 px4 make nxp_fmuk66-e_default upload
 ```
 
-## Deploy HIL simulation
+## Build HIL simulation
 
 ```bash
-# on development host (not on Raspberry Pi)
-gnc hil up px4 gisnav@raspberrypi.local
+# on development host (not on companion computer)
+companion_host=jetsonnano.local
+GISNAV_COMPANION_HOST=$companion_host gnc hil create --build px4 gisnav@$companion_host
+```
+
+## Start HIL simulation
+
+```bash
+# on development host (not on companion computer)
+companion_host=jetsonnano.local
+GISNAV_COMPANION_HOST=$companion_host gnc hil start px4 gisnav@$companion_host
 ```
 
 ::: tip Admin portal
-You can also use the [Admin portal](/admin-portal) hosted on the Raspberry Pi 5 to see that the core services are running.
+You can also use the [Admin portal](/admin-portal) hosted on the Jetson Nano to see that the Compose services are running.
 
 :::
 
+### Stop simulation
+
+```bash
+# In this case we need the "" to also stop on localhost, could also use @localhost
+gnc stop "" @jetsonnano.local
+```
+
 ## QGroundControl
+
+::: tip Restart for changes to take effect
+You may have to restart the simulation for some of these changes to take effect. Do not re-create the `qgc` container after making these changes or you will lose your configuration.
+:::
 
 After deploying the HIL simulation, adjust the settings via the QGC application as follows:
 

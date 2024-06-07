@@ -126,4 +126,9 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && cd docs/vitepress \
     && npm install
 
+# Download opencv-python-headless into pip cache for when we run headless
+# (e.g. on a companion computer). This is installed/uninstalled when needed
+# in the entrypoint.sh script.
+RUN pip download opencv-python-headless
+
 ENTRYPOINT ["/entrypoint.sh"]

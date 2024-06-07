@@ -23,7 +23,7 @@ Separate CLI and service into dedicated Debian packages.
 If you want to uninstall the service, use the below command:
 
 ```bash
-sudo apt-get remove gisnav
+sudo dpkg -r gisnav
 ```
 
 ## Quick start

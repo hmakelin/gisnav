@@ -8,7 +8,7 @@ You can make this process quicker by building your own (potentially cross-platfo
 ```bash
 GISNAV_RELEASE=v0.67.0
 wget https://github.com/hmakelin/gisnav/releases/download/${GISNAV_RELEASE}/gisnav-${GISNAV_RELEASE}_all.deb -O gisnav-${GISNAV_RELEASE}_all.deb
-sudo dpkg -i gisnav-${GISNAV_RELEASE}_all.deb
+sudo dpkg -i ./gisnav-${GISNAV_RELEASE}_all.deb
 ```
 
 ::: info Create Debian

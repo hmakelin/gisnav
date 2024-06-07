@@ -14,6 +14,7 @@ matching.
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting PnP problem.
 """
+import os
 from typing import Final, Optional, Tuple, Union, cast
 
 import cv2
@@ -551,9 +552,10 @@ class PoseNode(Node):
                 matchColor=(0, 255, 0),
                 flags=2,
             )
-
-            cv2.imshow(label, match_img)
-            cv2.waitKey(1)
+            # Require HEADLESS explicitly set to 0 before we call highgui
+            if os.getenv("HEADLESS", 1) == 0:
+                cv2.imshow(label, match_img)
+                cv2.waitKey(1)
 
         @narrow_types(self)
         def _compute_pose(

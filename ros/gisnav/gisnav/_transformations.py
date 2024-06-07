@@ -1,4 +1,5 @@
 """Helper functions for ROS messaging"""
+import os
 from collections import namedtuple
 from typing import Optional, Tuple, Union, cast
 
@@ -213,11 +214,13 @@ def visualize_camera_position(image, t, title):
     # x, y = int(t[0]), int(
     #    height - t[1]
     # )  # move height origin from bottom to top left for cv2
-    x, y = t[0:2].squeeze().tolist()
-    x, y = int(x), int(y)
-    image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
-    cv2.imshow(title, image)
-    cv2.waitKey(1)
+    # Require HEADLESS explicitly set to 0 before we call highgui
+    if os.getenv("HEADLESS", 1) == 0:
+        x, y = t[0:2].squeeze().tolist()
+        x, y = int(x), int(y)
+        image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
+        cv2.imshow(title, image)
+        cv2.waitKey(1)
 
 
 def visualize_camera_corners(image, corners, title):
@@ -227,23 +230,25 @@ def visualize_camera_corners(image, corners, title):
     # x, y = int(t[0]), int(
     #    height - t[1]
     # )  # move height origin from bottom to top left for cv2
-    for i, corner in enumerate(corners):
-        x, y = corner[0:2].squeeze().tolist()
-        x, y = int(x), int(y)
+    # Require HEADLESS explicitly set to 0 before we call highgui
+    if os.getenv("HEADLESS", 1) == 0:
+        for i, corner in enumerate(corners):
+            x, y = corner[0:2].squeeze().tolist()
+            x, y = int(x), int(y)
 
-        # image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        fontScale = 1
-        color = (0, 255, 0)
-        thickness = 2
-        text = "TL" if i == 0 else "BR"
-        image = cv2.putText(
-            image, text, (x, y), font, fontScale, color, thickness, cv2.LINE_AA
-        )
-        image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
+            # image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            fontScale = 1
+            color = (0, 255, 0)
+            thickness = 2
+            text = "TL" if i == 0 else "BR"
+            image = cv2.putText(
+                image, text, (x, y), font, fontScale, color, thickness, cv2.LINE_AA
+            )
+            image = cv2.circle(np.array(image), (x, y), 5, (0, 255, 0), -1)
 
-    cv2.imshow(title, image)
-    cv2.waitKey(1)
+        cv2.imshow(title, image)
+        cv2.waitKey(1)
 
 
 # TODO: refactor out this function

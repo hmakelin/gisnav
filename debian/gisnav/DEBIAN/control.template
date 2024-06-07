@@ -8,6 +8,6 @@ Homepage: https://gisnav.org
 Package: gisnav
 Version: ${VERSION}
 Architecture: all
-Depends: bash, docker-compose-plugin, openssh-client, coreutils, sed, x11-utils
+Depends: bash, docker-compose-plugin, openssh-client, coreutils, sed, x11-utils, util-linux
 Description: GISNav CLI Tool
  This package contains GISNav CLI ("gnc") - a Docker Compose wrapper that streamlines the deployment of GISNav system configurations. Additionally, it includes the "gisnav.service" systemd service (disabled by default) that can be used to ensure the Compose services are running on system startup.

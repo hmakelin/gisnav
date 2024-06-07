@@ -28,6 +28,7 @@ export default withMermaid({
             { text: 'System requirements', link: '/system-requirements' },
             { text: 'Install from Debian package', link: '/install-from-debian-package' },
             { text: 'GISNav CLI', link: '/gisnav-cli' },
+            { text: 'GISNav systemd service', link: '/systemd' },
             { text: 'Admin portal', link: '/admin-portal' },
           ]
         },

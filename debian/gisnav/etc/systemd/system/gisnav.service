@@ -7,7 +7,7 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/etc/gisnav/docker
-ExecStart=gnv start
+ExecStart=gnc up gisnav -d
 ExecStop=gnv stop
 TimeoutStartSec=0
 

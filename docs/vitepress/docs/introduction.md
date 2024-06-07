@@ -18,7 +18,7 @@ GISNav at the high level consists of the following components:
 
 4. [**Command Line Interface**](/gisnav-cli): The GISNav Debian package comes with a simple command line interface (CLI) tool called `gnc` that allows users to easily control the system. The CLI provides commands for setting up the environment, starting and stopping services, and monitoring the system's status.
 
-5. **systemd service**: The Debian package also includes the `gisnav.service` systemd service that ensures all required services are automatically started on system startup.
+5. [**systemd service**](/systemd): The Debian package also includes the `gisnav.service` systemd service that ensures all required services are automatically started on system startup.
 
 6. [**Captive admin portal**](/admin-portal): GISNav includes a web-based captive admin portal for managing and configuring the system, including managing the onboard GIS data with no prior knowledge of GIS tools required.
 

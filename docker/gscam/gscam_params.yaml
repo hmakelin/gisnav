@@ -5,6 +5,8 @@ gscam_publisher:
       ! rtph264depay
       ! avdec_h264
       ! videoconvert
+      ! videorate
+      ! video/x-raw, framerate=2/1
     preroll: False
     use_gst_timestamps: True
     frame_id: 'mono'

@@ -30,13 +30,9 @@ services:
 
   gisnav:
     <<: *x11
-    environment:
-      HEADLESS: ${GISNAV_HEADLESS}
 
   px4:
     <<: *x11
-    environment:
-      HEADLESS: ${SIM_HEADLESS}
 
   ardupilot:
     <<: *x11

@@ -1,0 +1,14 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that enables switching headless
+# mode for various GUI services
+
+name: gisnav
+
+services:
+  gisnav:
+    environment:
+      HEADLESS: ${GISNAV_HEADLESS}
+
+  px4:
+    environment:
+      HEADLESS: ${SIM_HEADLESS}

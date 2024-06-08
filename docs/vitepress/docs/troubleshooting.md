@@ -231,3 +231,9 @@ You will probably want to use `docker compose` here instead of `docker` for the 
 for basic debugging that does not require launching GUI apps.
 
 :::
+
+## Environment variable changes not picked up by containers
+
+Docker Compose configures the container when it is created, not when it is started.
+
+Check your container configuration with `docker inspect <container-name>`. If it does not match your expected configuration, try recreating the container with `MY_ENV_VAR=my_value gnc create`.

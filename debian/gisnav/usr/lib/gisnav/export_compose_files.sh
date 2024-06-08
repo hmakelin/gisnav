@@ -65,12 +65,12 @@ case $GISNAV_GPU_TYPE in
         ;;
 esac
 
-# Add X11 overlay if we have a display available
+# Add X11 and headless overlays if we have a display available
 if xdpyinfo >/dev/null 2>&1; then
     if [[ $verbose -eq 1 ]]; then
         echo "Display is available."
     fi
-    compose_files="$compose_files -f $gisnav_docker_home/docker-compose.x11.yaml"
+    compose_files="$compose_files -f $gisnav_docker_home/docker-compose.x11.yaml -f $gisnav_docker_home/docker-compose.headless.yaml"
 else
     if [[ $verbose -eq 1 ]]; then
         echo "Display is not available."

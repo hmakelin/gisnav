@@ -25,7 +25,7 @@ This page describes how to run the [SITL simulation](/sitl-local) with GISNav ru
 Prepare the containers for the SITL simulation environment by running the following command on your simulation host.
 
 ```bash
-GISNAV_COMPANION_HOST=jetsonnano.local gnc create --build px4 gisnav@jetsonnano.local
+gnc create --build px4 gisnav@jetsonnano.local
 ```
 
 Start your simulation:

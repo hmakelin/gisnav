@@ -129,7 +129,7 @@ GISNAV_COMPANION_HOST=jetsonnano.local gnc hil create --build px4 gisnav@jetsonn
 
 ```bash
 # on development host (not on companion computer)
-GISNAV_COMPANION_HOST=jetsonnano.local gnc hil start px4 gisnav@jetsonnano.local
+gnc hil start px4 gisnav@jetsonnano.local
 ```
 
 ::: tip Admin portal

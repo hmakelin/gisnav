@@ -24,4 +24,12 @@ mavlink-routerd -e ${GISNAV_COMPANION_IP:?empty or not set}:${GISNAV_CMP_MAVROS_
 export UXRCE_DDS_AG_IP=$(python3 Tools/convert_ip.py ${GISNAV_COMPANION_IP:?empty or not set})
 echo "Connecting uXRCE-DDS client with agent at ${GISNAV_COMPANION_IP:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set} (integer IP: ${UXRCE_DDS_AG_IP:?empty or not set})."
 
+# Check if HEADLESS is blank or set to 0
+# PX4 Gazebo seems to start in headless mode regardless of the value of HEADLESS,
+# so we unset it completely if the value is blank or 0
+if [ -z "$HEADLESS" ] || [ "$HEADLESS" == "0" ]; then
+  # Unset the HEADLESS variable
+  unset HEADLESS
+fi
+
 exec "$@"

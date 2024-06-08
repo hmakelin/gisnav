@@ -122,16 +122,14 @@ gnc hil run --no-deps -e DONT_RUN=1 px4 make nxp_fmuk66-e_default upload
 
 ```bash
 # on development host (not on companion computer)
-companion_host=jetsonnano.local
-GISNAV_COMPANION_HOST=$companion_host gnc hil create --build px4 gisnav@$companion_host
+GISNAV_COMPANION_HOST=jetsonnano.local gnc hil create --build px4 gisnav@jetsonnano.local
 ```
 
 ## Start HIL simulation
 
 ```bash
 # on development host (not on companion computer)
-companion_host=jetsonnano.local
-GISNAV_COMPANION_HOST=$companion_host gnc hil start px4 gisnav@$companion_host
+GISNAV_COMPANION_HOST=jetsonnano.local gnc hil start px4 gisnav@jetsonnano.local
 ```
 
 ::: tip Admin portal

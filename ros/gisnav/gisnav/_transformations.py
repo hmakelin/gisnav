@@ -231,7 +231,7 @@ def visualize_camera_corners(image, corners, title):
     #    height - t[1]
     # )  # move height origin from bottom to top left for cv2
     # Require HEADLESS explicitly set to 0 before we call highgui
-    if os.getenv("HEADLESS", 1) == 0:
+    if int(os.getenv("HEADLESS", 1)) == 0:
         for i, corner in enumerate(corners):
             x, y = corner[0:2].squeeze().tolist()
             x, y = int(x), int(y)

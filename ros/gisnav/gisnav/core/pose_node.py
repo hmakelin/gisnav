@@ -85,7 +85,7 @@ class PoseNode(Node):
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     class _ScalingBuffer:
-        """Maintains timestamped query frame to world frame scaling in a sliding windown
+        """Maintains timestamped query frame to world frame scaling in a sliding window
         buffer so that shallow matching (VO) pose can be scaled to meters using
         scaling information obtained from deep matching
         """
@@ -101,9 +101,9 @@ class PoseNode(Node):
             self._timestamp_arr = np.append(self._timestamp_arr, timestamp_usec)
 
             if self._scaling_arr.size > self._WINDOW_LENGTH:
-                self._scaling_arr[-self._WINDOW_LENGTH :]
+                self._scaling_arr = self._scaling_arr[-self._WINDOW_LENGTH :]
             if self._timestamp_arr.size > self._WINDOW_LENGTH:
-                self._timestamp_arr[-self._WINDOW_LENGTH :]
+                self._timestamp_arr = self._timestamp_arr[-self._WINDOW_LENGTH :]
 
         def interpolate(self, timestamp_usec: int) -> Optional[float]:
             if self._scaling_arr.size < 2:
@@ -126,20 +126,53 @@ class PoseNode(Node):
         super().__init__(*args, **kwargs)
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Initialize DL model for map matching (noisy global position, no drift)
-        self._matcher = (
-            LightGlueMatcher(
-                "disk",
-                params={
-                    "filter_threshold": self.CONFIDENCE_THRESHOLD_DEEP_MATCH,
-                    "depth_confidence": -1,
-                    "width_confidence": -1,
-                },
+        if self._device == "cuda":
+            original_load = torch.load
+
+            def load_onto_gpu(*args, **kwargs):
+                """Monkey-patch :func:`torch.load` to force loading directly
+                onto GPU
+
+                We load directly onto GPU to avoid memory issues on devices with only
+                4GB of CPU memory (e.g. Jetson Nano 4GB model), whereby loading
+                LightGlue would cause pt_main_thread to take up almost all
+                available main memory and likely freeze the system.
+
+                :func:`torch.hub.load_state_dict_from_url` is used by kornia when
+                initializing :class:`LightGlueMatcher` (and possibly also DISK
+                extractor). :func:`torch.hub.load_state_dict_from_url` again
+                calls :func:`torch.load`, which is the one we will patch just
+                in case we skip calling :func:`torch.hub.load_state_dict_from_url`.
+                """
+                if kwargs.get("map_location", None) != self._device:
+                    assert self._device == "cuda"
+                    kwargs["map_location"] = self._device
+                if not kwargs.get("mmap", False):
+                    kwargs["mmap"] = True
+                return original_load(*args, **kwargs)
+
+            torch.load = load_onto_gpu
+
+        try:
+            # Initialize DL model for map matching (noisy global position, no drift)
+            self._matcher = (
+                LightGlueMatcher(
+                    "disk",
+                    params={
+                        "filter_threshold": self.CONFIDENCE_THRESHOLD_DEEP_MATCH,
+                        "depth_confidence": -1,
+                        "width_confidence": -1,
+                    },
+                )
+                .to(self._device)
+                .half()
+                .eval()
             )
-            .to(self._device)
-            .eval()
-        )
-        self._extractor = DISK.from_pretrained("depth").to(self._device)
+            self._extractor = DISK.from_pretrained("depth").to(self._device).half()
+        finally:
+            if self._device == "cuda":
+                # Restore the original function to avoid side effects
+                torch.load = original_load
 
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
@@ -156,7 +189,6 @@ class PoseNode(Node):
 
         # initialize publishers (for launch tests)
         self.pose
-        # TODO method does not support none input
         self.camera_optical_twist_in_camera_optical_frame(None)
 
         self._tf_buffer = tf2_ros.Buffer()
@@ -218,7 +250,7 @@ class PoseNode(Node):
         This represents the global 3D position and orientation of the ``camera_optical``
         frame in the REP 105 ``earth`` (ECEF) frame. This is obtained via deep
         matching and is a discontinuous estimate of pose. It is intended to be fused
-        with and complement the continous or smooth twist estimate obtained via
+        with and complement the continuous or smooth twist estimate obtained via
         shallow matching or visual odometry (VO).
         """
         return self._get_pose(self.pose_image)
@@ -266,7 +298,7 @@ class PoseNode(Node):
                 )
             else:
                 self.get_logger().debug(
-                    "No scaling availble for VO - will not return VO pose"
+                    "No scaling available for VO - will not return VO pose"
                 )
                 return None
 
@@ -328,7 +360,7 @@ class PoseNode(Node):
     def camera_optical_twist_in_camera_optical_frame(
         self, msg: MonocularStereoImage
     ) -> Optional[TwistWithCovarianceStamped]:
-        """REP 105 ``camera_optical`` frame twist in its intrisic frame"""
+        """REP 105 ``camera_optical`` frame twist in its intrinsic frame"""
         scaling = self._scaling_buffer.interpolate(
             tf_.usec_from_header(msg.query.header)
         )
@@ -363,7 +395,6 @@ class PoseNode(Node):
         """
 
     @property
-    # @ROS.max_delay_ms(DELAY_DEFAULT_MS)
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_TWIST_IMAGE.replace("~", STEREO_NODE_NAME)}',
@@ -397,8 +428,6 @@ class PoseNode(Node):
                 stereo_image.reference, desired_encoding="mono8"
             )
             assert reference_img.ndim == 2 or reference_img.shape[2] == 1
-            # reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2GRAY)
-            # Reconstruct 16-bit elevation from the last two channels
             reference_elevation = self._cv_bridge.imgmsg_to_cv2(
                 stereo_image.dem, desired_encoding="mono8"
             )
@@ -428,16 +457,16 @@ class PoseNode(Node):
             keypoints
         """
         if not shallow_inference:
-            qry_tensor = torch.Tensor(qry[None, None]).to(self._device) / 255.0
-            ref_tensor = torch.Tensor(ref[None, None]).to(self._device) / 255.0
+            qry_tensor = torch.Tensor(qry[None, None]).to(self._device).half() / 255.0
+            ref_tensor = torch.Tensor(ref[None, None]).to(self._device).half() / 255.0
             qry_tensor = qry_tensor.expand(-1, 3, -1, -1)
             ref_tensor = ref_tensor.expand(-1, 3, -1, -1)
 
-            with torch.inference_mode():
+            with torch.inference_mode():  # , torch.autocast(self._device):
                 input = torch.cat([qry_tensor, ref_tensor], dim=0)
                 # limit number of features to run faster, None means no limit i.e.
                 # slow but accurate
-                max_keypoints = 1024  # 4096  # None
+                max_keypoints = 256  # 4096  # None
                 feat_qry, feat_ref = self._extractor(
                     input, max_keypoints, pad_if_not_divisible=True
                 )
@@ -450,11 +479,14 @@ class PoseNode(Node):
                     kp_ref[None], torch.ones(1, len(kp_ref), 1, 1, device=self._device)
                 )
                 dists, match_indices = self._matcher(
-                    desc_qry, desc_ref, lafs_qry, lafs_ref
+                    desc_qry.half(), desc_ref.half(), lafs_qry.half(), lafs_ref.half()
                 )
 
             mkp_qry = kp_qry[match_indices[:, 0]].cpu().numpy()
             mkp_ref = kp_ref[match_indices[:, 1]].cpu().numpy()
+
+            # Free memory
+            torch.cuda.empty_cache()
 
             return mkp_qry, mkp_ref
 
@@ -468,8 +500,6 @@ class PoseNode(Node):
             # Apply ratio test
             good = []
             for m, n in matches:
-                # TODO: have a separate confidence threshold for shallow and deep
-                #  keypoint matching?
                 if m.distance < self.CONFIDENCE_THRESHOLD_SHALLOW_MATCH * n.distance:
                     good.append(m)
 
@@ -486,6 +516,10 @@ class PoseNode(Node):
             mkp_qry, mkp_ref = zip(*mkps)
             mkp_qry = np.array(mkp_qry)
             mkp_ref = np.array(mkp_ref)
+
+            # Free memory by deleting intermediate variables
+            # del kp_qry, desc_qry, kp_ref, desc_ref, matches, good, mkps
+            torch.cuda.empty_cache()
 
             return mkp_qry, mkp_ref
 
@@ -524,15 +558,10 @@ class PoseNode(Node):
                 except np.linalg.LinAlgError:
                     return src_pts
 
-            # We modify these from ROS to cv2 axes convention so we create copies
-            # mkp_qry = mkp_qry.copy()
-            # mkp_ref = mkp_ref.copy()
-
             k = camera_info.k.reshape((3, 3))
             h_matrix = k @ np.delete(np.hstack((r, t)), 2, 1)
             projected_fov = _project_fov(qry, h_matrix)
 
-            projected_fov[:, :, 1] = projected_fov[:, :, 1]
             img_with_fov = cv2.polylines(
                 ref, [np.int32(projected_fov)], True, 255, 3, cv2.LINE_AA
             )
@@ -553,9 +582,12 @@ class PoseNode(Node):
                 flags=2,
             )
             # Require HEADLESS explicitly set to 0 before we call highgui
-            if os.getenv("HEADLESS", 1) == 0:
+            if int(os.getenv("HEADLESS", 1)) == 0:
                 cv2.imshow(label, match_img)
                 cv2.waitKey(1)
+
+            # Free memory by deleting intermediate variables
+            torch.cuda.empty_cache()
 
         @narrow_types(self)
         def _compute_pose(
@@ -587,9 +619,10 @@ class PoseNode(Node):
             ) -> Tuple[np.ndarray, np.ndarray]:
                 """Computes :term:`pose` using :func:`cv2.solvePnPRansac`"""
                 dist_coeffs = np.zeros((4, 1))
+                # self.get_logger().info(f"{mkp2_3d} {mkp_qry}")
                 _, r, t, _ = cv2.solvePnPRansac(
-                    mkp2_3d,
-                    mkp_qry,
+                    mkp2_3d.astype("float32"),
+                    mkp_qry.astype("float32"),
                     k_matrix,
                     dist_coeffs,
                     useExtrinsicGuess=False,
@@ -602,11 +635,6 @@ class PoseNode(Node):
             k_matrix = camera_info.k.reshape((3, 3))
 
             mkp2_3d = _compute_3d_points(mkp_ref, elevation)
-
-            # Adjust y-axis for ROS convention (origin is bottom left, not top left),
-            # elevation (z) coordinate remains unchanged
-            # mkp2_3d[:, 1] = camera_info.height - mkp2_3d[:, 1]
-            # mkp_qry[:, 1] = camera_info.height - mkp_qry[:, 1]
 
             r, t = _compute_pose(mkp2_3d, mkp_qry, k_matrix)
 

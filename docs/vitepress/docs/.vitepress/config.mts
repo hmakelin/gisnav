@@ -35,22 +35,9 @@ export default withMermaid({
         {
           text: 'Simulation',
           items: [
-            {
-              text: 'SITL',
-              collapsed: false,
-              items: [
-                { text: 'Simulate GPS failure', link: '/sitl-local' },
-              { text: 'SITL with companion computer', link: '/sitl-remote' },
-            ]
-            },
-            {
-              text: 'HIL',
-              collapsed: false,
-              items: [
-                { text: 'HIL with Pixhawk FMU', link: '/hil-pixhawk' },
-            ]
-            }
-
+            { text: 'Simulate GPS failure in SITL', link: '/sitl-local' },
+            { text: 'SITL with companion computer', link: '/sitl-remote' },
+            { text: 'HIL with Pixhawk FMU', link: '/hil-pixhawk' },
           ]
         },
         {

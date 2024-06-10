@@ -35,12 +35,30 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_static_broadcaster",
+            name="camera_frd_static_broadcaster",
             arguments=[
                 "0",
                 "0",
                 "0",
                 "0",
+                "0",
+                "0",
+                "gimbal_0",
+                "camera_frd",
+            ],
+        ),
+    )
+    # this is camera_rfu - not REP 103 compliant, should be flu?
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="camera_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "1.571",
                 "0",
                 "0",
                 "gimbal_0",

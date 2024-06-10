@@ -101,9 +101,9 @@ class PoseNode(Node):
             self._timestamp_arr = np.append(self._timestamp_arr, timestamp_usec)
 
             if self._scaling_arr.size > self._WINDOW_LENGTH:
-                self._scaling_arr[-self._WINDOW_LENGTH :]
+                self._scaling_arr = self._scaling_arr[-self._WINDOW_LENGTH :]
             if self._timestamp_arr.size > self._WINDOW_LENGTH:
-                self._timestamp_arr[-self._WINDOW_LENGTH :]
+                self._scaling_arr = self._timestamp_arr[-self._WINDOW_LENGTH :]
 
         def interpolate(self, timestamp_usec: int) -> Optional[float]:
             if self._scaling_arr.size < 2:

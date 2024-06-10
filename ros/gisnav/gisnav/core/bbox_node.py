@@ -11,10 +11,12 @@ import rclpy
 import tf2_ros
 import tf_transformations
 from geographic_msgs.msg import BoundingBox
-from geometry_msgs.msg import PoseStamped, Quaternion, TransformStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from mavros_msgs.msg import GimbalDeviceAttitudeStatus
 from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.srv import SetParameters
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, NavSatFix
 from tf2_ros.transform_broadcaster import TransformBroadcaster
@@ -27,7 +29,6 @@ from ..constants import (
     ROS_TOPIC_MAVROS_GLOBAL_POSITION,
     ROS_TOPIC_MAVROS_LOCAL_POSITION,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
-    FrameID,
 )
 
 
@@ -64,6 +65,43 @@ class BBoxNode(Node):
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
+        self._set_tf_send("tf.send", True)
+
+    def _set_tf_send(self, param_name, param_value):
+        """Need to publish base_link to gimbal(_0) transform to tf"""
+        # Create a client for the parameter service
+        self._set_params_cli_gimbal_control = self.create_client(
+            SetParameters, "/mavros/gimbal_control/set_parameters"
+        )
+        self._set_params_cli_local_position = self.create_client(
+            SetParameters, "/mavros/local_position/set_parameters"
+        )
+
+        for cli in (
+            self._set_params_cli_gimbal_control,
+            self._set_params_cli_local_position,
+        ):
+            while not cli.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info("Waiting for parameter service...")
+
+            # Create request to set the parameter
+            req = SetParameters.Request()
+            param = Parameter(
+                name=param_name, type_=Parameter.Type.BOOL, value=param_value
+            )
+            req.parameters = [param.to_parameter_msg()]
+
+            # Call the service to set the parameter
+            future = cli.call_async(req)
+            rclpy.spin_until_future_complete(self, future)
+
+            if future.result() is not None:
+                self.get_logger().info(
+                    f"Parameter {param_name} set successfully to {param_value}"
+                )
+            else:
+                self.get_logger().error(f"Failed to set parameter {param_name}")
+
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the global position message from the EKF"""
         self.fov_bounding_box
@@ -77,23 +115,10 @@ class BBoxNode(Node):
     def nav_sat_fix(self) -> Optional[NavSatFix]:
         """Vehicle GNSS fix from FCU, or None if unknown"""
 
-    def _vehicle_pose_cb(self, msg: PoseStamped) -> None:
-        """Callback for vehicle local position message from the EKF"""
-        assert msg.header.frame_id == "map", (
-            f"Unexpected frame_id for vehicle local frame received via vehicle "
-            f"local position pose topic: {msg.header.frame_id} (expected 'map')"
-        )
-
-        # Publish local tangent plane (ENU) to vehicle FRD frame transformation
-        assert msg.header.frame_id == "map"
-        transform_base_link = messaging.pose_to_transform(msg, "base_link")
-        self.broadcaster.sendTransform([transform_base_link])
-
     @property
     @ROS.subscribe(
         ROS_TOPIC_MAVROS_LOCAL_POSITION,
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_vehicle_pose_cb,
     )
     def vehicle_pose(self) -> Optional[PoseStamped]:
         """Vehicle pose in EKF local frame from FCU, or None unknown"""
@@ -329,88 +354,6 @@ class BBoxNode(Node):
 
         :param msg: :class:`.GimbalDeviceAttitudeStatus` message from MAVROS
         """
-
-        def _normalize_quaternion(q: Quaternion) -> Quaternion:
-            norm = np.sqrt(q.w**2 + q.x**2 + q.y**2 + q.z**2)
-            q.w = q.w / norm
-            q.x = q.x / norm
-            q.y = q.y / norm
-            q.z = q.z / norm
-            return q
-
-        @narrow_types(self)
-        def _publish_camera_transform(
-            vehicle_pose: PoseStamped,
-            gimbal_device_attitude_status: GimbalDeviceAttitudeStatus,
-        ) -> None:
-            """Publish camera ENU pose to transformations
-
-            * Current implementation assumes camera faces directly down from
-              vehicle body if GimbalDeviceAttitudeStatus message (MAVLink` gimbal
-              protocol v2) is not available. Should probably not be used for estimating
-              vehicle orientation
-            * If GimbalDeviceAttitudeStatus message is available, only the flags
-              value of 12 i.e. bit mask 1100 (horizon-locked pitch and roll,
-              floating yaw) is supported.
-
-            :param vehicle_pose:
-            :param gimbal_device_attitude_status:
-            """
-            # TODO publish relative transform with gimbaldeviceattitudestatus
-            #  timestamp (this one now has vehicle pose timestamp)
-            parent_frame_id: FrameID = "map"
-            child_frame_id: FrameID = "camera"
-
-            assert gimbal_device_attitude_status.flags == 12, (
-                "Currently GISNav only supports a two-axis gimbal that has "
-                "horizon-locked roll and pitch (MAVLink Gimbal Protocol v2 "
-                "GimbalDeviceAttitudeStatus message flags has value 12 i.e. "
-                "1100 for bit mask)."
-            )
-            # TODO: handle failure flags (e.g. gimbal at physical limit)
-            # TODO: handle gimbal lock flags (especially yaw lock, flags == 16)
-
-            # Extract yaw-only quaternion from vehicle's quaternion
-            # because the gimbal quaternion has floating yaw
-            vehicle_q = vehicle_pose.pose.orientation
-            vehicle_yaw_only_q = Quaternion(w=vehicle_q.w, x=0.0, y=0.0, z=vehicle_q.z)
-            vehicle_yaw_only_q = _normalize_quaternion(vehicle_yaw_only_q)
-
-            # Need to mirror gimbal orientation along vehicle Y and Z-axis in
-            # FRD frame to get the camera ENU quaternion to display
-            # correctly in rviz - TODO figure out why (combination of
-            #  NED-to-ENU and camera_pinhole-to-camera_frd?)
-            gimbal_enu_mirrored_q = (
-                gimbal_device_attitude_status.q.x,
-                -gimbal_device_attitude_status.q.y,
-                -gimbal_device_attitude_status.q.z,
-                gimbal_device_attitude_status.q.w,
-            )
-
-            camera_enu_q = tf_transformations.quaternion_multiply(
-                tuple(messaging.as_np_quaternion(vehicle_yaw_only_q)),
-                gimbal_enu_mirrored_q,
-            )
-
-            transform_stamped = TransformStamped()
-
-            # Copy the header and edit frame_ids
-            transform_stamped.header = vehicle_pose.header
-            transform_stamped.child_frame_id = child_frame_id
-            transform_stamped.header.frame_id = parent_frame_id
-
-            # Copy the pose information to the transform
-            transform_stamped.transform.translation.x = vehicle_pose.pose.position.x
-            transform_stamped.transform.translation.y = vehicle_pose.pose.position.y
-            transform_stamped.transform.translation.z = vehicle_pose.pose.position.z
-            transform_stamped.transform.rotation = messaging.as_ros_quaternion(
-                np.array(camera_enu_q)
-            )
-
-            self.broadcaster.sendTransform([transform_stamped])
-
-        _publish_camera_transform(self.vehicle_pose, msg)
-
         self.fov_bounding_box
 
     @property

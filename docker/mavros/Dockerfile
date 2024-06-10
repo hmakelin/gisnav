@@ -26,9 +26,9 @@ RUN apt-get -y install software-properties-common wget curl tcpdump && \
 # mavros_msgs is needed by both downstream images so it is already built here
 # adds an additional custom patch to gps_input.cpp
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    git clone --branch gimbal-protocol-v2-plugin \
-      https://github.com/adinkra-labs/mavros_feature_gimbal-protocol-v2-plugin.git mavros && \
+    git clone --branch 2.8.0 https://github.com/mavlink/mavros.git && \
     rosdep update && \
+    apt-get update && \
     rosdep install --from-paths . --ignore-src -y && \
     cd .. && \
     colcon build --packages-ignore mavros mavros_extras libmavconn && \

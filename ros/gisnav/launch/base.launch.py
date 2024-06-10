@@ -18,7 +18,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="static_broadcaster",
+            name="camera_optical_static_broadcaster",
             arguments=[
                 "0",
                 "0",
@@ -28,6 +28,23 @@ def generate_launch_description():
                 "-1.571",
                 "camera",
                 "camera_optical",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="camera_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "gimbal_0",
+                "camera",
             ],
         ),
     )

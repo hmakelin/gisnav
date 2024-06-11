@@ -39,7 +39,6 @@
   <depend>socat</depend>
 
   <!-- torch, kornia (deep learning dependencies) are still in setup.py -->
-  <depend>python3-opencv</depend>s
   <depend>python3-numpy</depend>
   <depend>python3-pyproj</depend>
   <depend>python3-requests</depend>

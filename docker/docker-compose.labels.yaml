@@ -103,6 +103,13 @@ services:
       homepage.name: RViz
       homepage.description: ROS visualization tool
 
+  rqt:
+    labels:
+      <<: *labels
+      homepage.group: Development services
+      homepage.name: RQt
+      homepage.description: ROS development tool
+
   gscam:
     labels:
       <<: *labels

@@ -31,6 +31,9 @@ services:
   rviz:
     command: rviz2 -d gisnav_config.rviz
 
+  rqt:
+    command: rqt
+
   gscam:
     command:
       - "ros2"

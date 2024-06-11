@@ -86,3 +86,7 @@ services:
   rviz:
     networks:
       - dds
+
+  rqt:
+    networks:
+      - dds

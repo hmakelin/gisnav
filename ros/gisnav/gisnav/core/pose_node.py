@@ -14,7 +14,6 @@ matching.
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting PnP problem.
 """
-import os
 from typing import Final, Optional, Tuple, Union, cast
 
 import cv2
@@ -47,8 +46,10 @@ from ..constants import (
     MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
+    ROS_TOPIC_RELATIVE_MATCHES_IMAGE,
     ROS_TOPIC_RELATIVE_POSE,
     ROS_TOPIC_RELATIVE_POSE_IMAGE,
+    ROS_TOPIC_RELATIVE_POSITION_IMAGE,
     ROS_TOPIC_RELATIVE_QUERY_TWIST,
     ROS_TOPIC_RELATIVE_TWIST_IMAGE,
     STEREO_NODE_NAME,
@@ -172,6 +173,14 @@ class PoseNode(Node):
 
         self._scaling_buffer = self._ScalingBuffer()
 
+        # Publishers for dev image
+        self._matches_publisher = self.create_publisher(
+            Image, ROS_TOPIC_RELATIVE_MATCHES_IMAGE, 10
+        )
+        self._position_publisher = self.create_publisher(
+            Image, ROS_TOPIC_RELATIVE_POSITION_IMAGE, 10
+        )
+
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
             self._set_pose_request.pose = pose
@@ -248,13 +257,12 @@ class PoseNode(Node):
 
         camera_optical_position_in_world = -r_inv @ t
 
-        tf_.visualize_camera_position(
-            ref.copy(),
-            camera_optical_position_in_world,
-            f"Camera {'principal point' if shallow_inference else 'position'} "
-            f"in {'previous' if shallow_inference else 'world'} frame, "
-            f"{'shallow' if shallow_inference else 'deep'} inference",
-        )
+        # Publish camera position in world frame to ROS for debugging
+        x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
+        x, y = int(x), int(y)
+        image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
+        ros_image = self._cv_bridge.cv2_to_imgmsg(image)
+        self._position_publisher.publish(ros_image)
 
         if isinstance(msg, MonocularStereoImage):
             scaling = self._scaling_buffer.interpolate(
@@ -449,9 +457,7 @@ class PoseNode(Node):
                 lafs_ref = laf_from_center_scale_ori(
                     kp_ref[None], torch.ones(1, len(kp_ref), 1, 1, device=self._device)
                 )
-                dists, match_indices = self._matcher(
-                    desc_qry, desc_ref, lafs_qry, lafs_ref
-                )
+                _, match_indices = self._matcher(desc_qry, desc_ref, lafs_qry, lafs_ref)
 
             mkp_qry = kp_qry[match_indices[:, 0]].cpu().numpy()
             mkp_ref = kp_ref[match_indices[:, 1]].cpu().numpy()
@@ -542,6 +548,7 @@ class PoseNode(Node):
 
             matches = [cv2.DMatch(i, i, 0) for i in range(len(mkp_qry))]
 
+            # Publish keypoint match image to ROS for debugging
             match_img = cv2.drawMatches(
                 img_with_fov,
                 mkp_ref,
@@ -552,10 +559,9 @@ class PoseNode(Node):
                 matchColor=(0, 255, 0),
                 flags=2,
             )
-            # Require HEADLESS explicitly set to 0 before we call highgui
-            if os.getenv("HEADLESS", 1) == 0:
-                cv2.imshow(label, match_img)
-                cv2.waitKey(1)
+            match_img = cv2.cvtColor(match_img, cv2.COLOR_BGR2GRAY)
+            ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
+            self._matches_publisher.publish(ros_match_image)
 
         @narrow_types(self)
         def _compute_pose(

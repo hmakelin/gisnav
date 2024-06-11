@@ -83,6 +83,10 @@ services:
     build:
       context: rviz
 
+  rqt:
+    build:
+      context: rqt
+
   gscam:
     build:
       context: gscam

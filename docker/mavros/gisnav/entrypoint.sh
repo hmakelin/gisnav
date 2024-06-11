@@ -51,28 +51,4 @@ else
     echo "INFO: Launch parameter files or target volume not found on container - likely already moved to shared volume or shared volume is not mounted."
 fi
 
-# Handle cv2 in headless mode
-# Check the HEADLESS environment variable (only mapped when x11 overlay is provided),
-# so on a X-server-less (display-less) system we the variable is always unset.
-if [ -z "$HEADLESS" ] || [ "$HEADLESS" -eq 1 ]; then
-    if ! pip show opencv-python-headless >/dev/null 2>&1; then
-        echo "Running in headless mode - installing 'opencv-python-headless'..."
-        pip install opencv-python-headless
-        if [ $? -ne 0 ]; then
-            echo "Failed to install 'opencv-python-headless'. Exiting."
-            exit 1
-        fi
-    fi
-else
-    if pip show opencv-python-headless >/dev/null 2>&1; then
-        echo "Running in windowed mode - uninstalling 'opencv-python-headless'..."
-        pip uninstall -y opencv-python-headless
-        if [ $? -ne 0 ]; then
-            echo "Failed to uninstall 'opencv-python-headless'. Exiting."
-            exit 1
-        fi
-    fi
-fi
-
-
 exec "$@"

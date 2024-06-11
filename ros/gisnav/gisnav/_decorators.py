@@ -154,7 +154,7 @@ def narrow_types(
                     f"Unexpected input argument types for {method.__name__}: "
                     f"{', '.join(mismatch_msgs)}"
                 )
-                node_instance.get_logger().warn(log_msg)
+                node_instance.get_logger().debug(log_msg)
                 return return_value
 
             return method(*args, **kwargs)

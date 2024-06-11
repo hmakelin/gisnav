@@ -39,3 +39,6 @@ services:
 
   rviz:
     <<: *x11
+
+  rqt:
+    <<: *x11

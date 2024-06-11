@@ -31,25 +31,12 @@ The scripts here look for containers that have the string `gisnav` in their name
 
 ### Headless mode
 
-When developing on a lower performance system or when doing automated testing (e.g., with MAVSDK), you may want to run the Gazebo simulation in headless mode to increase performance:
+When developing on a lower performance system or when doing automated testing (e.g., with MAVSDK), you may want to create the simulation cotnainer in headless mode to increase performance:
 
-::: info Building Compose services
-See [Deploy with Docker Compose](/deploy-with-docker-compose) for more information on how to build the Docker Compose services used in the below example.
 
-:::
-
-::: code-group
-
-```bash [PX4]
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav -f docker-compose.yaml -f docker-compose.headless.yaml up px4
+```bash
+SIM_HEADLESS=1 gnc create px4
 ```
-
-```bash [ArduPilot]
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav -f docker-compose.yaml -f docker-compose.headless.yaml up ardupilot
-```
-:::
 
 ### GPU drivers not available
 

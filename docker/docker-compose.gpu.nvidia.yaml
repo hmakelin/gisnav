@@ -33,3 +33,6 @@ services:
 
   rviz:
     <<: *nvidia
+
+  rqt:
+    <<: *nvidia

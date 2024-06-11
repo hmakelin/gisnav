@@ -46,6 +46,12 @@ services:
         ROS_DISTRO: humble
     <<: *ros
 
+  rqt:
+    build:
+      args:
+        ROS_DISTRO: humble
+    <<: *ros
+
   gscam:
     build:
       args:

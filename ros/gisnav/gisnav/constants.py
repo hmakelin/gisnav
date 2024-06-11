@@ -91,6 +91,12 @@ ROS_TOPIC_MAVROS_GIMBAL_DEVICE_ATTITUDE_STATUS = (
 ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY = "/robot_localization/odometry/filtered"
 """Topic for filtered odometry from the ``robot_localization`` package EKF node"""
 
+ROS_TOPIC_RELATIVE_MATCHES_IMAGE = "~/dev/matches_image"
+"""Relative topic into which :class:`.PoseNode` publishes the keypoint match image."""
+
+ROS_TOPIC_RELATIVE_POSITION_IMAGE = "~/dev/position_image"
+"""Relative topic into which :class:`.PoseNode` publishes the camera position image."""
+
 DELAY_DEFAULT_MS: Final = 2000
 """Max acceptable delay for things like global position"""
 

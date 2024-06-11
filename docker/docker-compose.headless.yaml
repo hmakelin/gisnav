@@ -5,10 +5,6 @@
 name: gisnav
 
 services:
-  gisnav:
-    environment:
-      HEADLESS: ${GISNAV_HEADLESS}
-
   px4:
     environment:
       HEADLESS: ${SIM_HEADLESS}

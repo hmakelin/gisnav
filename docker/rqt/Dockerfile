@@ -5,7 +5,7 @@ ARG ROS_DISTRO
 ENV ROS_DISTRO=${ROS_DISTRO}
 
 RUN apt-get update && \
-    apt-get -y install ros-${ROS_DISTRO}-rviz2 && \
+    apt-get -y install ros-${ROS_DISTRO}-rqt* && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
 

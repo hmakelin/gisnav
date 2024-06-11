@@ -31,3 +31,6 @@ services:
 
   rviz:
     <<: *broadcom
+
+  rqt:
+    <<: *broadcom

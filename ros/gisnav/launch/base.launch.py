@@ -23,10 +23,10 @@ def generate_launch_description():
                 "0",
                 "0",
                 "0",
-                "-1.571",
+                "1.571",
                 "0",
-                "-1.571",
-                "camera",
+                "1.571",
+                "camera_frd",
                 "camera_optical",
             ],
         ),
@@ -48,20 +48,20 @@ def generate_launch_description():
             ],
         ),
     )
-    # this is camera_rfu - not REP 103 compliant, should be flu?
+    # this FLU i.e. REP 103 standard body-relative frame
     ld.add_action(
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_static_broadcaster",
+            name="camera_rfu_static_broadcaster",
             arguments=[
                 "0",
                 "0",
                 "0",
-                "1.571",
                 "0",
                 "0",
-                "gimbal_0",
+                "3.141",
+                "camera_frd",
                 "camera",
             ],
         ),

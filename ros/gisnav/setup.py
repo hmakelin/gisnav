@@ -152,6 +152,7 @@ setup(
             "gis_node = gisnav:run_gis_node",
             "stereo_node = gisnav:run_stereo_node",
             "pose_node = gisnav:run_pose_node",
+            "twist_node = gisnav:run_twist_node",
             "bbox_node = gisnav:run_bbox_node",
             "wfst_node = gisnav:run_wfst_node",
         ],

@@ -45,7 +45,6 @@
   <depend>python3-setuptools</depend> <!-- setuptools is build dependency only? -->
   <depend>python3-shapely</depend>
   <depend>python3-serial</depend>
-  <depend>python3-scipy</depend>
   <!-- <depend>python3-owslib</depend> not found by rosdep, in setup.py instead -->
 
   <!-- need these to install things from setup.py -->

@@ -22,10 +22,11 @@ from .constants import (
     POSE_NODE_NAME,
     ROS_NAMESPACE,
     STEREO_NODE_NAME,
+    TWIST_NODE_NAME,
     UORB_NODE_NAME,
     WFST_NODE_NAME,
 )
-from .core import BBoxNode, GISNode, PoseNode, StereoNode
+from .core import BBoxNode, GISNode, PoseNode, StereoNode, TwistNode
 
 try:
     from .extensions.wfst_node import WFSTNode
@@ -149,3 +150,8 @@ def run_stereo_node():
 def run_pose_node():
     """Spins up a :class:`.PoseNode`"""
     _run(PoseNode, POSE_NODE_NAME, **_rclpy_node_kwargs)
+
+
+def run_twist_node():
+    """Spins up a :class:`.TwistNode`"""
+    _run(TwistNode, TWIST_NODE_NAME, **_rclpy_node_kwargs)

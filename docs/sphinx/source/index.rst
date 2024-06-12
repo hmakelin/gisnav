@@ -16,6 +16,7 @@ Here you can find the automatically generated API reference for the GISNav ROS 2
     public/gis_node
     public/stereo_node
     public/pose_node
+    public/twist_node
 
 .. toctree::
     :caption: Extension nodes

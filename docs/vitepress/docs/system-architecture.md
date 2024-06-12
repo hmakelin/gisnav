@@ -32,7 +32,7 @@ graph TB
     subgraph core["GISNav core nodes"]
         BBoxNode -->|"geographic_msgs/BoundingBox"| GISNode
         GISNode -->|"gisnav_msgs/OrthoImage"| StereoNode
-        StereoNode -->|"gisnav_msgs/MonocularStereoImage"| PoseNode
+        StereoNode -->|"gisnav_msgs/MonocularStereoImage"| TwistNode
         StereoNode -->|"gisnav_msgs/OrthoStereoImage"| PoseNode
     end
 
@@ -46,6 +46,7 @@ graph TB
         ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| NMEANode
     end
 
+    TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped"| ekf
     PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped"| ekf
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
 

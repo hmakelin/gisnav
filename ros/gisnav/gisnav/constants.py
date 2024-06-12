@@ -21,6 +21,9 @@ BBOX_NODE_NAME: Final = "bbox_node"
 POSE_NODE_NAME: Final = "pose_node"
 """Name of :class:`.PoseNode` spun up by :func:`.run_pose_node`."""
 
+TWIST_NODE_NAME: Final = "twist_node"
+"""Name of :class:`.TwistNode` spun up by :func:`.run_twist_node`."""
+
 STEREO_NODE_NAME: Final = "stereo_node"
 """Name of :class:`.StereoNode` spun up by :func:`.run_stereo_node`"""
 

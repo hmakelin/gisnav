@@ -53,7 +53,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_rfu_static_broadcaster",
+            name="camera_static_broadcaster",
             arguments=[
                 "0",
                 "0",

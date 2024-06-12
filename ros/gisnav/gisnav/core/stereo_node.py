@@ -78,11 +78,22 @@ class StereoNode(Node):
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
+        self._previous_rotation: Optional[float] = None
+        self._pose_image: Optional[OrthoStereoImage] = None
+
+    def _orthoimage_cb(self, msg: OrthoImage) -> None:
+        # Set cached rotation to None to trigger rotation and cropping on
+        # new reference orthoimages
+        # TODO: rotation and pose image should be cached atomically
+        self._previous_rotation = None
+        self._pose_image = None
+
     @property
     @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_ORTHOIMAGE.replace("~", GIS_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_orthoimage_cb,
     )
     def orthoimage(self) -> Optional[OrthoImage]:
         """Subscribed orthoimage, or None if unknown"""
@@ -173,22 +184,6 @@ class StereoNode(Node):
             """Rotate and crop and orthoimage stack to align with query image"""
             transform = transform.transform
 
-            orthoimage_arr = self._cv_bridge.imgmsg_to_cv2(
-                orthoimage.image, desired_encoding="passthrough"
-            )
-            dem_arr = self._cv_bridge.imgmsg_to_cv2(
-                orthoimage.dem, desired_encoding="mono8"
-            )
-            orthoimage_arr = cv2.cvtColor(orthoimage_arr, cv2.COLOR_BGR2GRAY)
-            orthoimage_stack = np.dstack((orthoimage_arr, dem_arr))
-
-            # TODO: make dem 16 bit
-            assert orthoimage_stack.shape[2] == 2, (
-                f"Orthoimage stack channel count was {orthoimage_stack.shape[2]} "
-                f"when 2 was expected (one channel for 8-bit grayscale reference "
-                f"image and one 8-bit channel for 8-bit elevation reference)"
-            )
-
             # Rotate and crop orthoimage stack
             # TODO: implement this part better e.g. use
             #  tf_transformations.euler_from_quaternion
@@ -200,33 +195,64 @@ class StereoNode(Node):
             # rotation is positive 90 degrees.
             rotation = (camera_yaw_degrees + camera_roll_degrees) % 360
 
-            crop_shape: Tuple[int, int] = image.height, image.width
+            # Do not recompute/warp reference if rotation diff is less than 5 deg
+            if (
+                self._previous_rotation is None
+                or (rotation - self._previous_rotation) % 360 > 5
+            ):
+                orthoimage_arr = self._cv_bridge.imgmsg_to_cv2(
+                    orthoimage.image, desired_encoding="passthrough"
+                )
+                dem_arr = self._cv_bridge.imgmsg_to_cv2(
+                    orthoimage.dem, desired_encoding="mono8"
+                )
+                orthoimage_arr = cv2.cvtColor(orthoimage_arr, cv2.COLOR_BGR2GRAY)
+                orthoimage_stack = np.dstack((orthoimage_arr, dem_arr))
 
-            # here positive rotation is counter-clockwise, so we invert
-            orthoimage_rotated_stack, M = self._rotate_and_crop_center(
-                orthoimage_stack, rotation, crop_shape
-            )
+                # TODO: make dem 16 bit
+                assert orthoimage_stack.shape[2] == 2, (
+                    f"Orthoimage stack channel count was {orthoimage_stack.shape[2]} "
+                    f"when 2 was expected (one channel for 8-bit grayscale reference "
+                    f"image and one 8-bit channel for 8-bit elevation reference)"
+                )
 
-            reference_image_msg = self._cv_bridge.cv2_to_imgmsg(
-                orthoimage_rotated_stack[:, :, 0], encoding="mono8"
-            )
+                crop_shape: Tuple[int, int] = image.height, image.width
 
-            # TODO: 16 bit DEM
-            dem_msg = self._cv_bridge.cv2_to_imgmsg(
-                orthoimage_rotated_stack[:, :, 1], encoding="mono8"
-            )
-            reference_image_msg.header.stamp = image.header.stamp
+                # here positive rotation is counter-clockwise, so we invert
+                orthoimage_rotated_stack, M = self._rotate_and_crop_center(
+                    orthoimage_stack, rotation, crop_shape
+                )
+
+                reference_image_msg = self._cv_bridge.cv2_to_imgmsg(
+                    orthoimage_rotated_stack[:, :, 0], encoding="mono8"
+                )
+
+                reference_image_msg.header.stamp = image.header.stamp
+                proj_str = self._world_to_reference_proj_str(
+                    np.linalg.inv(M),  # TODO: try-except
+                    orthoimage.crs.data,
+                )
+                # TODO: 16 bit DEM
+                dem_msg = self._cv_bridge.cv2_to_imgmsg(
+                    orthoimage_rotated_stack[:, :, 1], encoding="mono8"
+                )
+            else:
+                assert self._pose_image is not None
+                reference_image_msg = self._pose_image.reference
+                proj_str = self._pose_image.crs.data
+                dem_msg = self._pose_image.dem
+
+            assert reference_image_msg is not None
+            assert proj_str is not None
+
             dem_msg.header.stamp = image.header.stamp
 
             ortho_stereo_image_msg = OrthoStereoImage(
                 query=image, reference=reference_image_msg, dem=dem_msg
             )
 
-            # Publish transformation
-            proj_str = self._world_to_reference_proj_str(
-                np.linalg.inv(M),  # TODO: try-except
-                orthoimage.crs.data,
-            )
+            self._previous_rotation = rotation
+            self._pose_image = ortho_stereo_image_msg
 
             ortho_stereo_image_msg.crs = String(data=proj_str)
 

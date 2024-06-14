@@ -42,9 +42,9 @@ def generate_launch_description():
                 "0",
                 "0",
                 "0",
-                "0",
+                "-3.141",
                 "gimbal_0",
-                "camera_frd",
+                "camera",
             ],
         ),
     )
@@ -61,8 +61,25 @@ def generate_launch_description():
                 "0",
                 "0",
                 "3.141",
-                "camera_frd",
                 "camera",
+                "camera_frd",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="camera_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "-3.141",
+                "base_link_stabilized",
+                "base_link_stabilized_frd",
             ],
         ),
     )

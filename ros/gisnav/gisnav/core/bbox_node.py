@@ -61,34 +61,44 @@ class BBoxNode(Node):
 
         # Needed for updating tf2 with camera to vehicle relative pose
         # and vehicle to wgs84 relative
-        self.broadcaster = TransformBroadcaster(self)
+        self._tf_broadcaster = TransformBroadcaster(self)
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
-        self._set_tf_send("tf.send", True)
-
-    def _set_tf_send(self, param_name, param_value):
-        """Need to publish base_link to gimbal(_0) transform to tf"""
-        # Create a client for the parameter service
         self._set_params_cli_gimbal_control = self.create_client(
             SetParameters, "/mavros/gimbal_control/set_parameters"
         )
         self._set_params_cli_local_position = self.create_client(
             SetParameters, "/mavros/local_position/set_parameters"
         )
+        self._set_params(
+            (self._set_params_cli_local_position, self._set_params_cli_gimbal_control),
+            Parameter(name="tf.send", type_=Parameter.Type.BOOL, value=True),
+        )
 
-        for cli in (
-            self._set_params_cli_gimbal_control,
-            self._set_params_cli_local_position,
-        ):
+        # The base_link_stabilized_frd frame is used as the parent frame for
+        # the MAVROS gimbal_control plugin gimbal frames. This ensures that
+        # gimbal roll and pitch stabilization is taken into account when publishing
+        # the gimbal_{i} frames into tf2. The yaw is still assumed to float.
+        # This corresponds to `GimbalDeviceAttitudeStatus` message `flags` value of
+        # 12 i.e. bit mask 1100.
+        self._set_params(
+            (self._set_params_cli_gimbal_control,),
+            Parameter(
+                name="tf.frame_id",
+                type_=Parameter.Type.STRING,
+                value="base_link_stabilized_frd",
+            ),
+        )
+
+    def _set_params(self, clients, param):
+        """Need to publish base_link to gimbal(_0) transform to tf"""
+        for cli in clients:
             while not cli.wait_for_service(timeout_sec=1.0):
                 self.get_logger().info("Waiting for parameter service...")
 
             # Create request to set the parameter
             req = SetParameters.Request()
-            param = Parameter(
-                name=param_name, type_=Parameter.Type.BOOL, value=param_value
-            )
             req.parameters = [param.to_parameter_msg()]
 
             # Call the service to set the parameter
@@ -96,11 +106,9 @@ class BBoxNode(Node):
             rclpy.spin_until_future_complete(self, future)
 
             if future.result() is not None:
-                self.get_logger().info(
-                    f"Parameter {param_name} set successfully to {param_value}"
-                )
+                self.get_logger().info(f"Parameter {param} set successfully")
             else:
-                self.get_logger().error(f"Failed to set parameter {param_name}")
+                self.get_logger().error(f"Failed to set parameter {param}")
 
     def _nav_sat_fix_cb(self, msg: NavSatFix) -> None:
         """Callback for the global position message from the EKF"""
@@ -354,6 +362,7 @@ class BBoxNode(Node):
 
         :param msg: :class:`.GimbalDeviceAttitudeStatus` message from MAVROS
         """
+        self.publish_stabilized_base_link_frame(msg.header.stamp)
         self.fov_bounding_box
 
     @property
@@ -364,3 +373,54 @@ class BBoxNode(Node):
     )
     def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
         """Camera orientation from FCU, or None unknown"""
+
+    def publish_stabilized_base_link_frame(self, stamp) -> None:
+        """Publishes ``base_link_frd_stabilized`` tf frame
+
+        The MAVROS published gimbal_0 frame does not adjust for stabilization
+        (shows up wrong in RViz when vehicle has pitch or roll i.e. when flying
+        and not hovering for a copter type vehicle). The stabilized frame adjusts
+        for vehicle pitch and roll.
+
+        Assumes `GimbalDeviceAttitudeStatus` message `flags` value of
+        12 i.e. bit mask 1100 (horizon-locked pitch and roll, floating yaw).
+        """
+        try:
+            # Get the transform from map to base_link_frd
+            trans = self._tf_buffer.lookup_transform(
+                "map", "base_link", rclpy.time.Time()
+            )
+
+            # Extract the yaw from the transform
+            _, _, yaw = tf_transformations.euler_from_quaternion(
+                [
+                    trans.transform.rotation.x,
+                    trans.transform.rotation.y,
+                    trans.transform.rotation.z,
+                    trans.transform.rotation.w,
+                ]
+            )
+
+            # Create a new transform with only the yaw for map to
+            # base_link_frd_stabilized
+            now = rclpy.time.Time(seconds=stamp.sec, nanoseconds=stamp.nanosec)
+            new_trans = TransformStamped()
+            new_trans.header.stamp = now.to_msg()
+            new_trans.header.frame_id = "map"
+            new_trans.child_frame_id = "base_link_stabilized"
+            new_trans.transform.translation.x = trans.transform.translation.x
+            new_trans.transform.translation.y = trans.transform.translation.y
+            new_trans.transform.translation.z = trans.transform.translation.z
+
+            # Create a quaternion from the yaw
+            q = tf_transformations.quaternion_from_euler(0, 0, yaw)
+            new_trans.transform.rotation.x = q[0]
+            new_trans.transform.rotation.y = q[1]
+            new_trans.transform.rotation.z = q[2]
+            new_trans.transform.rotation.w = q[3]
+
+            # Publish the new transform
+            self._tf_broadcaster.sendTransform(new_trans)
+
+        except Exception as e:
+            self.get_logger().warn(f"Could not transform map to base_link: {e}")

@@ -162,7 +162,8 @@ class PoseNode(Node):
             qry = self._cv_bridge.imgmsg_to_cv2(
                 msg.query, desired_encoding="passthrough"
             )
-            qry = cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)
+            assert qry.ndim == 2
+            # qry = cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)
             ref = self._cv_bridge.imgmsg_to_cv2(msg.reference, desired_encoding="mono8")
             assert ref.ndim == 2 or ref.shape[2] == 1
             # reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2GRAY)

@@ -49,7 +49,6 @@
 
   <!-- need these to install things from setup.py -->
   <depend>python3-pip</depend>
-  <depend>libpq-dev</depend>
 
   <export>
     <build_type>ament_python</build_type>

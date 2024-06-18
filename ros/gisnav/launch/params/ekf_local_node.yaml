@@ -1,0 +1,34 @@
+robot_localization:
+  ekf_local_node:
+    ros__parameters:
+      odom_frame: "gisnav_odom"
+      base_link_frame: "gisnav_camera_link_optical"
+      world_frame: "gisnav_odom"
+      map_frame: "gisnav_map"
+
+      publish_tf: true
+
+      frequency: 5.0
+
+      # need predict_to_current_time if required output Hz is higher than input
+      #predict_to_current_time: true
+      sensor_timeout: 10.0
+      #pose0_queue_size: 20
+      #pose0_rejection_threshold: 2.0
+
+      #dynamic_process_noise_covariance: True
+      #transform_timeout: 0.200
+
+      use_sim_time: false
+      two_d_mode: false
+
+      # Fuse smooth relative pose estimated via VO differentially as velocity
+      pose0: "/gisnav/twist_node/pose"
+      pose0_config: [true, true, true,     # Position XYZ
+                     true, true, true,     # Orientation (roll, pitch, yaw)
+                     false, false, false,  # Velocity XYZ
+                     false, false, false,  # Angular rates XYZ
+                     false, false, false]  # Accelerations XYZ
+
+      #debug: true
+      #debug_out_file: "/home/hmakelin/robot_localization_debug.txt"

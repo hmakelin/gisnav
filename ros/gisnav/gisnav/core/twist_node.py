@@ -16,10 +16,10 @@ from typing import Optional, cast
 
 import cv2
 import numpy as np
+import rclpy
 import tf2_ros
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
-from gisnav_msgs.msg import MonocularStereoImage  # type: ignore[attr-defined]
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from sensor_msgs.msg import CameraInfo, Image, TimeReference
@@ -28,16 +28,14 @@ from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
     MAVROS_TOPIC_TIME_REFERENCE,
-    ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
+    ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_MATCHES_IMAGE,
     ROS_TOPIC_RELATIVE_POSE,
     ROS_TOPIC_RELATIVE_POSITION_IMAGE,
-    ROS_TOPIC_RELATIVE_TWIST_IMAGE,
-    STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
+from ._shared import compute_pose, visualize_matches_and_pose
 
 
 class TwistNode(Node):
@@ -61,13 +59,6 @@ class TwistNode(Node):
 
         self._cv_bridge = CvBridge()
 
-        # initialize subscriptions
-        self.camera_info
-        self.time_reference
-        self.twist_image
-        # initialize publisher (for launch tests)
-        self.pose
-
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
         self._orb = cv2.ORB_create()
@@ -83,6 +74,15 @@ class TwistNode(Node):
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+
+        # Cached reference image for visual odometry
+        self._cached_reference: Optional[Image] = None
+
+        # initialize subscriptions
+        self.camera_info
+        self.time_reference
+        # initialize publisher (for launch tests)
+        self.pose
 
     @property
     @ROS.subscribe(
@@ -100,30 +100,41 @@ class TwistNode(Node):
     def camera_info(self) -> Optional[CameraInfo]:
         """Camera info including the intrinsics matrix, or None if unknown"""
 
-    def _twist_image_cb(self, msg: Image) -> None:
-        """Callback for :attr:`.twist_image` message"""
-        self.pose
+    def _image_cb(self, msg: Image) -> None:
+        """Callback for :attr:`.image` message"""
+        if self._cached_reference is not None:
+            self.pose
+        else:
+            self._cached_reference = msg
+
+    @property
+    @ROS.subscribe(
+        ROS_TOPIC_IMAGE,
+        QoSPresetProfiles.SENSOR_DATA.value,
+        callback=_image_cb,
+    )
+    def image(self) -> Optional[Image]:
+        """Subscribed raw image from vehicle camera, or None if unknown"""
 
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform(child_frame_id="camera_optical")
     def pose(self) -> Optional[PoseWithCovarianceStamped]:
-        """Camera pose in previous :term:`REP 105` ``camera_optical`` frame
+        """Camera pose in previous :term:`REP 105` ``gisnav_odom`` frame
 
-        This represents the relative 3D position and orientation of the  REP 105
-        ``camera_optical`` frame in its intrinsic frame in the REP 105 ``earth``
-        (ECEF) frame.
+        This is computed as the the relative 3D position and orientation of the
+        REP 105 ``camera_optical`` frame in its intrinsic frame from successive
+        camera images
         """
 
         @narrow_types(self)
         def _pose(
-            camera_info: CameraInfo, msg: MonocularStereoImage
+            camera_info: CameraInfo, query: Image, reference: Image
         ) -> Optional[PoseWithCovarianceStamped]:
-            qry = self._cv_bridge.imgmsg_to_cv2(msg.query, desired_encoding="mono8")
-            ref = self._cv_bridge.imgmsg_to_cv2(msg.reference, desired_encoding="mono8")
+            qry = self._cv_bridge.imgmsg_to_cv2(query, desired_encoding="mono8")
+            ref = self._cv_bridge.imgmsg_to_cv2(reference, desired_encoding="mono8")
 
             # find the keypoints and descriptors with ORB
             kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
@@ -187,7 +198,7 @@ class TwistNode(Node):
             ros_image = self._cv_bridge.cv2_to_imgmsg(image)
             self._position_publisher.publish(ros_image)
 
-            # TODO: scale position based on altitude here
+            # TODO 1: scale position based on altitude here
             #  Altitude can come from FCU EKF - no need to have tight coupling with
             #  PoseNode deep matching.
             # if isinstance(msg, MonocularStereoImage):
@@ -204,35 +215,50 @@ class TwistNode(Node):
             #        )
             #        return None
 
-            pose = tf_.create_pose_msg(
-                msg.query.header.stamp,
-                cast(FrameID, "camera_optical"),
+            pose_msg = tf_.create_pose_msg(
+                query.header.stamp,
+                cast(FrameID, "gisnav_camera_link_optical"),
                 r_inv,
                 camera_optical_position_in_world,
             )
-
-            if pose is not None:
-                pose_with_covariance = PoseWithCovariance(
-                    pose=pose.pose, covariance=COVARIANCE_LIST
-                )
-                pose_with_covariance = PoseWithCovarianceStamped(
-                    header=pose.header, pose=pose_with_covariance
-                )
-                return pose_with_covariance
-            else:
+            if pose_msg is None:
+                # TODO: handle better
                 return None
 
-        return _pose(self.camera_info, self.twist_image)
+            fx = camera_info.k[0]
+            pose_msg.pose.position.x -= camera_info.width / 2
+            pose_msg.pose.position.y -= camera_info.height / 2
+            pose_msg.pose.position.z += fx
 
-    @property
-    @ROS.subscribe(
-        f"/{ROS_NAMESPACE}"
-        f'/{ROS_TOPIC_RELATIVE_TWIST_IMAGE.replace("~", STEREO_NODE_NAME)}',
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_twist_image_cb,
-    )
-    def twist_image(self) -> Optional[MonocularStereoImage]:
-        """Aligned and cropped query and reference images from :class:`.StereoNode`
+            # TODO 2: convert to odom, if not odom, then set odom here
+            if self._tf_buffer.can_transform(
+                "gisnav_odom", "gisnav_camera_link_optical", reference.header.stamp
+            ):
+                # reftime = rclpy.time.Time(
+                #    seconds=reference.header.stamp.sec,
+                #    nanoseconds=reference.header.stamp.nanosec,
+                # )
+                pose_msg.header.stamp = reference.header.stamp
+                pose_msg = self._tf_buffer.transform(
+                    pose_msg, "gisnav_odom", rclpy.duration.Duration(seconds=10)
+                )
+                pose_msg.header.stamp = query.header.stamp
+            else:
+                pose_msg.header.stamp = query.header.stamp
+                pose_msg.header.frame_id = "gisnav_odom"
 
-        This image couple is used for visual odometry or "shallow" matching.
-        """
+            # TODO: use custom error model for VO
+            # pose_with_covariance = PoseWithCovariance(
+            #    pose=pose.pose, covariance=COVARIANCE_LIST
+            # )
+            # pose_with_covariance = PoseWithCovarianceStamped(
+            #    header=pose.header, pose=pose_with_covariance
+            # )
+            pose_with_covariance = PoseWithCovariance(pose=pose_msg.pose)
+            pose_with_covariance = PoseWithCovarianceStamped(
+                header=pose_msg.header, pose=pose_with_covariance
+            )
+            self._cached_reference = query
+            return pose_with_covariance
+
+        return _pose(self.camera_info, self.image, self._cached_reference)

@@ -86,10 +86,23 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="robot_localization",
-            name="ekf_node",
+            name="ekf_global_node",
             namespace="robot_localization",
             executable="ekf_node",
-            parameters=[os.path.join(package_share_dir, "launch/params/ekf_node.yaml")],
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/ekf_global_node.yaml")
+            ],
+        )
+    )
+    ld.add_action(
+        Node(
+            package="robot_localization",
+            name="ekf_local_node",
+            namespace="robot_localization",
+            executable="ekf_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/ekf_local_node.yaml")
+            ],
         )
     )
     ld.add_action(
@@ -125,15 +138,15 @@ def generate_launch_description():
             ],
         )
     )
-    # ld.add_action(
-    #    Node(
-    #        package=_PACKAGE_NAME,
-    #        name="twist_node",
-    #        namespace=_PACKAGE_NAME,
-    #        executable="twist_node",
-    #        parameters=[
-    #            os.path.join(package_share_dir, "launch/params/twist_node.yaml")
-    #        ],
-    #    )
-    # )
+    ld.add_action(
+        Node(
+            package=_PACKAGE_NAME,
+            name="twist_node",
+            namespace=_PACKAGE_NAME,
+            executable="twist_node",
+            parameters=[
+                os.path.join(package_share_dir, "launch/params/twist_node.yaml")
+            ],
+        )
+    )
     return ld

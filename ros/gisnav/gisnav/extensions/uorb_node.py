@@ -76,7 +76,9 @@ class UORBNode(Node):
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
-        self._publish(msg)
+        # TODO update - earth frame odometry no longer published by ekf
+        if msg.header.frame_id == "earth":
+            self._publish(msg)
 
     @property
     @ROS.subscribe(

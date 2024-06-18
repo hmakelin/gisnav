@@ -72,7 +72,7 @@ class TwistNode(Node):
             Image, ROS_TOPIC_RELATIVE_POSITION_IMAGE, 10
         )
 
-        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=30))
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         # Cached reference image for visual odometry
@@ -232,18 +232,24 @@ class TwistNode(Node):
 
             # TODO 2: convert to odom, if not odom, then set odom here
             if self._tf_buffer.can_transform(
-                "gisnav_odom", "gisnav_camera_link_optical", reference.header.stamp
+                "gisnav_odom", "gisnav_camera_link_optical", rclpy.time.Time()
             ):
-                # reftime = rclpy.time.Time(
-                #    seconds=reference.header.stamp.sec,
-                #    nanoseconds=reference.header.stamp.nanosec,
-                # )
                 pose_msg.header.stamp = reference.header.stamp
-                pose_msg = self._tf_buffer.transform(
-                    pose_msg, "gisnav_odom", rclpy.duration.Duration(seconds=10)
-                )
+                try:
+                    pose_msg = self._tf_buffer.transform(pose_msg, "gisnav_odom")
+                except tf2_ros.ExtrapolationException:
+                    self.get_logger().warning(
+                        "Could not extrapolate odom frame - skipping publishing this "
+                        "one."
+                    )
+                    return None
+
                 pose_msg.header.stamp = query.header.stamp
             else:
+                self.get_logger().warning(
+                    "Could not find transform from camera_link_optical to odom "
+                    "- resetting odom frame."
+                )
                 pose_msg.header.stamp = query.header.stamp
                 pose_msg.header.frame_id = "gisnav_odom"
 

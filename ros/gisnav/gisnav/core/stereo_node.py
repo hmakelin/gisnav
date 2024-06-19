@@ -2,8 +2,7 @@
 synthetic query and reference stereo image couple.
 
 Synthetic refers to the fact that no stereo camera is actually assumed or required.
-The reference can be an older image from the same monocular camera, or alternatively an
-aligned orthoimage and DEM raster from the GIS server.
+The reference os an aligned orthoimage and DEM raster from the GIS server.
 
 Alignment and cropping to the same dimension as the query image is done to the
 reference orthoimage by using information of the onboard camera resolution and the
@@ -19,11 +18,7 @@ import tf2_ros
 import tf_transformations
 from cv_bridge import CvBridge
 from geometry_msgs.msg import TransformStamped
-from gisnav_msgs.msg import (  # type: ignore[attr-defined]
-    MonocularStereoImage,
-    OrthoImage,
-    OrthoStereoImage,
-)
+from gisnav_msgs.msg import OrthoImage, OrthoStereoImage  # type: ignore[attr-defined]
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
@@ -39,7 +34,6 @@ from ..constants import (
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_POSE_IMAGE,
-    ROS_TOPIC_RELATIVE_TWIST_IMAGE,
 )
 
 
@@ -72,7 +66,6 @@ class StereoNode(Node):
         # setup publisher to pass launch test without image callback being
         # triggered
         self.pose_image
-        self.twist_image
 
         # Initialize the transform broadcaster and listener
         self._tf_buffer = tf2_ros.Buffer()
@@ -111,8 +104,6 @@ class StereoNode(Node):
     def _image_cb(self, msg: Image) -> None:
         """Callback for :attr:`.image` message"""
         self.pose_image  # publish rotated and cropped orthoimage stack
-
-        self.twist_image  # publish two subsequent images for VO
 
         # TODO this is brittle - nothing is enforcing that this is assigned after
         #  publishing stereo_image
@@ -274,26 +265,9 @@ class StereoNode(Node):
             transform,
         )
 
-    @property
-    @ROS.publish(
-        ROS_TOPIC_RELATIVE_TWIST_IMAGE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def twist_image(self) -> Optional[MonocularStereoImage]:
-        """Published stereo couple image consisting of query image and reference image
-
-        Used for visual odometry and specifically velocity estimation
-        """
-
-        @narrow_types(self)
-        def _stereo_image(qry: Image, ref: Image) -> Optional[MonocularStereoImage]:
-            return MonocularStereoImage(query=qry, reference=ref)
-
-        return _stereo_image(qry=self.image, ref=self.previous_image)
-
-    # @staticmethod
+    @staticmethod
     def _rotate_and_crop_center(
-        self, image: np.ndarray, angle_degrees: float, shape: Tuple[int, int]
+        image: np.ndarray, angle_degrees: float, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Rotates an image around its center axis and then crops it to the
         specified shape.

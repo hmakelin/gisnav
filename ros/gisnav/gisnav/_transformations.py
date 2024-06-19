@@ -448,3 +448,30 @@ def create_identity_pose_stamped(x, y, z):
     pose_stamped.pose.orientation.w = 1.0
 
     return pose_stamped
+
+
+def angle_off_nadir(quaternion):
+    """Angle off nadir in radians"""
+    # Convert quaternion to a rotation matrix
+    rotation_matrix = tf_transformations.quaternion_matrix(quaternion)[:3, :3]
+
+    # Camera's forward direction in the camera frame (assuming camera facing
+    # positive x-axis)
+    camera_forward = np.array([1, 0, 0])
+
+    # Transform the camera's forward direction to the base frame
+    camera_forward_base = np.dot(rotation_matrix, camera_forward)
+
+    # Nadir direction in the base frame (assuming nadir is negative z-axis
+    # in base frame)
+    nadir_direction = np.array([0, 0, -1])
+
+    # Calculate the angle between the forward vector and nadir direction
+    cos_theta = np.dot(camera_forward_base, nadir_direction) / (
+        np.linalg.norm(camera_forward_base) * np.linalg.norm(nadir_direction)
+    )
+    angle_off_nadir = np.arccos(
+        np.clip(cos_theta, -1.0, 1.0)
+    )  # Clip to handle numerical inaccuracies
+
+    return angle_off_nadir

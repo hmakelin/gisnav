@@ -157,7 +157,7 @@ class TwistNode(Node):
                     good,
                 )
             )
-            if mkps is None:
+            if mkps is None or len(mkps) == 0:
                 # TODO: log here
                 return None
 
@@ -201,19 +201,43 @@ class TwistNode(Node):
             # TODO 1: scale position based on altitude here
             #  Altitude can come from FCU EKF - no need to have tight coupling with
             #  PoseNode deep matching.
-            # if isinstance(msg, MonocularStereoImage):
-            #    scaling = self._scaling_buffer.interpolate(
-            #        tf_.usec_from_header(msg.query.header)
-            #    )
-            #    if scaling is not None:
-            #        camera_optical_position_in_world = (
-            #            camera_optical_position_in_world * scaling
-            #        )
-            #    else:
-            #        self.get_logger().debug(
-            #            "No scaling availble for VO - will not return VO pose"
-            #        )
-            #        return None
+            assert self._hfov is not None  # we have camera info
+            maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
+            angle_off_nadir: Optional[float] = None
+            try:
+                transform = self._tf_buffer.lookup_transform(
+                    "base_link_stabilized", "camera_frd", rclpy.time.Time()
+                )
+                rotation = transform.transform.rotation
+                quaternion = (rotation.x, rotation.y, rotation.z, rotation.w)
+                angle_off_nadir = tf_.angle_off_nadir(quaternion)
+            except Exception as e:
+                self.get_logger().warn(f"Could not get transform: {e}")
+                return None
+
+            if angle_off_nadir > maximum_pitch_before_horizon_visible:
+                self.get_logger().warning(
+                    f"Angle off nadir: {np.degrees(angle_off_nadir)} degrees, "
+                    f"max angle {np.degrees(maximum_pitch_before_horizon_visible)}. "
+                    f"Scale for monocular VO could be inaccurate."
+                )
+                # return None
+
+            assert angle_off_nadir is not None
+            # TODO: get a better estimate of distance to ground
+            distance_to_ground_transform = self._tf_buffer.lookup_transform(
+                "map", "base_link", rclpy.time.Time()
+            )
+            distance_to_ground = distance_to_ground_transform.transform.translation.z
+            # TODO: handle infinity here
+            distance_to_ground_along_optical_axis = distance_to_ground / np.cos(
+                angle_off_nadir
+            )
+            fx = camera_info.k[0]
+            scaling = np.abs(distance_to_ground_along_optical_axis / fx)
+            camera_optical_position_in_world = (
+                camera_optical_position_in_world * scaling
+            )
 
             pose_msg = tf_.create_pose_msg(
                 query.header.stamp,
@@ -226,9 +250,9 @@ class TwistNode(Node):
                 return None
 
             fx = camera_info.k[0]
-            pose_msg.pose.position.x -= camera_info.width / 2
-            pose_msg.pose.position.y -= camera_info.height / 2
-            pose_msg.pose.position.z += fx
+            pose_msg.pose.position.x -= scaling * camera_info.width / 2
+            pose_msg.pose.position.y -= scaling * camera_info.height / 2
+            pose_msg.pose.position.z += scaling * fx
 
             # TODO 2: convert to odom, if not odom, then set odom here
             if self._tf_buffer.can_transform(
@@ -268,3 +292,19 @@ class TwistNode(Node):
             return pose_with_covariance
 
         return _pose(self.camera_info, self.image, self._cached_reference)
+
+    @property
+    def _hfov(self) -> Optional[float]:
+        """Horizontal field of view in radians"""
+
+        @narrow_types(self)
+        def _hfov(camera_info: CameraInfo) -> Optional[float]:
+            # Extract the focal length in the x direction from the intrinsics matrix
+            fx = self.camera_info.k[0]
+
+            # Calculate the horizontal field of view (HFOV)
+            hfov = 2 * np.arctan(self.camera_info.width / (2 * fx))
+
+            return hfov
+
+        return _hfov(self.camera_info)

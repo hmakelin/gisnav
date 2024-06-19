@@ -52,19 +52,9 @@ ROS_TOPIC_RELATIVE_POSE_IMAGE: Final = "~/pose_image"
 :attr:`.StereoNode.pose_image`.
 """
 
-ROS_TOPIC_RELATIVE_TWIST_IMAGE: Final = "~/twist_image"
-"""Relative topic into which :class:`.StereoNode` publishes
-:attr:`.StereoNode.twist_image`.
-"""
-
 ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
 """Relative topic into which :class:`.PoseNode` publishes
 :attr:`.PoseNode.pose`.
-
-"""
-ROS_TOPIC_RELATIVE_QUERY_TWIST: Final = "~/vo/twist"
-"""Relative topic into which :class:`.PoseNode` publishes
-:attr:`.PoseNode.camera_optical_twist_in_camera_optical_frame`.
 """
 
 MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"

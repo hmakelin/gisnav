@@ -34,18 +34,17 @@ def launch_setup(context, *args, **kwargs):
     actions = []
 
     if protocol == "uorb":
-        pass
-        # actions.append(
-        #    Node(
-        #        package=_PACKAGE_NAME,
-        #        executable="uorb_node",
-        #        name="uorb_node",
-        #        namespace=_PACKAGE_NAME,
-        #        parameters=[
-        #            os.path.join(package_share_dir, "launch/params/uorb_node.yaml")
-        #        ],
-        #    )
-        # )
+        actions.append(
+            Node(
+                package=_PACKAGE_NAME,
+                executable="uorb_node",
+                name="uorb_node",
+                namespace=_PACKAGE_NAME,
+                parameters=[
+                    os.path.join(package_share_dir, "launch/params/uorb_node.yaml")
+                ],
+            )
+        )
     elif protocol == "nmea":
         actions.append(
             Node(

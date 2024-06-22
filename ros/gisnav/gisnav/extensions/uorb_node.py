@@ -8,7 +8,7 @@ import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import PoseStamped, Vector3Stamped
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -76,9 +76,7 @@ class UORBNode(Node):
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
-        # TODO update - earth frame odometry no longer published by ekf
-        if msg.header.frame_id == "earth":
-            self._publish(msg)
+        self._publish(msg)
 
     @property
     @ROS.subscribe(
@@ -94,6 +92,27 @@ class UORBNode(Node):
         @narrow_types(self)
         def _publish_inner(odometry: Odometry) -> None:
             pose = odometry.pose.pose
+
+            # todo use odometry timestamp
+            if self._tf_buffer.can_transform(
+                odometry.header.frame_id, "earth", rclpy.time.Time()
+            ):
+                # Convert pose from (likely gisnav_map frame) to earth frame
+                # TODO lookup tf directly, do not check with can transform,
+                #  handle exception
+                transform = self._tf_buffer.lookup_transform(
+                    odometry.header.frame_id, "earth", rclpy.time.Time()
+                )
+                pose = self._tf_buffer.transform(
+                    PoseStamped(header=transform.header, pose=pose), "earth"
+                )
+            else:
+                self.get_logger().info(
+                    f"Cannot transform {odometry.header.frame_id} to earth frame"
+                )
+                return None
+
+            pose = pose.pose
             # WGS 84 longitude and latitude, and AGL altitude in meters
             # TODO: this is alt above ellipsoid, not agl
             lon, lat, alt_agl = tf_.ecef_to_wgs84(
@@ -141,6 +160,7 @@ class UORBNode(Node):
 
             # TODO: should be able to use the stamp here or extrapolate? instead
             #  of getting latest
+            # TODO: use gisnav frames?
             transform = tf_.get_transform(
                 self,
                 "map",
@@ -168,7 +188,7 @@ class UORBNode(Node):
             # TODO: should be able to use the stamp here or extrapolate? instead
             #  of getting latest
             transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", rclpy.time.Time()  # odometry.header.stamp
+                self, "gisnav_map", "earth", rclpy.time.Time()  # odometry.header.stamp
             )
 
             if transform_earth_to_map is None:

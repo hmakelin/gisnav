@@ -186,6 +186,18 @@ def pose_to_transform(
     return transform_stamped
 
 
+def transform_to_pose(
+    transform_stamped_msg: TransformStamped,
+) -> PoseStamped:
+    pose_stamped = PoseStamped()
+    pose_stamped.header = transform_stamped_msg.header
+    pose_stamped.pose.position.x = transform_stamped_msg.transform.translation.x
+    pose_stamped.pose.position.y = transform_stamped_msg.transform.translation.y
+    pose_stamped.pose.position.z = transform_stamped_msg.transform.translation.z
+    pose_stamped.pose.orientation = transform_stamped_msg.transform.rotation
+    return pose_stamped
+
+
 def get_transform(
     node: Node, target_frame: FrameID, source_frame: FrameID, stamp: Time
 ) -> TransformStamped:
@@ -475,3 +487,69 @@ def angle_off_nadir(quaternion):
     )  # Clip to handle numerical inaccuracies
 
     return angle_off_nadir
+
+
+def add_transform_stamped(
+    transform1: TransformStamped, transform2: TransformStamped
+) -> TransformStamped:
+    # Convert the TransformStamped objects to transformation matrices
+    transform1_matrix = tf_transformations.concatenate_matrices(
+        tf_transformations.translation_matrix(
+            (
+                transform1.transform.translation.x,
+                transform1.transform.translation.y,
+                transform1.transform.translation.z,
+            )
+        ),
+        tf_transformations.quaternion_matrix(
+            (
+                transform1.transform.rotation.x,
+                transform1.transform.rotation.y,
+                transform1.transform.rotation.z,
+                transform1.transform.rotation.w,
+            )
+        ),
+    )
+
+    transform2_matrix = tf_transformations.concatenate_matrices(
+        tf_transformations.translation_matrix(
+            (
+                transform2.transform.translation.x,
+                transform2.transform.translation.y,
+                transform2.transform.translation.z,
+            )
+        ),
+        tf_transformations.quaternion_matrix(
+            (
+                transform2.transform.rotation.x,
+                transform2.transform.rotation.y,
+                transform2.transform.rotation.z,
+                transform2.transform.rotation.w,
+            )
+        ),
+    )
+
+    # Multiply the transformation matrices to get the composed transformation
+    combined_matrix = tf_transformations.concatenate_matrices(
+        transform1_matrix, transform2_matrix
+    )
+
+    # Extract the translation and rotation from the combined matrix
+    translation = tf_transformations.translation_from_matrix(combined_matrix)
+    rotation = tf_transformations.quaternion_from_matrix(combined_matrix)
+
+    # Create a new TransformStamped object for the result
+    combined_transform = TransformStamped()
+    combined_transform.header.stamp = rclpy.clock.Clock().now().to_msg()
+    combined_transform.header.frame_id = transform1.header.frame_id
+    combined_transform.child_frame_id = transform2.child_frame_id
+
+    combined_transform.transform.translation.x = translation[0]
+    combined_transform.transform.translation.y = translation[1]
+    combined_transform.transform.translation.z = translation[2]
+    combined_transform.transform.rotation.x = rotation[0]
+    combined_transform.transform.rotation.y = rotation[1]
+    combined_transform.transform.rotation.z = rotation[2]
+    combined_transform.transform.rotation.w = rotation[3]
+
+    return combined_transform

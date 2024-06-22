@@ -88,7 +88,7 @@ def generate_launch_description():
             package="robot_localization",
             name="ekf_global_node",
             namespace="robot_localization",
-            executable="ekf_node",
+            executable="ukf_node",
             parameters=[
                 os.path.join(package_share_dir, "launch/params/ekf_global_node.yaml")
             ],

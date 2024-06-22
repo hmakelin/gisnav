@@ -12,11 +12,16 @@ from typing import Optional, cast
 
 import cv2
 import numpy as np
+import rclpy
 import tf2_ros
 import tf_transformations
 import torch
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
+from geometry_msgs.msg import (
+    PoseWithCovariance,
+    PoseWithCovarianceStamped,
+    TransformStamped,
+)
 from gisnav_msgs.msg import OrthoStereoImage  # type: ignore[attr-defined]
 from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
@@ -37,7 +42,7 @@ from ..constants import (
     STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
+from ._shared import compute_pose, visualize_matches_and_pose
 
 
 class PoseNode(Node):
@@ -105,6 +110,10 @@ class PoseNode(Node):
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+        self._tf_broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self)
+        self._tf_static_broadcaster = (
+            tf2_ros.static_transform_broadcaster.StaticTransformBroadcaster(self)
+        )
 
     def _set_initial_pose(self, pose):
         if not self._pose_sent:
@@ -141,7 +150,6 @@ class PoseNode(Node):
         ROS_TOPIC_RELATIVE_POSE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    @ROS.transform(child_frame_id="camera_optical")
     def pose(self) -> Optional[PoseWithCovarianceStamped]:
         """Camera pose in :term:`REP 105` ``earth`` frame
 
@@ -265,12 +273,63 @@ class PoseNode(Node):
             q = tf_transformations.quaternion_from_matrix(r_ecef)
             pose.pose.orientation = tf_.as_ros_quaternion(np.array(q))
 
+            # todo add functions for transforms arithmetic and clean up this whole
+            #  section
+            earth_to_gisnav_camera_optical = tf_.pose_to_transform(
+                pose, "gisnav_camera_link_optical"
+            )
+
+            if self._tf_buffer.can_transform(
+                "gisnav_camera_link_optical", "gisnav_odom", rclpy.time.Time()
+            ):
+                gisnav_camera_optical_to_gisnav_odom = self._tf_buffer.lookup_transform(
+                    "gisnav_camera_link_optical", "gisnav_odom", rclpy.time.Time()
+                )
+                earth_to_gisnav_odom = tf_.add_transform_stamped(
+                    earth_to_gisnav_camera_optical, gisnav_camera_optical_to_gisnav_odom
+                )
+
+                if not self._tf_buffer.can_transform(
+                    "earth", "gisnav_map", rclpy.time.Time()
+                ):
+                    earth_to_gisnav_map = earth_to_gisnav_odom
+                    earth_to_gisnav_map.header.frame_id = "earth"
+                    earth_to_gisnav_map.child_frame_id = "gisnav_map"
+                    self._tf_static_broadcaster.sendTransform([earth_to_gisnav_map])
+
+                    # identity transform
+                    gisnav_map_to_gisnav_odom = TransformStamped()
+                    gisnav_map_to_gisnav_odom.header.stamp = pose.header.stamp
+                    gisnav_map_to_gisnav_odom.header.frame_id = "gisnav_map"
+                    gisnav_map_to_gisnav_odom.child_frame_id = "gisnav_odom"
+
+                    # TODO implement better, no need to return None here, we can publish
+                    return None
+
+                gisnav_map_to_earth = self._tf_buffer.lookup_transform(
+                    "gisnav_map", "earth", rclpy.time.Time()
+                )
+                gisnav_map_to_camera_link_optical = tf_.add_transform_stamped(
+                    gisnav_map_to_earth, earth_to_gisnav_camera_optical
+                )
+                pose_msg = tf_.transform_to_pose(gisnav_map_to_camera_link_optical)
+                pose_msg.header.frame_id = "gisnav_map"
+            else:
+                self.get_logger().warning(
+                    "Odom frame likely not yet initialized, skpping publishing global "
+                    "pose"
+                )
+                return None
+
+            assert pose_msg is not None
+
+            # TODO: re-enable covariance/implement error model
             pose_with_covariance = PoseWithCovariance(
-                pose=pose.pose, covariance=COVARIANCE_LIST
+                pose=pose_msg.pose  # , covariance=COVARIANCE_LIST
             )
 
             pose_with_covariance = PoseWithCovarianceStamped(
-                header=pose.header, pose=pose_with_covariance
+                header=pose_msg.header, pose=pose_with_covariance
             )
 
             return pose_with_covariance

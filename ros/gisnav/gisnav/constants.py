@@ -99,6 +99,9 @@ FrameID = Literal[
     "camera_optical",
     "map",
     "earth",
+    "gisnav_map",
+    "gisnav_odom",
+    "gisnav_camera_link_optical",
 ]
 """Allowed ROS message header ``frame_id`` as specified in REP 103 and
 REP 105. The ``odom`` frame is not used by GISNav but may be published e.g. by

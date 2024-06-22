@@ -1,23 +1,23 @@
 robot_localization:
   ekf_global_node:
     ros__parameters:
-      odom_frame: "odom"
-      base_link_frame: "camera_optical"
-      world_frame: "earth"
-      map_frame: "earth"
+      odom_frame: "gisnav_odom"
+      base_link_frame: "gisnav_camera_link_optical"
+      world_frame: "gisnav_map"
+      map_frame: "gisnav_map"
 
-      #publish_tf: true
+      publish_tf: true
 
-      frequency: 10.0
+      frequency: 5.0
 
       # need predict_to_current_time if required output Hz is higher than input
       #predict_to_current_time: true
       sensor_timeout: 10.0
       #pose0_queue_size: 20
-      pose0_rejection_threshold: 2.0
+      #pose0_rejection_threshold: 2.0
 
-      dynamic_process_noise_covariance: True
-      transform_timeout: 0.200
+      #dynamic_process_noise_covariance: True
+      #transform_timeout: 0.200
 
       use_sim_time: false
       two_d_mode: false
@@ -27,10 +27,9 @@ robot_localization:
       #print_diagnostics: true
 
       # Fuse absolute pose estimated from map rasters
-      # TODO: enable orientation fusion
       pose0: "/gisnav/pose_node/pose"
       pose0_config: [true, true, true,     # Position XYZ
-                     false, false, false, #true, true, true,     # Orientation (roll, pitch, yaw)
+                     true, true, true,     # Orientation (roll, pitch, yaw)
                      false, false, false,  # Velocity XYZ
                      false, false, false,  # Angular rates XYZ
                      false, false, false]  # Accelerations XYZ

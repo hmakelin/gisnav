@@ -194,13 +194,13 @@ class TwistNode(Node):
             # Publish camera position in world frame to ROS for debugging
             x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
             x, y = int(x), int(y)
-            image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
-            ros_image = self._cv_bridge.cv2_to_imgmsg(image)
-            self._position_publisher.publish(ros_image)
+            try:
+                image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
+                ros_image = self._cv_bridge.cv2_to_imgmsg(image)
+                self._position_publisher.publish(ros_image)
+            except cv2.error as e:
+                self.get_logger().info(f"Could not draw camera position: {e}")
 
-            # TODO 1: scale position based on altitude here
-            #  Altitude can come from FCU EKF - no need to have tight coupling with
-            #  PoseNode deep matching.
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
             angle_off_nadir: Optional[float] = None
@@ -254,11 +254,11 @@ class TwistNode(Node):
             pose_msg.pose.position.y -= scaling * camera_info.height / 2
             pose_msg.pose.position.z += scaling * fx
 
-            # TODO 2: convert to odom, if not odom, then set odom here
             if self._tf_buffer.can_transform(
                 "gisnav_odom", "gisnav_camera_link_optical", rclpy.time.Time()
             ):
                 pose_msg.header.stamp = reference.header.stamp
+
                 try:
                     pose_msg = self._tf_buffer.transform(pose_msg, "gisnav_odom")
                 except tf2_ros.ExtrapolationException:
@@ -276,6 +276,20 @@ class TwistNode(Node):
                 )
                 pose_msg.header.stamp = query.header.stamp
                 pose_msg.header.frame_id = "gisnav_odom"
+
+            # report base_link pose instead of camera frame pose
+            # (fix difference in orientation)
+            # reftime = rclpy.time.Time(
+            #    seconds=pose_msg.header.stamp.sec,
+            #    nanoseconds=pose_msg.header.stamp.nanosec,
+            # )
+            # todo use reftime
+            transform = self._tf_buffer.lookup_transform(
+                "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
+            )  # reftime)
+            transform = tf_.add_transform_stamped(pose_msg, transform)
+            pose_msg.pose.orientation = transform.transform.rotation
+            pose_msg.header.frame_id = "gisnav_odom"
 
             # TODO: use custom error model for VO
             # pose_with_covariance = PoseWithCovariance(

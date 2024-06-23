@@ -69,7 +69,7 @@ class BBoxNode(Node):
             SetParameters, "/mavros/gimbal_control/set_parameters"
         )
         self._set_params_cli_local_position = self.create_client(
-            SetParameters, "/mavros/local_position/set_parameters"
+            SetParameters, "/mavros/global_position/set_parameters"
         )
         self._set_params(
             (self._set_params_cli_local_position, self._set_params_cli_gimbal_control),
@@ -362,7 +362,8 @@ class BBoxNode(Node):
 
         :param msg: :class:`.GimbalDeviceAttitudeStatus` message from MAVROS
         """
-        self.publish_stabilized_base_link_frame(msg.header.stamp)
+        self._publish_stabilized_base_link_frame(msg.header.stamp)
+        self._publish_for_gisnav_frames()
         self.fov_bounding_box
 
     @property
@@ -374,7 +375,7 @@ class BBoxNode(Node):
     def gimbal_device_attitude_status(self) -> Optional[GimbalDeviceAttitudeStatus]:
         """Camera orientation from FCU, or None unknown"""
 
-    def publish_stabilized_base_link_frame(self, stamp) -> None:
+    def _publish_stabilized_base_link_frame(self, stamp) -> None:
         """Publishes ``base_link_frd_stabilized`` tf frame
 
         The MAVROS published gimbal_0 frame does not adjust for stabilization
@@ -424,3 +425,23 @@ class BBoxNode(Node):
 
         except Exception as e:
             self.get_logger().warn(f"Could not transform map to base_link: {e}")
+
+    def _publish_for_gisnav_frames(self) -> None:
+        """Publishes gisnav_base_link to gisnav_camera_link transform"""
+
+        try:
+            transform = self._tf_buffer.lookup_transform(
+                "base_link", "camera", rclpy.time.Time()
+            )
+            transform.header.frame_id = "gisnav_base_link"
+            transform.child_frame_id = "gisnav_camera_link"
+            self._tf_broadcaster.sendTransform(transform)
+        except (
+            tf2_ros.LookupException,
+            tf2_ros.ConnectivityException,
+            tf2_ros.ExtrapolationException,
+        ) as e:
+            self.get_logger().warning(
+                f"Could not publish gisnav_base_link to gisnav_camera_link due "
+                f"to exception: {e}"
+            )

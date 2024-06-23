@@ -490,23 +490,34 @@ def angle_off_nadir(quaternion):
 
 
 def add_transform_stamped(
-    transform1: TransformStamped, transform2: TransformStamped
+    transform1: Union[TransformStamped, PoseStamped], transform2: TransformStamped
 ) -> TransformStamped:
     # Convert the TransformStamped objects to transformation matrices
+    translation1 = (
+        transform1.transform.translation
+        if isinstance(transform1, TransformStamped)
+        else transform1.pose.position
+    )
+    rotation1 = (
+        transform1.transform.rotation
+        if isinstance(transform1, TransformStamped)
+        else transform1.pose.orientation
+    )
+
     transform1_matrix = tf_transformations.concatenate_matrices(
         tf_transformations.translation_matrix(
             (
-                transform1.transform.translation.x,
-                transform1.transform.translation.y,
-                transform1.transform.translation.z,
+                translation1.x,
+                translation1.y,
+                translation1.z,
             )
         ),
         tf_transformations.quaternion_matrix(
             (
-                transform1.transform.rotation.x,
-                transform1.transform.rotation.y,
-                transform1.transform.rotation.z,
-                transform1.transform.rotation.w,
+                rotation1.x,
+                rotation1.y,
+                rotation1.z,
+                rotation1.w,
             )
         ),
     )

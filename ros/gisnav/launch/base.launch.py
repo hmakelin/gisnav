@@ -35,6 +35,23 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
+            name="gisnav_camera_optical_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "1.571",
+                "0",
+                "1.571",
+                "gisnav_camera_link_frd",
+                "gisnav_camera_link_optical",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
             name="camera_frd_static_broadcaster",
             arguments=[
                 "0",
@@ -48,7 +65,6 @@ def generate_launch_description():
             ],
         ),
     )
-    # this FLU i.e. REP 103 standard body-relative frame
     ld.add_action(
         Node(
             package="tf2_ros",
@@ -63,6 +79,23 @@ def generate_launch_description():
                 "3.141",
                 "camera",
                 "camera_frd",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="camera_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "3.141",
+                "gisnav_camera_link",
+                "gisnav_camera_link_frd",
             ],
         ),
     )

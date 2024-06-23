@@ -2,7 +2,7 @@ robot_localization:
   ekf_global_node:
     ros__parameters:
       odom_frame: "gisnav_odom"
-      base_link_frame: "gisnav_camera_link_optical"
+      base_link_frame: "gisnav_base_link"
       world_frame: "gisnav_map"
       map_frame: "gisnav_map"
 
@@ -34,8 +34,7 @@ robot_localization:
                      false, false, false,  # Angular rates XYZ
                      false, false, false]  # Accelerations XYZ
 
-      # TODO: re-enable fusing VO in global filter
-      # Fuse smooth relative pose estimated via VO differentially as velocity
+      # Fuse smooth relative pose estimated via VO
       #pose1: "/gisnav/twist_node/pose"
       #pose1_differential: true
       #pose1_config: [true, true, true,     # Position XYZ

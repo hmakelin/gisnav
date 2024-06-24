@@ -309,10 +309,18 @@ class PoseNode(Node):
                 gisnav_map_to_earth = self._tf_buffer.lookup_transform(
                     "gisnav_map", "earth", rclpy.time.Time()
                 )
+                gisnav_camera_optical_to_base_link = self._tf_buffer.lookup_transform(
+                    "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
+                )
                 gisnav_map_to_camera_link_optical = tf_.add_transform_stamped(
                     gisnav_map_to_earth, earth_to_gisnav_camera_optical
                 )
-                pose_msg = tf_.transform_to_pose(gisnav_map_to_camera_link_optical)
+                gisnav_map_to_base_link = tf_.add_transform_stamped(
+                    gisnav_map_to_camera_link_optical,
+                    gisnav_camera_optical_to_base_link,
+                )
+
+                pose_msg = tf_.transform_to_pose(gisnav_map_to_base_link)
                 pose_msg.header.frame_id = "gisnav_map"
             else:
                 self.get_logger().warning(

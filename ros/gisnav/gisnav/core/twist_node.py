@@ -284,9 +284,20 @@ class TwistNode(Node):
             #    nanoseconds=pose_msg.header.stamp.nanosec,
             # )
             # todo use reftime
-            transform = self._tf_buffer.lookup_transform(
-                "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
-            )  # reftime)
+            try:
+                transform = self._tf_buffer.lookup_transform(
+                    "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
+                )  # reftime)
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ) as e:
+                self.get_logger().warning(
+                    f"Could not transform from gisnav_camera_link_optical to "
+                    f"gisnav_base_link. Skipping publishing pose. {e}"
+                )
+                return None
             transform = tf_.add_transform_stamped(pose_msg, transform)
             pose_msg.pose.orientation = transform.transform.rotation
             pose_msg.header.frame_id = "gisnav_odom"

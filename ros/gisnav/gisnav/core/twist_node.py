@@ -77,6 +77,7 @@ class TwistNode(Node):
 
         # Cached reference image for visual odometry
         self._cached_reference: Optional[Image] = None
+        self._previous_image: Optional[Image] = None  # backup for cached reference
 
         # initialize subscriptions
         self.camera_info
@@ -106,6 +107,8 @@ class TwistNode(Node):
             self.pose
         else:
             self._cached_reference = msg
+
+        self._previous_image = msg
 
     @property
     @ROS.subscribe(
@@ -157,17 +160,16 @@ class TwistNode(Node):
                     good,
                 )
             )
-            if mkps is None or len(mkps) == 0:
-                # TODO: log here
+            if mkps is None or len(mkps) < self.MIN_MATCHES:
+                self.get_logger().debug(
+                    "Not enough matches - resetting reference frame"
+                )
+                self._cached_reference = self._previous_image
                 return None
 
             mkp_qry, mkp_ref = zip(*mkps)
             mkp_qry = np.array(mkp_qry)
             mkp_ref = np.array(mkp_ref)
-
-            if len(mkp_qry) < self.MIN_MATCHES:
-                self.get_logger().debug("Not enough matches - returning None")
-                return None
 
             pose = compute_pose(camera_info, mkp_qry, mkp_ref, np.zeros_like(qry))
             if pose is None:

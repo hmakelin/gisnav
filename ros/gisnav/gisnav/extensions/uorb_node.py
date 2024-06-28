@@ -76,7 +76,12 @@ class UORBNode(Node):
 
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
-        self._publish(msg)
+        if msg.header.frame_id == "gisnav_odom":
+            # Only publish mock GPS messages from VO odometry
+            # Using odometry derived from global EKF would greatly overestimate velocity
+            # because the map to odom transform jumps around - vehicle is not actually
+            # doing that.
+            self._publish(msg)
 
     @property
     @ROS.subscribe(
@@ -342,39 +347,45 @@ class UORBNode(Node):
         > Uses the release/1.14 tag version of :class:`px4_msgs.msg.SensorGps`
         """
         yaw_rad = np.radians(yaw_degrees)
-
         msg = SensorGps()
-        msg.timestamp = 0
-        msg.timestamp_sample = int(timestamp)
-        msg.device_id = 0
-        msg.fix_type = 3
-        msg.s_variance_m_s = s_variance_m_s
-        msg.c_variance_rad = cog_variance_rad
-        msg.lat = lat
-        msg.lon = lon
-        msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
-        msg.alt = int(altitude_amsl * 1e3)
-        msg.eph = eph
-        msg.epv = epv
-        msg.hdop = 0.0
-        msg.vdop = 0.0
-        msg.noise_per_ms = 0
-        msg.automatic_gain_control = 0
-        msg.jamming_state = 0  # 1 := OK, 0 := UNKNOWN
-        msg.jamming_indicator = 0
-        msg.spoofing_state = 0  # 1 := OK, 0 := UNKNOWN
-        msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
-        msg.vel_n_m_s = vel_n_m_s
-        msg.vel_e_m_s = vel_e_m_s
-        msg.vel_d_m_s = vel_d_m_s
-        msg.cog_rad = cog
-        msg.vel_ned_valid = True
-        msg.timestamp_time_relative = 0
-        msg.satellites_used = satellites_visible
-        msg.time_utc_usec = msg.timestamp_sample
-        msg.heading = float(yaw_rad)
-        msg.heading_offset = 0.0  # assume map frame is an ENU frame
-        msg.heading_accuracy = h_variance_rad
+
+        try:
+            msg.timestamp = 0
+            msg.timestamp_sample = int(timestamp)
+            msg.device_id = 0
+            msg.fix_type = 3
+            msg.s_variance_m_s = s_variance_m_s
+            msg.c_variance_rad = cog_variance_rad
+            msg.lat = lat
+            msg.lon = lon
+            msg.alt_ellipsoid = int(altitude_ellipsoid * 1e3)
+            msg.alt = int(altitude_amsl * 1e3)
+            msg.eph = eph
+            msg.epv = epv
+            msg.hdop = 0.0
+            msg.vdop = 0.0
+            msg.noise_per_ms = 0
+            msg.automatic_gain_control = 0
+            msg.jamming_state = 0  # 1 := OK, 0 := UNKNOWN
+            msg.jamming_indicator = 0
+            msg.spoofing_state = 0  # 1 := OK, 0 := UNKNOWN
+            msg.vel_m_s = np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2)
+            msg.vel_n_m_s = vel_n_m_s
+            msg.vel_e_m_s = vel_e_m_s
+            msg.vel_d_m_s = vel_d_m_s
+            msg.cog_rad = cog
+            msg.vel_ned_valid = True
+            msg.timestamp_time_relative = 0
+            msg.satellites_used = satellites_visible
+            msg.time_utc_usec = msg.timestamp_sample
+            msg.heading = float(yaw_rad)
+            msg.heading_offset = 0.0  # assume map frame is an ENU frame
+            msg.heading_accuracy = h_variance_rad
+        except AssertionError as e:
+            self.get_logger().warning(
+                f"Could not create mock GPS message due to exception: {e}"
+            )
+            msg = None
 
         return msg
 

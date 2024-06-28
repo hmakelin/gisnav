@@ -35,7 +35,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="gisnav_camera_optical_static_broadcaster",
+            name="gisnav_camera_link_optical_static_broadcaster",
             arguments=[
                 "0",
                 "0",
@@ -52,7 +52,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_frd_static_broadcaster",
+            name="camera_static_broadcaster",
             arguments=[
                 "0",
                 "0",
@@ -69,7 +69,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_static_broadcaster",
+            name="camera_frd_static_broadcaster",
             arguments=[
                 "0",
                 "0",
@@ -86,7 +86,7 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_static_broadcaster",
+            name="gisnav_camera_link_static_broadcaster",
             arguments=[
                 "0",
                 "0",
@@ -103,7 +103,24 @@ def generate_launch_description():
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
-            name="camera_static_broadcaster",
+            name="gisnav_map_ned_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "1.5707963267948966",  # yaw   (90 degrees in radians)
+                "0",  # pitch (0 degrees in radians)
+                "3.141592653589793",  # roll  (180 degrees in radians)
+                "gisnav_map",
+                "gisnav_map_ned",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="base_link_stabilized_frd_static_broadcaster",
             arguments=[
                 "0",
                 "0",

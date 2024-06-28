@@ -8,7 +8,7 @@ import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
-from geometry_msgs.msg import PoseStamped, Vector3Stamped
+from geometry_msgs.msg import PointStamped, PoseStamped, TwistWithCovariance, Vector3
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -157,39 +157,22 @@ class UORBNode(Node):
             epv = np.sqrt(z_var)
 
             # 3D velocity
-            # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
-            # z axis
-            # TODO: map is not published by GISNav - should use an ENU map frame
-            #  published by gisnav instead
-            twist = odometry.twist.twist
-
-            # TODO: should be able to use the stamp here or extrapolate? instead
-            #  of getting latest
-            # TODO: use gisnav frames?
-            transform = tf_.get_transform(
-                self,
-                "map",
-                "camera_optical",
-                rclpy.time.Time(),  # odometry.header.stamp
+            twist_with_covariance = odometry.twist
+            twist_with_covariance = self._transform_twist_with_covariance(
+                twist_with_covariance,
+                odometry.header.stamp,
+                "gisnav_base_link",
+                "gisnav_map_ned",
             )
-
-            # Need to convert linear twist vector to stamped version becase
-            # do_transform_vector3 expects stamped
-            vector_stamped = Vector3Stamped(header=odometry.header, vector=twist.linear)
-            vector_stamped.header.frame_id = odometry.child_frame_id
-            if transform is None:
-                # TODO: do this better
+            if twist_with_covariance is None:
+                self.get_logger().warning("Could not determine twist covariances")
                 return None
-            linear_enu = tf2_geometry_msgs.do_transform_vector3(
-                vector_stamped, transform
-            )
-            linear_enu = linear_enu.vector
-            vel_n_m_s = linear_enu.y
-            vel_e_m_s = linear_enu.x
-            vel_d_m_s = -linear_enu.z
+
+            vel_n_m_s = twist_with_covariance.twist.linear.x
+            vel_e_m_s = twist_with_covariance.twist.linear.y
+            vel_d_m_s = twist_with_covariance.twist.linear.z
 
             # Heading
-            # vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
             # TODO: should be able to use the stamp here or extrapolate? instead
             #  of getting latest
             transform_earth_to_map = tf_.get_transform(
@@ -224,7 +207,7 @@ class UORBNode(Node):
             )
 
             # Speed variance, assume no covariances
-            twist_cov = odometry.twist.covariance.reshape((6, 6))
+            twist_cov = twist_with_covariance.covariance.reshape((6, 6))
             # Twist in ENU -> remap to NED here by swapping x and y axes, z axis
             # inversion should not affect variance
             vel_n_m_s_var = twist_cov[1, 1]
@@ -420,3 +403,68 @@ class UORBNode(Node):
         _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
 
         return wgs84_elevation, msl_elevation
+
+    def _transform_twist_with_covariance(
+        self, twist_with_cov, stamp, from_frame, to_frame
+    ):
+        # Transform the linear component
+        point = PointStamped()
+        point.header.frame_id = from_frame
+        point.header.stamp = rclpy.time.Time().to_msg()  # stamp
+        point.point.x = twist_with_cov.twist.linear.x
+        point.point.y = twist_with_cov.twist.linear.y
+        point.point.z = twist_with_cov.twist.linear.z
+
+        try:
+            # Get the transformation matrix
+            transform = self._tf_buffer.lookup_transform(
+                to_frame, from_frame, rclpy.time.Time()
+            )
+            # Set transform linear component to zero, only use orientation since
+            # we are applying this to a velocity
+            transform.transform.translation = Vector3()
+            transformed_point = tf2_geometry_msgs.do_transform_point(point, transform)
+
+            quat = [
+                transform.transform.rotation.x,
+                transform.transform.rotation.y,
+                transform.transform.rotation.z,
+                transform.transform.rotation.w,
+            ]
+            # Get the rotation matrix from the quaternion
+            rot_matrix = tf_transformations.quaternion_matrix(quat)[
+                :3, :3
+            ]  # We only need the 3x3 rotation part
+
+            # The Jacobian for linear velocity is just the rotation matrix
+            J = rot_matrix
+
+            # Extract the linear velocity covariance (3x3)
+            linear_cov = np.array(twist_with_cov.covariance).reshape(6, 6)[:3, :3]
+
+            # Transform the covariance
+            transformed_linear_cov = J @ linear_cov @ J.T
+
+            # Create a new TwistWithCovariance
+            transformed_twist_with_cov = TwistWithCovariance()
+            transformed_twist_with_cov.twist.linear = Vector3(
+                x=transformed_point.point.x,
+                y=transformed_point.point.y,
+                z=transformed_point.point.z,
+            )
+            # Keep the original angular component
+            transformed_twist_with_cov.twist.angular = twist_with_cov.twist.angular
+
+            # Update the covariance
+            transformed_cov = np.zeros((6, 6))
+            transformed_cov[:3, :3] = transformed_linear_cov
+            transformed_cov[3:, 3:] = np.array(twist_with_cov.covariance).reshape(6, 6)[
+                3:, 3:
+            ]  # Keep original angular covariance
+            transformed_twist_with_cov.covariance = transformed_cov.flatten().tolist()
+
+            return transformed_twist_with_cov
+
+        except tf2_ros.TransformException as ex:
+            self.get_logger().error(f"Could not transform twist with covariance: {ex}")
+            return None

@@ -1,6 +1,6 @@
 """Helper functions for ROS messaging"""
 from collections import namedtuple
-from typing import Optional, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 import numpy as np
 import rclpy.time
@@ -15,7 +15,7 @@ from geometry_msgs.msg import (
     TransformStamped,
     TwistWithCovarianceStamped,
 )
-from pyproj import Proj, transform
+from pyproj import Proj, Transformer, transform
 from rclpy.node import Node
 from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
@@ -564,3 +564,49 @@ def add_transform_stamped(
     combined_transform.transform.rotation.w = rotation[3]
 
     return combined_transform
+
+
+def ecef_to_enu_heading(
+    ecef_x: float, ecef_y: float, ecef_z: float, orientation_quaternion: List[float]
+) -> float:
+    # Convert ECEF to geodetic (lat, lon, alt)
+    ecef_to_geodetic = Transformer.from_crs("EPSG:4978", "EPSG:4326", always_xy=True)
+    lon, lat, alt = ecef_to_geodetic.transform(ecef_x, ecef_y, ecef_z)
+
+    # Calculate rotation matrix from ECEF to ENU
+    sin_lat = np.sin(np.radians(lat))
+    cos_lat = np.cos(np.radians(lat))
+    sin_lon = np.sin(np.radians(lon))
+    cos_lon = np.cos(np.radians(lon))
+
+    rotation_ecef_to_enu = np.array(
+        [
+            [-sin_lon, cos_lon, 0],
+            [-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat],
+            [cos_lat * cos_lon, cos_lat * sin_lon, sin_lat],
+        ]
+    )
+
+    # Convert orientation quaternion to rotation matrix
+    rotation_base_link_to_ecef = tf_transformations.quaternion_matrix(
+        orientation_quaternion
+    )[:3, :3]
+
+    # Combine rotations: base_link to ECEF to ENU
+    rotation_base_link_to_enu = rotation_ecef_to_enu @ rotation_base_link_to_ecef
+
+    # Extract the heading (yaw) from the combined rotation matrix
+    heading = np.arctan2(
+        rotation_base_link_to_enu[0, 1], rotation_base_link_to_enu[1, 1]
+    )
+
+    # Re-center yaw origin to north (instead of east in ENU frame)
+    heading += np.pi / 2
+
+    # Convert heading to degrees
+    heading_degrees = np.degrees(heading)
+
+    # Normalize to 0-360 range
+    heading_degrees = (heading_degrees + 360) % 360
+
+    return heading_degrees

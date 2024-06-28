@@ -227,9 +227,18 @@ class TwistNode(Node):
 
             assert angle_off_nadir is not None
             # TODO: get a better estimate of distance to ground
-            distance_to_ground_transform = self._tf_buffer.lookup_transform(
-                "map", "base_link", rclpy.time.Time()
-            )
+            try:
+                distance_to_ground_transform = self._tf_buffer.lookup_transform(
+                    "map", "base_link", rclpy.time.Time()
+                )
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ) as e:
+                self.get_logger().warning(f"Cannot estimate scale for VO: {e}")
+                return None
+
             distance_to_ground = distance_to_ground_transform.transform.translation.z
             # TODO: handle infinity here
             distance_to_ground_along_optical_axis = distance_to_ground / np.cos(

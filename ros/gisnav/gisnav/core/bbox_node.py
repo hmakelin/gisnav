@@ -69,7 +69,7 @@ class BBoxNode(Node):
             SetParameters, "/mavros/gimbal_control/set_parameters"
         )
         self._set_params_cli_local_position = self.create_client(
-            SetParameters, "/mavros/global_position/set_parameters"
+            SetParameters, "/mavros/local_position/set_parameters"
         )
         self._set_params(
             (self._set_params_cli_local_position, self._set_params_cli_gimbal_control),

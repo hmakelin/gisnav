@@ -215,6 +215,7 @@ class UORBNode(Node):
                 yaw_rad = 2 * np.pi + yaw_rad
 
             # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before re-centering
+            yaw_rad += np.pi / 2
             vehicle_yaw_degrees = np.degrees(yaw_rad)
             vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
             # MAVLink yaw definition 0 := not available

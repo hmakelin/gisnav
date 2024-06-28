@@ -1,4 +1,13 @@
 #!/bin/bash
+# This script automatically manages raster files (such as TIFF, JP2, ECW, and IMG formats)
+# within a specified download directory (/etc/mapserver) for use with MapServer. It listens
+# for file creation, movement, and deletion events in the imagery and dem directories. When
+# a new ZIP file is added to either directory, the script unzips its contents into the same
+# directory and then removes the original ZIP file. If a raster file is added directly or
+# extracted from a ZIP file, the script regenerates a Virtual Raster (VRT) file to include
+# all raster files present in the directory.The script cleans up by removing the original
+# potential .zip files from the directories after extraction. This process ensures that
+# MapServer always serves the latest raster data available in the directories.
 set -e
 
 # Remove any stale PID or socket files before starting Apache

@@ -17,11 +17,7 @@ import tf2_ros
 import tf_transformations
 import torch
 from cv_bridge import CvBridge
-from geometry_msgs.msg import (
-    PoseWithCovariance,
-    PoseWithCovarianceStamped,
-    TransformStamped,
-)
+from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from gisnav_msgs.msg import OrthoStereoImage  # type: ignore[attr-defined]
 from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
@@ -282,26 +278,36 @@ class PoseNode(Node):
             if self._tf_buffer.can_transform(
                 "gisnav_camera_link_optical", "gisnav_odom", rclpy.time.Time()
             ):
-                gisnav_camera_optical_to_gisnav_odom = self._tf_buffer.lookup_transform(
-                    "gisnav_camera_link_optical", "gisnav_odom", rclpy.time.Time()
-                )
-                earth_to_gisnav_odom = tf_.add_transform_stamped(
-                    earth_to_gisnav_camera_optical, gisnav_camera_optical_to_gisnav_odom
-                )
-
                 if not self._tf_buffer.can_transform(
                     "earth", "gisnav_map", rclpy.time.Time()
                 ):
-                    earth_to_gisnav_map = earth_to_gisnav_odom
+                    try:
+                        camera_optical_to_map = self._tf_buffer.lookup_transform(
+                            "camera_optical", "map", rclpy.time.Time()
+                        )
+                    except (
+                        tf2_ros.LookupException,
+                        tf2_ros.ConnectivityException,
+                        tf2_ros.ExtrapolationException,
+                    ) as e:
+                        self.get_logger().warning(
+                            f"Could not transform from camera_optical to "
+                            f"map. Skipping publishing pose. {e}"
+                        )
+                        return None
+
+                    # Put gisnav_map roughly where (mavros_)map is, this should make it
+                    # ENU and thereby comply with REP 105. Assumes current
+                    # camera_optical to map transform from FCU via MAVROS is
+                    # sufficiently correct
+                    # TODO: implement without assumption FCU EKF has correct state
+                    #  estimate?
+                    earth_to_gisnav_map = tf_.add_transform_stamped(
+                        earth_to_gisnav_camera_optical, camera_optical_to_map
+                    )
                     earth_to_gisnav_map.header.frame_id = "earth"
                     earth_to_gisnav_map.child_frame_id = "gisnav_map"
                     self._tf_static_broadcaster.sendTransform([earth_to_gisnav_map])
-
-                    # identity transform
-                    gisnav_map_to_gisnav_odom = TransformStamped()
-                    gisnav_map_to_gisnav_odom.header.stamp = pose.header.stamp
-                    gisnav_map_to_gisnav_odom.header.frame_id = "gisnav_map"
-                    gisnav_map_to_gisnav_odom.child_frame_id = "gisnav_odom"
 
                     # TODO implement better, no need to return None here, we can publish
                     return None

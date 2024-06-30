@@ -108,9 +108,16 @@ class UORBNode(Node):
                 transform = self._tf_buffer.lookup_transform(
                     odometry.header.frame_id, "earth", rclpy.time.Time()
                 )
-                pose = self._tf_buffer.transform(
-                    PoseStamped(header=transform.header, pose=pose), "earth"
-                )
+                try:
+                    pose = self._tf_buffer.transform(
+                        PoseStamped(header=transform.header, pose=pose), "earth"
+                    )
+                except np.linalg.LinAlgError as e:
+                    self.get_logger().info(
+                        f"Cannot transform {odometry.header.frame_id} to earth frame: "
+                        f"{e}"
+                    )
+                    return None
             else:
                 self.get_logger().info(
                     f"Cannot transform {odometry.header.frame_id} to earth frame"

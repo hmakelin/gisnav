@@ -37,7 +37,7 @@ from ..constants import (
     STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import compute_pose, visualize_matches_and_pose
+from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
 
 
 class PoseNode(Node):
@@ -283,6 +283,7 @@ class PoseNode(Node):
                             "camera_optical",
                             "map",
                             query_time,
+                            rclpy.duration.Duration(seconds=0.1),
                         )
                     except (
                         tf2_ros.LookupException,
@@ -312,7 +313,10 @@ class PoseNode(Node):
                     return None
 
                 gisnav_map_to_earth = self._tf_buffer.lookup_transform(
-                    "gisnav_map", "earth", query_time
+                    "gisnav_map",
+                    "earth",
+                    query_time,
+                    rclpy.duration.Duration(seconds=0.1),
                 )
                 try:
                     gisnav_camera_optical_to_base_link = (
@@ -320,6 +324,7 @@ class PoseNode(Node):
                             "gisnav_camera_link_optical",
                             "gisnav_base_link",
                             query_time,
+                            rclpy.duration.Duration(seconds=0.1),
                         )
                     )
                 except (
@@ -354,7 +359,7 @@ class PoseNode(Node):
 
             # TODO: re-enable covariance/implement error model
             pose_with_covariance = PoseWithCovariance(
-                pose=pose_msg.pose  # , covariance=COVARIANCE_LIST
+                pose=pose_msg.pose, covariance=COVARIANCE_LIST
             )
 
             pose_with_covariance = PoseWithCovarianceStamped(

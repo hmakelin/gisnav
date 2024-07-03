@@ -10,9 +10,11 @@ static node entrypoints are defined here in the package root namespace.
 import cProfile
 import io
 import pstats
-from typing import Optional
+from threading import Thread
+from typing import Optional, Union
 
 import rclpy
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 
 from .constants import (
@@ -90,7 +92,7 @@ except ModuleNotFoundError as e:
 
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
-    """Spins up a ROS 2 node
+    """Spins up a ROS 2 node, using MultiThreadedExecutor for PoseNode
 
     :param constructor: Node constructor
     :param *args: Node constructor args
@@ -104,10 +106,33 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         profile = None
 
     node: Optional[Node] = None
+    executor: Optional[Union[MultiThreadedExecutor, SingleThreadedExecutor]] = None
+    spin_thread: Optional[Thread] = None
+
     try:
         rclpy.init()
         node = constructor(*args, **kwargs)
-        rclpy.spin(node)
+
+        if isinstance(node, PoseNode) or isinstance(node, TwistNode):
+            # We need to use a multi-threaded executor with PoseNode because when
+            # running keypoint matching on CPU (no GPU) the heavy processing prevents
+            # the tf buffer from receiving transforms in time, preventing matching
+            # transforms by correct timestamp. We also use this for TwistNode to ensure
+            # we have latest transformations in the buffer when needed.
+            executor = MultiThreadedExecutor()
+            executor.add_node(node)
+
+            spin_thread = Thread(target=executor.spin, daemon=True)
+            spin_thread.start()
+
+            # Keep the main thread alive
+            while rclpy.ok():
+                pass
+        else:
+            executor = SingleThreadedExecutor()
+            executor.add_node(node)
+            executor.spin()
+
     except KeyboardInterrupt as e:
         print(f"Keyboard interrupt received:\n{e}")
         if profile is not None:
@@ -120,6 +145,10 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             if node is not None:
                 node.get_logger().info(s.getvalue())
     finally:
+        if executor is not None:
+            executor.shutdown()
+        if spin_thread is not None:
+            spin_thread.join()
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()

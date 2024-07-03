@@ -23,12 +23,11 @@ from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
-from sensor_msgs.msg import CameraInfo, Image, TimeReference
+from sensor_msgs.msg import CameraInfo, Image
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
-    MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_MATCHES_IMAGE,
@@ -80,7 +79,6 @@ class PoseNode(Node):
 
         # initialize subscriptions
         self.camera_info
-        self.time_reference
         self.pose_image
 
         # initialize publisher (for launch tests)
@@ -104,8 +102,12 @@ class PoseNode(Node):
             Image, ROS_TOPIC_RELATIVE_POSITION_IMAGE, 10
         )
 
-        self._tf_buffer = tf2_ros.Buffer()
-        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+        # Deep matching can be very slow when running on CPU so we need to keep
+        # transformations in a buffer for a long time
+        self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=45))
+        self._tf_listener = tf2_ros.TransformListener(
+            self._tf_buffer, self, spin_thread=True
+        )
         self._tf_broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self)
         self._tf_static_broadcaster = (
             tf2_ros.static_transform_broadcaster.StaticTransformBroadcaster(self)
@@ -116,14 +118,6 @@ class PoseNode(Node):
             self._set_pose_request.pose = pose
             self._future = self._set_pose_client.call_async(self._set_pose_request)
             self._pose_sent = True
-
-    @property
-    @ROS.subscribe(
-        MAVROS_TOPIC_TIME_REFERENCE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def time_reference(self) -> Optional[TimeReference]:
-        """Time reference from FCU, or None if unknown"""
 
     @property
     @ROS.subscribe(
@@ -278,12 +272,17 @@ class PoseNode(Node):
             if self._tf_buffer.can_transform(
                 "gisnav_camera_link_optical", "gisnav_odom", rclpy.time.Time()
             ):
-                if not self._tf_buffer.can_transform(
-                    "earth", "gisnav_map", rclpy.time.Time()
-                ):
+                query_time = rclpy.time.Time(
+                    seconds=msg.query.header.stamp.sec,
+                    nanoseconds=msg.query.header.stamp.nanosec,
+                )
+
+                if not self._tf_buffer.can_transform("earth", "gisnav_map", query_time):
                     try:
                         camera_optical_to_map = self._tf_buffer.lookup_transform(
-                            "camera_optical", "map", rclpy.time.Time()
+                            "camera_optical",
+                            "map",
+                            query_time,
                         )
                     except (
                         tf2_ros.LookupException,
@@ -313,11 +312,27 @@ class PoseNode(Node):
                     return None
 
                 gisnav_map_to_earth = self._tf_buffer.lookup_transform(
-                    "gisnav_map", "earth", rclpy.time.Time()
+                    "gisnav_map", "earth", query_time
                 )
-                gisnav_camera_optical_to_base_link = self._tf_buffer.lookup_transform(
-                    "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
-                )
+                try:
+                    gisnav_camera_optical_to_base_link = (
+                        self._tf_buffer.lookup_transform(
+                            "gisnav_camera_link_optical",
+                            "gisnav_base_link",
+                            query_time,
+                        )
+                    )
+                except (
+                    tf2_ros.LookupException,
+                    tf2_ros.ConnectivityException,
+                    tf2_ros.ExtrapolationException,
+                ) as e:
+                    self.get_logger().warning(
+                        f"Could not transform from gisnav_camera_link_optical to "
+                        f"gisnav_base_link. Skipping publishing pose. {e}"
+                    )
+                    return None
+
                 gisnav_map_to_camera_link_optical = tf_.add_transform_stamped(
                     gisnav_map_to_earth, earth_to_gisnav_camera_optical
                 )

@@ -16,7 +16,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from rclpy.timer import Timer
-from sensor_msgs.msg import CameraInfo, TimeReference
+from sensor_msgs.msg import CameraInfo
 from shapely.geometry import box
 from std_msgs.msg import String
 
@@ -24,7 +24,6 @@ from .. import _transformations as tf_
 from .._decorators import ROS, cache_if, narrow_types
 from ..constants import (
     BBOX_NODE_NAME,
-    MAVROS_TOPIC_TIME_REFERENCE,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX,
@@ -143,7 +142,6 @@ class GISNode(Node):
         # subscriptions to the appropriate ROS topics
         self.bounding_box
         self.camera_info
-        self.time_reference
 
         # TODO: use throttling in publish decorator, remove timer
         publish_rate = self.publish_rate
@@ -340,14 +338,6 @@ class GISNode(Node):
 
     @property
     @ROS.subscribe(
-        MAVROS_TOPIC_TIME_REFERENCE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def time_reference(self) -> Optional[TimeReference]:
-        """Time reference from FCU, or None if unknown"""
-
-    @property
-    @ROS.subscribe(
         f"/{ROS_NAMESPACE}"
         f'/{ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX.replace("~", BBOX_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
@@ -534,11 +524,6 @@ class GISNode(Node):
 
             # Set old bounding box
             self.old_bounding_box = bounding_box
-
-            if self.time_reference is None:
-                self.get_logger().warning(
-                    "Publishing orthoimage without FCU time reference."
-                )
 
             height, width = img.shape[:2]
             M = self._calculate_affine_transformation_matrix(

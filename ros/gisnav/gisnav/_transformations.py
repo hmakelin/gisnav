@@ -17,46 +17,11 @@ from geometry_msgs.msg import (
 )
 from pyproj import Proj, transform
 from rclpy.node import Node
-from sensor_msgs.msg import TimeReference
 from std_msgs.msg import Header
 
 from .constants import FrameID
 
 BBox = namedtuple("BBox", "left bottom right top")
-
-
-def create_header(
-    node: Node, frame_id: str = "", time_reference: Optional[TimeReference] = None
-) -> Header:
-    """Creates a class:`std_msgs.msg.Header` for an outgoing ROS message
-
-    If `time_reference` is provided, time_reference.header.stamp -
-    time_reference.time_ref is subtracted from the message header stamp. This
-    could e.g. be the difference between the local system time and the foreign
-    :term:`FCU` time.
-
-    :param frame_id: Header frame_id value
-    :param time_reference: Optional time reference for synchronizing the
-        timestamp
-    :return: ROS message header
-    """
-    now = node.get_clock().now()
-    header = Header()
-    header.stamp.sec = now.seconds_nanoseconds()[0]
-    header.stamp.nanosec = now.seconds_nanoseconds()[1]
-    header.frame_id = frame_id
-
-    if time_reference is not None:
-        # sync time
-        header.stamp = (
-            rclpy.time.Time.from_msg(header.stamp)
-            - (
-                rclpy.time.Time.from_msg(time_reference.header.stamp)
-                - rclpy.time.Time.from_msg(time_reference.time_ref)
-            )
-        ).to_msg()
-
-    return header
 
 
 def usec_from_header(header: Header) -> int:

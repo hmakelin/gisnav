@@ -22,12 +22,11 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import CameraInfo, Image, TimeReference
+from sensor_msgs.msg import CameraInfo, Image
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
 from ..constants import (
-    MAVROS_TOPIC_TIME_REFERENCE,
     ROS_TOPIC_CAMERA_INFO,
     ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_MATCHES_IMAGE,
@@ -73,7 +72,9 @@ class TwistNode(Node):
         )
 
         self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=30))
-        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+        self._tf_listener = tf2_ros.TransformListener(
+            self._tf_buffer, self, spin_thread=True
+        )
 
         # Cached reference image for visual odometry
         self._cached_reference: Optional[Image] = None
@@ -81,17 +82,8 @@ class TwistNode(Node):
 
         # initialize subscriptions
         self.camera_info
-        self.time_reference
         # initialize publisher (for launch tests)
         self.pose
-
-    @property
-    @ROS.subscribe(
-        MAVROS_TOPIC_TIME_REFERENCE,
-        QoSPresetProfiles.SENSOR_DATA.value,
-    )
-    def time_reference(self) -> Optional[TimeReference]:
-        """Time reference from FCU, or None if unknown"""
 
     @property
     @ROS.subscribe(
@@ -265,8 +257,14 @@ class TwistNode(Node):
             pose_msg.pose.position.y -= scaling * camera_info.height / 2
             pose_msg.pose.position.z += scaling * fx
 
+            # reftime = rclpy.time.Time(
+            #    seconds=reference.header.stamp.sec,
+            #    nanoseconds=reference.header.stamp.nanosec,
+            # )
             if self._tf_buffer.can_transform(
-                "gisnav_odom", "gisnav_camera_link_optical", rclpy.time.Time()
+                "gisnav_odom",
+                "gisnav_camera_link_optical",
+                rclpy.time.Time(),  # reftime, rclpy.duration.Duration(seconds=0.1),
             ):
                 pose_msg.header.stamp = reference.header.stamp
 
@@ -282,23 +280,25 @@ class TwistNode(Node):
                 pose_msg.header.stamp = query.header.stamp
             else:
                 self.get_logger().warning(
-                    "Could not find transform from camera_link_optical to odom "
-                    "- resetting odom frame."
+                    "Could not find transform from gisnav_camera_link_optical to "
+                    "gisnav_odom - resetting gisnav_odom frame."
                 )
                 pose_msg.header.stamp = query.header.stamp
                 pose_msg.header.frame_id = "gisnav_odom"
 
             # report base_link pose instead of camera frame pose
             # (fix difference in orientation)
-            # reftime = rclpy.time.Time(
-            #    seconds=pose_msg.header.stamp.sec,
-            #    nanoseconds=pose_msg.header.stamp.nanosec,
+            # todo use qrytime - esp. with pitch and roll timestamp sync is important
+            # qrytime = rclpy.time.Time(
+            #    seconds=query.header.stamp.sec,
+            #    nanoseconds=query.header.stamp.nanosec,
             # )
-            # todo use reftime
             try:
                 transform = self._tf_buffer.lookup_transform(
-                    "gisnav_camera_link_optical", "gisnav_base_link", rclpy.time.Time()
-                )  # reftime)
+                    "gisnav_camera_link_optical",
+                    "gisnav_base_link",
+                    rclpy.time.Time(),  # qrytime, rclpy.duration.Duration(seconds=0.1),
+                )
             except (
                 tf2_ros.LookupException,
                 tf2_ros.ConnectivityException,
@@ -311,20 +311,23 @@ class TwistNode(Node):
                 return None
             transform = tf_.add_transform_stamped(pose_msg, transform)
             pose_msg.pose.orientation = transform.transform.rotation
-            pose_msg.header.frame_id = "gisnav_odom"
+            # pose_msg.header.frame_id = "gisnav_odom"
+            assert pose_msg.header.frame_id == "gisnav_odom"
+            assert pose_msg.header.stamp == query.header.stamp
 
             # TODO: use custom error model for VO
             # pose_with_covariance = PoseWithCovariance(
-            #    pose=pose.pose, covariance=COVARIANCE_LIST
+            #   pose=pose_msg.pose, covariance=COVARIANCE_LIST
             # )
             # pose_with_covariance = PoseWithCovarianceStamped(
-            #    header=pose.header, pose=pose_with_covariance
+            #   header=pose_msg.header, pose=pose_with_covariance
             # )
             pose_with_covariance = PoseWithCovariance(pose=pose_msg.pose)
             pose_with_covariance = PoseWithCovarianceStamped(
                 header=pose_msg.header, pose=pose_with_covariance
             )
             self._cached_reference = query
+
             return pose_with_covariance
 
         return _pose(self.camera_info, self.image, self._cached_reference)

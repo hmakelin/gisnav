@@ -9,6 +9,6 @@ gscam_publisher:
       ! videoconvert
       ! video/x-raw,format=GRAY8
     preroll: False
-    use_gst_timestamps: True
+    use_gst_timestamps: False  # use ROS time, important
     frame_id: 'mono'
     image_encoding: 'mono8'

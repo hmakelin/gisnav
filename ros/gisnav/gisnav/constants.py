@@ -57,11 +57,6 @@ ROS_TOPIC_RELATIVE_POSE: Final = "~/pose"
 :attr:`.PoseNode.pose`.
 """
 
-MAVROS_TOPIC_TIME_REFERENCE: Final = "/mavros/time_reference"
-"""The MAVROS time reference topic that has the difference between
-the local system time and the foreign FCU time
-"""
-
 ROS_TOPIC_CAMERA_INFO: Final = "/camera/camera_info"
 """Name of ROS topic for :class:`sensor_msgs.msg.CameraInfo` messages"""
 

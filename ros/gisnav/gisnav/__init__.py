@@ -121,13 +121,11 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             # we have latest transformations in the buffer when needed.
             executor = MultiThreadedExecutor()
             executor.add_node(node)
+            executor.spin()
 
-            spin_thread = Thread(target=executor.spin, daemon=True)
-            spin_thread.start()
-
-            # Keep the main thread alive
-            while rclpy.ok():
-                pass
+            # spin_thread = Thread(target=executor.spin, daemon=True)
+            # spin_thread.start()
+            # spin_thread.join()
         else:
             executor = SingleThreadedExecutor()
             executor.add_node(node)

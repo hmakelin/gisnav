@@ -257,23 +257,24 @@ class TwistNode(Node):
             pose_msg.pose.position.y -= scaling * camera_info.height / 2
             pose_msg.pose.position.z += scaling * fx
 
-            # reftime = rclpy.time.Time(
-            #    seconds=reference.header.stamp.sec,
-            #    nanoseconds=reference.header.stamp.nanosec,
-            # )
+            reftime = rclpy.time.Time(
+                seconds=reference.header.stamp.sec,
+                nanoseconds=reference.header.stamp.nanosec,
+            )
             if self._tf_buffer.can_transform(
                 "gisnav_odom",
                 "gisnav_camera_link_optical",
-                rclpy.time.Time(),  # reftime, rclpy.duration.Duration(seconds=0.1),
+                reftime,
+                rclpy.duration.Duration(seconds=0.1),  # rclpy.time.Time(),
             ):
                 pose_msg.header.stamp = reference.header.stamp
 
                 try:
                     pose_msg = self._tf_buffer.transform(pose_msg, "gisnav_odom")
-                except tf2_ros.ExtrapolationException:
+                except tf2_ros.ExtrapolationException as e:
                     self.get_logger().warning(
-                        "Could not extrapolate odom frame - skipping publishing this "
-                        "one."
+                        f"Could not extrapolate odom frame - skipping publishing this "
+                        f"one: {e}"
                     )
                     return None
 

@@ -30,6 +30,10 @@ all: dist
 clean:
 	@rm -rf $(BUILD_DIR) $(DIST_DIR)
 
+.PHONY: distclean
+distclean:
+	@rm -rf $(DIST_DIR)
+
 .PHONY: install
 install: dist
 	@sudo dpkg -i $(DIST_DIR)/$(DEB_FILE)

@@ -7,7 +7,7 @@ If your autopilot is connected to a vehicle, it is highly recommended to disable
 
 :::
 
-This page describes how to run HIL simulation on a Pixhawk board and a companion computer.
+This page describes how to run HIL simulation on a Pixhawk board and a Raspberry Pi companion computer.
 
 ## Prerequisites
 
@@ -23,13 +23,13 @@ This page describes how to run HIL simulation on a Pixhawk board and a companion
 
 - You need the `ssh` server enabled on your companion computer. Include your own `ssh` public key in the `~/.ssh/authorized_keys` file on the companion computer to ensure you can `ssh` in.
 
-- These instructions assume you are using the hostname `jetsonnano` and that your network stack supports mDNS (`.local` domain). You can edit your companion computer hostname by editing the `/etc/hostname` file.
+- These instructions assume you are using the hostname `raspberrypi` and that your network stack supports mDNS (`.local` domain). You can edit your companion computer hostname by editing the `/etc/hostname` file.
 
 - Your simulation host and companion computer must be on the same local network. You can e.g. connect them directly with an Ethernet cable. You should share internet connection to your companion computer if you connect directly via Ethernet cable and not e.g. via a router.
 
-#### Connect NVIDIA Jetson Nano and NXP RDDRONE-FMUK66
+#### Connect Raspberry Pi 5 and NXP RDDRONE-FMUK66
 
-- We connect our development computer to the Jetson Nano over Ethernet. This is so that we can upload the containers implementing required onboard services.
+- We connect our development computer to the Raspberry Pi over Ethernet. This is so that we can upload the containers implementing required onboard services.
 
 - This board does not have a `GPS 2` port, so we use the `TELEM 1` port typically reserved for MAVLink communication with GCS for the uORB mock GPS messages.
 
@@ -54,7 +54,7 @@ graph TB
         Laptop_ETH[Ethernet]
         Laptop_USB[USB]
     end
-    subgraph "NVIDIA Jetson Nano"
+    subgraph "Raspberry Pi 5 8GB"
         subgraph USB["USB-A (x4)"]
             Pi_USB_MAVLink[USB-A]
             Pi_USB_Mouse[USB-A]
@@ -122,18 +122,18 @@ gnc hil run --no-deps -e DONT_RUN=1 px4 make nxp_fmuk66-e_default upload
 
 ```bash
 # on development host (not on companion computer)
-GISNAV_COMPANION_HOST=jetsonnano.local gnc hil create --build px4 gisnav@jetsonnano.local
+GISNAV_COMPANION_HOST=raspberrypi.local gnc hil create --build px4 gisnav@raspberrypi.local
 ```
 
 ## Start HIL simulation
 
 ```bash
 # on development host (not on companion computer)
-gnc hil start px4 gisnav@jetsonnano.local
+gnc hil start px4 gisnav@raspberrypi.local
 ```
 
 ::: tip Admin portal
-You can also use the [Admin portal](/admin-portal) hosted on the Jetson Nano to see that the Compose services are running.
+You can also use the [Admin portal](/admin-portal) hosted on the Raspberry Pi 5 to see that the Compose services are running.
 
 :::
 
@@ -141,7 +141,7 @@ You can also use the [Admin portal](/admin-portal) hosted on the Jetson Nano to 
 
 ```bash
 # In this case we need the "" to also stop on localhost, could also use @localhost
-gnc stop "" @jetsonnano.local
+gnc stop "" @raspberrypi.local
 ```
 
 ## QGroundControl

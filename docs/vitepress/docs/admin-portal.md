@@ -26,7 +26,7 @@ gnc start nginx
 
 ## Access admin portal
 
-You can access the admin portal at port `80` on the host machine such as `localhost`, or e.g. `jetsonnano.local` if using [a separate companion computer on a local network](/hil-pixhawk). Use the below example commands to open the admin portal with your default web browser.
+You can access the admin portal at port `80` on the host machine such as `localhost`, or e.g. `raspberrypi.local` if using [a separate companion computer on a local network](/hil-pixhawk). Use the below example commands to open the admin portal with your default web browser.
 
 ::: info SSL/TLS not yet supported
 SSL/TLS i.e. HTTPS over port `443` is not yet supported.

@@ -51,7 +51,7 @@ A monocular camera carried [onboard](#onboard) that is used by GISNav for [pose]
 estimation.
 
 ### Companion, companion computer
-The [onboard](#onboard) companion computer that GISNav runs on. E.g., NVIDIA [Jetson Nano](#nano-jetson-nano).
+The [onboard](#onboard) companion computer that GISNav runs on. E.g., NVIDIA [Jetson Orin Nano](#nano-jetson-nano).
 
 ### Container
 A [Docker](#docker) container.
@@ -618,8 +618,8 @@ ROS GStreamer camera driver: [github.com/ros-drivers/gscam](https://github.com/r
 ### GStreamer
 Open source multimedia framework: [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/)
 
-### Nano, Jetson Nano
-An NVIDIA Jetson Nano computer
+### Nano, Jetson Orin Nano
+An NVIDIA Jetson Orin Nano computer
 
 ### Jupyter, JupyterLab
 A web-based IDE: [jupyter.org](https://jupyter.org/)

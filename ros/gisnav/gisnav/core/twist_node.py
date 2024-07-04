@@ -213,9 +213,9 @@ class TwistNode(Node):
                 self.get_logger().warning(
                     f"Angle off nadir: {np.degrees(angle_off_nadir)} degrees, "
                     f"max angle {np.degrees(maximum_pitch_before_horizon_visible)}. "
-                    f"Scale for monocular VO could be inaccurate."
+                    f" - skipping matching."
                 )
-                # return None
+                return None
 
             assert angle_off_nadir is not None
             # TODO: get a better estimate of distance to ground

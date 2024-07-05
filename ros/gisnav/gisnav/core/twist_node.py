@@ -34,7 +34,7 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_POSITION_IMAGE,
     FrameID,
 )
-from ._shared import compute_pose, visualize_matches_and_pose
+from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
 
 
 class TwistNode(Node):
@@ -186,14 +186,15 @@ class TwistNode(Node):
             camera_optical_position_in_world = -r_inv @ t
 
             # Publish camera position in world frame to ROS for debugging
-            x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
-            x, y = int(x), int(y)
             try:
+                x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
+                x, y = int(x), int(y)
                 image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
                 ros_image = self._cv_bridge.cv2_to_imgmsg(image)
                 self._position_publisher.publish(ros_image)
-            except cv2.error as e:
+            except (cv2.error, ValueError) as e:
                 self.get_logger().info(f"Could not draw camera position: {e}")
+                return None
 
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
@@ -265,7 +266,7 @@ class TwistNode(Node):
                 "gisnav_odom",
                 "gisnav_camera_link_optical",
                 reftime,
-                rclpy.duration.Duration(seconds=0.1),  # rclpy.time.Time(),
+                rclpy.duration.Duration(seconds=0.2),  # rclpy.time.Time(),
             ):
                 pose_msg.header.stamp = reference.header.stamp
 
@@ -290,15 +291,16 @@ class TwistNode(Node):
             # report base_link pose instead of camera frame pose
             # (fix difference in orientation)
             # todo use qrytime - esp. with pitch and roll timestamp sync is important
-            # qrytime = rclpy.time.Time(
-            #    seconds=query.header.stamp.sec,
-            #    nanoseconds=query.header.stamp.nanosec,
-            # )
+            qrytime = rclpy.time.Time(
+                seconds=query.header.stamp.sec,
+                nanoseconds=query.header.stamp.nanosec,
+            )
             try:
                 transform = self._tf_buffer.lookup_transform(
                     "gisnav_camera_link_optical",
                     "gisnav_base_link",
-                    rclpy.time.Time(),  # qrytime, rclpy.duration.Duration(seconds=0.1),
+                    qrytime,
+                    rclpy.duration.Duration(seconds=0.2),
                 )
             except (
                 tf2_ros.LookupException,
@@ -312,18 +314,13 @@ class TwistNode(Node):
                 return None
             transform = tf_.add_transform_stamped(pose_msg, transform)
             pose_msg.pose.orientation = transform.transform.rotation
-            # pose_msg.header.frame_id = "gisnav_odom"
             assert pose_msg.header.frame_id == "gisnav_odom"
             assert pose_msg.header.stamp == query.header.stamp
 
             # TODO: use custom error model for VO
-            # pose_with_covariance = PoseWithCovariance(
-            #   pose=pose_msg.pose, covariance=COVARIANCE_LIST
-            # )
-            # pose_with_covariance = PoseWithCovarianceStamped(
-            #   header=pose_msg.header, pose=pose_with_covariance
-            # )
-            pose_with_covariance = PoseWithCovariance(pose=pose_msg.pose)
+            pose_with_covariance = PoseWithCovariance(
+                pose=pose_msg.pose, covariance=COVARIANCE_LIST
+            )
             pose_with_covariance = PoseWithCovarianceStamped(
                 header=pose_msg.header, pose=pose_with_covariance
             )

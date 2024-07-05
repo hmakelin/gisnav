@@ -413,7 +413,7 @@ class GISNode(Node):
 
         bbox = tf_.bounding_box_to_bbox(bounding_box)
 
-        self.get_logger().info("Requesting new orthoimage")
+        self.get_logger().debug("Requesting new orthoimage")
         img: np.ndarray = self._get_map(
             layers, styles, srs, bbox, size, format_, transparency
         )
@@ -423,7 +423,7 @@ class GISNode(Node):
 
         dem: Optional[np.ndarray] = None
         if len(dem_layers) > 0 and dem_layers[0]:
-            self.get_logger().info("Requesting new DEM")
+            self.get_logger().debug("Requesting new DEM")
             dem = self._get_map(
                 dem_layers,
                 dem_styles,

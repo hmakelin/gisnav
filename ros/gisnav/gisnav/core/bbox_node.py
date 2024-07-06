@@ -95,7 +95,9 @@ class BBoxNode(Node):
         """Need to publish base_link to gimbal(_0) transform to tf"""
         for cli in clients:
             while not cli.wait_for_service(timeout_sec=1.0):
-                self.get_logger().info("Waiting for parameter service...")
+                self.get_logger().info(
+                    f"Waiting for parameter service {cli.srv_name}..."
+                )
 
             # Create request to set the parameter
             req = SetParameters.Request()
@@ -106,7 +108,10 @@ class BBoxNode(Node):
             rclpy.spin_until_future_complete(self, future)
 
             if future.result() is not None:
-                self.get_logger().info(f"Parameter {param} set successfully")
+                self.get_logger().info(
+                    f"Parameter {param.name}={param.value} set successfully "
+                    f"for {cli.srv_name}"
+                )
             else:
                 self.get_logger().error(f"Failed to set parameter {param}")
 

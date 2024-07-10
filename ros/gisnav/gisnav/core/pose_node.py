@@ -183,6 +183,7 @@ class PoseNode(Node):
                 feat_qry, feat_ref = self._extractor(
                     input, max_keypoints, pad_if_not_divisible=True
                 )
+                # time.sleep(3)
                 kp_qry, desc_qry = feat_qry.keypoints, feat_qry.descriptors
                 kp_ref, desc_ref = feat_ref.keypoints, feat_ref.descriptors
                 lafs_qry = laf_from_center_scale_ori(
@@ -365,6 +366,9 @@ class PoseNode(Node):
             pose_with_covariance = PoseWithCovarianceStamped(
                 header=pose_msg.header, pose=pose_with_covariance
             )
+
+            # Pose should have the query image timestamp
+            pose_with_covariance.header.stamp = msg.query.header.stamp
 
             return pose_with_covariance
 

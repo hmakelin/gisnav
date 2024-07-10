@@ -75,6 +75,7 @@ class TwistNode(Node):
         self._tf_listener = tf2_ros.TransformListener(
             self._tf_buffer, self, spin_thread=True
         )
+        self._tf_broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self)
 
         # Cached reference image for visual odometry
         self._cached_reference: Optional[Image] = None
@@ -135,7 +136,21 @@ class TwistNode(Node):
             kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
             kp_ref, desc_ref = self._orb.detectAndCompute(ref, None)
 
-            matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)
+            try:
+                matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)
+            except cv2.error as e:
+                self.get_logger().debug(
+                    f"Could not match - resetting reference frame: {e}"
+                )
+                self._cached_reference = self._previous_image
+                return None
+
+            if len(matches) < self.MIN_MATCHES:
+                self.get_logger().debug(
+                    "Not enough matches - resetting reference frame"
+                )
+                self._cached_reference = self._previous_image
+                return None
 
             # Apply ratio test
             good = []
@@ -199,9 +214,16 @@ class TwistNode(Node):
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
             angle_off_nadir: Optional[float] = None
+            query_time = rclpy.time.Time(
+                seconds=query.header.stamp.sec,
+                nanoseconds=query.header.stamp.nanosec,
+            )
             try:
                 transform = self._tf_buffer.lookup_transform(
-                    "base_link_stabilized", "camera_frd", rclpy.time.Time()
+                    "base_link_stabilized",
+                    "camera_frd",
+                    query_time,
+                    rclpy.duration.Duration(seconds=0.2),
                 )
                 rotation = transform.transform.rotation
                 quaternion = (rotation.x, rotation.y, rotation.z, rotation.w)
@@ -222,7 +244,7 @@ class TwistNode(Node):
             # TODO: get a better estimate of distance to ground
             try:
                 distance_to_ground_transform = self._tf_buffer.lookup_transform(
-                    "map", "base_link", rclpy.time.Time()
+                    "map", "base_link", query_time, rclpy.duration.Duration(seconds=0.2)
                 )
             except (
                 tf2_ros.LookupException,
@@ -290,16 +312,11 @@ class TwistNode(Node):
 
             # report base_link pose instead of camera frame pose
             # (fix difference in orientation)
-            # todo use qrytime - esp. with pitch and roll timestamp sync is important
-            qrytime = rclpy.time.Time(
-                seconds=query.header.stamp.sec,
-                nanoseconds=query.header.stamp.nanosec,
-            )
             try:
                 transform = self._tf_buffer.lookup_transform(
                     "gisnav_camera_link_optical",
                     "gisnav_base_link",
-                    qrytime,
+                    query_time,
                     rclpy.duration.Duration(seconds=0.2),
                 )
             except (

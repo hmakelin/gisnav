@@ -108,18 +108,49 @@ class UORBNode(Node):
                 transform = self._tf_buffer.lookup_transform(
                     odometry.header.frame_id, "earth", rclpy.time.Time()
                 )
+                odom_time = rclpy.time.Time(
+                    seconds=odometry.header.stamp.sec,
+                    nanoseconds=odometry.header.stamp.nanosec,
+                )
+
+                pose_stamped = PoseStamped(header=odometry.header, pose=pose)
                 try:
                     pose = self._tf_buffer.transform(
-                        PoseStamped(header=transform.header, pose=pose), "earth"
+                        pose_stamped,
+                        "earth",
+                        rclpy.duration.Duration(seconds=0.2),
                     )
-                except np.linalg.LinAlgError as e:
-                    self.get_logger().info(
-                        f"Cannot transform {odometry.header.frame_id} to earth frame: "
-                        f"{e}"
+                # TODO np.linalgerror?
+                except (
+                    # np.linalg.LinAlgError,
+                    tf2_ros.LookupException,
+                    tf2_ros.ConnectivityException,
+                    tf2_ros.ExtrapolationException,
+                ) as e:
+                    self.get_logger().debug(
+                        f"Cannot transform {odometry.header.frame_id} to earth frame "
+                        f"at desired timestamp, using latest odom frame instead: {e}"
                     )
-                    return None
+                    pose_stamped.header.stamp = transform.header.stamp
+                    # Use existing transform (do_transform)
+                    try:
+                        pose = self._tf_buffer.transform(
+                            pose_stamped,
+                            "earth",
+                        )
+                    except (
+                        # np.linalg.LinAlgError,
+                        tf2_ros.LookupException,
+                        tf2_ros.ConnectivityException,
+                        tf2_ros.ExtrapolationException,
+                    ) as ex:
+                        self.get_logger().warning(
+                            f"Cannot transform {odometry.header.frame_id} to earth "
+                            f"frame, skipping publishing mock GPS message: {ex}"
+                        )
+                        return None
             else:
-                self.get_logger().info(
+                self.get_logger().warning(
                     f"Cannot transform {odometry.header.frame_id} to earth frame"
                 )
                 return None
@@ -180,15 +211,20 @@ class UORBNode(Node):
             vel_d_m_s = twist_with_covariance.twist.linear.z
 
             # Heading
-            # TODO: should be able to use the stamp here or extrapolate? instead
-            #  of getting latest
-            transform_earth_to_map = tf_.get_transform(
-                self, "gisnav_map", "earth", rclpy.time.Time()  # odometry.header.stamp
-            )
-
-            if transform_earth_to_map is None:
+            try:
+                transform_earth_to_map = self._tf_buffer.lookup_transform(
+                    "gisnav_map",
+                    "earth",
+                    odom_time,
+                    rclpy.duration.Duration(seconds=0.2),
+                )
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ) as e:
                 self.get_logger().warning(
-                    "Could not determine heading - skpping publishing SensorGps."
+                    f"Could not determine heading - skipping publishing SensorGps: {e}"
                 )
                 # TODO Set yaw to zero and make yaw/heading accuracy
                 #  np.nan in this case?
@@ -415,18 +451,17 @@ class UORBNode(Node):
         self, twist_with_cov, stamp, from_frame, to_frame
     ):
         # Transform the linear component
+        ts = rclpy.time.Time(seconds=stamp.sec, nanoseconds=stamp.nanosec)
         point = PointStamped()
         point.header.frame_id = from_frame
-        point.header.stamp = rclpy.time.Time().to_msg()  # stamp
+        point.header.stamp = ts.to_msg()  # stamp
         point.point.x = twist_with_cov.twist.linear.x
         point.point.y = twist_with_cov.twist.linear.y
         point.point.z = twist_with_cov.twist.linear.z
 
         try:
             # Get the transformation matrix
-            transform = self._tf_buffer.lookup_transform(
-                to_frame, from_frame, rclpy.time.Time()
-            )
+            transform = self._tf_buffer.lookup_transform(to_frame, from_frame, ts)
             # Set transform linear component to zero, only use orientation since
             # we are applying this to a velocity
             transform.transform.translation = Vector3()

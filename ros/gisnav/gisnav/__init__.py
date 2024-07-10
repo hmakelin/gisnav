@@ -113,12 +113,18 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
         rclpy.init()
         node = constructor(*args, **kwargs)
 
-        if isinstance(node, PoseNode) or isinstance(node, TwistNode):
+        # TODO: check UORBNode only if it's imported
+        if (
+            isinstance(node, PoseNode)
+            or isinstance(node, TwistNode)
+            or isinstance(node, UORBNode)
+        ):
             # We need to use a multi-threaded executor with PoseNode because when
             # running keypoint matching on CPU (no GPU) the heavy processing prevents
             # the tf buffer from receiving transforms in time, preventing matching
-            # transforms by correct timestamp. We also use this for TwistNode to ensure
-            # we have latest transformations in the buffer when needed.
+            # transforms by correct timestamp. We also use this for TwistNode and
+            # UORBNode to ensure we have latest transformations in the buffer when
+            # needed.
             executor = MultiThreadedExecutor()
             executor.add_node(node)
             executor.spin()

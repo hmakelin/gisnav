@@ -31,6 +31,14 @@ class UORBNode(Node):
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default for :attr:`.dem_vertical_datum`"""
 
+    _REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH = 5
+    """Number of required odometry messages before we start publishing
+
+    This gives some time for the internal state of the EKF to catch up with the actual
+    state in case it starts from zero. Ideally we should be able to initialize both
+    pose and twist and not have to wait for the filter state to catch up.
+    """
+
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
     _EPSG_MSL = 5773  # Example: EGM96
@@ -62,6 +70,8 @@ class UORBNode(Node):
             f"EPSG:{self.dem_vertical_datum}", f"EPSG:{self._EPSG_MSL}", always_xy=True
         )
 
+        self._received_odometry_counter: int = 0
+
         # Subscribe
         self.odometry
 
@@ -77,11 +87,25 @@ class UORBNode(Node):
     def _odometry_cb(self, msg: Odometry) -> None:
         """Callback for :attr:`.odometry`"""
         if msg.header.frame_id == "gisnav_odom":
-            # Only publish mock GPS messages from VO odometry
-            # Using odometry derived from global EKF would greatly overestimate velocity
-            # because the map to odom transform jumps around - vehicle is not actually
-            # doing that.
-            self._publish(msg)
+            if (
+                self._received_odometry_counter
+                >= self._REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH
+            ):
+                # Only publish mock GPS messages from VO odometry
+                # Using odometry derived from global EKF would greatly overestimate
+                # velocity because the map to odom transform jumps around - vehicle is
+                # not actually doing that.
+                self._publish(msg)
+        else:
+            remaining = (
+                self._REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH
+                - self._received_odometry_counter
+            )
+            self.get_logger().info(
+                f"Waiting for filter state to catch up - still need "
+                f"{remaining} more messages"
+            )
+            self._received_odometry_counter += 1
 
     @property
     @ROS.subscribe(

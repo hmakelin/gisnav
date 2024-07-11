@@ -57,7 +57,7 @@ class UORBNode(Node):
             QoSPresetProfiles.SENSOR_DATA.value,
         )
 
-        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=30))
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
         # Create transformers
@@ -96,16 +96,16 @@ class UORBNode(Node):
                 # velocity because the map to odom transform jumps around - vehicle is
                 # not actually doing that.
                 self._publish(msg)
-        else:
-            remaining = (
-                self._REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH
-                - self._received_odometry_counter
-            )
-            self.get_logger().info(
-                f"Waiting for filter state to catch up - still need "
-                f"{remaining} more messages"
-            )
-            self._received_odometry_counter += 1
+            else:
+                remaining = (
+                    self._REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH
+                    - self._received_odometry_counter
+                )
+                self.get_logger().info(
+                    f"Waiting for filter state to catch up - still need "
+                    f"{remaining} more messages"
+                )
+                self._received_odometry_counter += 1
 
     @property
     @ROS.subscribe(

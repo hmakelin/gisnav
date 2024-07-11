@@ -313,29 +313,29 @@ class PoseNode(Node):
                     # TODO implement better, no need to return None here, we can publish
                     return None
 
-                gisnav_map_to_earth = self._tf_buffer.lookup_transform(
+                # TODO: this is earth to map
+                gisnav_map_to_earth = tf_.lookup_transform(
+                    self._tf_buffer,
                     "gisnav_map",
                     "earth",
-                    query_time,
-                    rclpy.duration.Duration(seconds=0.1),
+                    (msg.query.header.stamp, rclpy.duration.Duration(seconds=0.2)),
+                    self.get_logger(),
                 )
-                try:
-                    gisnav_camera_optical_to_base_link = (
-                        self._tf_buffer.lookup_transform(
-                            "gisnav_camera_link_optical",
-                            "gisnav_base_link",
-                            query_time,
-                            rclpy.duration.Duration(seconds=0.1),
-                        )
-                    )
-                except (
-                    tf2_ros.LookupException,
-                    tf2_ros.ConnectivityException,
-                    tf2_ros.ExtrapolationException,
-                ) as e:
+                # TODO: this is base_link to camera_link_optical
+                gisnav_camera_optical_to_base_link = tf_.lookup_transform(
+                    self._tf_buffer,
+                    "gisnav_camera_link_optical",
+                    "gisnav_base_link",
+                    (msg.query.header.stamp, rclpy.duration.Duration(seconds=0.2)),
+                    self.get_logger(),
+                )
+                if (
+                    gisnav_map_to_earth is None
+                    or gisnav_camera_optical_to_base_link is None
+                ):
                     self.get_logger().warning(
-                        f"Could not transform from gisnav_camera_link_optical to "
-                        f"gisnav_base_link. Skipping publishing pose. {e}"
+                        "Could not transform from gisnav_camera_link_optical to "
+                        "gisnav_base_link. Skipping publishing pose."
                     )
                     return None
 

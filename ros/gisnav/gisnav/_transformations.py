@@ -182,6 +182,49 @@ def get_transform(
         return None
 
 
+def lookup_transform(
+    buffer: tf2_ros.Buffer,
+    target_frame: FrameID,
+    source_frame: FrameID,
+    time_duration: Optional[Tuple[Time, rclpy.duration.Duration]] = None,
+    logger=None,
+) -> TransformStamped:
+    """Returns transform from source to target frame, or None if not available"""
+    transform: Optional[TransformStamped] = None
+    try:
+        if time_duration is not None:
+            # Get transform at desired timestamp
+            transform = buffer.lookup_transform(
+                target_frame, source_frame, time_duration[0], time_duration[1]
+            )
+        else:
+            # Get latest transform instead
+            transform = buffer.lookup_transform(
+                target_frame, source_frame, rclpy.time.Time()
+            )
+    except (
+        # np.linalg.LinAlgError,
+        tf2_ros.LookupException,
+        tf2_ros.ConnectivityException,
+        tf2_ros.ExtrapolationException,
+    ) as e:
+        if logger is not None:
+            if time_duration is not None:
+                logger.debug(
+                    f"Cannot transform {source_frame} to {target_frame} frame "
+                    f"at desired timestamp, using latest odom_frame instead: {e}"
+                )
+                return lookup_transform(
+                    buffer, target_frame, source_frame, logger=logger
+                )
+            else:
+                logger.warning(
+                    f"Cannot transform {source_frame} to {target_frame} frame: {e}"
+                )
+
+    return transform
+
+
 # TODO: refactor out this function
 def extract_yaw(q: Quaternion) -> float:
     """Calculate the yaw angle from a quaternion in the ENU frame.

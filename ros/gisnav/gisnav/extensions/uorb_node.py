@@ -8,7 +8,7 @@ import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
-from geometry_msgs.msg import PointStamped, PoseStamped, TwistWithCovariance, Vector3
+from geometry_msgs.msg import PointStamped, TwistWithCovariance, Vector3
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -98,64 +98,22 @@ class UORBNode(Node):
         def _publish_inner(odometry: Odometry) -> None:
             pose = odometry.pose.pose
 
-            # todo use odometry timestamp
-            if self._tf_buffer.can_transform(
-                odometry.header.frame_id, "earth", rclpy.time.Time()
-            ):
-                # Convert pose from (likely gisnav_map frame) to earth frame
-                # TODO lookup tf directly, do not check with can transform,
-                #  handle exception
-                transform = self._tf_buffer.lookup_transform(
-                    odometry.header.frame_id, "earth", rclpy.time.Time()
-                )
-                odom_time = rclpy.time.Time(
-                    seconds=odometry.header.stamp.sec,
-                    nanoseconds=odometry.header.stamp.nanosec,
-                )
-
-                pose_stamped = PoseStamped(header=odometry.header, pose=pose)
-                try:
-                    pose = self._tf_buffer.transform(
-                        pose_stamped,
-                        "earth",
-                        rclpy.duration.Duration(seconds=0.2),
-                    )
-                # TODO np.linalgerror?
-                except (
-                    # np.linalg.LinAlgError,
-                    tf2_ros.LookupException,
-                    tf2_ros.ConnectivityException,
-                    tf2_ros.ExtrapolationException,
-                ) as e:
-                    self.get_logger().debug(
-                        f"Cannot transform {odometry.header.frame_id} to earth frame "
-                        f"at desired timestamp, using latest odom frame instead: {e}"
-                    )
-                    pose_stamped.header.stamp = transform.header.stamp
-                    # Use existing transform (do_transform)
-                    try:
-                        pose = self._tf_buffer.transform(
-                            pose_stamped,
-                            "earth",
-                        )
-                    except (
-                        # np.linalg.LinAlgError,
-                        tf2_ros.LookupException,
-                        tf2_ros.ConnectivityException,
-                        tf2_ros.ExtrapolationException,
-                    ) as ex:
-                        self.get_logger().warning(
-                            f"Cannot transform {odometry.header.frame_id} to earth "
-                            f"frame, skipping publishing mock GPS message: {ex}"
-                        )
-                        return None
-            else:
+            # TODO use inverse publish rate for duration
+            transform = tf_.lookup_transform(
+                self._tf_buffer,
+                "earth",
+                odometry.header.frame_id,
+                (odometry.header.stamp, rclpy.duration.Duration(seconds=0.2)),
+                logger=self.get_logger(),
+            )
+            if transform is None:
                 self.get_logger().warning(
-                    f"Cannot transform {odometry.header.frame_id} to earth frame"
+                    f"Could not determine transform from {odometry.header.frame_id} "
+                    f"to earth"
                 )
                 return None
 
-            pose = pose.pose
+            pose = tf2_geometry_msgs.do_transform_pose(pose, transform)
             # WGS 84 longitude and latitude, and AGL altitude in meters
             # TODO: this is alt above ellipsoid, not agl
             lon, lat, alt_agl = tf_.ecef_to_wgs84(
@@ -211,25 +169,16 @@ class UORBNode(Node):
             vel_d_m_s = twist_with_covariance.twist.linear.z
 
             # Heading
-            try:
-                transform_earth_to_map = self._tf_buffer.lookup_transform(
-                    "gisnav_map",
-                    "earth",
-                    odom_time,
+            transform_earth_to_map = tf_.lookup_transform(
+                self._tf_buffer,
+                "gisnav_map",
+                "earth",
+                time_duration=(
+                    odometry.header.stamp,
                     rclpy.duration.Duration(seconds=0.2),
-                )
-            except (
-                tf2_ros.LookupException,
-                tf2_ros.ConnectivityException,
-                tf2_ros.ExtrapolationException,
-            ) as e:
-                self.get_logger().warning(
-                    f"Could not determine heading - skipping publishing SensorGps: {e}"
-                )
-                # TODO Set yaw to zero and make yaw/heading accuracy
-                #  np.nan in this case?
-                return None
-
+                ),
+                logger=self.get_logger(),
+            )
             pose_map = tf2_geometry_msgs.do_transform_pose(pose, transform_earth_to_map)
             euler = tf_transformations.euler_from_quaternion(
                 tf_.as_np_quaternion(pose_map.orientation).tolist()
@@ -461,7 +410,15 @@ class UORBNode(Node):
 
         try:
             # Get the transformation matrix
-            transform = self._tf_buffer.lookup_transform(to_frame, from_frame, ts)
+            transform = tf_.lookup_transform(
+                self._tf_buffer,
+                to_frame,
+                from_frame,
+                time_duration=(stamp, rclpy.duration.Duration(seconds=0.2)),
+                logger=self.get_logger(),
+            )
+            if transform is None:
+                return None
             # Set transform linear component to zero, only use orientation since
             # we are applying this to a velocity
             transform.transform.translation = Vector3()

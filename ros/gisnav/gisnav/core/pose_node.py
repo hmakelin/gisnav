@@ -8,6 +8,7 @@ drift-free.
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting PnP problem.
 """
+import time
 from typing import Optional, cast
 
 import cv2
@@ -37,7 +38,7 @@ from ..constants import (
     STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
+from ._shared import COVARIANCE_LIST_GLOBAL, compute_pose, visualize_matches_and_pose
 
 
 class PoseNode(Node):
@@ -104,7 +105,7 @@ class PoseNode(Node):
 
         # Deep matching can be very slow when running on CPU so we need to keep
         # transformations in a buffer for a long time
-        self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=45))
+        self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=30))
         self._tf_listener = tf2_ros.TransformListener(
             self._tf_buffer, self, spin_thread=True
         )
@@ -179,11 +180,11 @@ class PoseNode(Node):
                 input = torch.cat([qry_tensor, ref_tensor], dim=0)
                 # limit number of features to run faster, None means no limit i.e.
                 # slow but accurate
-                max_keypoints = 1024  # 4096  # None
+                max_keypoints = 512
                 feat_qry, feat_ref = self._extractor(
                     input, max_keypoints, pad_if_not_divisible=True
                 )
-                # time.sleep(3)
+                time.sleep(10)
                 kp_qry, desc_qry = feat_qry.keypoints, feat_qry.descriptors
                 kp_ref, desc_ref = feat_ref.keypoints, feat_ref.descriptors
                 lafs_qry = laf_from_center_scale_ori(
@@ -360,7 +361,7 @@ class PoseNode(Node):
 
             # TODO: re-enable covariance/implement error model
             pose_with_covariance = PoseWithCovariance(
-                pose=pose_msg.pose, covariance=COVARIANCE_LIST
+                pose=pose_msg.pose, covariance=COVARIANCE_LIST_GLOBAL
             )
 
             pose_with_covariance = PoseWithCovarianceStamped(

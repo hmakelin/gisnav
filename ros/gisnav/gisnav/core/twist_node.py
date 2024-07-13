@@ -184,32 +184,32 @@ class TwistNode(Node):
             r, t = pose
 
             # VISUALIZE
-            match_img = visualize_matches_and_pose(
-                camera_info,
-                qry.copy(),
-                ref.copy(),
-                mkp_qry,
-                mkp_ref,
-                r,
-                t,
-            )
-            ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
-            self._matches_publisher.publish(ros_match_image)
+            # match_img = visualize_matches_and_pose(
+            #    camera_info,
+            #    qry.copy(),
+            #    ref.copy(),
+            #    mkp_qry,
+            #    mkp_ref,
+            #    r,
+            #    t,
+            # )
+            # ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
+            # self._matches_publisher.publish(ros_match_image)
             # END VISUALIZE
 
             r_inv = r.T
             camera_optical_position_in_world = -r_inv @ t
 
             # Publish camera position in world frame to ROS for debugging
-            try:
-                x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
-                x, y = int(x), int(y)
-                image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
-                ros_image = self._cv_bridge.cv2_to_imgmsg(image)
-                self._position_publisher.publish(ros_image)
-            except (cv2.error, ValueError) as e:
-                self.get_logger().info(f"Could not draw camera position: {e}")
-                return None
+            # try:
+            #    x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
+            #    x, y = int(x), int(y)
+            #    image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
+            #    ros_image = self._cv_bridge.cv2_to_imgmsg(image)
+            #    #self._position_publisher.publish(ros_image)
+            # except (cv2.error, ValueError) as e:
+            #    self.get_logger().info(f"Could not draw camera position: {e}")
+            #    return None
 
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
@@ -336,7 +336,7 @@ class TwistNode(Node):
 
             # TODO: use custom error model for VO
             pose_with_covariance = PoseWithCovariance(
-                pose=pose_msg.pose, covariance=COVARIANCE_LIST
+                pose=pose_msg.pose  # , covariance=COVARIANCE_LIST
             )
             pose_with_covariance = PoseWithCovarianceStamped(
                 header=pose_msg.header, pose=pose_with_covariance

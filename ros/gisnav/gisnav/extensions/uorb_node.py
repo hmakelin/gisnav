@@ -8,7 +8,7 @@ import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
-from geometry_msgs.msg import PointStamped, TwistWithCovariance, Vector3
+from geometry_msgs.msg import PointStamped, PoseStamped, TwistWithCovariance, Vector3
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
 from pyproj import Transformer
@@ -31,7 +31,7 @@ class UORBNode(Node):
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default for :attr:`.dem_vertical_datum`"""
 
-    _REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH = 5
+    _REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH = 10
     """Number of required odometry messages before we start publishing
 
     This gives some time for the internal state of the EKF to catch up with the actual
@@ -120,8 +120,6 @@ class UORBNode(Node):
     def _publish(self, odometry: Odometry) -> None:
         @narrow_types(self)
         def _publish_inner(odometry: Odometry) -> None:
-            pose = odometry.pose.pose
-
             # TODO use inverse publish rate for duration
             transform = tf_.lookup_transform(
                 self._tf_buffer,
@@ -137,9 +135,41 @@ class UORBNode(Node):
                 )
                 return None
 
-            pose = tf2_geometry_msgs.do_transform_pose(pose, transform)
+            # self.get_logger().info(f"time diff between odom to earth tf and current odom: {odometry.header.stamp.sec - transform.header.stamp.sec} sec")
+            odom_time = rclpy.time.Time(
+                seconds=odometry.header.stamp.sec,
+                nanoseconds=odometry.header.stamp.nanosec,
+            )
+            transform_time = rclpy.time.Time(
+                seconds=transform.header.stamp.sec,
+                nanoseconds=transform.header.stamp.nanosec,
+            )
+            transform_bridge = self._tf_buffer.lookup_transform_full(
+                "gisnav_base_link",
+                transform_time,
+                "gisnav_base_link",
+                odom_time,
+                "gisnav_odom",
+            )
+            # self.get_logger().info(f"tf bridge: {transform_bridge.transform.translation}")
+            # transform = tf_.add_transform_stamped(transform, transform_bridge)
+            # transform.header.frame_id = "earth"
+            # transform.header.stamp = odometry.header.stamp
+            # assert transform.header.frame_id == "earth"
+            # assert transform.header.stamp.sec == odometry.header.stamp.sec
+            # assert transform.header.stamp.nanosec == odometry.header.stamp.nanosec
+
+            pose = PoseStamped(header=odometry.header, pose=odometry.pose.pose)
+
+            pose = tf_.add_transform_stamped(pose, transform_bridge)
+            pose = tf_.transform_to_pose(pose)
+            # self.get_logger().info(f"pose {pose}")
+
+            pose = tf2_geometry_msgs.do_transform_pose(pose.pose, transform)
             # WGS 84 longitude and latitude, and AGL altitude in meters
             # TODO: this is alt above ellipsoid, not agl
+
+            # pose = pose.pose
             lon, lat, alt_agl = tf_.ecef_to_wgs84(
                 pose.position.x, pose.position.y, pose.position.z
             )

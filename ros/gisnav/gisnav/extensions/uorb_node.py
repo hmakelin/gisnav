@@ -144,13 +144,22 @@ class UORBNode(Node):
                 seconds=transform.header.stamp.sec,
                 nanoseconds=transform.header.stamp.nanosec,
             )
-            transform_bridge = self._tf_buffer.lookup_transform_full(
-                "gisnav_base_link",
-                transform_time,
-                "gisnav_base_link",
-                odom_time,
-                "gisnav_odom",
-            )
+            try:
+                transform_bridge = self._tf_buffer.lookup_transform_full(
+                    "gisnav_base_link",
+                    transform_time,
+                    "gisnav_base_link",
+                    odom_time,
+                    "gisnav_odom",
+                )
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ) as e:
+                self.get_logger().warning(f"Could not get transform to old odom frame: {e}")
+                return None
+
             # self.get_logger().info(f"tf bridge: {transform_bridge.transform.translation}")
             # transform = tf_.add_transform_stamped(transform, transform_bridge)
             # transform.header.frame_id = "earth"

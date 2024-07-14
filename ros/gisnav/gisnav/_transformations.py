@@ -210,9 +210,9 @@ def lookup_transform(
     ) as e:
         if logger is not None:
             if time_duration is not None:
-                logger.warning(
+                logger.debug(
                     f"Cannot transform {source_frame} to {target_frame} frame "
-                    f"at desired timestamp, using latest odom_frame instead: {e}"
+                    f"at desired timestamp, using latest frame instead: {e}"
                 )
                 return lookup_transform(
                     buffer, target_frame, source_frame, logger=logger

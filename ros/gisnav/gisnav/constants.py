@@ -92,6 +92,8 @@ FrameID = Literal[
     "base_link",
     "camera",
     "camera_optical",
+    "base_link_stabilized",
+    "camera_frd",
     "map",
     "odom",
     "earth",

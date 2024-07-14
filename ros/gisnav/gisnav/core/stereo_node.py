@@ -251,15 +251,8 @@ class StereoNode(Node):
 
         query_image, orthoimage = self.image, self.orthoimage
 
-        # Need camera orientation in an ENU frame ("map") to rotate
-        # the orthoimage stack
-        # transform = (
-        #    tf_.get_transform(self, "map", "camera", rclpy.time.Time())
-        #    if hasattr(self, "_tf_buffer")
-        #    else None
-        # )
         if query_image is None:
-            self.get_logger().debug(f"Query image is None - skipping publishing")
+            self.get_logger().debug("Query image is None - skipping publishing")
             return None
 
         query_time = rclpy.time.Time(

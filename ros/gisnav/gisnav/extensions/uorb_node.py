@@ -8,6 +8,7 @@ import rclpy
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
+from builtin_interfaces.msg import Time
 from geometry_msgs.msg import PointStamped, PoseStamped, TwistWithCovariance, Vector3
 from nav_msgs.msg import Odometry
 from px4_msgs.msg import SensorGps
@@ -59,6 +60,7 @@ class UORBNode(Node):
 
         self._tf_buffer = tf2_ros.Buffer(rclpy.duration.Duration(seconds=30))
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
+        self._latest_global_match_stamp: Optional[Time] = None
 
         # Create transformers
         self._transformer_to_wgs84 = Transformer.from_crs(
@@ -106,6 +108,9 @@ class UORBNode(Node):
                     f"{remaining} more messages"
                 )
                 self._received_odometry_counter += 1
+        else:
+            assert msg.header.frame_id == "gisnav_map"
+            self._latest_global_match_stamp = msg.header.stamp
 
     @property
     @ROS.subscribe(
@@ -121,28 +126,42 @@ class UORBNode(Node):
         @narrow_types(self)
         def _publish_inner(odometry: Odometry) -> None:
             # TODO use inverse publish rate for duration
-            transform = tf_.lookup_transform(
+            assert odometry.header.frame_id == "gisnav_odom"
+
+            # Do not use timestamp from VO, use latest global match timestamp
+            # instead. This is to avoid interpolating in the gisnav_map frame which
+            # leads to bad results because the observations there are very sparse if
+            # e.g. running on CPU only
+            if self._latest_global_match_stamp is None:
+                self.get_logger().warning(
+                    "No global match timestamps yet, skipping publishing mock GPS msg"
+                )
+                return None
+            odom_to_earth = tf_.lookup_transform(
                 self._tf_buffer,
                 "earth",
-                odometry.header.frame_id,
-                (odometry.header.stamp, rclpy.duration.Duration(seconds=0.2)),
+                self._odometry.header.frame_id,
+                (
+                    self._latest_global_match_stamp,
+                    rclpy.duration.Duration(seconds=0.2),
+                ),  # (odometry.header.stamp, rclpy.duration.Duration(seconds=0.2)),
                 logger=self.get_logger(),
             )
-            if transform is None:
+            if odom_to_earth is None:
                 self.get_logger().warning(
                     f"Could not determine transform from {odometry.header.frame_id} "
                     f"to earth"
                 )
                 return None
 
-            # self.get_logger().info(f"time diff between odom to earth tf and current odom: {odometry.header.stamp.sec - transform.header.stamp.sec} sec")
             odom_time = rclpy.time.Time(
                 seconds=odometry.header.stamp.sec,
                 nanoseconds=odometry.header.stamp.nanosec,
             )
+            # transform time is same as self._latest_global_match_stamp?
             transform_time = rclpy.time.Time(
-                seconds=transform.header.stamp.sec,
-                nanoseconds=transform.header.stamp.nanosec,
+                seconds=odom_to_earth.header.stamp.sec,
+                nanoseconds=odom_to_earth.header.stamp.nanosec,
             )
             try:
                 transform_bridge = self._tf_buffer.lookup_transform_full(
@@ -151,34 +170,27 @@ class UORBNode(Node):
                     "gisnav_base_link",
                     odom_time,
                     "gisnav_odom",
+                    rclpy.duration.Duration(seconds=0.2),
                 )
             except (
                 tf2_ros.LookupException,
                 tf2_ros.ConnectivityException,
                 tf2_ros.ExtrapolationException,
             ) as e:
-                self.get_logger().warning(f"Could not get transform to old odom frame: {e}")
+                self.get_logger().warning(
+                    f"Could not get transform to old odom frame: {e}"
+                )
                 return None
-
-            # self.get_logger().info(f"tf bridge: {transform_bridge.transform.translation}")
-            # transform = tf_.add_transform_stamped(transform, transform_bridge)
-            # transform.header.frame_id = "earth"
-            # transform.header.stamp = odometry.header.stamp
-            # assert transform.header.frame_id == "earth"
-            # assert transform.header.stamp.sec == odometry.header.stamp.sec
-            # assert transform.header.stamp.nanosec == odometry.header.stamp.nanosec
 
             pose = PoseStamped(header=odometry.header, pose=odometry.pose.pose)
 
             pose = tf_.add_transform_stamped(pose, transform_bridge)
             pose = tf_.transform_to_pose(pose)
-            # self.get_logger().info(f"pose {pose}")
 
-            pose = tf2_geometry_msgs.do_transform_pose(pose.pose, transform)
+            pose = tf2_geometry_msgs.do_transform_pose(pose.pose, odom_to_earth)
             # WGS 84 longitude and latitude, and AGL altitude in meters
             # TODO: this is alt above ellipsoid, not agl
 
-            # pose = pose.pose
             lon, lat, alt_agl = tf_.ecef_to_wgs84(
                 pose.position.x, pose.position.y, pose.position.z
             )

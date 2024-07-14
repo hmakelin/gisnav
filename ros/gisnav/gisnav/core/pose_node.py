@@ -203,7 +203,7 @@ class PoseNode(Node):
                 feat_qry, feat_ref = self._extractor(
                     input, max_keypoints, pad_if_not_divisible=True
                 )
-                time.sleep(10)
+                time.sleep(5)
                 kp_qry, desc_qry = feat_qry.keypoints, feat_qry.descriptors
                 kp_ref, desc_ref = feat_ref.keypoints, feat_ref.descriptors
                 lafs_qry = laf_from_center_scale_ori(
@@ -380,7 +380,7 @@ class PoseNode(Node):
 
             # TODO: re-enable covariance/implement error model
             pose_with_covariance = PoseWithCovariance(
-                pose=pose_msg.pose, covariance=COVARIANCE_LIST_GLOBAL
+                pose=pose_msg.pose  # , covariance=COVARIANCE_LIST_GLOBAL
             )
 
             pose_with_covariance = PoseWithCovarianceStamped(

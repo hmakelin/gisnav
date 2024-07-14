@@ -12,7 +12,7 @@ reference images and then solving the resulting PnP problem.
 Does not publish a Twist message, instead publishes Pose which should then be
 fused differentially by the EKF.
 """
-from typing import Optional, cast
+from typing import Optional, Tuple, cast
 
 import cv2
 import numpy as np
@@ -180,6 +180,7 @@ class TwistNode(Node):
 
             pose = compute_pose(camera_info, mkp_qry, mkp_ref, np.zeros_like(qry))
             if pose is None:
+                self._cached_reference = self._previous_image
                 return None
             r, t = pose
 
@@ -213,17 +214,19 @@ class TwistNode(Node):
 
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
+
             angle_off_nadir: Optional[float] = None
             query_time = rclpy.time.Time(
                 seconds=query.header.stamp.sec,
                 nanoseconds=query.header.stamp.nanosec,
             )
             try:
-                transform = self._tf_buffer.lookup_transform(
+                transform = tf_.lookup_transform(
+                    self._tf_buffer,
                     "base_link_stabilized",
                     "camera_frd",
-                    query_time,
-                    rclpy.duration.Duration(seconds=0.2),
+                    (query_time, rclpy.duration.Duration(seconds=1.0)),
+                    self.get_logger(),
                 )
                 rotation = transform.transform.rotation
                 quaternion = (rotation.x, rotation.y, rotation.z, rotation.w)
@@ -232,6 +235,7 @@ class TwistNode(Node):
                 self.get_logger().warn(f"Could not get transform: {e}")
                 return None
 
+            assert angle_off_nadir is not None
             if angle_off_nadir > maximum_pitch_before_horizon_visible:
                 self.get_logger().warning(
                     f"Angle off nadir: {np.degrees(angle_off_nadir)} degrees, "
@@ -259,10 +263,19 @@ class TwistNode(Node):
             distance_to_ground_along_optical_axis = distance_to_ground / np.cos(
                 angle_off_nadir
             )
+            img_dim = self._image_dimensions(distance_to_ground)
+            if img_dim is None:
+                self.get_logger().warning("Cannot determine image dimensions in meters")
+                return None
+            _, _, meters_per_pixel_x, meters_per_pixel_y = img_dim
             fx = camera_info.k[0]
             scaling = np.abs(distance_to_ground_along_optical_axis / fx)
-            camera_optical_position_in_world = (
-                camera_optical_position_in_world * scaling
+            camera_optical_position_in_world = np.array(
+                [
+                    camera_optical_position_in_world[0] * meters_per_pixel_x,
+                    camera_optical_position_in_world[1] * meters_per_pixel_y,
+                    camera_optical_position_in_world[2] * scaling,
+                ]
             )
 
             pose_msg = tf_.create_pose_msg(
@@ -275,9 +288,11 @@ class TwistNode(Node):
                 # TODO: handle better
                 return None
 
+            # Todo: brittle - multiply with scaling only once (see above), e.g. multiply
+            #  difference from principal point
             fx = camera_info.k[0]
-            pose_msg.pose.position.x -= scaling * camera_info.width / 2
-            pose_msg.pose.position.y -= scaling * camera_info.height / 2
+            pose_msg.pose.position.x -= meters_per_pixel_x * camera_info.width / 2
+            pose_msg.pose.position.y -= meters_per_pixel_y * camera_info.height / 2
             pose_msg.pose.position.z += scaling * fx
 
             reftime = rclpy.time.Time(
@@ -362,3 +377,39 @@ class TwistNode(Node):
             return hfov
 
         return _hfov(self.camera_info)
+
+    def _image_dimensions(
+        self, distance_to_ground_along_principal_axis: float
+    ) -> Optional[Tuple[float, float, float, float]]:
+        @narrow_types(self)
+        def _image_dimensions(
+            camera_info: CameraInfo, distance_to_ground_along_principal_axis: float
+        ) -> Tuple[float, float, float, float]:
+            # Extract camera parameters
+            fx = camera_info.k[0]  # Focal length x
+            fy = camera_info.k[4]  # Focal length y
+            width = camera_info.width
+            height = camera_info.height
+
+            # Calculate field of view
+            fov_horizontal = 2 * np.arctan(width / (2 * fx))
+            fov_vertical = 2 * np.arctan(height / (2 * fy))
+
+            # Calculate plane dimensions
+            plane_width_meters = (
+                2 * distance_to_ground_along_principal_axis * np.tan(fov_horizontal / 2)
+            )
+            plane_height_meters = (
+                2 * distance_to_ground_along_principal_axis * np.tan(fov_vertical / 2)
+            )
+
+            return (
+                plane_width_meters,
+                plane_height_meters,
+                plane_width_meters / width,
+                plane_height_meters / height,
+            )
+
+        return _image_dimensions(
+            self.camera_info, distance_to_ground_along_principal_axis
+        )

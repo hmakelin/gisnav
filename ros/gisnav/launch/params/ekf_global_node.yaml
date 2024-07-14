@@ -13,7 +13,7 @@ robot_localization:
       # need predict_to_current_time if required output Hz is higher than input
       #predict_to_current_time: true
       sensor_timeout: 30.0
-      #pose0_queue_size: 20
+      pose1_queue_size: 20
       #pose0_rejection_threshold: 2.0
 
       #dynamic_process_noise_covariance: True
@@ -22,8 +22,8 @@ robot_localization:
       use_sim_time: false
       two_d_mode: false
 
-      #smooth_lagged_data: true
-      #history_length: 10.0
+      smooth_lagged_data: true
+      history_length: 20.0
       #print_diagnostics: true
 
       # Fuse absolute pose estimated from map rasters
@@ -35,12 +35,13 @@ robot_localization:
                      false, false, false]  # Accelerations XYZ
 
       # Fuse smooth relative pose estimated via VO
-      #pose1: "/gisnav/twist_node/pose"
-      #pose1_config: [true, true, true,     # Position XYZ
-      #               true, true, true,     # Orientation (roll, pitch, yaw)
-      #               false, false, false,  # Velocity XYZ
-      #               false, false, false,  # Angular rates XYZ
-      #               false, false, false]  # Accelerations XYZ
+      pose1: "/gisnav/twist_node/pose"
+      pose1_differential: true
+      pose1_config: [true, true, true,     # Position XYZ
+                     true, true, true,     # Orientation (roll, pitch, yaw)
+                     false, false, false,  # Velocity XYZ
+                     false, false, false,  # Angular rates XYZ
+                     false, false, false]  # Accelerations XYZ
 
       #debug: true
       #debug_out_file: "/home/hmakelin/robot_localization_debug.txt"

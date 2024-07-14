@@ -210,7 +210,7 @@ def lookup_transform(
     ) as e:
         if logger is not None:
             if time_duration is not None:
-                logger.debug(
+                logger.warning(
                     f"Cannot transform {source_frame} to {target_frame} frame "
                     f"at desired timestamp, using latest odom_frame instead: {e}"
                 )
@@ -559,8 +559,10 @@ def add_transform_stamped(
 
     # Create a new TransformStamped object for the result
     combined_transform = TransformStamped()
-    combined_transform.header.stamp = rclpy.clock.Clock().now().to_msg()
-    combined_transform.header.frame_id = transform1.header.frame_id
+    # combined_transform.header.stamp = rclpy.clock.Clock().now().to_msg()
+    # combined_transform.header.stamp = transform1.header.stamp
+    # combined_transform.header.frame_id = transform1.header.frame_id
+    combined_transform.header = transform1.header
     combined_transform.child_frame_id = transform2.child_frame_id
 
     combined_transform.transform.translation.x = translation[0]

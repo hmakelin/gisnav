@@ -125,8 +125,8 @@
         // Initial update
         updateWFSData();
 
-        // Refresh WFS data every 1 seconds
-        setInterval(updateWFSData, 1000);
+        // Refresh WFS data at 5 Hz
+        setInterval(updateWFSData, 200);
 
         // Create the WFS layer
         var wfsLayer = new ol.layer.Vector({

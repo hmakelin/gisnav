@@ -93,6 +93,7 @@ FrameID = Literal[
     "camera",
     "camera_optical",
     "map",
+    "odom",
     "earth",
     "gisnav_map",
     "gisnav_odom",

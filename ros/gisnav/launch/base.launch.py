@@ -135,6 +135,23 @@ def generate_launch_description():
     )
     ld.add_action(
         Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="map_to_odom_static_broadcaster",
+            arguments=[
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "map",
+                "odom",
+            ],
+        ),
+    )
+    ld.add_action(
+        Node(
             package="robot_localization",
             name="ekf_global_node",
             namespace="robot_localization",

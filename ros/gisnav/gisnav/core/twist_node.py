@@ -17,6 +17,7 @@ from typing import Optional, Tuple, cast
 import cv2
 import numpy as np
 import rclpy
+import tf2_geometry_msgs
 import tf2_ros
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
@@ -42,7 +43,7 @@ class TwistNode(Node):
     reference by finding matching keypoints and solving the PnP problem.
     """
 
-    CONFIDENCE_THRESHOLD = 0.9
+    CONFIDENCE_THRESHOLD = 0.7
     """Confidence threshold for filtering out bad keypoint matches"""
 
     MIN_MATCHES = 30
@@ -142,14 +143,14 @@ class TwistNode(Node):
                 self.get_logger().debug(
                     f"Could not match - resetting reference frame: {e}"
                 )
-                self._cached_reference = self._previous_image
+                # self._cached_reference = self._previous_image
                 return None
 
             if len(matches) < self.MIN_MATCHES:
                 self.get_logger().debug(
                     "Not enough matches - resetting reference frame"
                 )
-                self._cached_reference = self._previous_image
+                # self._cached_reference = self._previous_image
                 return None
 
             # Apply ratio test
@@ -171,7 +172,7 @@ class TwistNode(Node):
                 self.get_logger().debug(
                     "Not enough matches - resetting reference frame"
                 )
-                self._cached_reference = self._previous_image
+                # self._cached_reference = self._previous_image
                 return None
 
             mkp_qry, mkp_ref = zip(*mkps)
@@ -180,37 +181,37 @@ class TwistNode(Node):
 
             pose = compute_pose(camera_info, mkp_qry, mkp_ref, np.zeros_like(qry))
             if pose is None:
-                self._cached_reference = self._previous_image
+                # self._cached_reference = self._previous_image
                 return None
             r, t = pose
 
             # VISUALIZE
-            # match_img = visualize_matches_and_pose(
-            #    camera_info,
-            #    qry.copy(),
-            #    ref.copy(),
-            #    mkp_qry,
-            #    mkp_ref,
-            #    r,
-            #    t,
-            # )
-            # ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
-            # self._matches_publisher.publish(ros_match_image)
+            match_img = visualize_matches_and_pose(
+                camera_info,
+                qry.copy(),
+                ref.copy(),
+                mkp_qry,
+                mkp_ref,
+                r,
+                t,
+            )
+            ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
+            self._matches_publisher.publish(ros_match_image)
             # END VISUALIZE
 
             r_inv = r.T
             camera_optical_position_in_world = -r_inv @ t
 
             # Publish camera position in world frame to ROS for debugging
-            # try:
-            #    x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
-            #    x, y = int(x), int(y)
-            #    image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
-            #    ros_image = self._cv_bridge.cv2_to_imgmsg(image)
-            #    #self._position_publisher.publish(ros_image)
-            # except (cv2.error, ValueError) as e:
-            #    self.get_logger().info(f"Could not draw camera position: {e}")
-            #    return None
+            try:
+                x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
+                x, y = int(x), int(y)
+                image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
+                self._cv_bridge.cv2_to_imgmsg(image)
+                # self._position_publisher.publish(ros_image)
+            except (cv2.error, ValueError) as e:
+                self.get_logger().info(f"Could not draw camera position: {e}")
+                return None
 
             assert self._hfov is not None  # we have camera info
             maximum_pitch_before_horizon_visible = (np.pi / 2) - (self._hfov / 2)
@@ -299,31 +300,84 @@ class TwistNode(Node):
                 seconds=reference.header.stamp.sec,
                 nanoseconds=reference.header.stamp.nanosec,
             )
-            if self._tf_buffer.can_transform(
+            # if self._tf_buffer.can_transform(
+            #    "gisnav_odom",
+            #    "gisnav_camera_link_optical",
+            #    reftime,
+            #    rclpy.duration.Duration(seconds=0.2),  # rclpy.time.Time(),
+            # ):
+
+            if not self._tf_buffer.can_transform(
+                "gisnav_map", "gisnav_odom", rclpy.time.Time()
+            ):
+                map_to_odom = tf_.lookup_transform(
+                    self._tf_buffer, "map", "odom", logger=self.get_logger()
+                )
+                if map_to_odom is not None:
+                    map_to_odom.header.frame_id = "gisnav_map"
+                    map_to_odom.child_frame_id = "gisnav_odom"
+                    self.get_logger().info(
+                        "Initializing gisnav_map to gisnav_odom from"
+                        "FCU (from map to odom"
+                    )
+                    self._tf_broadcaster.sendTransform(map_to_odom)
+                else:
+                    self.get_logger().warning(
+                        "Could not init gisnav_map to gisnav_odom"
+                    )
+
+            camera_optical_to_odom = tf_.lookup_transform(
+                self._tf_buffer,
                 "gisnav_odom",
                 "gisnav_camera_link_optical",
-                reftime,
-                rclpy.duration.Duration(seconds=0.2),  # rclpy.time.Time(),
-            ):
-                pose_msg.header.stamp = reference.header.stamp
+                (reftime, rclpy.duration.Duration(seconds=0.2)),
+                logger=self.get_logger(),
+            )
+            if camera_optical_to_odom is None:
+                self.get_logger().warning(
+                    "Could not find transform from gisnav_camera_link_optical to "
+                    "gisnav_odom - initializing gisnav_odom to gisnav_base_link from FCU."
+                )
+                odom_to_base_link = tf_.lookup_transform(
+                    self._tf_buffer,
+                    "base_link",
+                    "odom",
+                    (reftime, rclpy.duration.Duration(seconds=0.2)),
+                    logger=self.get_logger(),
+                )
 
-                try:
-                    pose_msg = self._tf_buffer.transform(pose_msg, "gisnav_odom")
-                except tf2_ros.ExtrapolationException as e:
-                    self.get_logger().warning(
-                        f"Could not extrapolate odom frame - skipping publishing this "
-                        f"one: {e}"
+                if odom_to_base_link is None:
+                    self.get_logger().info(
+                        "Could not determine odom to base_link, returning None"
                     )
                     return None
 
-                pose_msg.header.stamp = query.header.stamp
-            else:
-                self.get_logger().warning(
-                    "Could not find transform from gisnav_camera_link_optical to "
-                    "gisnav_odom - resetting gisnav_odom frame."
+                odom_to_base_link.header.frame_id = "gisnav_odom"
+                odom_to_base_link.child_frame_id = "gisnav_base_link"
+                self.get_logger().info(
+                    "Initializing gisnav_odom to gisnav_base_link from FCU"
                 )
-                pose_msg.header.stamp = query.header.stamp
-                pose_msg.header.frame_id = "gisnav_odom"
+                self._tf_broadcaster.sendTransform(odom_to_base_link)
+
+                # try again
+                camera_optical_to_odom = tf_.lookup_transform(
+                    self._tf_buffer,
+                    "gisnav_odom",
+                    "gisnav_camera_link_optical",
+                    (reftime, rclpy.duration.Duration(seconds=0.2)),
+                    logger=self.get_logger(),
+                )
+
+            if camera_optical_to_odom is None:
+                self.get_logger().info(
+                    "Could not determine gisnav camera link optical to odom transform, returning None"
+                )
+                return None
+
+            pose_msg.pose = tf2_geometry_msgs.do_transform_pose(
+                pose_msg.pose, camera_optical_to_odom
+            )
+            pose_msg.header.frame_id = "gisnav_odom"
 
             # report base_link pose instead of camera frame pose
             # (fix difference in orientation)
@@ -344,9 +398,12 @@ class TwistNode(Node):
                     f"gisnav_base_link. Skipping publishing pose. {e}"
                 )
                 return None
+
             transform = tf_.add_transform_stamped(pose_msg, transform)
             pose_msg.pose.orientation = transform.transform.rotation
-            assert pose_msg.header.frame_id == "gisnav_odom"
+            assert (
+                pose_msg.header.frame_id == "gisnav_odom"
+            ), f"pose_msg header should be gisnav_odom (was {pose_msg.header.frame_id})"
             assert pose_msg.header.stamp == query.header.stamp
 
             # TODO: use custom error model for VO

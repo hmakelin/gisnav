@@ -156,25 +156,6 @@ class PoseNode(Node):
             camera_info: CameraInfo,
             msg: OrthoStereoImage,
         ) -> Optional[PoseWithCovarianceStamped]:
-            if not self._tf_buffer.can_transform(
-                "gisnav_map", "gisnav_odom", rclpy.time.Time()
-            ):
-                map_to_odom = tf_.lookup_transform(
-                    self._tf_buffer, "map", "odom", logger=self.get_logger()
-                )
-                if map_to_odom is not None:
-                    map_to_odom.header.frame_id = "gisnav_map"
-                    map_to_odom.header.child_frame_id = "gisnav_odom"
-                    self.get_logger().info(
-                        "Initializing gisnav_map to gisnav_odom from"
-                        "FCU (from map to odom"
-                    )
-                    self._tf_broadcaster.sendTransform(map_to_odom)
-                else:
-                    self.get_logger().warning(
-                        "Could not init gisnav_map to gisnav_odom"
-                    )
-
             # Convert the ROS Image message to an OpenCV image
             # Extract individual channels
             qry = self._cv_bridge.imgmsg_to_cv2(

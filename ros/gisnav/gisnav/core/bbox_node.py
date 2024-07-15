@@ -75,6 +75,10 @@ class BBoxNode(Node):
             (self._set_params_cli_local_position, self._set_params_cli_gimbal_control),
             Parameter(name="tf.send", type_=Parameter.Type.BOOL, value=True),
         )
+        self._set_params(
+            (self._set_params_cli_local_position,),
+            Parameter(name="tf.frame_id", type_=Parameter.Type.STRING, value="odom"),
+        )
 
         # The base_link_stabilized_frd frame is used as the parent frame for
         # the MAVROS gimbal_control plugin gimbal frames. This ensures that

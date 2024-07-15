@@ -16,7 +16,7 @@ COVARIANCE_LIST: Final = _covariance_matrix.flatten().tolist()
 
 
 _covariance_matrix = np.zeros((6, 6))
-np.fill_diagonal(_covariance_matrix, 25)  # 3 meter SD = 9 variance
+np.fill_diagonal(_covariance_matrix, 9)  # 3 meter SD = 9 variance
 _covariance_matrix[3, 3] = np.radians(3**2)  # angle error should be set quite small
 _covariance_matrix[4, 4] = _covariance_matrix[3, 3]
 _covariance_matrix[5, 5] = _covariance_matrix[3, 3]

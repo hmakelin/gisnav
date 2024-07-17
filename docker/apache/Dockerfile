@@ -3,11 +3,8 @@ ARG TINYOWS_MAPFILE
 
 # Update apt repository and install necessary packages
 RUN apt-get update && apt-get install -y \
-    cgi-mapserver \
-    mapserver-bin \
     apache2 \
     inotify-tools \
-    libapache2-mod-fcgid \
     gdal-bin \
     libgdal-dev \
     unzip \
@@ -19,19 +16,24 @@ FROM apache AS mapserver
 # Install TinyOWS dependencies
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    build-essential \
-    autoconf \
-    automake \
-    libtool \
-    libxml2-dev \
-    libgeos-dev \
-    postgresql-server-dev-all \
-    postgis \
-    libfcgi-dev \
-    libfcgi0ldbl \
-    libpq-dev \
-    flex \
-    git \
+      build-essential \
+      autoconf \
+      automake \
+      libtool \
+      libxml2-dev \
+      libgeos-dev \
+      postgresql-server-dev-all \
+      postgis \
+      libfcgi-dev \
+      libfcgi0ldbl \
+      libpq-dev \
+      flex \
+      git \
+      cgi-mapserver \
+      mapserver-bin \
+      mapcache-cgi \
+      libapache2-mod-mapcache \
+      libapache2-mod-fcgid \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone, build, and install TinyOWS
@@ -74,6 +76,8 @@ RUN wget "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF/hist
     #gdalwarp $DEM_FILENAME $DEM_4326_FILENAME # -s_srs EPSG:4269 -t_srs EPSG:4326
 
 COPY mapserver/mapfiles/ /etc/mapserver/
+
+RUN mkdir -p /var/cache/mapcache
 
 # Enable Apache modules
 RUN a2enmod rewrite && a2enmod fcgid && a2enmod cgi

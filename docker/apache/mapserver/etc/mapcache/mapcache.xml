@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mapcache>
+  <cache name="disk" type="disk">
+    <base>/var/cache/mapcache</base>
+    <symlink_blank/>
+  </cache>
+
+  <source name="mapserver" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>imagery</LAYERS>
+      </params>
+    </getmap>
+    <http>
+      <url>http://localhost/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map</url>
+    </http>
+  </source>
+
+  <tileset name="imagery">
+    <source>mapserver</source>
+    <cache>disk</cache>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <!-- metatile dimensions should approximate the diagonal of the image resolution, e.g. ~735 for 640x360 images -->
+    <metatile>3 3</metatile>
+    <metabuffer>10</metabuffer>
+  </tileset>
+
+  <service type="wmts" enabled="true"/>
+  <service type="demo" enabled="true"/>
+
+  <default_format>PNG</default_format>
+
+  <errors>report</errors>
+  <lock_dir>/tmp</lock_dir>
+</mapcache>

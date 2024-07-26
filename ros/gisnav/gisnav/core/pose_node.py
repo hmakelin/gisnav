@@ -8,7 +8,6 @@ drift-free.
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting PnP problem.
 """
-import time
 from typing import Optional, cast
 
 import cv2
@@ -20,7 +19,8 @@ import torch
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from gisnav_msgs.msg import OrthoStereoImage  # type: ignore[attr-defined]
-from kornia.feature import DISK, LightGlueMatcher, laf_from_center_scale_ori
+from kornia.feature import LightGlueMatcher, get_laf_center
+from kornia_moons.feature import OpenCVFeatureKornia
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
@@ -39,6 +39,13 @@ from ..constants import (
     FrameID,
 )
 from ._shared import COVARIANCE_LIST_GLOBAL, compute_pose, visualize_matches_and_pose
+
+# Fix "UserWarning: Plan failed with a cudnnException:
+# CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed
+# cudnn_status: CUDNN_STATUS_NOT_SUPPORTED (Triggered internally at
+# ../aten/src/ATen/native/cudnn/Conv_v8.cpp:919"
+# torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.deterministic = True
 
 
 class PoseNode(Node):
@@ -66,7 +73,7 @@ class PoseNode(Node):
         # Initialize DL model for map matching
         self._matcher = (
             LightGlueMatcher(
-                "disk",
+                "sift",
                 params={
                     "filter_threshold": self.CONFIDENCE_THRESHOLD,
                     "depth_confidence": -1,
@@ -76,7 +83,7 @@ class PoseNode(Node):
             .to(self._device)
             .eval()
         )
-        self._extractor = DISK.from_pretrained("depth").to(self._device)
+        self._extractor_sift = OpenCVFeatureKornia(cv2.SIFT_create(4096), mrSize=1.0)
 
         # initialize subscriptions
         self.camera_info
@@ -158,15 +165,15 @@ class PoseNode(Node):
         ) -> Optional[PoseWithCovarianceStamped]:
             # Convert the ROS Image message to an OpenCV image
             # Extract individual channels
-            qry = self._cv_bridge.imgmsg_to_cv2(
-                msg.query, desired_encoding="passthrough"
-            )
-            assert qry.ndim == 2
+            qry = self._cv_bridge.imgmsg_to_cv2(msg.query, desired_encoding="mono8")
+            assert qry.ndim == 2 or qry.shape[2] == 1
+            # assert qry.ndim == 2
             # qry = cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)
             ref = self._cv_bridge.imgmsg_to_cv2(msg.reference, desired_encoding="mono8")
             assert ref.ndim == 2 or ref.shape[2] == 1
+
             # reference_img = cv2.cvtColor(reference_img, cv2.COLOR_BGR2GRAY)
-            # Reconstruct 16-bit elevation from the last two channels
+            # TODO: Support 16-bit elevation
             reference_elevation = self._cv_bridge.imgmsg_to_cv2(
                 msg.dem, desired_encoding="mono8"
             )
@@ -174,32 +181,33 @@ class PoseNode(Node):
             with torch.inference_mode():
                 qry_tensor = torch.Tensor(qry[None, None]).to(self._device) / 255.0
                 ref_tensor = torch.Tensor(ref[None, None]).to(self._device) / 255.0
-                qry_tensor = qry_tensor.expand(-1, 3, -1, -1)
-                ref_tensor = ref_tensor.expand(-1, 3, -1, -1)
+                qry_tensor = qry_tensor.expand(-1, 1, -1, -1)
+                ref_tensor = torch.clone(ref_tensor).expand(-1, 1, -1, -1)
 
-                input = torch.cat([qry_tensor, ref_tensor], dim=0)
-                # limit number of features to run faster, None means no limit i.e.
-                # slow but accurate
-                max_keypoints = 512
-                feat_qry, feat_ref = self._extractor(
-                    input, max_keypoints, pad_if_not_divisible=True
+                lafs_qry, _, descs_qry = self._extractor_sift(qry_tensor)
+                lafs_ref, _, descs_ref = self._extractor_sift(ref_tensor)
+
+                # Convert to RootSIFT
+                descs_qry = torch.nn.functional.normalize(descs_qry, dim=-1, p=1).sqrt()
+                descs_ref = torch.nn.functional.normalize(descs_ref, dim=-1, p=1).sqrt()
+                dists, match_indices = self._matcher(
+                    descs_qry[0], descs_ref[0], lafs_qry, lafs_ref
                 )
-                time.sleep(5)
-                kp_qry, desc_qry = feat_qry.keypoints, feat_qry.descriptors
-                kp_ref, desc_ref = feat_ref.keypoints, feat_ref.descriptors
-                lafs_qry = laf_from_center_scale_ori(
-                    kp_qry[None], torch.ones(1, len(kp_qry), 1, 1, device=self._device)
-                )
-                lafs_ref = laf_from_center_scale_ori(
-                    kp_ref[None], torch.ones(1, len(kp_ref), 1, 1, device=self._device)
-                )
-                _, match_indices = self._matcher(desc_qry, desc_ref, lafs_qry, lafs_ref)
+
+                kp_qry = get_laf_center(lafs_qry).squeeze()
+                kp_ref = get_laf_center(lafs_ref).squeeze()
+
+                # Artificially increase matching time (simulate CPU or resource
+                # constrained device)
+                # time.sleep(5)
 
                 mkp_qry = kp_qry[match_indices[:, 0]].cpu().numpy()
                 mkp_ref = kp_ref[match_indices[:, 1]].cpu().numpy()
 
             if len(mkp_qry) < self.MIN_MATCHES:
-                self.get_logger().debug("Not enough matches - returning None")
+                self.get_logger().warning(
+                    f"Not enough matches ({len(mkp_qry)})- returning None"
+                )
                 return None
 
             pose = compute_pose(camera_info, mkp_qry, mkp_ref, reference_elevation)
@@ -227,6 +235,11 @@ class PoseNode(Node):
             # Publish camera position in world frame to ROS for debugging
             x, y = camera_optical_position_in_world[0:2].squeeze().tolist()
             x, y = int(x), int(y)
+
+            if not (0 <= x <= ref.shape[0] and 0 <= y <= ref.shape[1]):
+                self.get_logger().warning(f"center {(x, y)} was not in expected range")
+                return None
+
             image = cv2.circle(np.array(ref.copy()), (x, y), 5, (0, 255, 0), -1)
             ros_image = self._cv_bridge.cv2_to_imgmsg(image)
             self._position_publisher.publish(ros_image)
@@ -238,6 +251,7 @@ class PoseNode(Node):
                 camera_optical_position_in_world,
             )
             if pose is None:
+                self.get_logger().warning("Could not create pose msg - returning None")
                 # TODO: handle better
                 return None
 

@@ -210,6 +210,13 @@ class StereoNode(Node):
                 crop_shape: Tuple[int, int] = image.height, image.width
 
                 # here positive rotation is counter-clockwise, so we invert
+                # TODO: rotation 0 for SIFT features (rotation invariant),
+                #  handle better, e.g. via a ROS parameter
+                # self.get_logger().debug(
+                #    "Assuming feature extractor is rotation invariant, "
+                #    "not rotating reference image"
+                # )
+                # rotation = 0
                 orthoimage_rotated_stack, M = self._rotate_and_crop_center(
                     orthoimage_stack, rotation, crop_shape
                 )

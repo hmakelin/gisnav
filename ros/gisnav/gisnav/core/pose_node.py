@@ -19,8 +19,7 @@ import torch
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from gisnav_msgs.msg import OrthoStereoImage  # type: ignore[attr-defined]
-from kornia.feature import LightGlueMatcher, get_laf_center
-from kornia_moons.feature import OpenCVFeatureKornia
+from kornia.feature import LightGlueMatcher, get_laf_center, laf_from_center_scale_ori
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
 from robot_localization.srv import SetPose
@@ -83,7 +82,7 @@ class PoseNode(Node):
             .to(self._device)
             .eval()
         )
-        self._extractor_sift = OpenCVFeatureKornia(cv2.SIFT_create(4096), mrSize=1.0)
+        self._extractor = cv2.SIFT_create()
 
         # initialize subscriptions
         self.camera_info
@@ -179,23 +178,79 @@ class PoseNode(Node):
             )
 
             with torch.inference_mode():
-                qry_tensor = torch.Tensor(qry[None, None]).to(self._device) / 255.0
-                ref_tensor = torch.Tensor(ref[None, None]).to(self._device) / 255.0
-                qry_tensor = qry_tensor.expand(-1, 1, -1, -1)
-                ref_tensor = torch.clone(ref_tensor).expand(-1, 1, -1, -1)
-
-                lafs_qry, _, descs_qry = self._extractor_sift(qry_tensor)
-                lafs_ref, _, descs_ref = self._extractor_sift(ref_tensor)
-
-                # Convert to RootSIFT
-                descs_qry = torch.nn.functional.normalize(descs_qry, dim=-1, p=1).sqrt()
-                descs_ref = torch.nn.functional.normalize(descs_ref, dim=-1, p=1).sqrt()
-                dists, match_indices = self._matcher(
-                    descs_qry[0], descs_ref[0], lafs_qry, lafs_ref
+                kp_qry_cv2_orig, descs_qry_cv2 = self._extractor.detectAndCompute(
+                    qry, None
+                )
+                kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(
+                    ref, None
                 )
 
-                kp_qry = get_laf_center(lafs_qry).squeeze()
-                kp_ref = get_laf_center(lafs_ref).squeeze()
+                kp_qry_cv2 = cv2.KeyPoint_convert(kp_qry_cv2_orig)
+                kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
+
+                kp_qry_cv2_size = np.array(
+                    tuple(map(lambda kp: kp.size, kp_qry_cv2_orig)), dtype=np.float32
+                )
+                kp_qry_cv2_angle = np.array(
+                    tuple(map(lambda kp: kp.angle, kp_qry_cv2_orig)), dtype=np.float32
+                )
+                kp_ref_cv2_size = np.array(
+                    tuple(map(lambda kp: kp.size, kp_ref_cv2_orig)), dtype=np.float32
+                )
+                kp_ref_cv2_angle = np.array(
+                    tuple(map(lambda kp: kp.angle, kp_ref_cv2_orig)), dtype=np.float32
+                )
+
+                kp_qry_cv2, descs_qry_cv2 = tuple(
+                    map(
+                        lambda arr: torch.from_numpy(arr).to(self._device),
+                        (kp_qry_cv2, descs_qry_cv2),
+                    )
+                )
+                kp_qry_cv2_size, kp_qry_cv2_angle = tuple(
+                    map(
+                        lambda arr: torch.from_numpy(arr).to(self._device),
+                        (kp_qry_cv2_size, kp_qry_cv2_angle),
+                    )
+                )
+                kp_ref_cv2, descs_ref_cv2 = tuple(
+                    map(
+                        lambda arr: torch.from_numpy(arr).to(self._device),
+                        (kp_ref_cv2, descs_ref_cv2),
+                    )
+                )
+                kp_ref_cv2_size, kp_ref_cv2_angle = tuple(
+                    map(
+                        lambda arr: torch.from_numpy(arr).to(self._device),
+                        (kp_ref_cv2_size, kp_ref_cv2_angle),
+                    )
+                )
+
+                lafs_qry_cv2 = laf_from_center_scale_ori(
+                    kp_qry_cv2.unsqueeze(0),
+                    kp_qry_cv2_size[None, :, None, None],
+                    kp_qry_cv2_angle[None, :, None],
+                )
+                lafs_ref_cv2 = laf_from_center_scale_ori(
+                    kp_ref_cv2.unsqueeze(0),
+                    kp_ref_cv2_size[None, :, None, None],
+                    kp_ref_cv2_angle[None, :, None],
+                )
+
+                # Convert to RootSIFT (required by kornia LightGlueMatcher)
+                descs_qry_cv2 = torch.nn.functional.normalize(
+                    descs_qry_cv2, dim=-1, p=1
+                ).sqrt()
+                descs_ref_cv2 = torch.nn.functional.normalize(
+                    descs_ref_cv2, dim=-1, p=1
+                ).sqrt()
+
+                dists, match_indices = self._matcher(
+                    descs_qry_cv2, descs_ref_cv2, lafs_qry_cv2, lafs_ref_cv2
+                )
+
+                kp_qry = get_laf_center(lafs_qry_cv2).squeeze()
+                kp_ref = get_laf_center(lafs_ref_cv2).squeeze()
 
                 # Artificially increase matching time (simulate CPU or resource
                 # constrained device)

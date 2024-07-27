@@ -336,7 +336,8 @@ class TwistNode(Node):
             if camera_optical_to_odom is None:
                 self.get_logger().warning(
                     "Could not find transform from gisnav_camera_link_optical to "
-                    "gisnav_odom - initializing gisnav_odom to gisnav_base_link from FCU."
+                    "gisnav_odom - initializing gisnav_odom to gisnav_base_link from "
+                    "FCU."
                 )
                 odom_to_base_link = tf_.lookup_transform(
                     self._tf_buffer,
@@ -370,7 +371,8 @@ class TwistNode(Node):
 
             if camera_optical_to_odom is None:
                 self.get_logger().info(
-                    "Could not determine gisnav camera link optical to odom transform, returning None"
+                    "Could not determine gisnav camera link optical to odom transform, "
+                    "returning None"
                 )
                 return None
 

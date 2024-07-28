@@ -44,6 +44,11 @@ class StereoNode(Node):
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
 
+    ROS_D_MAP_ROTATION_INTERVAL: Final = 45
+    """Interval in degrees at which keypoints are computed and cached for reference
+    map rasters. Default for :attr:`map_rotation_interval`.
+    """
+
     def __init__(self, *args, **kwargs) -> None:
         """Class initializer
 
@@ -69,8 +74,23 @@ class StereoNode(Node):
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
-        self._previous_rotation: Optional[float] = None
+        # Previous rotation is integer, not float, because we want to have the rotations
+        # in discrete buckets so that we can cache keypoints per rotation bucket
+        self._previous_rotation: Optional[int] = None
         self._pose_image: Optional[OrthoStereoImage] = None
+
+    @property
+    @ROS.parameter(
+        ROS_D_MAP_ROTATION_INTERVAL, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY
+    )
+    def map_rotation_interval(self) -> Optional[int]:
+        """ROS parameter default for map rotation interval in degrees
+
+        If the used keypoint descriptors have high rotation invariance, this value
+        can be made higher. Conversely, if the keypoints are hightly rotation invariant
+        this value should be very small. Smaller values mean more storage is needed
+        to cache keypoints at more rotation buckets.
+        """
 
     def _orthoimage_cb(self, msg: OrthoImage) -> None:
         # Set cached rotation to None to trigger rotation and cropping on
@@ -163,6 +183,7 @@ class StereoNode(Node):
             camera_info: CameraInfo,
             keypoint_cloud: PointCloud2,
             orthoimage: OrthoImage,
+            map_rotation_interval: int,
         ) -> Optional[OrthoStereoImage]:
             """Rotate and crop and orthoimage stack to align with query image"""
             query_time = rclpy.time.Time(
@@ -191,12 +212,15 @@ class StereoNode(Node):
             # (z axis up in an ENU frame), z is aligned with zenith so in that sense
             # this is positive in the counter-clockwise direction. E.g. east aligned
             # rotation is positive 90 degrees.
-            rotation = (camera_yaw_degrees + camera_roll_degrees) % 360
+            rotation = int((camera_yaw_degrees + camera_roll_degrees) % 360)
+            map_rotation = (
+                (rotation // map_rotation_interval) * map_rotation_interval % 360
+            )
 
             # Do not recompute/warp reference if rotation diff is less than 5 deg
             if (
                 self._previous_rotation is None
-                or (rotation - self._previous_rotation) % 360 > 5
+                or abs(rotation - self._previous_rotation) > map_rotation_interval
             ):
                 orthoimage_arr = self._cv_bridge.imgmsg_to_cv2(
                     orthoimage.image, desired_encoding="passthrough"
@@ -225,7 +249,7 @@ class StereoNode(Node):
                 # )
                 # rotation = 0
                 orthoimage_rotated_stack, M = self._rotate_and_crop_center(
-                    orthoimage_stack, rotation, crop_shape
+                    orthoimage_stack, map_rotation, crop_shape
                 )
 
                 reference_image_msg = self._cv_bridge.cv2_to_imgmsg(
@@ -258,7 +282,7 @@ class StereoNode(Node):
                 query_sift=keypoint_cloud, reference=reference_image_msg, dem=dem_msg
             )
 
-            self._previous_rotation = rotation
+            self._previous_rotation = map_rotation
             self._pose_image = ortho_stereo_image_msg
 
             ortho_stereo_image_msg.crs = String(data=proj_str)
@@ -269,6 +293,7 @@ class StereoNode(Node):
             self.camera_info,
             keypoint_cloud,
             self.orthoimage,
+            self.map_rotation_interval,
         )
 
     @staticmethod

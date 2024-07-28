@@ -1,3 +1,4 @@
 gisnav:
   stereo_node_gis:
-    ros__parameters: []
+    ros__parameters:
+      map_rotation_interval: 45  # degrees

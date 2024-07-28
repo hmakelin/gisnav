@@ -70,7 +70,7 @@ class TwistNode(Node):
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
         self._sift = cv2.SIFT_create()
-        self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        self._bf = cv2.BFMatcher(crossCheck=False)
 
         # Publishers for dev image
         self._matches_publisher = self.create_publisher(

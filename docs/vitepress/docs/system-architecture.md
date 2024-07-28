@@ -28,12 +28,13 @@ graph TB
     MAVROS -->|"geometry_msgs/PoseStamped"| BBoxNode
     MAVROS -->|"mavros_msgs/GimbalDeviceAttitudeStatus"| BBoxNode
     gscam ---->|"sensor_msgs/Image"| BBoxNode
+    gscam ---->|"sensor_msgs/Image"| TwistNode
 
     subgraph core["GISNav core nodes"]
         BBoxNode -->|"geographic_msgs/BoundingBox"| GISNode
         GISNode -->|"gisnav_msgs/OrthoImage"| StereoNode
-        StereoNode -->|"gisnav_msgs/MonocularStereoImage"| TwistNode
-        StereoNode -->|"gisnav_msgs/OrthoStereoImage"| PoseNode
+        StereoNode -->|"gisnav_msgs/OrthoStereoImage\n(rotated & cropped reference image + query image SIFT keypoints passed through)"| PoseNode
+        TwistNode -->|"sensor_msgs/PointCloud2\n(SIFT keypoints)"| StereoNode
     end
 
     subgraph extension["GISNav extension nodes"]
@@ -46,8 +47,9 @@ graph TB
         ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| NMEANode
     end
 
-    TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped"| ekf
-    PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped"| ekf
+    TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(local pose, odom frame)"| ekf
+
+    PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
 
     style micro_ros_agent fill-opacity:0, stroke-opacity:0;

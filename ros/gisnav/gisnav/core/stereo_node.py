@@ -22,7 +22,7 @@ from gisnav_msgs.msg import OrthoImage, OrthoStereoImage  # type: ignore[attr-de
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, PointCloud2
 from std_msgs.msg import String
 
 from .. import _transformations as tf_
@@ -31,9 +31,10 @@ from ..constants import (
     GIS_NODE_NAME,
     ROS_NAMESPACE,
     ROS_TOPIC_CAMERA_INFO,
-    ROS_TOPIC_IMAGE,
     ROS_TOPIC_RELATIVE_ORTHOIMAGE,
     ROS_TOPIC_RELATIVE_POSE_IMAGE,
+    ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS,
+    TWIST_NODE_NAME,
 )
 
 
@@ -58,10 +59,7 @@ class StereoNode(Node):
         # subscriptions to the appropriate ROS topics
         self.orthoimage
         self.camera_info
-        self.image
-
-        # TODO Declare as property?
-        self.previous_image: Optional[Image] = None
+        self.keypoints
 
         # setup publisher to pass launch test without image callback being
         # triggered
@@ -101,25 +99,20 @@ class StereoNode(Node):
         """Subscribed camera info for determining appropriate :attr:`.orthoimage` crop
         resolution, or None if unknown"""
 
-    def _image_cb(self, msg: Image) -> None:
+    def _keypoints_cb(self, msg: PointCloud2) -> None:
         """Callback for :attr:`.image` message"""
-        self.pose_image  # publish rotated and cropped orthoimage stack
-
-        # TODO this is brittle - nothing is enforcing that this is assigned after
-        #  publishing stereo_image
-        self.previous_image = (
-            msg  # needed for VO - leave this for last in this callback
-        )
+        self.pose_image(msg)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
     @ROS.subscribe(
-        ROS_TOPIC_IMAGE,
+        f"/{ROS_NAMESPACE}"
+        f'/{ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS.replace("~", TWIST_NODE_NAME)}',
         QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_image_cb,
+        callback=_keypoints_cb,
     )
-    def image(self) -> Optional[Image]:
-        """Subscribed raw image from vehicle camera, or None if unknown"""
+    def keypoints(self) -> Optional[PointCloud2]:
+        """Subscribed query image keypoints, or None if unknown"""
 
     def _world_to_reference_proj_str(
         self,
@@ -156,24 +149,38 @@ class StereoNode(Node):
 
         return _transform(M, crs)
 
-    @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_POSE_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pose_image(self) -> Optional[OrthoStereoImage]:
+    def pose_image(self, keypoint_cloud: PointCloud2) -> Optional[OrthoStereoImage]:
         """Published aligned and cropped orthoimage consisting of query image,
         reference image, and optional reference elevation raster (DEM).
         """
 
         @narrow_types(self)
         def _pnp_image(
-            image: Image,
+            camera_info: CameraInfo,
+            keypoint_cloud: PointCloud2,
             orthoimage: OrthoImage,
-            transform: TransformStamped,
         ) -> Optional[OrthoStereoImage]:
             """Rotate and crop and orthoimage stack to align with query image"""
-            transform = transform.transform
+            query_time = rclpy.time.Time(
+                seconds=keypoint_cloud.header.stamp.sec,
+                nanoseconds=keypoint_cloud.header.stamp.nanosec,
+            )
+            transform = tf_.lookup_transform(
+                self._tf_buffer,
+                "map",
+                "camera",
+                (query_time, rclpy.duration.Duration(seconds=0.2)),
+                logger=self.get_logger(),
+            )
+            if transform is None:
+                self.get_logger().warning("Could not get map to camera transform.")
+                return None
+            else:
+                transform = transform.transform
 
             # Rotate and crop orthoimage stack
             # TODO: implement this part better e.g. use
@@ -207,7 +214,7 @@ class StereoNode(Node):
                     f"image and one 8-bit channel for 8-bit elevation reference)"
                 )
 
-                crop_shape: Tuple[int, int] = image.height, image.width
+                crop_shape: Tuple[int, int] = camera_info.height, camera_info.width
 
                 # here positive rotation is counter-clockwise, so we invert
                 # TODO: rotation 0 for SIFT features (rotation invariant),
@@ -225,7 +232,7 @@ class StereoNode(Node):
                     orthoimage_rotated_stack[:, :, 0], encoding="mono8"
                 )
 
-                reference_image_msg.header.stamp = image.header.stamp
+                reference_image_msg.header.stamp = keypoint_cloud.header.stamp
                 proj_str = self._world_to_reference_proj_str(
                     np.linalg.inv(M),  # TODO: try-except
                     orthoimage.crs.data,
@@ -243,10 +250,12 @@ class StereoNode(Node):
             assert reference_image_msg is not None
             assert proj_str is not None
 
-            dem_msg.header.stamp = image.header.stamp
+            dem_msg.header.stamp = keypoint_cloud.header.stamp
 
+            # TODO: subscribe to image and add query image with same timestamp as SIFT
+            #  features to ease development and debugging (reduced performance)
             ortho_stereo_image_msg = OrthoStereoImage(
-                query=image, reference=reference_image_msg, dem=dem_msg
+                query_sift=keypoint_cloud, reference=reference_image_msg, dem=dem_msg
             )
 
             self._previous_rotation = rotation
@@ -256,32 +265,10 @@ class StereoNode(Node):
 
             return ortho_stereo_image_msg
 
-        query_image, orthoimage = self.image, self.orthoimage
-
-        if query_image is None:
-            self.get_logger().debug("Query image is None - skipping publishing")
-            return None
-
-        query_time = rclpy.time.Time(
-            seconds=query_image.header.stamp.sec,
-            nanoseconds=query_image.header.stamp.nanosec,
-        )
-        transform = (
-            tf_.lookup_transform(
-                self._tf_buffer,
-                "map",
-                "camera",
-                (query_time, rclpy.duration.Duration(seconds=0.2)),
-                logger=self.get_logger(),
-            )
-            if hasattr(self, "_tf_buffer")
-            else None
-        )
-
         return _pnp_image(
-            query_image,
-            orthoimage,
-            transform,
+            self.camera_info,
+            keypoint_cloud,
+            self.orthoimage,
         )
 
     @staticmethod

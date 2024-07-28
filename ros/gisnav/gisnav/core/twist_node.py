@@ -19,11 +19,13 @@ import numpy as np
 import rclpy
 import tf2_geometry_msgs
 import tf2_ros
+from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
+from std_msgs.msg import Header
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
@@ -33,9 +35,15 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_MATCHES_IMAGE,
     ROS_TOPIC_RELATIVE_POSE,
     ROS_TOPIC_RELATIVE_POSITION_IMAGE,
+    ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS,
     FrameID,
 )
-from ._shared import COVARIANCE_LIST, compute_pose, visualize_matches_and_pose
+from ._shared import (
+    COVARIANCE_LIST,
+    KEYPOINT_DTYPE,
+    compute_pose,
+    visualize_matches_and_pose,
+)
 
 
 class TwistNode(Node):
@@ -61,7 +69,7 @@ class TwistNode(Node):
 
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
-        self._orb = cv2.ORB_create()
+        self._sift = cv2.SIFT_create()
         self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
         # Publishers for dev image
@@ -84,6 +92,7 @@ class TwistNode(Node):
 
         # initialize subscriptions
         self.camera_info
+        self.image
         # initialize publisher (for launch tests)
         self.pose
 
@@ -113,6 +122,59 @@ class TwistNode(Node):
     def image(self) -> Optional[Image]:
         """Subscribed raw image from vehicle camera, or None if unknown"""
 
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS,
+        QoSPresetProfiles.SENSOR_DATA.value,
+    )
+    def _publish_keypoints(
+        self,
+        stamp: Time,
+        kps: np.ndarray,
+        descs: np.ndarray,
+        sizes: np.ndarray,
+        angles: np.ndarray,
+    ) -> Optional[PointCloud2]:
+        """Publish computed keypoints (RootSIFT) for query
+
+        :parameter kps: keypoint array of shape (N, 2) where N is number of keypoints
+        :descs kps: descriptor array of shape (N, 128) where N is the number of
+            keypoints
+        :parameter sizes: size array of shape (N,) where N is number of keypoints
+        :parameter angles: angle array of shape (N,) where N is number of keypoints
+        :return: Point cloud message representing the keypoints and descriptors
+        """
+        # Create a structured array for our custom point type
+        data = np.empty(kps.shape[0], dtype=KEYPOINT_DTYPE)
+        data["x"] = kps[:, 0]
+        data["y"] = kps[:, 1]
+        data["z"] = np.zeros_like(kps[:, 0])
+        data["size"] = sizes
+        data["angle"] = angles
+        data["descriptor"] = descs
+
+        msg = PointCloud2()
+        msg.header = Header()
+        msg.header.stamp = stamp
+        msg.header.frame_id = "query_image"
+
+        msg.height = 1
+        msg.width = len(data)
+        msg.fields = [
+            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(
+                name="descriptor", offset=12, datatype=PointField.FLOAT32, count=128
+            ),
+        ]
+        msg.is_bigendian = False
+        msg.point_step = data.itemsize
+        msg.row_step = data.itemsize * len(data)
+        msg.is_dense = False
+        msg.data = data.tobytes()
+
+        return msg
+
     @property
     @ROS.publish(
         ROS_TOPIC_RELATIVE_POSE,
@@ -134,8 +196,21 @@ class TwistNode(Node):
             ref = self._cv_bridge.imgmsg_to_cv2(reference, desired_encoding="mono8")
 
             # find the keypoints and descriptors with ORB
-            kp_qry, desc_qry = self._orb.detectAndCompute(qry, None)
-            kp_ref, desc_ref = self._orb.detectAndCompute(ref, None)
+            kp_qry, desc_qry = self._sift.detectAndCompute(qry, None)
+            kp_ref, desc_ref = self._sift.detectAndCompute(ref, None)
+
+            # Publish query image keypoints and descriptors to be reused downstream in
+            # PoseNode
+            kp_qry_arr = cv2.KeyPoint_convert(kp_qry)
+            size_qry = np.array(
+                tuple(map(lambda kp: kp.size, kp_qry)), dtype=np.float32
+            )
+            angle_qry = np.array(
+                tuple(map(lambda kp: kp.angle, kp_qry)), dtype=np.float32
+            )
+            self._publish_keypoints(
+                query.header.stamp, kp_qry_arr, desc_qry, size_qry, angle_qry
+            )
 
             try:
                 matches = self._bf.knnMatch(desc_qry, desc_ref, k=2)

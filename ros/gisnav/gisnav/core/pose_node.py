@@ -37,7 +37,12 @@ from ..constants import (
     STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import COVARIANCE_LIST_GLOBAL, compute_pose, visualize_matches_and_pose
+from ._shared import (
+    COVARIANCE_LIST_GLOBAL,
+    KEYPOINT_DTYPE,
+    compute_pose,
+    visualize_matches_and_pose,
+)
 
 # Fix "UserWarning: Plan failed with a cudnnException:
 # CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR: cudnnFinalize Descriptor Failed
@@ -162,12 +167,16 @@ class PoseNode(Node):
             camera_info: CameraInfo,
             msg: OrthoStereoImage,
         ) -> Optional[PoseWithCovarianceStamped]:
+            # Get the point cloud data as a numpy array
+            data = np.frombuffer(msg.query_sift.data, dtype=KEYPOINT_DTYPE)
+
+            # TODO: insert z/depth coordinates from elsewhere?
+            kp_qry_cv2 = np.column_stack((data["x"], data["y"]))
+            descs_qry_cv2 = data["descriptor"]
+            kp_qry_cv2_size = data["size"]
+            kp_qry_cv2_angle = data["angle"]
+
             # Convert the ROS Image message to an OpenCV image
-            # Extract individual channels
-            qry = self._cv_bridge.imgmsg_to_cv2(msg.query, desired_encoding="mono8")
-            assert qry.ndim == 2 or qry.shape[2] == 1
-            # assert qry.ndim == 2
-            # qry = cv2.cvtColor(qry, cv2.COLOR_BGR2GRAY)
             ref = self._cv_bridge.imgmsg_to_cv2(msg.reference, desired_encoding="mono8")
             assert ref.ndim == 2 or ref.shape[2] == 1
 
@@ -178,22 +187,10 @@ class PoseNode(Node):
             )
 
             with torch.inference_mode():
-                kp_qry_cv2_orig, descs_qry_cv2 = self._extractor.detectAndCompute(
-                    qry, None
-                )
                 kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(
                     ref, None
                 )
-
-                kp_qry_cv2 = cv2.KeyPoint_convert(kp_qry_cv2_orig)
                 kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
-
-                kp_qry_cv2_size = np.array(
-                    tuple(map(lambda kp: kp.size, kp_qry_cv2_orig)), dtype=np.float32
-                )
-                kp_qry_cv2_angle = np.array(
-                    tuple(map(lambda kp: kp.angle, kp_qry_cv2_orig)), dtype=np.float32
-                )
                 kp_ref_cv2_size = np.array(
                     tuple(map(lambda kp: kp.size, kp_ref_cv2_orig)), dtype=np.float32
                 )
@@ -201,28 +198,16 @@ class PoseNode(Node):
                     tuple(map(lambda kp: kp.angle, kp_ref_cv2_orig)), dtype=np.float32
                 )
 
-                kp_qry_cv2, descs_qry_cv2 = tuple(
+                kp_qry_cv2, descs_qry_cv2, kp_qry_cv2_size, kp_qry_cv2_angle = tuple(
                     map(
                         lambda arr: torch.from_numpy(arr).to(self._device),
-                        (kp_qry_cv2, descs_qry_cv2),
+                        (kp_qry_cv2, descs_qry_cv2, kp_qry_cv2_size, kp_qry_cv2_angle),
                     )
                 )
-                kp_qry_cv2_size, kp_qry_cv2_angle = tuple(
+                kp_ref_cv2, descs_ref_cv2, kp_ref_cv2_size, kp_ref_cv2_angle = tuple(
                     map(
                         lambda arr: torch.from_numpy(arr).to(self._device),
-                        (kp_qry_cv2_size, kp_qry_cv2_angle),
-                    )
-                )
-                kp_ref_cv2, descs_ref_cv2 = tuple(
-                    map(
-                        lambda arr: torch.from_numpy(arr).to(self._device),
-                        (kp_ref_cv2, descs_ref_cv2),
-                    )
-                )
-                kp_ref_cv2_size, kp_ref_cv2_angle = tuple(
-                    map(
-                        lambda arr: torch.from_numpy(arr).to(self._device),
-                        (kp_ref_cv2_size, kp_ref_cv2_angle),
+                        (kp_ref_cv2, descs_ref_cv2, kp_ref_cv2_size, kp_ref_cv2_angle),
                     )
                 )
 
@@ -244,7 +229,6 @@ class PoseNode(Node):
                 descs_ref_cv2 = torch.nn.functional.normalize(
                     descs_ref_cv2, dim=-1, p=1
                 ).sqrt()
-
                 dists, match_indices = self._matcher(
                     descs_qry_cv2, descs_ref_cv2, lafs_qry_cv2, lafs_ref_cv2
                 )
@@ -271,9 +255,11 @@ class PoseNode(Node):
             r, t = pose
 
             # VISUALIZE
+            # TODO: include query image in OrthoStereoImage message to enable
+            #  this visualization, now we only have SIFT features
             match_img = visualize_matches_and_pose(
                 camera_info,
-                qry.copy(),
+                np.zeros_like(ref),  # todo query image here
                 ref.copy(),
                 mkp_qry,
                 mkp_ref,

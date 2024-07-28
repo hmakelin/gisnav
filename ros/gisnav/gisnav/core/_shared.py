@@ -23,6 +23,18 @@ _covariance_matrix[5, 5] = _covariance_matrix[3, 3]
 COVARIANCE_LIST_GLOBAL: Final = _covariance_matrix.flatten().tolist()
 
 
+KEYPOINT_DTYPE = np.dtype(
+    [
+        ("x", np.float32),  # width
+        ("y", np.float32),  # height
+        ("z", np.float32),  # depth
+        ("size", np.float32),
+        ("angle", np.float32),
+        ("descriptor", np.float32, (128,)),  # 128-dimensional SIFT descriptors
+    ]
+)
+
+
 def visualize_matches_and_pose(
     camera_info: CameraInfo,
     qry: np.ndarray,

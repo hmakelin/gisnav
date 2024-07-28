@@ -85,6 +85,12 @@ ROS_TOPIC_RELATIVE_MATCHES_IMAGE = "~/dev/matches_image"
 ROS_TOPIC_RELATIVE_POSITION_IMAGE = "~/dev/position_image"
 """Relative topic into which :class:`.PoseNode` publishes the camera position image."""
 
+ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS = "~/keypoints"
+"""Relative topic into which :class:`.TwistNode` publishes the query image keypoints.
+
+SIFT keypoints are used because they are widely supported and rotation invariant.
+"""
+
 DELAY_DEFAULT_MS: Final = 2000
 """Max acceptable delay for things like global position"""
 
@@ -101,8 +107,11 @@ FrameID = Literal[
     "gisnav_odom",
     "gisnav_camera_link_optical",
     "gisnav_base_link",
+    "query_image",
 ]
 """Allowed ROS message header ``frame_id`` as specified in REP 103 and
 REP 105. The ``odom`` frame is not used by GISNav but may be published e.g. by
 MAVROS.
+
+* ``query_image`` units are pixels not meters.
 """

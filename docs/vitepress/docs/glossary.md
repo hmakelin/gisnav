@@ -530,6 +530,9 @@ Single Board Computer
 ### SCP, `scp`
 Secure Copy Protocol
 
+### SIFT
+Scale-invariant Feature Transform
+
 ### SITL
 Software In The Loop simulation
 

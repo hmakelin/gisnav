@@ -18,7 +18,6 @@ The core ROS topography diagram below depicts how ROS messages flow through GISN
 
 ```mermaid
 graph TB
-
     subgraph ros_middleware["ROS middleware"]
         MAVROS
         gscam
@@ -51,8 +50,10 @@ graph TB
 
     PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
+    ekf["ekf_localization_node"] -->|"nav_msgs/TransformStamped\n(map->odom, odom->base_link)"| tf
 
     style micro_ros_agent fill-opacity:0, stroke-opacity:0;
+    style tf fill-opacity:0, stroke-opacity:0;
 
 ```
 

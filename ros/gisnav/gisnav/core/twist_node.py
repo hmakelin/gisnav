@@ -12,7 +12,7 @@ reference images and then solving the resulting PnP problem.
 Does not publish a Twist message, instead publishes Pose which should then be
 fused differentially by the EKF.
 """
-from typing import Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 import cv2
 import numpy as np
@@ -86,8 +86,10 @@ class TwistNode(Node):
         )
         self._tf_broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self)
 
-        # Cached reference image for visual odometry
+        # Cached reference image for visual odometry, also cache SIFT features to
+        # improve performance
         self._cached_reference: Optional[Image] = None
+        self._cached_kps_desc: Optional[Tuple[List[cv2.KeyPoint], np.ndarray]] = None
         self._previous_image: Optional[Image] = None  # backup for cached reference
 
         # initialize subscriptions
@@ -197,7 +199,11 @@ class TwistNode(Node):
 
             # find the keypoints and descriptors with ORB
             kp_qry, desc_qry = self._sift.detectAndCompute(qry, None)
-            kp_ref, desc_ref = self._sift.detectAndCompute(ref, None)
+
+            if self._cached_kps_desc is None:
+                kp_ref, desc_ref = self._sift.detectAndCompute(ref, None)
+            else:
+                kp_ref, desc_ref = self._cached_kps_desc
 
             # Publish query image keypoints and descriptors to be reused downstream in
             # PoseNode
@@ -491,6 +497,7 @@ class TwistNode(Node):
                 header=pose_msg.header, pose=pose_with_covariance
             )
             self._cached_reference = query
+            self._cached_kps_desc = kp_qry, desc_qry
 
             return pose_with_covariance
 

@@ -27,7 +27,7 @@ graph TB
     MAVROS -->|"sensor_msgs/NavSatFix"| BBoxNode
     MAVROS -->|"geometry_msgs/PoseStamped"| BBoxNode
     MAVROS -->|"mavros_msgs/GimbalDeviceAttitudeStatus"| BBoxNode
-    gscam ---->|"sensor_msgs/Image"| BBoxNode
+    gscam ---->|"sensor_msgs/CameraInfo"| BBoxNode
     gscam ---->|"sensor_msgs/Image"| TwistNode
 
     subgraph core["GISNav core nodes"]

@@ -8,7 +8,7 @@ drift-free.
 The pose is estimated by finding matching keypoints between the query and
 reference images and then solving the resulting PnP problem.
 """
-from typing import Optional, cast
+from typing import List, Optional, Tuple, cast
 
 import cv2
 import numpy as np
@@ -16,6 +16,7 @@ import rclpy
 import tf2_ros
 import tf_transformations
 import torch
+from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
 from gisnav_msgs.msg import OrthoStereoImage  # type: ignore[attr-defined]
@@ -88,6 +89,10 @@ class PoseNode(Node):
             .eval()
         )
         self._extractor = cv2.SIFT_create()
+
+        self._cached_stamp_kps_desc: Optional[
+            Tuple[Time, List[cv2.KeyPoint], np.ndarray]
+        ] = None
 
         # initialize subscriptions
         self.camera_info
@@ -186,11 +191,26 @@ class PoseNode(Node):
                 msg.dem, desired_encoding="mono8"
             )
 
-            with torch.inference_mode():
+            kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(ref, None)
+            kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
+            if self._cached_stamp_kps_desc is None or not rclpy.time.Time.from_msg(
+                msg.reference.header.stamp
+            ) == rclpy.time.Time.from_msg(self._cached_stamp_kps_desc[0]):
+                # reference image has a new timestamp, let's recompute features
                 kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(
                     ref, None
                 )
                 kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
+                self._cached_stamp_kps_desc = (
+                    msg.reference.header.stamp,
+                    kp_ref_cv2_orig,
+                    descs_ref_cv2,
+                )
+            else:
+                # Use cached reference image features
+                _, kp_ref_cv2_orig, descs_ref_cv2 = self._cached_stamp_kps_desc
+
+            with torch.inference_mode():
                 kp_ref_cv2_size = np.array(
                     tuple(map(lambda kp: kp.size, kp_ref_cv2_orig)), dtype=np.float32
                 )

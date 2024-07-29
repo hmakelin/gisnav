@@ -91,7 +91,7 @@ class PoseNode(Node):
         self._extractor = cv2.SIFT_create()
 
         self._cached_stamp_kps_desc: Optional[
-            Tuple[Time, List[cv2.KeyPoint], np.ndarray]
+            Tuple[Time, Optional[List[cv2.KeyPoint]], np.ndarray]
         ] = None
 
         # initialize subscriptions
@@ -191,8 +191,7 @@ class PoseNode(Node):
                 msg.dem, desired_encoding="mono8"
             )
 
-            kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(ref, None)
-            kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
+            kp_ref_cv2_orig: Optional[List[cv2.KeyPoint]] = None
             if self._cached_stamp_kps_desc is None or not rclpy.time.Time.from_msg(
                 msg.reference.header.stamp
             ) == rclpy.time.Time.from_msg(self._cached_stamp_kps_desc[0]):
@@ -200,7 +199,7 @@ class PoseNode(Node):
                 kp_ref_cv2_orig, descs_ref_cv2 = self._extractor.detectAndCompute(
                     ref, None
                 )
-                kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
+                # TODO handle kp_ref_cv2_orig is None
                 self._cached_stamp_kps_desc = (
                     msg.reference.header.stamp,
                     kp_ref_cv2_orig,
@@ -209,6 +208,9 @@ class PoseNode(Node):
             else:
                 # Use cached reference image features
                 _, kp_ref_cv2_orig, descs_ref_cv2 = self._cached_stamp_kps_desc
+
+            assert kp_ref_cv2_orig is not None
+            kp_ref_cv2 = cv2.KeyPoint_convert(kp_ref_cv2_orig)
 
             with torch.inference_mode():
                 kp_ref_cv2_size = np.array(
@@ -287,6 +289,13 @@ class PoseNode(Node):
                 t,
             )
             ros_match_image = self._cv_bridge.cv2_to_imgmsg(match_img)
+            # TODO redundant timestamp logic below
+            if msg.query.header.stamp.sec == 0:
+                # query image is likely empty and we are using keypoints isntead,
+                # get timestamp from keypoints
+                ros_match_image.header.stamp = msg.query_sift.header.stamp
+            else:
+                ros_match_image.header.stamp = msg.query.header.stamp
             self._matches_publisher.publish(ros_match_image)
             # END VISUALIZE
 
@@ -444,7 +453,13 @@ class PoseNode(Node):
             )
 
             # Pose should have the query image timestamp
-            pose_with_covariance.header.stamp = msg.query.header.stamp
+            # TODO: handle this in a less brittle way
+            if msg.query.header.stamp.sec == 0:
+                # query image is likely empty and we are using keypoints isntead,
+                # get timestamp from keypoints
+                pose_with_covariance.header.stamp = msg.query_sift.header.stamp
+            else:
+                pose_with_covariance.header.stamp = msg.query.header.stamp
 
             return pose_with_covariance
 

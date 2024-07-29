@@ -81,15 +81,24 @@ class StereoNode(Node):
 
         # Previous rotation is integer, not float, because we want to have the rotations
         # in discrete buckets so that we can cache keypoints per rotation bucket
-        self._previous_rotation: Optional[int] = None
+        self._previous_map_rotation: Optional[int] = None
         self._pose_image: Optional[OrthoStereoImage] = None
 
     def _orthoimage_cb(self, msg: OrthoImage) -> None:
-        # Set cached rotation to None to trigger rotation and cropping on
-        # new reference orthoimages
         # TODO: rotation and pose image should be cached atomically
-        self._previous_rotation = None
-        self._pose_image = None
+        # TODO 2: fix use of "_orthoimage" - brittle if the private variable name is
+        #  changed
+        if not hasattr(self, "_orthoimage") or (
+            hasattr(self, "_orthoimage")
+            and rclpy.time.Time.from_msg(msg.image.header.stamp)
+            != rclpy.time.Time.from_msg(self._orthoimage.image.header.stamp)
+        ):
+            # Set cached rotation to None to trigger rotation and cropping on
+            # new reference orthoimages. But only if the new orthoimage has a different
+            # timestamp (it could be the same one we are already using, in which case
+            # we do not want to reset cache)
+            self._previous_map_rotation = None
+            self._pose_image = None
 
     @property
     @ROS.subscribe(
@@ -215,8 +224,9 @@ class StereoNode(Node):
 
             # Do not recompute/warp reference if rotation diff is less than 5 deg
             if (
-                self._previous_rotation is None
-                or abs(rotation - self._previous_rotation) > self._MAP_ROTATION_INTERVAL
+                self._previous_map_rotation is None
+                or abs(map_rotation - self._previous_map_rotation)
+                >= self._MAP_ROTATION_INTERVAL
             ):
                 orthoimage_arr = self._cv_bridge.imgmsg_to_cv2(
                     orthoimage.image, desired_encoding="passthrough"
@@ -236,14 +246,6 @@ class StereoNode(Node):
 
                 crop_shape: Tuple[int, int] = camera_info.height, camera_info.width
 
-                # here positive rotation is counter-clockwise, so we invert
-                # TODO: rotation 0 for SIFT features (rotation invariant),
-                #  handle better, e.g. via a ROS parameter
-                # self.get_logger().debug(
-                #    "Assuming feature extractor is rotation invariant, "
-                #    "not rotating reference image"
-                # )
-                # rotation = 0
                 orthoimage_rotated_stack, M = self._rotate_and_crop_center(
                     orthoimage_stack, map_rotation, crop_shape
                 )
@@ -277,8 +279,7 @@ class StereoNode(Node):
             ortho_stereo_image_msg = OrthoStereoImage(
                 query_sift=keypoint_cloud, reference=reference_image_msg, dem=dem_msg
             )
-
-            self._previous_rotation = map_rotation
+            self._previous_map_rotation = map_rotation
             self._pose_image = ortho_stereo_image_msg
 
             ortho_stereo_image_msg.crs = String(data=proj_str)

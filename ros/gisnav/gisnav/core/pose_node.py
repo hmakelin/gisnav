@@ -58,11 +58,19 @@ class PoseNode(Node):
     finding matching keypoints and solving the PnP problem.
     """
 
-    CONFIDENCE_THRESHOLD = 0.8
+    CONFIDENCE_THRESHOLD = 0.3
     """Confidence threshold for filtering out bad keypoint matches"""
 
     MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
+
+    MAX_KEYPOINTS = 1024
+    """Max number of SIFT keypoints to detect when matching on CPU
+
+    See also :attr:`TwistNode.MAX_KEYPOINTS`.
+
+    Keep this low to increase matching speed especially on resource constrained systems.
+    """
 
     def __init__(self, *args, **kwargs):
         """Class initializer
@@ -80,15 +88,25 @@ class PoseNode(Node):
             LightGlueMatcher(
                 "sift",
                 params={
+                    "n_layers": 6,
                     "filter_threshold": self.CONFIDENCE_THRESHOLD,
-                    "depth_confidence": -1,
+                    "depth_confidence": 0.8,
                     "width_confidence": -1,
                 },
             )
             .to(self._device)
             .eval()
         )
-        self._extractor = cv2.SIFT_create()
+
+        if self._device == "cpu":
+            self.get_logger().warning(
+                "Using CPU instead of GPU for matching - limiting"
+                "max number of keypoints to improve matching speed. "
+                "Performance may be negatively affected."
+            )
+            self._extractor = cv2.SIFT_create(self.MAX_KEYPOINTS)
+        else:
+            self._extractor = cv2.SIFT_create()
 
         self._cached_stamp_kps_desc: Optional[
             Tuple[Time, Optional[List[cv2.KeyPoint]], np.ndarray]
@@ -435,7 +453,7 @@ class PoseNode(Node):
                 pose_msg = tf_.transform_to_pose(gisnav_map_to_base_link)
                 pose_msg.header.frame_id = "gisnav_map"
             else:
-                self.get_logger().warning(
+                self.get_logger().debug(
                     "Odom frame likely not yet initialized, skpping publishing global "
                     "pose"
                 )

@@ -44,7 +44,7 @@ class StereoNode(Node):
     _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
     """A read only ROS parameter descriptor"""
 
-    _MAP_ROTATION_INTERVAL: Final = 90
+    _MAP_ROTATION_INTERVAL: Final = 45
     """Interval in degrees at which keypoints are computed and cached for reference
     map rasters. Default for :attr:`map_rotation_interval`.
 

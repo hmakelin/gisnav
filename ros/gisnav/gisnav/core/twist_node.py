@@ -19,6 +19,7 @@ import numpy as np
 import rclpy
 import tf2_geometry_msgs
 import tf2_ros
+import torch
 from builtin_interfaces.msg import Time
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PoseWithCovariance, PoseWithCovarianceStamped
@@ -57,6 +58,14 @@ class TwistNode(Node):
     MIN_MATCHES = 30
     """Minimum number of keypoint matches before attempting pose estimation"""
 
+    MAX_KEYPOINTS = 1024
+    """Max number of SIFT keypoints to detect when matching on CPU
+
+    See also :attr:`PoseNode.MAX_KEYPOINTS`.
+
+    Keep this low to increase matching speed especially on resource constrained systems.
+    """
+
     def __init__(self, *args, **kwargs):
         """Class initializer
 
@@ -65,11 +74,23 @@ class TwistNode(Node):
         """
         super().__init__(*args, **kwargs)
 
+        # TODO: ask PoseNode instead of using torch here
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self._cv_bridge = CvBridge()
 
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
-        self._sift = cv2.SIFT_create()
+        if self._device == "cpu":
+            self.get_logger().warning(
+                "Using CPU instead of GPU for matching - limiting"
+                "max number of keypoints to improve matching speed. "
+                "Performance may be negatively affected."
+            )
+            self._sift = cv2.SIFT_create(self.MAX_KEYPOINTS)
+        else:
+            self._sift = cv2.SIFT_create()
+
         self._bf = cv2.BFMatcher(crossCheck=False)
 
         # Publishers for dev image
@@ -197,7 +218,7 @@ class TwistNode(Node):
             qry = self._cv_bridge.imgmsg_to_cv2(query, desired_encoding="mono8")
             ref = self._cv_bridge.imgmsg_to_cv2(reference, desired_encoding="mono8")
 
-            # find the keypoints and descriptors with ORB
+            # find the keypoints and descriptors with SIFT
             kp_qry, desc_qry = self._sift.detectAndCompute(qry, None)
 
             if self._cached_kps_desc is None:

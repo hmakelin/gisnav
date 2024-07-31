@@ -27,7 +27,7 @@ This is the supported system i.e. development and testing is done on these specs
     - **Storage**: 128GB SD card  <Badge type="tip" text="Recommended"/>, 64GB should also work
     - **OS**: Debian and its derivatives <Badge type="tip" text="Recommended"/>
     ::: tip GPU recommended
-    The goal is to make GISNav work without a GPU so it is developed and tested on a Raspberry Pi. However, you will likely get better results using e.g. an Nvidia board. There should be no hard dependency on an NVIDIA GPU, but PyTorch will by default upload the model into main (CPU) memory since CUDA is not available.
+    The goal is to make GISNav work without a GPU so it is developed and tested on a Raspberry Pi. However, you will likely get better results using e.g. an Nvidia Jetson Orin Nano board. There should be no hard dependency on an NVIDIA GPU, but PyTorch will most likely by default upload the model into main (CPU) memory if CUDA is not available.
     :::
 
     ::: warning Warning: 4GB of memory not enough

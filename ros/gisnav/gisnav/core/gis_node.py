@@ -6,7 +6,6 @@ from typing import IO, Final, List, Optional, Tuple
 
 import cv2
 import numpy as np
-import rclpy
 import requests
 from cv_bridge import CvBridge
 from geographic_msgs.msg import BoundingBox, GeoPoint
@@ -534,7 +533,7 @@ class GISNode(Node):
                 proj_str: FrameID = tf_.affine_to_proj(M)
 
             # Assign timestamp
-            orthoimage_msg.image.header.stamp = rclpy.time.Time().to_msg()
+            orthoimage_msg.image.header.stamp = self.get_clock().now().to_msg()
             orthoimage_msg.dem.header.stamp = orthoimage_msg.image.header.stamp
 
             orthoimage_msg.crs = String(data=proj_str)

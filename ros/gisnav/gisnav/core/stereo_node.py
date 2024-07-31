@@ -73,7 +73,7 @@ class StereoNode(Node):
 
         # setup publisher to pass launch test without image callback being
         # triggered
-        self.pose_image
+        self.pnp_image
 
         # Initialize the transform broadcaster and listener
         self._tf_buffer = tf2_ros.Buffer()
@@ -86,12 +86,9 @@ class StereoNode(Node):
 
     def _orthoimage_cb(self, msg: OrthoImage) -> None:
         # TODO: rotation and pose image should be cached atomically
-        # TODO 2: fix use of "_orthoimage" - brittle if the private variable name is
-        #  changed
-        if not hasattr(self, "_orthoimage") or (
-            hasattr(self, "_orthoimage")
-            and rclpy.time.Time.from_msg(msg.image.header.stamp)
-            != rclpy.time.Time.from_msg(self._orthoimage.image.header.stamp)
+        if self._pose_image is None or (
+            rclpy.time.Time.from_msg(msg.image.header.stamp)
+            != rclpy.time.Time.from_msg(self._pose_image.reference.header.stamp)
         ):
             # Set cached rotation to None to trigger rotation and cropping on
             # new reference orthoimages. But only if the new orthoimage has a different
@@ -122,7 +119,7 @@ class StereoNode(Node):
 
     def _keypoints_cb(self, msg: PointCloud2) -> None:
         """Callback for :attr:`.image` message"""
-        self.pose_image(msg)
+        self.pnp_image(msg)
 
     @property
     # @ROS.max_delay_ms(messaging.DELAY_FAST_MS) - gst plugin does not enable timestamp?
@@ -174,7 +171,7 @@ class StereoNode(Node):
         ROS_TOPIC_RELATIVE_POSE_IMAGE,
         QoSPresetProfiles.SENSOR_DATA.value,
     )
-    def pose_image(self, keypoint_cloud: PointCloud2) -> Optional[OrthoStereoImage]:
+    def pnp_image(self, keypoint_cloud: PointCloud2) -> Optional[OrthoStereoImage]:
         """Published aligned and cropped orthoimage consisting of query image,
         reference image, and optional reference elevation raster (DEM).
         """

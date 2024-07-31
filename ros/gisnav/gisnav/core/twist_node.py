@@ -82,6 +82,8 @@ class TwistNode(Node):
         # Initialize ORB detector and brute force matcher for VO
         # (smooth relative position with drift)
         if self._device == "cpu":
+            # TODO: PoseNode limits max number of keypoints - do we need to do same here
+            #  like we are now doing?
             self.get_logger().warning(
                 "Using CPU instead of GPU for matching - limiting"
                 "max number of keypoints to improve matching speed. "
@@ -167,6 +169,10 @@ class TwistNode(Node):
         :return: Point cloud message representing the keypoints and descriptors
         """
         # Create a structured array for our custom point type
+        if not isinstance(kps, np.ndarray):
+            # TODO use narrow types decorator here
+            self.get_logger().error(f"Provided keypoints was not a numpy array: {kps}")
+            return None
         data = np.empty(kps.shape[0], dtype=KEYPOINT_DTYPE)
         data["x"] = kps[:, 0]
         data["y"] = kps[:, 1]

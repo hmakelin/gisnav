@@ -58,10 +58,10 @@ class PoseNode(Node):
     finding matching keypoints and solving the PnP problem.
     """
 
-    CONFIDENCE_THRESHOLD = 0.3
+    CONFIDENCE_THRESHOLD = 0.5
     """Confidence threshold for filtering out bad keypoint matches"""
 
-    MIN_MATCHES = 30
+    MIN_MATCHES = 15
     """Minimum number of keypoint matches before attempting pose estimation"""
 
     MAX_KEYPOINTS = 1024
@@ -83,29 +83,43 @@ class PoseNode(Node):
 
         self._cv_bridge = CvBridge()
 
-        # Initialize DL model for map matching
-        self._matcher = (
-            LightGlueMatcher(
-                "sift",
-                params={
-                    "n_layers": 6,
-                    "filter_threshold": self.CONFIDENCE_THRESHOLD,
-                    "depth_confidence": 0.8,
-                    "width_confidence": -1,
-                },
-            )
-            .to(self._device)
-            .eval()
-        )
-
+        # TODO: adjust dynamically based on runtime matching speed, not statically
+        #  depending on whether we are running on cpu or gpu (even though it is a good
+        #  proxy for slow vs fast matching).
         if self._device == "cpu":
             self.get_logger().warning(
                 "Using CPU instead of GPU for matching - limiting"
-                "max number of keypoints to improve matching speed. "
-                "Performance may be negatively affected."
+                "max number of keypoints and enabling adaptive mechanisms to improve "
+                "matching speed. Accuracy may be negatively affected."
+            )
+            self._matcher = (
+                LightGlueMatcher(
+                    "sift",
+                    params={
+                        "n_layers": 5,
+                        "filter_threshold": self.CONFIDENCE_THRESHOLD,
+                        "depth_confidence": 0.99,
+                        "width_confidence": 0.99,
+                    },
+                )
+                .to(self._device)
+                .eval()
             )
             self._extractor = cv2.SIFT_create(self.MAX_KEYPOINTS)
         else:
+            self._matcher = (
+                LightGlueMatcher(
+                    "sift",
+                    params={
+                        "n_layers": 9,
+                        "filter_threshold": self.CONFIDENCE_THRESHOLD,
+                        "depth_confidence": -1,
+                        "width_confidence": -1,
+                    },
+                )
+                .to(self._device)
+                .eval()
+            )
             self._extractor = cv2.SIFT_create()
 
         self._cached_stamp_kps_desc: Optional[

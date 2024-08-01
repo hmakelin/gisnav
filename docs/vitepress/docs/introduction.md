@@ -41,8 +41,8 @@ ArduPilot simulation needs significant rework to get working again. Only PX4 is 
 
 :::
 
-::: info NMEA and uORB SensorGps (PX4) messages supported
-TODO: Swap NMEA integration for u-blox for a (potentially) better downstream integration
+::: info u-blox and uORB SensorGps (PX4) messages supported
+NMEA deprecated in favor of u-blox.
 
 :::
 

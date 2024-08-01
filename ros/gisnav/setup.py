@@ -122,6 +122,7 @@ setup(
     tests_require=["pytest"],
     extras_require={
         "nmea_node": ["pynmea2"],
+        "ublox_node": ["pyubx2"],
         "dev": [
             "aiohttp",
             "autodocsumm",
@@ -155,6 +156,7 @@ setup(
             "twist_node = gisnav:run_twist_node",
             "bbox_node = gisnav:run_bbox_node",
             "wfst_node = gisnav:run_wfst_node",
+            "ublox_node = gisnav:run_ublox_node",
         ],
     },
 )

@@ -58,6 +58,19 @@ def launch_setup(context, *args, **kwargs):
                 ],
             )
         )
+    elif protocol == "ublox":
+        actions.append(
+            Node(
+                package=_PACKAGE_NAME,
+                executable="ublox_node",
+                name="ublox_node",
+                namespace=_PACKAGE_NAME,
+                parameters=[
+                    os.path.join(package_share_dir, "launch/params/ublox_node.yaml"),
+                    {"port": port_config},
+                ],
+            )
+        )
     else:
         raise ValueError(
             f"Unsupported protocol {protocol}. Choose either 'uorb' or 'nmea'."

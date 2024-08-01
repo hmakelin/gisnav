@@ -15,6 +15,9 @@ ROS_NAMESPACE: Final = "gisnav"
 GIS_NODE_NAME: Final = "gis_node"
 """Name of :class:`.GISNode` spun up by :func:`.run_gis_node`"""
 
+UBLOX_NODE_NAME: Final = "ublox_node"
+"""Name of :class:`.UBloxNode` spun up by :func:`.run_ublox_node`"""
+
 BBOX_NODE_NAME: Final = "bbox_node"
 """Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
 

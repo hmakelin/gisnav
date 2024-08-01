@@ -1,5 +1,9 @@
 SHELL := /bin/bash
 
+# Default output protocol for mock GPS messages (uorb or ublox). u-blox requires
+# an exposed serial port while uORB uses ROS.
+PROTOCOL=ublox
+
 .PHONY: docs
 docs:
 	@cd docs/sphinx && sphinx-build -M markdown ./source ./build
@@ -62,6 +66,21 @@ format: lint
 check: lint test
 	@echo "Running code quality checks..."
 
+.PHONY: dev
+dev: install
+ifeq ($(PROTOCOL),uorb)
+	@echo "Protocol is uorb; no need for serial-to-TCP bridge."
+	@echo "Launching GISNav locally..."
+	@ros2 launch gisnav local.launch.py protocol:=uorb
+else
+	@echo "Setting up socat bridge to send $(PROTOCOL) serial output to simulator container over TCP port 15000..."
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:localhost:15000 || (echo "Could not establish serial-to-TCP bridge"; exit 1)
+	@sleep 3  # Give socat time to create the pty
+	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
+	@echo "Launching GISNav locally..."
+	@ros2 launch gisnav local.launch.py protocol:=$(PROTOCOL) port:=`readlink /tmp/gisnav-pty-link` baudrate:=9600
+endif
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -69,6 +88,7 @@ help:
 	@echo "  docs preview   - Preview the documentation"
 	@echo "  docs dev       - Run the documentation development server"
 	@echo "  build          - Build the project"
+	@echo "  dev            - Run GISNav locally"
 	@echo "  dist           - Create a distribution package"
 	@echo "  clean          - Clean up all generated files"
 	@echo "  clean docs     - Clean up documentation build files only"

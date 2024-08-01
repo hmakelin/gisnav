@@ -1,6 +1,7 @@
 """This module contains :class:`.NMEANode`, an extension ROS node that publishes
 mock GPS (GNSS) messages to FCU over the NMEA protocol via a serial port
 """
+import warnings
 from datetime import datetime
 from typing import Final, List, Optional, Tuple
 
@@ -24,6 +25,11 @@ from ..constants import ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
+
+warnings.warn(
+    "NMEANode is deprecated. Use UORBNode or UBloxNode instead.",
+    DeprecationWarning,
+)
 
 
 class NMEANode(Node):

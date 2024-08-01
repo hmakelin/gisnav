@@ -34,12 +34,11 @@ endif()
 
 # message definitions
 find_package(sensor_msgs REQUIRED)
-find_package(geographic_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OrthoStereoImage.msg"
   "msg/OrthoImage.msg"
-  DEPENDENCIES sensor_msgs geographic_msgs
+  DEPENDENCIES sensor_msgs
  )
 
 ament_package()

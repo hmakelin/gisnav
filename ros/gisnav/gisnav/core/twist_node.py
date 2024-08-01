@@ -39,8 +39,7 @@ from ..constants import (
     ROS_TOPIC_RELATIVE_QUERY_KEYPOINTS,
     FrameID,
 )
-from ._shared import (
-    COVARIANCE_LIST,
+from ._shared import (  # COVARIANCE_LIST,
     KEYPOINT_DTYPE,
     compute_pose,
     visualize_matches_and_pose,

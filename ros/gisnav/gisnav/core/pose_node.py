@@ -38,8 +38,7 @@ from ..constants import (
     STEREO_NODE_NAME,
     FrameID,
 )
-from ._shared import (
-    COVARIANCE_LIST_GLOBAL,
+from ._shared import (  # COVARIANCE_LIST_GLOBAL,
     KEYPOINT_DTYPE,
     compute_pose,
     visualize_matches_and_pose,

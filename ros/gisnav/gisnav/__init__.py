@@ -10,11 +10,14 @@ static node entrypoints are defined here in the package root namespace.
 import cProfile
 import io
 import pstats
-from threading import Thread
 from typing import Optional, Union
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
+from rclpy.executors import (
+    ExternalShutdownException,
+    MultiThreadedExecutor,
+    SingleThreadedExecutor,
+)
 from rclpy.node import Node
 
 from .constants import (
@@ -107,7 +110,6 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
 
     node: Optional[Node] = None
     executor: Optional[Union[MultiThreadedExecutor, SingleThreadedExecutor]] = None
-    spin_thread: Optional[Thread] = None
 
     try:
         rclpy.init()
@@ -128,17 +130,13 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             executor = MultiThreadedExecutor()
             executor.add_node(node)
             executor.spin()
-
-            # spin_thread = Thread(target=executor.spin, daemon=True)
-            # spin_thread.start()
-            # spin_thread.join()
         else:
             executor = SingleThreadedExecutor()
             executor.add_node(node)
             executor.spin()
 
-    except KeyboardInterrupt as e:
-        print(f"Keyboard interrupt received:\n{e}")
+    except (KeyboardInterrupt, ExternalShutdownException) as e:
+        print(f"External shutdown/keyboard interrupt received:\n{e}")
         if profile is not None:
             assert __debug__
             # Print out cProfile stats
@@ -151,10 +149,9 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
     finally:
         if executor is not None:
             executor.shutdown()
-        if spin_thread is not None:
-            spin_thread.join()
         if node is not None:
             node.destroy_node()
+
         rclpy.shutdown()
 
 

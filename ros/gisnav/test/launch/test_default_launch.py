@@ -14,7 +14,7 @@ from test.launch.testcases import TestTopographyCase  # isort: skip  # noqa: F40
 def generate_test_description():
     """Generates a PX4 launch description"""
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "../../launch/default.launch.py")
+    filename = os.path.join(dirname, "../../launch/local.launch.py")
     ld = IncludeLaunchDescription(PythonLaunchDescriptionSource(filename))
     return LaunchDescription(
         [

@@ -47,13 +47,13 @@ The Makefile uses the ROS launch system under the hood to define and deploy conf
 
 ### Default configuration
 
-The `default.launch.py` file can be used for all launches. A `dev.launch.py` configuration is provided to include additional nodes that help with development.
+A `local.launch.py` launch configuration is provided that allows choosing the output protocol and port.
 
 To see what launch arguments the launch file accepts, type in the following command:
 
 ```bash
 cd ~/colcon_ws
-ros2 launch gisnav default.launch.py --show-args
+ros2 launch gisnav local.launch.py --show-args
 ```
 
 ### Redirecting serial output for SITL simulation <Badge type="info" text="NMEA/u-blox"/>
@@ -64,7 +64,7 @@ The Makefile `make dev PROTOCOL=nmea` and `make dev PROTOCOL=ublox` recipes crea
 
 ```bash
 cd ~/colcon_ws/src/gisnav
-gnc start px4 gisnav
+gnc start px4
 PX4_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1)
 socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000
 ```
@@ -76,19 +76,19 @@ You are now ready to launch GISNav via the ROS launch system.
 ::: code-group
 ```bash [uORB <Badge type="tip" text="Recommended for PX4"/>]
 cd ~/colcon_ws
-ros2 launch gisnav default.launch.py protocol:=uorb
+ros2 launch gisnav local.launch.py protocol:=uorb
 ```
 
 ```bash [u-blox]
 cd ~/colcon_ws
 PTY_PORT=$(readlink /tmp/gisnav-pty-link)
-ros2 launch gisnav default.launch.py protocol:=u-blox port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+ros2 launch gisnav local.launch.py protocol:=u-blox port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
 ```
 
 ```bash [NMEA <Badge type="warning" text="Deprecated"/>]
 cd ~/colcon_ws
 PTY_PORT=$(readlink /tmp/gisnav-pty-link)
-ros2 launch gisnav default.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+ros2 launch gisnav local.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
 ```
 
 :::

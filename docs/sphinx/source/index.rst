@@ -16,13 +16,14 @@ Here you can find the automatically generated API reference for the GISNav ROS 2
     public/gis_node
     public/stereo_node
     public/pose_node
+    public/twist_node
 
 .. toctree::
     :caption: Extension nodes
 
     public/uorb_node
     public/nmea_node
-    public/qgis_node
+    public/wfst_node
 
 .. toctree::
     :caption: Static API

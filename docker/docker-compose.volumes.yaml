@@ -1,0 +1,33 @@
+# This Docker Compose override file is part of the GISNav project configuration.
+# It provides specific volume configurations for services, allowing them to
+# store and access necessary data and configuration files.
+
+name: gisnav
+
+services:
+  mapserver:
+    volumes:
+      - maps-volume:/etc/mapserver/maps
+
+  gisnav:
+    volumes:
+      - gisnav-volume:/etc/gisnav
+
+  gscam:
+    volumes:
+      - gscam-volume:/etc/gscam
+
+  fileserver:
+    volumes:
+      - maps-volume:/var/www/filegator/repository/mapserver
+      - gscam-volume:/var/www/filegator/repository/gscam
+      - gisnav-volume:/var/www/filegator/repository/gisnav
+
+  nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      #- ./nginx/var/www/html/static/leaflet:/var/www/html/static/leaflet
+
+  postgres:
+    volumes:
+      - pgdata-volume:/var/lib/postgresql/data

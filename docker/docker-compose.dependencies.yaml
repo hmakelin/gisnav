@@ -1,0 +1,32 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that sets up dependencies between
+# the services.
+
+name: gisnav
+
+services:
+
+  gisnav:
+    depends_on:
+      - micro-ros-agent
+      - mavros
+      - gscam
+      - mapserver
+      - postgres
+      - autoheal
+      - nginx
+
+  px4:
+    depends_on:
+      - qgc
+
+  nginx:
+    depends_on:
+      - fileserver
+      - homepage
+      - monitoring
+      - mapserver
+
+  mapserver:
+    depends_on:
+      - postgres

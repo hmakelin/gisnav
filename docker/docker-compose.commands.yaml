@@ -1,0 +1,53 @@
+
+# This Docker Compose override file is part of the GISNav project configuration.
+# It specifies the commands to run for each service, ensuring that they start
+# with the appropriate entry points and configurations.
+
+name: gisnav
+
+services:
+  mapserver:
+    command: apache2ctl -D FOREGROUND
+
+  mavros:
+    command: ros2 run mavros mavros_node --ros-args -p fcu_url:=udp://:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}@${GISNAV_FCU_URL:?empty or not set}:${GISNAV_CMP_MAVROS_REMOTE_PORT:?empty or not set} -p plugin_allowlist:="[gimbal_control, 'sys_*', global_position, local_position, imu]"
+
+  micro-ros-agent:
+    build:
+      context: micro-ros-agent
+    command: udp4 -p ${UXRCE_DDS_PRT:?empty or not set}
+
+  gisnav:
+    command: ros2 launch gisnav container.launch.py protocol:=uorb
+    #command: ros2 launch gisnav default.launch.py protocol:=uorb
+    #command: socat pty,link=/dev/ttyS1 tcp:gisnav-px4-1:15000 & ros2 launch gisnav default.launch.py protocol:=nmea
+
+  px4:
+    command: make px4_sitl gazebo-classic_typhoon_h480__ksql_airport
+
+  ardupilot:
+    command: bash -c "cd ~ && make sim_vehicle"
+
+  rviz:
+    command: rviz2 -d gisnav_config.rviz
+
+  rqt:
+    command: rqt
+
+  gscam:
+    command:
+      - "ros2"
+      - "run"
+      - "gscam"
+      - "gscam_node"
+      - "--ros-args"
+      - "--params-file"
+      - "/etc/gscam/gscam_params.yaml"
+      - "-p"
+      - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
+
+  fileserver:
+    command: apache2ctl -D FOREGROUND
+
+  monitoring:
+    command: glances -w

@@ -78,19 +78,17 @@ make dev-base-setup
 
 Alternatively, following the below steps will do the same thing.
 
-`GISNode` needs to know where `gisnav-mapserver-1` is, and `QGISNode` needs to know where `gisnav-postgres-1` is. You can find them with the following commands if the `mapserver` and `postgres` services are running:
+`GISNode` needs to know where `gisnav-mapserver-1` is. You can find them with the following commands if the `mapserver` service is running:
 
 ```bash
 cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start postgres mapserver
-POSTGRES_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-postgres-1`
+docker compose -p gisnav start mapserver
 MAPSERVER_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1`
 ```
 
 If these are not yet in your `/etc/hosts` file, add them:
 
 ```bash
-echo "$(POSTGRES_IP) gisnav-postgres-1" | sudo tee -a /etc/hosts
 echo "$(MAPSERVER_IP) gisnav-mapserver-1" | sudo tee -a /etc/hosts
 ```
 

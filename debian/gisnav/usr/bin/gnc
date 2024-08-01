@@ -1,0 +1,220 @@
+#!/bin/bash
+
+# Function to print usage
+print_usage() {
+    echo "Usage: gnc [sitl|hil] {<any docker compose command>|help} service[@remote] ..."
+    echo ""
+    echo "Deployment modes:"
+    echo "  sitl            Software-in-the-loop. Default mode if not provided."
+    echo "  hil             Hardware-in-the-loop. (Note: HIL mode is currently unsupported by 'gnc')."
+    echo ""
+    echo "Examples:"
+    echo "  gnc start"
+    echo "  gnc logs gisnav"
+    echo "  GISNAV_COMPANION_HOST=jetsonnano.local gnc start px4 gisnav@jetsonnano.local"
+    echo "  gnc stop @jetsonnano.local"
+}
+
+# Fetch the list of valid services - cannot use gnc itself here to avoid recursion
+valid_services=$(docker compose -p gisnav -f /etc/gisnav/docker/docker-compose.yaml config --services)
+
+# Function to check if a given token is a valid service
+is_valid_service() {
+    local token="$1"
+    for service in $valid_services; do
+        if [[ "$token" == "$service" ]]; then
+            return 0  # Token is a valid service
+        fi
+    done
+    return 1  # Token is not a valid service
+}
+
+# Function to manage tasks
+manage_tasks() {
+    local deployment_mode=$1
+    shift 1
+
+    # Handle submode
+    case "$deployment_mode" in
+        sitl)
+            export GISNAV_MODE=sitl
+            ;;
+        hil)
+            export GISNAV_MODE=hil
+            ;;
+        *)
+            echo "Unknown mode: $deployment_mode"
+            print_usage
+            exit 1
+            ;;
+    esac
+
+    # Initialize associative array for remotes and their services
+    declare -A remote_services
+    BLANK_SERVICE=" "  # Variable for blank space service
+    command=""
+    command_args=()
+    container_command_args=()
+    seen_service=false
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            *@localhost|*@127.0.0.1)
+                service="${1%@*}"
+                seen_service=true  # Set flag indicating we've seen a valid service
+                # If service is empty, replace it with a blank space
+                if [ -z "$service" ]; then
+                    service="$BLANK_SERVICE"
+                fi
+                if [ -z $local_services ]; then
+                    local_services="$service"
+                else
+                    local_services+=" $service"
+                fi
+                ;;
+            *@*)
+                service="${1%@*}"
+                # If service is empty, replace it with a blank space
+                seen_service=true  # Set flag indicating we've seen a valid service
+                if [ -z "$service" ]; then
+                    service="$BLANK_SERVICE"
+                fi
+                remote="${1#*@}"
+                if [ -z "${remote_services[$remote]}" ]; then
+                    remote_services[$remote]="$service"
+                else
+                    remote_services[$remote]+=" $service"
+                fi
+                ;;
+            *)
+                if ! is_valid_service "$1"; then
+                    if $seen_service; then
+                        # container commands
+                        container_command_args+=("$1")
+                    elif [ -z "$command" ]; then
+                        # we need and expect the command to be the first arg
+                        command="$1"
+                    elif [[ "$1" == -* || "$1" == --* ]]; then
+                        # optional commands
+                        command_args+=("$1")
+                    else
+                        # arguments to optional commands OR "blank" service
+                        if [ -z "$1" ]; then
+                            service="$BLANK_SERVICE"
+                            seen_service=true  # Set flag indicating we've seen a valid service
+                            if [ -z $local_services ]; then
+                                local_services="$service"
+                            else
+                                local_services+=" $service"
+                            fi
+                        else
+                            command_args+=("$1")
+                        fi
+                    fi
+                else
+                    service="$1"
+                    seen_service=true  # Set flag indicating we've seen a valid service
+                    #service="${1%@*}"
+                    # If service is empty, replace it with a blank space
+                    if [ -z "$service" ]; then
+                        service="$BLANK_SERVICE"
+                    fi
+                    if [ -z $local_services ]; then
+                        local_services="$service"
+                    else
+                        local_services+=" $service"
+                    fi
+                fi
+                ;;
+        esac
+        shift
+    done
+
+    # If no command provided, print usage
+    if [ -z "$command" ]; then
+        print_usage
+        exit 1
+    fi
+
+	# Array to store PIDs of background jobs
+	pids=()
+
+	# Function to execute command on remote and handle output
+	execute_command() {
+	    local remote=$1
+	    local services=$2
+	    local command=$3
+	    local deployment_mode=$4
+	    local command_args=("${!5}")
+	    local container_command_args=$6
+
+		# Allocate pseudo-terminal -t to ensure SIGINT is forwarded correctly
+	    if [[ "$services" == *"$BLANK_SERVICE"* ]]; then
+		echo "Executing '$command' on remote '$remote'"
+		ssh -tt "$remote" "tty | sed 's/\/dev\///' > /tmp/gnc_ttyfile_$$; gnc $deployment_mode $command ${command_args[*]} $container_command_args" &
+	    else
+		echo "Executing '$command' for services '$services' on remote '$remote'"
+		ssh -tt "$remote" "tty | sed 's/\/dev\///' > /tmp/gnc_ttyfile_$$; gnc $deployment_mode $command $services ${command_args[*]} $container_command_args" &
+	    fi
+
+	    pids+=($!)  # Store the PID of the last background job
+	}
+
+	# Kill docker-compose matching the pseudo-terminal opened by this script
+	# This is a roundabout way of getting the same results as hitting Ctrl-C on the shell that is attached to the running container
+	trap 'echo "Terminating..."; for pid in "${pids[@]}"; do kill -SIGINT $pid 2>/dev/null; done; for remote in "${!remote_services[@]}"; do ssh -tt "$remote" "pkill -t \$(cat /tmp/gnc_ttyfile_$$) docker-compose"; done; wait' SIGINT
+
+	# Execute command for each remote and its services in parallel
+	for remote in "${!remote_services[@]}"; do
+	    services=${remote_services[$remote]}
+	    execute_command "$remote" "$services" "$command" "$deployment_mode" command_args[@] "$container_command_args"
+	done
+
+    # Handle command for local services. Either we have collected local services
+    # earlier (gnc start px4, gnc start px4 gisnav@jetsonnano.local) and it's not empty,
+    # or both remote services and local services are empty (gnc start)
+    if [ ! -z "$local_services" ] || ( [ -z "$local_services" ] && [ ! ${#remote_services[@]} -gt 0 ] ); then
+        case "$command" in
+            build)
+                # Custom handling for building images on resource constrained systems
+                /usr/lib/gisnav/build.sh "$command" "${command_args[@]}" $local_services "${container_command_args[@]}"
+                pids+=($!)  # Store the PID of the last background job
+                ;;
+            create)
+                # Custom handling for creating images to enable GUI apps
+                /usr/lib/gisnav/create.sh "$command" "${command_args[@]}" $local_services "${container_command_args[@]}"
+                pids+=($!)  # Store the PID of the last background job
+                ;;
+            help)
+                print_usage
+                ;;
+            *)
+                # Default script
+                /usr/lib/gisnav/compose.sh "$command" "${command_args[@]}" $local_services ${container_command_args[@]}
+                pids+=($!)  # Store the PID of the last background job
+                ;;
+        esac
+    fi
+
+    # Wait for all background processes to complete
+    wait
+}
+
+# Check if enough arguments are provided
+if [ $# -lt 1 ]; then
+    print_usage
+    exit 1
+fi
+
+# Determine default for deployment mode if not provided
+deployment_mode="sitl"
+command=""
+declare -a command_args
+
+if [ "$1" == "sitl" ] || [ "$1" == "hil" ]; then
+    deployment_mode=$1
+    shift
+fi
+
+# Manage tasks based on provided arguments
+manage_tasks $deployment_mode "$@"

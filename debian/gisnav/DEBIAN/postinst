@@ -1,0 +1,24 @@
+#!/bin/sh
+set -e
+
+# Change to the directory where the docker-compose.yml is located
+cd /etc/gisnav/docker
+
+# The gnc CLI tool should be provided with this package
+# We prepare containers here as part of the installation process so that the
+# user experience is better when running `gnc start` for the first time (i.e.
+# will not have to pull or build Docker images then).
+# Not enabled here because this could significantly slow down install, and
+# cause issues with the package manager state when users inevitably interrupt
+# the lengthy build process.
+#gnc build gisnav --with-dependencies
+#gnc create gisnav
+
+# Enable the gisnav.service at startup
+# Not enabled automatically here because this could significantly slow down
+# resource constrained edge devices.
+#systemctl enable gisnav.service
+
+echo "Installation complete. Type 'gnc help' to see available commands."
+
+exit 0

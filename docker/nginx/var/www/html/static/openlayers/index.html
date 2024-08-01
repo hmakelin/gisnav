@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenLayers WMS and WFS Viewer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol3/4.6.5/ol.css" type="text/css">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map" class="map"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ol3/4.6.5/ol.js"></script>
+    <script>
+        // Initialize the map
+        var map = new ol.Map({
+            target: 'map',
+            view: new ol.View({
+                center: ol.proj.fromLonLat([-122.25545505795706, 37.5231189505726]),
+                zoom: 13,
+            })
+        });
+
+        // Base layer
+        var osmLayer = new ol.layer.Tile({
+            source: new ol.source.OSM(),
+            title: 'OpenStreetMap',
+            type: 'base',
+            visible: true
+        });
+
+        map.addLayer(osmLayer);
+
+        // WMS layers
+        var wmsUrl = '/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map';
+
+        var imageryLayer = new ol.layer.Image({
+            source: new ol.source.ImageWMS({
+                url: wmsUrl,
+                params: {'LAYERS': 'imagery', 'TILED': true},
+                ratio: 1,
+                serverType: 'mapserver'
+            }),
+            title: 'Imagery',
+            visible: true
+        });
+
+        var demLayer = new ol.layer.Image({
+            source: new ol.source.ImageWMS({
+                url: wmsUrl,
+                params: {'LAYERS': 'dem', 'TILED': true},
+                ratio: 1,
+                serverType: 'mapserver'
+            }),
+            title: 'DEM',
+            visible: true
+        });
+        map.addLayer(demLayer);
+        map.addLayer(imageryLayer);
+
+        // Define the WFS source
+        var wfsSource = new ol.source.Vector({
+            format: new ol.format.GML({
+                extractGeometryName: true
+            }),
+            title: "WFS",
+            projection: 'EPSG:4326'
+        });
+
+        // Function to fetch and update WFS data
+        function updateWFSData() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map&service=WFS&version=1.1.0&request=GetFeature&typename=glm:position', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        // Clear existing features
+                        wfsSource.clear();
+
+                        var xmlString = xhr.responseText;
+
+                        // Parse the XML response
+                        var parser = new DOMParser();
+                        var xmlDoc = parser.parseFromString(xmlString, "text/xml");
+
+                        var featureMembers = xmlDoc.querySelectorAll('featureMember');
+
+                        featureMembers.forEach(function (featureMember) {
+                            var position = featureMember.querySelector('pos').textContent.split(' ');
+                            var id = featureMember.querySelector('id').textContent;
+
+                            // todo: clean this up - should not need transform
+                            var transform = ol.proj.getTransform('EPSG:4326', 'EPSG:3857');
+                            var feature = new ol.Feature({
+                                geometry: new ol.geom.Point(transform([parseFloat(position[1]), parseFloat(position[0])])),
+                                id: id
+                            });
+
+                            wfsSource.addFeature(feature);
+                        });
+                    } else {
+                        console.error('WFS request failed with status:', xhr.status);
+                    }
+                }
+            };
+            xhr.onerror = function () {
+                console.error('Error fetching WFS data.');
+            };
+            xhr.send();
+        }
+
+        // Initial update
+        updateWFSData();
+
+        // Refresh WFS data at 5 Hz
+        setInterval(updateWFSData, 200);
+
+        // Create the WFS layer
+        var wfsLayer = new ol.layer.Vector({
+            source: wfsSource,
+            style: new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 6,
+                    fill: new ol.style.Fill({ color: 'red' }),
+                    stroke: new ol.style.Stroke({ color: 'white', width: 2 }),
+                }),
+            }),
+            title: 'Position',
+            visible: true
+        });
+        map.addLayer(wfsLayer);
+
+    </script>
+</body>
+</html>

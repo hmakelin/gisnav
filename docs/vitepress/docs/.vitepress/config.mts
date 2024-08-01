@@ -13,7 +13,7 @@ export default withMermaid({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/README' },
+      { text: 'Guide', link: '/introduction' },
       { text: 'API Reference', link: '/reference/index' }
     ],
     outline: {
@@ -22,35 +22,37 @@ export default withMermaid({
     sidebar: {
       '/': [
         {
-          text: 'SITL simulation',
+          text: 'Getting started',
           items: [
-            { text: 'Run mock GPS demo', link: '/README' },
-            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
-          ]
-        },
-        {
-          text: 'HIL simulation',
-          items: [
-            { text: 'Jetson & Pixhawk', link: '/jetson-pixhawk' }
-          ]
-        },
-        {
-          text: 'Configuration',
-          items: [
+            { text: 'Introduction', link: '/introduction' },
+            { text: 'System requirements', link: '/system-requirements' },
+            { text: 'Install from Debian package', link: '/install-from-debian-package' },
+            { text: 'GISNav CLI', link: '/gisnav-cli' },
+            { text: 'GISNav systemd service', link: '/systemd' },
             { text: 'Admin portal', link: '/admin-portal' },
-            { text: 'Setup GIS server', link: '/setup-gis-server' },
+          ]
+        },
+        {
+          text: 'Simulation',
+          items: [
+            { text: 'Simulate GPS failure in SITL', link: '/sitl-local' },
+            { text: 'SITL with companion computer', link: '/sitl-remote' },
+            { text: 'HIL with Pixhawk FMU', link: '/hil-pixhawk' },
           ]
         },
         {
           text: 'Development',
           items: [
             { text: 'Install locally', link: '/install-locally' },
+            { text: 'Deploy with Docker Compose', link: '/deploy-with-docker-compose' },
             { text: 'Deploy for development', link: '/deploy-for-development' },
             { text: 'System architecture', link: '/system-architecture' },
             { text: 'Run ROS nodes', link: '/ros-run-node' },
             { text: 'Remap ROS topics', link: '/remap-ros-topics' },
             { text: 'Run tests', link: '/test-gisnav' },
             { text: 'Generate documentation', link: '/generate-documentation' },
+            { text: 'Create Debian distributable', link: '/create-debian' },
+            { text: 'Setup GIS server', link: '/setup-gis-server' },
           ]
         },
         {
@@ -76,7 +78,7 @@ export default withMermaid({
           items: [
             { text: 'UORBNode', link: '/reference/public/uorb_node' },
             { text: 'NMEANode', link: '/reference/public/nmea_node' },
-            { text: 'QGISNode', link: '/reference/public/qgis_node' },
+            { text: 'WFSTNode', link: '/reference/public/wfst_node' },
           ]
         },
         {

@@ -1,0 +1,11 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: gisnav
+Source: https://github.com/hmakelin/gisnav
+
+Files: *
+Copyright: 2022 Harri Makelin
+License: MIT
+ The full text of the license can be found in the LICENSE.md file
+ available at:
+ .
+ https://github.com/hmakelin/gisnav/blob/${VERSION}/LICENSE.md

@@ -1,0 +1,36 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that sets up Broadcom VideoCore GPU devices
+# for services that require access to the GPU.
+
+name: gisnav
+
+# x-broadcom is an anchor that holds the common Broadcom VideoCore GPU configuration.
+# This includes exposing the necessary devices for GPU access.
+
+x-broadcom: &broadcom
+  devices:
+    # Expose the VideoCore memory device for GPU access
+    - /dev/vc-mem:/dev/vc-mem
+    # Expose the VideoCore I/O device for GPU access
+    - /dev/vcio:/dev/vcio
+
+# Define the services that will inherit the broadcom configuration
+services:
+  gisnav:
+    # Merge the configuration into the service
+    <<: *broadcom
+
+  px4:
+    <<: *broadcom
+
+  ardupilot:
+    <<: *broadcom
+
+  qgc:
+    <<: *broadcom
+
+  rviz:
+    <<: *broadcom
+
+  rqt:
+    <<: *broadcom

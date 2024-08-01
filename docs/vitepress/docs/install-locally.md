@@ -100,7 +100,7 @@ as the workspace might not play nicely with the virtual environment.
 
 GISNav's Python dependencies are divided into [core](./glossary#core-core-functionality), [extended](./glossary#extension-extended-functionality), and development dependencies. You must at least install the core dependencies.
 
-- If you know you are not going to use a specific extension such as `QGISNode`, you can skip installing the corresponding Python [extra](/glossary#extra). `NMEANode` is required for the [mock GPS demo](/README) and enables downstream integration of GISNav as a secondary GPS device via the NMEA protocol.
+- If you know you are not going to use a specific extension such as `NMEANode`, you can skip installing the corresponding Python [extra](/glossary#extra). `NMEANode` is required for the [mock GPS demo](/README) and enables downstream integration of GISNav as a secondary GPS device via the NMEA protocol.
 
 - The development dependencies are required for various development tasks such as generating documentation and running tests. You do not need to install them if you do not plan to do any development work on GISNav.
 
@@ -115,9 +115,7 @@ pip3 install ./gisnav
 
 ```bash [Extended <Badge type="info" text="Optional"/>]
 cd ~/colcon_ws/src/gisnav
-pip3 install ./gisnav[nmea_node]
-pip3 install ./gisnav[uorb_node]
-pip3 install ./gisnav[qgis_node]
+pip3 install ./gisnav[nmea_node,uorb_node]
 ```
 
 ```bash [Development <Badge type="info" text="Optional"/>]

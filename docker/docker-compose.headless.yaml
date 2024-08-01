@@ -1,9 +1,10 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines a reusable configuration layer that enables switching headless
+# mode for various GUI services
+
+name: gisnav
+
 services:
-  # Sets Gazebo to run in headless mode
   px4:
     environment:
-      HEADLESS: 1
-
-  ardupilot:
-    environment:
-      HEADLESS: 1
+      HEADLESS: ${SIM_HEADLESS}

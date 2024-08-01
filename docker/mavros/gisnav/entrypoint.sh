@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-source "/opt/ros/$ROS_VERSION/setup.bash"
+source "/opt/ros/$ROS_DISTRO/setup.bash"
 source "/opt/colcon_ws/install/setup.bash" --
 
 # Ensure we have npm to build docs
@@ -22,6 +22,7 @@ if [ ! -d "$TARGET_DIR" ]; then
     echo "WARNING: Target directory $TARGET_DIR does not exist. Please use Docker Compose to create the image to ensure ROS launch parameters are moved to a shared volume."
 fi
 
+# TODO: fix mounting of config files - currently the exposed ones are not used
 # Check if the source directory exists and has yaml files
 if [ -d "$SOURCE_DIR" ] && [ -d "$TARGET_DIR" ] && [ "$(ls -A $SOURCE_DIR/*.yaml 2>/dev/null)" ]; then
     # Iterate over each .yaml file in the source directory

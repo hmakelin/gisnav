@@ -11,3 +11,7 @@
     - Maxar:
         href: https://maxar.com/maxar-intelligence/products/satellite-imagery
         description: Commercial high-resolution satellite imagery
+- Admin services:
+    - OpenLayers:
+        href: /openlayers/index.html
+        description: View onboard maps via browser-based client

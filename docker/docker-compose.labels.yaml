@@ -1,0 +1,166 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines volumes, networks, and services with labels for metadata and organization.
+# Labels are used to provide additional information about the maintainer, website,
+# and descriptions for each component, enhancing documentation and management.
+
+name: gisnav
+
+# Define reusable labels using an anchor for common metadata.
+x-labels: &labels
+  org.gisnav.maintainer: "Harri Makelin <hmakelin@protonmail.com>"
+  org.gisnav.website: "https://gisnav.org"
+
+# Define volumes with labels for storing data and configuration.
+volumes:
+  maps-volume:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Volume for storing map data, exposed to end-user tools in the Docker host network"
+  gscam-volume:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Volume for GSCam configuration data, exposed to end-user tools in the Docker host network"
+  gisnav-volume:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Volume for GISNav ROS configuration such as launch and parameter files, exposed to end-user tools in the Docker host network"
+
+# Define networks with labels for different types of services.
+networks:
+  gis:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Network for GIS related services"
+  mavlink:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Network for MAVLink communication with autopilot middleware and GCS"
+  admin:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Network for administrative access and management, where end-user tools can access specific volumes that contain configuration data"
+  dds:
+    labels:
+      <<: *labels
+      org.gisnav.description: "Network for UDP communication between ROS nodes. Fast-DDS shared memory transport between ROS nodes seems to have issues when running ROS inside Docker containers, possibly when running containers as root. So the middleware is placed in the same network with the `gisnav` service to allow communication over the network stack instead."
+
+# Define services with labels for metadata, grouping, and descriptions.
+# The homepage.* labels are displayed on the Homepage admin portal
+services:
+  mapserver:
+    labels:
+      <<: *labels
+      homepage.group: GIS services
+      homepage.name: MapServer
+      homepage.description: MapServer GIS service
+
+  mavros:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: MAVROS
+      homepage.description: MAVLink to ROS middleware
+
+  micro-ros-agent:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: micro-ROS agent
+      homepage.description: uORB to ROS (PX4) middleware
+
+  qgc:
+    labels:
+      <<: *labels
+      homepage.group: Ground services
+      homepage.name: QGroundControl
+      homepage.description: Ground control software with GUI for controlling the vehicle
+
+  gisnav:
+    labels:
+      <<: *labels
+      homepage.group: Application services
+      homepage.name: GISNav
+      homepage.description: Generates mock GPS messages for FCU using visual map-based navigation
+
+  px4:
+    labels:
+      <<: *labels
+      homepage.group: Simulation services
+      homepage.name: PX4
+      homepage.description: PX4 simulation and firmware tool
+
+  ardupilot:
+    labels:
+      <<: *labels
+      homepage.group: Simulation services
+      homepage.name: ArduPilot
+      homepage.description: ArduPilot simulation and firmware tool
+
+  rviz:
+    labels:
+      <<: *labels
+      homepage.group: Development services
+      homepage.name: RViz
+      homepage.description: ROS visualization tool
+
+  rqt:
+    labels:
+      <<: *labels
+      homepage.group: Development services
+      homepage.name: RQt
+      homepage.description: ROS development tool
+
+  gscam:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: gscam
+      homepage.description: GStreamer to ROS video middleware
+
+  autoheal:
+    labels:
+      <<: *labels
+      homepage.group: Application services
+      homepage.name: Autoheal
+      homepage.description: Monitors and maintains health of other services.
+
+  postgres:
+    labels:
+      <<: *labels
+      homepage.group: GIS services
+      homepage.name: Postgres
+      homepage.description: PostGIS relational database for storing geographical information
+
+  fileserver:
+    labels:
+      <<: *labels
+      homepage.group: Admin services
+      homepage.name: FileGator
+      homepage.description: File manager for uploading and removing orthoimagery and DEMs and editing ROS configuration files
+      homepage.href: /fileserver
+      homepage.target: _blank
+
+  homepage:
+    labels:
+      <<: *labels
+      homepage.group: Admin services
+      homepage.name: Homepage
+      homepage.description: Administration dashboard
+      homepage.href: /
+      homepage.target: _self
+
+  monitoring:
+    labels:
+      <<: *labels
+      homepage.group: Admin services
+      homepage.name: Glances
+      homepage.description: System monitor
+      homepage.href: /monitoring
+      homepage.target: _blank
+
+  nginx:
+    labels:
+      <<: *labels
+      homepage.group: Admin services
+      homepage.name: Nginx
+      homepage.description: Reverse proxy server

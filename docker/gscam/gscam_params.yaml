@@ -4,8 +4,11 @@ gscam_publisher:
       udpsrc port=5600 caps="application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264"
       ! rtph264depay
       ! avdec_h264
+      ! videorate
+      ! video/x-raw,framerate=5/1
       ! videoconvert
+      ! video/x-raw,format=GRAY8
     preroll: False
-    use_gst_timestamps: True
+    use_gst_timestamps: False  # use ROS time, important
     frame_id: 'mono'
-    image_encoding: 'rgb8'  # Does not support bgr8, handle this downstream
+    image_encoding: 'mono8'

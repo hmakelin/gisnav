@@ -51,7 +51,7 @@ A monocular camera carried [onboard](#onboard) that is used by GISNav for [pose]
 estimation.
 
 ### Companion, companion computer
-The [onboard](#onboard) companion computer that GISNav runs on. E.g., NVIDIA [Jetson Nano](#nano-jetson-nano).
+The [onboard](#onboard) companion computer that GISNav runs on. E.g., NVIDIA [Jetson Orin Nano](#nano-jetson-nano).
 
 ### Container
 A [Docker](#docker) container.
@@ -286,13 +286,16 @@ Used to refer to the [vehicle](#vehicle), typically in a [ROS](#ros-ros-2) conte
 
 Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [vehicle](#heading). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
 
-
 ### Service
 - A [Docker Compose](#docker-compose) service
 - A [ROS](#ros-ros-2) service
+- A [systemd](#systemd) service
 
 ### Service orchestration
 Deploying and managing [Docker Compose](#docker-compose) [services](#service) that constitute a GISNav [deployment](#deploy-deployment). Currently done using [Make](#make-make) (Makefiles).
+
+### Simulation host
+Computer that hosts the (Gazebo) simulation world. Typically a more powerful server, or a desktop or laptop personal computer.
 
 ### Subscribe, subscriber, subscription
 A [ROS](#ros-ros-2) subscription, to subscribe to a ROS [topic](#topic).
@@ -327,16 +330,25 @@ Direction pointing directly up from the [vehicle](#vehicle) (opposed to [nadir](
 ### BBox
 Bounding box
 
-### Dev
-Development
+### `cmp`
+Companion computer
 
 ### Coords
 Coordinates
+
+### Dev
+Development
 
 ### Diff, `diff`
 Difference
 
 Also `git diff` and `diff` command line utilities to show differences in git repositories and files respectively.
+
+### Distro
+Distribution, a Linux distribution such as Debian
+
+### `gnc`
+GISNav CLI
 
 ### Img
 Image
@@ -353,7 +365,7 @@ Query
 ### Ref
 Reference
 
-### Sim
+### Sim, `sim`
 Simulation
 
 ### TTY, `tty`, `pty`
@@ -456,8 +468,14 @@ Graphical User Interface
 ### HIL, HITL
 Hardware In The Loop simulation
 
+### HTTP(S)
+Hypertext Transfer Protocol (Secure)
+
 ### IDE
 Integrated/Interactive Development Environment
+
+### mDNS
+Multicas DNS
 
 ### NAIP
 National Agriculture Imagery Program
@@ -506,14 +524,23 @@ ROS Enhancement Proposal
 ### RPY
 Roll, pitch, yaw. Euler angle representation of [attitude](#orientation-attitude) which suffers from gimbal lock, unlike [quaternions](#quaternion)
 
+### SBC
+Single Board Computer
+
 ### SCP, `scp`
 Secure Copy Protocol
+
+### SIFT
+Scale-invariant Feature Transform
 
 ### SITL
 Software In The Loop simulation
 
 ### SQL
 Structured Query Language: [SQL](https://en.wikipedia.org/wiki/SQL)
+
+### SSL/TLS
+Secure Sockets Layer / Transport Layer Security
 
 ### TCP, TCP/IP, IP
 Transmission Control Protocol/Internet Protocol
@@ -535,6 +562,14 @@ Virtual Network Computing
 
 ### VO
 Visual Odometry
+
+### WFS, WFS-T
+Web Feature Service (Transactional)
+
+::: info See also
+- [WFS Standard](https://www.ogc.org/standards/wfs)
+
+:::
 
 ### WGS, WGS 84
 A World Geodetic System coordinate system: [World Geodetic System](https://en.wikipedia.org/wiki/World_Geodetic_System)
@@ -562,6 +597,9 @@ NVIDIA parallel computing platform: [developer.nvidia.com/cuda-zone](https://dev
 ### DDS / Data Distribution Service
 A middleware protocol and standard: [dds-foundation.org](https://www.dds-foundation.org/)
 
+### Debian
+A Linux distribution: [debian.org/](https://www.debian.org/)
+
 ### Docker
 Software containerization tool: [docker.com](https://www.docker.com/)
 
@@ -583,8 +621,8 @@ ROS GStreamer camera driver: [github.com/ros-drivers/gscam](https://github.com/r
 ### GStreamer
 Open source multimedia framework: [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/)
 
-### Nano, Jetson Nano
-An NVIDIA Jetson Nano computer
+### Nano, Jetson Orin Nano
+An NVIDIA Jetson Orin Nano computer
 
 ### Jupyter, JupyterLab
 A web-based IDE: [jupyter.org](https://jupyter.org/)
@@ -633,11 +671,11 @@ PX4 Autopilot: [px4.io](https://px4.io/)
 ### Python
 A computer programming language: [python.org](https://www.python.org/)
 
+### Raspberry Pi 5
+A popular SBC: [raspberrypi.com/products/raspberry-pi-5](https://www.raspberrypi.com/products/raspberry-pi-5/)
+
 ### QEMU
 A FOSS full-system emulator: [qemu.org](https://www.qemu.org/)
-
-### QGIS
-A GIS client (and server): [qgis.org/en/site](https://qgis.org/en/site/)
 
 ### QGroundControl
 GCS software: [qgroundcontrol.com](http://qgroundcontrol.com/)
@@ -655,6 +693,9 @@ ROS 3D visualization software: [github.com/ros2/rviz](https://github.com/ros2/rv
 
 ### Sphinx
 Documentation generation software: [sphinx-doc.org/en/master/](https://www.sphinx-doc.org/en/master/)
+
+### systemd
+A system and service manager for Linux: [systemd.io](https://systemd.io/)
 
 ### tf2
 [ROS 2](#ros-ros-2) transformations library: [wiki.ros.org/tf2](http://wiki.ros.org/tf2)

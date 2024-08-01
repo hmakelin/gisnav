@@ -1,3 +1,0 @@
-services:
-  mavros:
-    command: ros2 run mavros mavros_node --ros-args --param fcu_url:=udp-b://localhost:14551@14555

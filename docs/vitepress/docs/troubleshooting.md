@@ -18,7 +18,7 @@ px4-1  | [Err] [GuiIface.cc:118] This application failed to start because no Qt 
 
 ### Expose X server
 
-If the Gazebo, QGroundControl, RViz, or QGIS windows do not appear on your screen soon after [deploying your Docker Compose services](#deploy-with-docker-compose), you may need to expose your X server to your containers.
+If the Gazebo, QGroundControl or RViz windows do not appear on your screen soon after [deploying your Docker Compose services](#deploy-with-docker-compose), you may need to expose your X server to your containers.
 
 ::: info `gisnav` required in container names
 The scripts here look for containers that have the string `gisnav` in their names. It is important that you use the `-p gisnav` option or `COMPOSE_PROJECT_NAME=gisnav` environment variable when building and creating your containers.
@@ -31,25 +31,12 @@ The scripts here look for containers that have the string `gisnav` in their name
 
 ### Headless mode
 
-When developing on a lower performance system or when doing automated testing (e.g., with MAVSDK), you may want to run the Gazebo simulation in headless mode to increase performance:
+When developing on a lower performance system or when doing automated testing (e.g., with MAVSDK), you may want to create the simulation cotnainer in headless mode to increase performance:
 
-::: info Building Compose services
-See [Deploy with Docker Compose](/deploy-with-docker-compose) for more information on how to build the Docker Compose services used in the below example.
 
-:::
-
-::: code-group
-
-```bash [PX4]
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav -f docker-compose.yaml -f docker-compose.headless.yaml up px4
+```bash
+SIM_HEADLESS=1 gnc create px4
 ```
-
-```bash [ArduPilot]
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav -f docker-compose.yaml -f docker-compose.headless.yaml up ardupilot
-```
-:::
 
 ### GPU drivers not available
 
@@ -120,6 +107,94 @@ root@669b94309b51:/PX4-Autopilot# cat /dev/ttyS4
 $GPGGA,090425,3731.4157,N,12215.3002,W,1,12,0.00,45.5,M,0.0,M,,*68
 ```
 
+### Issues reinstalling `gisnav`
+
+Try removing any previous installation and cleaning `apt` cache before reinstalling:
+
+```bash
+sudo apt-get remove gisnav
+sudo apt-get clean
+```
+
+## Cannot upload firmware via Docker containers
+
+### Serial port not available
+
+You can upload firmware to your Pixhawk board connected via USB from the `qgc` and `px4` service containers.
+
+Ensure you are running the services using the `gnc hil` command.
+
+Check that the `/dev/ttyACM0` device is available:
+
+```bash
+gnc hil run qgc bash
+# inside qgc or px4 container
+ls -l /dev/ttyACM0
+```
+
+Ensure that the user is in the `dialout` group which should have permission to access the USB device:
+
+```bash
+# inside qgc or px4 container
+groups $(whoami) | grep dialout
+```
+
+### Check that your bootloader is matched by the upload make target
+
+Check that your board bootloader is found here and take note of the name:
+
+```bash
+gnc exec px4 bash
+ls /dev/serial/by-id
+```
+
+Check that the pattern is matched by the PX4 `upload.cmake` target:
+
+```
+cat PX4-Autopilot/platforms/nuttx/cmake/upload.cmake | grep -20 APPEND serial_ports
+```
+
+## Cannot build `mavros` or X on Raspberry Pi, Raspberry Pi freezes
+
+### CPU overheating
+
+The CPU might be overheating. You can get a case for your Pi that has a fan to improve heat dissipation.
+
+### Power supply
+
+Ensure you have a sufficient power supply for your Raspberry Pi.
+
+### Out of memory
+
+4GB of memory may not be enough to build `mavros`. You can try adding another 4 GB using a swapfile:
+
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Monitor your swapfile usage:
+
+```bash
+watch swapon --show
+```
+
+Monitor your memory usage:
+
+```bash
+watch free -m
+```
+
+Delete the swapfile after building (optional):
+
+```bash
+sudo swapoff /swapfile
+sudo rm /swapfile
+```
+
 ## General debugging
 
 ### Run shell inside container
@@ -143,3 +218,9 @@ You will probably want to use `docker compose` here instead of `docker` for the 
 for basic debugging that does not require launching GUI apps.
 
 :::
+
+## Environment variable changes not picked up by containers
+
+Docker Compose configures the container when it is created, not when it is started.
+
+Check your container configuration with `docker inspect <container-name>`. If it does not match your expected configuration, try recreating the container with `MY_ENV_VAR=my_value gnc create`.

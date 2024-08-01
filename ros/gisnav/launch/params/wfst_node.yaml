@@ -1,0 +1,4 @@
+gisnav:
+  wfst_node:
+    ros__parameters:
+      wfst_url: 'http://localhost/cgi-bin/tinyows.cgi'  # host.docker.internal

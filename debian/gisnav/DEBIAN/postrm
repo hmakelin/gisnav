@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+
+# Stop and disable the systemd service
+if [ -x "$(command -v systemctl)" ]; then
+    if systemctl stop gisnav.service; then
+        echo "Successfully stopped gisnav.service."
+    else
+        echo "Could not stop gisnav.service - this is OK if the service was not running."
+    fi
+
+    if systemctl disable gisnav.service; then
+        echo "Successfully disabled gisnav.service."
+    else
+        echo "Could not disable gisnav.service - this is OK if the service was not enabled."
+    fi
+else
+    echo "systemctl command not found. Skipping service stop and disable."
+fi
+
+# Execute docker compose down
+if [ -x "$(command -v docker compose)" ]; then
+    # "down" removes containers, volumes, networks
+    if docker compose -p gisnav down; then
+        echo "Successfully executed docker compose down."
+    else
+        echo "Failed to execute docker compose down. Please stop and remove any GISNav Docker containers manually."
+    fi
+else
+    echo "docker command not found. Skipping docker compose down."
+fi
+
+exit 0

@@ -140,9 +140,4 @@ See the [system architecture page](/system-architecture) for more information.
 
 Simply drop rasters in any GDAL supported formats into the map folder and the GIS server will automatically update itself.
 
-You can use the provided QGIS service to check whether the maps are there:
-
-```bash
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav up qgis
-```
+You can use the OpenLayers web client to see the maps are there. The link is found on the admin portal home page.

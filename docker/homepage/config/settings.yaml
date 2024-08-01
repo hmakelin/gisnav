@@ -1,18 +1,23 @@
-title: GISNav home
+title: GISNav admin portal
 language: en
-#background: images/logo-no-background.svg
-favicon: images/gisnav-website-favicon-color.png
 showStats: true
+
 layout:
   Admin services:
-    icon: mdi-cog
+    tab: Companion computer
+  Application services:
+    tab: Companion computer
+  GIS services:
+    tab: Companion computer
+  Dev services:
+    tab: Simulation host
+  Middleware services:
+    tab: Companion computer
+  Ground services:
+    tab: Simulation host
+  Simulation services:
+    tab: Simulation host
   Download maps:
-    icon: mdi-map-plus
-  Core services:
-    icon: mdi-shield-alert
-    style: row
-    columns: 4
-  Development services:
-    icon: mdi-code-braces
-    style: row
-    columns: 4
+    tab: External resources
+  Bookmarks:
+    tab: External resources

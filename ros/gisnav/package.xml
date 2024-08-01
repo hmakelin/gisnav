@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>gisnav</name>
+  <version>0.67.0</version>
+  <description>Estimates airborne drone global position by matching video to map retrieved from onboard GIS server.</description>
+  <author email="hmakelin@protonmail.com">Harri Makelin</author>
+  <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
+  <license>MIT</license>
+
+  <build_depend>rosidl_default_generators</build_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>launch_testing</test_depend>
+
+  <depend>rclpy</depend>
+  <depend>rosidl_typesupport_c</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>cv_bridge</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>geographic_info</depend>
+  <depend>geographic_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>px4_msgs</depend>
+  <depend>ros2launch</depend>
+  <depend>tf_transformations</depend>
+  <depend>tf2_ros</depend>
+  <depend>robot_localization</depend>
+
+  <!-- socat only required for SITL simulation (serial to TCP bridge) -->
+  <depend>socat</depend>
+
+  <!-- torch, kornia (deep learning dependencies) are still in setup.py -->
+  <depend>python3-numpy</depend>
+  <depend>python3-pyproj</depend>
+  <depend>python3-requests</depend>
+  <depend>python3-setuptools</depend> <!-- setuptools is build dependency only? -->
+  <depend>python3-shapely</depend>
+  <depend>python3-serial</depend>
+  <!-- <depend>python3-owslib</depend> not found by rosdep, in setup.py instead -->
+
+  <!-- need these to install things from setup.py -->
+  <depend>python3-pip</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

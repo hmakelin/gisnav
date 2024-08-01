@@ -1,0 +1,16 @@
+# This Docker Compose override file is part of the GISNav project configuration.
+# It specifies the commands to run for each service in HIL mode, ensuring that
+# they start with the appropriate entry points and configurations.
+
+services:
+  # TODO
+  # Connects MAVROS over serial instead of default UDP
+  #mavros:
+  #  command: ros2 run mavros mavros_node --ros-args --param fcu_url:=/dev/ttyUSB0:57600
+
+  px4:
+    command: >
+      /bin/bash -c "
+      source ./Tools/simulation/gazebo-classic/setup_gazebo.bash $(pwd) $(pwd)/build/px4_sitl_default &&
+      gazebo ./Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/hitl_iris.world
+      "

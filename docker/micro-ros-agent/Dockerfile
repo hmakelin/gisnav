@@ -1,6 +1,10 @@
 FROM microros/micro-ros-agent:foxy
 
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
+# tcpdump for healthcheck
+RUN apt-get update && \
+    apt-get -y install tcpdump && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt clean
 
 # sed edits px4_msgs CMakeLists.txt so that only SensorGps message is built
 RUN cd /uros_ws && \

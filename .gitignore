@@ -1,31 +1,41 @@
+# IDEs and editors
+.idea/
+.vscode/
+
 # Python virtual environment
 venv/
 
-# PyCharm generated files
-.idea/
-
-# Python bytecode
+# Python bytecode and cache directories
 *.pyc
+**/__pycache__/
 
-# colcon created folders
-build/
-install/
-log/
+# General build directories (e.g., colcon, make, sphinx, VitePress)
+**/build/
+**/_build/
+**/.build/
+**/dist/
+**/_dist/
+**/.dist/
+**/install/
+**/_install/
+**/.install/
+**/log/
+**/_log/
+**/.log/
+**/cache/
+**/_cache/
+**/.cache/
 
-# VitePress
-docs/vitepress/docs/.vitepress/dist
-docs/vitepress/docs/.vitepress/build
-docs/vitepress/docs/.vitepress/cache
-docs/vitepress/docs/reference/
-
-# Sphinx
-docs/sphinx/build
+# GISNav docs build specific build folder
+docs/vitepress/docs/reference
 
 # coverage.py files
 .coverage*
 
 # SITL test log output (but leave one sample flight log)
 gisnav/test/sitl/output/
+*.ulg
+*.ulog
 
 # Jupyter Notebook checkpoints, notebooks
 gisnav/test/sitl/ulog_analysis/.ipynb_checkpoints/
@@ -36,7 +46,6 @@ gisnav/test/sitl/ulog_analysis/output
 *.egg-info
 
 # Debian package builds
-debian
 .pybuild
 *.deb
 
@@ -45,3 +54,6 @@ debian
 
 # node
 node_modules
+
+# pytest
+*.pytest_cache/*

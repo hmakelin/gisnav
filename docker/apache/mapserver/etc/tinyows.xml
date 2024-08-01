@@ -1,0 +1,17 @@
+<tinyows online_resource="http://localhost/cgi-bin/tinyows"
+         schema_dir="/usr/local/share/tinyows/schema/">
+
+<pg host="gisnav-postgres-1" user="gisnav" password="gisnav" dbname="gisnav" port="5432"/>
+
+<metadata name="TinyOWS Server"
+          title="TinyOWS Server - WFS-T GISNav Service" />
+
+<layer retrievable="1"
+       writable="1"
+       ns_prefix="gisnav"
+       ns_uri="http://www.mapserver.org/tinyows/"
+       name="position"
+       schema="feature"
+       title="Position" />
+
+</tinyows>

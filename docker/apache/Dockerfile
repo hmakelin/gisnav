@@ -1,6 +1,5 @@
 FROM ubuntu:jammy AS apache
-
-LABEL maintainer="Harri Makelin <hmakelin@protonmail.com>"
+ARG TINYOWS_MAPFILE
 
 # Update apt repository and install necessary packages
 RUN apt-get update && apt-get install -y \
@@ -16,6 +15,34 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 FROM apache AS mapserver
+
+# Install TinyOWS dependencies
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    libxml2-dev \
+    libgeos-dev \
+    postgresql-server-dev-all \
+    postgis \
+    libfcgi-dev \
+    libfcgi0ldbl \
+    libpq-dev \
+    flex \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone, build, and install TinyOWS
+# Need to copy postgis3.2 contrib to new location
+RUN git clone https://github.com/MapServer/tinyows.git \
+    && cd tinyows \
+    && autoconf \
+    && ./configure \
+    && make \
+    && make install \
+    && cp tinyows /usr/lib/cgi-bin
 
 ARG NAIP_GDOWN_ID=16M_kbsLpF3t87KC2n9YgqGEBA5h0lG7U
 ARG OSM_GDOWN_ID=1snGYjWxs71m6I-qxKsmUzch_bAfQtrEW
@@ -51,22 +78,25 @@ COPY mapserver/mapfiles/ /etc/mapserver/
 # Enable Apache modules
 RUN a2enmod rewrite && a2enmod fcgid && a2enmod cgi
 
-# Configure Apache to serve the MapServer CGI
-# Add .cgi suffix to the executable to make Apache correctly handle the
-# requests
+# Configure Apache to serve the MapServer CGI and TinyOWS
 RUN echo "<Directory /usr/lib/cgi-bin/>" > /etc/apache2/conf-available/mapserver.conf \
     && echo "    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    AddHandler fcgid-script .fcgi" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    AddHandler cgi-script .cgi .pl" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "    Require all granted" >> /etc/apache2/conf-available/mapserver.conf \
+    #&& echo "    SetEnv TINYOWS_MAPFILE $TINYOWS_MAPFILE" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "</Directory>" >> /etc/apache2/conf-available/mapserver.conf \
     && echo "ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/" >> /etc/apache2/conf-available/mapserver.conf \
     && a2enconf mapserver \
     && mv /usr/lib/cgi-bin/mapserv /usr/lib/cgi-bin/mapserv.cgi \
-    && chmod +x /usr/lib/cgi-bin/mapserv.cgi
+    && mv /usr/lib/cgi-bin/tinyows /usr/lib/cgi-bin/tinyows.cgi \
+    && ln -s /usr/lib/cgi-bin/tinyows.cgi /usr/lib/cgi-bin/tinyows \
+    && chmod +x /usr/lib/cgi-bin/mapserv.cgi \
+    && chmod +x /usr/lib/cgi-bin/tinyows.cgi
 
 # Setup complete, start MapServer with default mapfile
 COPY mapserver/entrypoint.sh /
+COPY mapserver/etc/ /etc/
 
 RUN chmod +x /entrypoint.sh
 
@@ -93,29 +123,9 @@ RUN apt-get update && \
     bzip2 && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Firefox (not via Snap)
-# Detect architecture using dpkg (more reliable in Debian-based containers)
-RUN ARCH=$(dpkg --print-architecture) && \
-    FIREFOX_VERSION=102.0 && \
-    if [ "$ARCH" = "amd64" ]; then \
-        FIREFOX_URL="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-x86_64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2"; \
-    elif [ "$ARCH" = "arm64" ]; then \
-        FIREFOX_URL="https://ftp.mozilla.org/pub/firefox/releases/${FIREFOX_VERSION}/linux-aarch64/en-US/firefox-${FIREFOX_VERSION}.tar.bz2"; \
-    else \
-        echo "Unsupported architecture"; exit 1; \
-    fi && \
-    wget -q ${FIREFOX_URL} -O /tmp/firefox.tar.bz2 && \
-    tar xjf /tmp/firefox.tar.bz2 -C /opt/ && \
-    ln -s /opt/firefox/firefox /usr/local/bin/firefox && \
-    rm /tmp/firefox.tar.bz2
-
-COPY fileserver/logo-no-background.svg /
-
-# Setup filegator and add some customization so that we know we are
-# still within GISNav. Granting guest user permissions here will skip the login
+# Setup filegator. Granting guest user permissions here will skip the login
 # screen on launch.
-# TODO clone specific version and build with customizations - current customizations
-#  are very brittle in case the app structure is changed in a new release
+# TODO clone specific version and build with less brittle customizations
 RUN mkdir -p /var/www/ && \
     cd /var/www && \
     wget https://github.com/filegator/static/raw/master/builds/filegator_latest.zip && \
@@ -125,13 +135,8 @@ RUN mkdir -p /var/www/ && \
     chmod -R 775 filegator && \
     cd filegator && \
     cp configuration_sample.php configuration.php && \
-    sed -i "s/'app_name' => 'FileGator'/'app_name' => 'GISNav'/g" configuration.php && \
-    sed -i "s|'logo' => 'https://filegator.io/filegator_logo.svg'|'logo' => 'img/logo-no-background.svg'|g" configuration.php && \
     sed -i "/'editable' => \[/ s/]/, '.yml', '.yaml'&/" configuration.php && \
     sed -i 's/100 \* 1024 \* 1024/2 \* 1024 \* 1024 \* 1024/g' configuration.php && \
-    mkdir -p dist/img && \
-    cp /logo-no-background.svg dist/img && \
-    sed -i 's/#34b891/#ff4136/g' dist/css/app.css && \
     jq '.["2"].permissions = "read|write|upload|download|zip"' private/users.json.blank > temp.json && mv temp.json private/users.json
 
 

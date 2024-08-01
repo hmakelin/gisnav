@@ -1,11 +1,13 @@
 - greeting:
     text_size: xl
-    text: GISNav
+    text: GISNav admin portal
 - glances:
-    url: http://host.docker.internal:61208
+    href: /monitoring
+    version: 4
+    url: http://gisnav-monitoring-1:61208
     cpu: true # optional, enabled by default, disable by setting to false
     mem: true # optional, enabled by default, disable by setting to false
     cputemp: true # disabled by default
     uptime: true # disabled by default
-    disk: / # disabled by default, use mount point of disk(s) in glances. Can also be a list (see below)
+    disk: / # disabled by default, use mount point of disk(s) in glances
     expanded: true # show the expanded view

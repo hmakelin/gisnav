@@ -1,0 +1,17 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It contains video streaming related configurations.
+
+name: gisnav
+
+services:
+  px4:
+    build:
+      args:
+        # PX4_VIDEO_HOST_IP must be available at build-time
+        PX4_VIDEO_HOST_IP: ${GISNAV_COMPANION_HOST:?empty or not set}
+    environment:
+      PX4_VIDEO_HOST_IP: ${GISNAV_COMPANION_HOST:?empty or not set}
+
+  gscam:
+    ports:
+      - "${GISNAV_VIDEO_BIND_PORT:?empty or not set}:${GISNAV_VIDEO_BIND_PORT:?empty or not set}/udp"

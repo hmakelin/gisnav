@@ -1,0 +1,92 @@
+# This Docker Compose file is part of the GISNav project configuration.
+# It defines various services, their network associations, and port mappings
+# to facilitate communication and functionality within the GISNav system. The
+# port mappings here expose specific services to communication from both the
+# local and any number of remote hosts.
+
+name: gisnav
+
+services:
+  mapserver:
+    networks:
+      - gis
+
+  mavros:
+    networks:
+      - dds
+    ports:
+      - "${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}/udp"
+
+  micro-ros-agent:
+    networks:
+      - dds
+    ports:
+      - "${UXRCE_DDS_PRT:?empty or not set}:${UXRCE_DDS_PRT:?empty or not set}/udp"
+    environment:
+      UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
+
+  qgc:
+    network_mode: host
+
+  # TODO: Expose serial device instead of TCP port and output NMEA directly?
+  gisnav:
+    networks:
+      - gis
+      - dds
+
+  px4:
+    network_mode: host
+    environment:
+      UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
+      GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?empty or not set}
+      GISNAV_CMP_MAVROS_BIND_PORT: ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Expose avahi-daemon socket to find .local devices (e.g. raspberrypi.local)
+      # from inside the container
+      - /run/avahi-daemon/socket:/run/avahi-daemon/socket
+
+  # TODO: Define and expose necessary ports for ArduPilot.
+  ardupilot:
+    network_mode: host
+
+  gscam:
+    networks:
+      - dds
+
+  postgres:
+    networks:
+      - gis
+
+  fileserver:
+    networks:
+      - admin
+
+  homepage:
+    networks:
+      - admin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  monitoring:
+    networks:
+      - admin
+
+  nginx:
+    networks:
+      - admin
+      - gis  # gis network for leaflet app mapserver access
+    ports:
+      # Expose HTTP port
+      - "80:80/tcp"
+      # Expose HTTPS port
+      - "443:443/tcp"
+
+  rviz:
+    networks:
+      - dds
+
+  rqt:
+    networks:
+      - dds

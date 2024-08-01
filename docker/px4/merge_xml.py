@@ -1,83 +1,85 @@
-"""
-This script merges an XML file containing a Gazebo plugin definition with a
-typhoon_h480.sdf.jinja file, which is part of the PX4 SITL Gazebo plugin. The
-XML file should include a plugin definition that needs to be placed under the
-camera sensor element in the typhoon_h480.sdf.jinja file.
-
-Usage:
-    python merge_xml.py path/to/xml_file.xml path/to/typhoon_h480.sdf.jinja
-
-Arguments:
-    xml_file: Path to the XML file containing the plugin definition.
-    sdf_jinja_file: Path to the typhoon_h480.sdf.jinja file.
-
-The script will merge the plugin definition from the provided XML file into the
-typhoon_h480.sdf.jinja file "in-place". If the camera sensor element is not
-found in the typhoon_h480.sdf.jinja file, the script will print an error
-message and exit.
-"""
 import argparse
 import os
+import xml.etree.ElementTree as ET
 
-from lxml import etree
+
+def merge_world_xml(source_file, merge_file):
+    # Parse the source XML file
+    tree = ET.parse(source_file)
+    root = tree.getroot()
+
+    # Parse the XML content to merge
+    merge_tree = ET.parse(merge_file)
+    merge_root = merge_tree.getroot()
+
+    # Find the <world> element in the source XML
+    world_element = root.find("world")
+
+    # Check if <world> element exists in both source and merge content
+    if world_element is not None and merge_root.find("world") is not None:
+        # Merge <include> elements
+        for include_element in merge_root.find("world").findall("include"):
+            world_element.append(include_element)
+
+        # Merge <spherical_coordinates> elements
+        spherical_coordinates_element = merge_root.find("world").find(
+            "spherical_coordinates"
+        )
+        if spherical_coordinates_element is not None:
+            existing_spherical_coordinates = world_element.find("spherical_coordinates")
+            if existing_spherical_coordinates is None:
+                world_element.append(spherical_coordinates_element)
+            else:
+                world_element.remove(existing_spherical_coordinates)
+                world_element.append(spherical_coordinates_element)
+
+    # Write back to the source XML file
+    tree.write(source_file)
 
 
-def merge_xml(xml_file, sdf_jinja_file):
-    """
-    Merge an XML file containing a Gazebo plugin definition into a
-    typhoon_h480.sdf.jinja file.
+def merge_camera_xml(source_file, merge_file):
+    # Parse the source XML file
+    tree = ET.parse(source_file)
+    root = tree.getroot()
 
-    This function reads the plugin definition from the provided XML file and
-    inserts it under the camera sensor element in the typhoon_h480.sdf.jinja file.
-    The modified content is then written back to the typhoon_h480.sdf.jinja file.
+    # Parse the XML content to merge
+    merge_tree = ET.parse(merge_file)
+    merge_root = merge_tree.getroot()
 
-    Args:
-        xml_file (str): Path to the XML file containing the plugin definition.
-        sdf_jinja_file (str): Path to the typhoon_h480.sdf.jinja file.
+    # Find the <link name='base_link'> element in the source XML
+    base_link_element = root.find(".//link[@name='base_link']")
 
-    If the camera sensor element is not found in the typhoon_h480.sdf.jinja file,
-    an error message is printed and the function returns without modifying the file.
-    """
-    # Parse the provided XML file
-    with open(xml_file, "r") as file:
-        xml_content = file.read()
-    snippet_tree = etree.fromstring(xml_content)
+    # Check if <link name='base_link'> element exists in the source and merge content
+    if base_link_element is not None and merge_root is not None:
+        # Merge the content of merge_root into base_link_element
+        # for elem in merge_root:
+        #    base_link_element.append(elem)
+        base_link_element.append(merge_root)
 
-    # Parse the typhoon_h480.sdf.jinja file
-    with open(sdf_jinja_file, "r") as file:
-        sdf_jinja_content = file.read()
-    sdf_jinja_tree = etree.fromstring(sdf_jinja_content)
-
-    # Find the camera sensor in the typhoon_h480.sdf.jinja file
-    camera_sensor = sdf_jinja_tree.xpath("//sensor[@name='camera']")
-
-    if camera_sensor:
-        # Insert the plugin from the XML file under the camera sensor element
-        camera_sensor[0].append(snippet_tree.find(".//plugin"))
-
-        # Write the modified content back to the typhoon_h480.sdf.jinja file
-        with open(sdf_jinja_file, "wb") as file:
-            file.write(etree.tostring(sdf_jinja_tree, pretty_print=True))
-    else:
-        print("Camera sensor not found in the typhoon_h480.sdf.jinja file.")
+    # Write back to the source XML file
+    tree.write(source_file)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge XML files.")
+    parser.add_argument("source", type=str, help="Path to the source XML file.")
     parser.add_argument(
-        "xml_file", type=str, help="Path to the XML file with the plugin data."
+        "merge", type=str, help="Path to the XML file with the content to merge."
     )
     parser.add_argument(
-        "sdf_jinja_file", type=str, help="Path to the typhoon_h480.sdf.jinja file."
+        "--camera", action="store_true", help="Flag to indicate camera merge."
     )
 
     args = parser.parse_args()
 
-    if os.path.exists(args.xml_file) and os.path.exists(args.sdf_jinja_file):
-        merge_xml(args.xml_file, args.sdf_jinja_file)
+    if os.path.exists(args.source) and os.path.exists(args.merge):
+        if args.camera:
+            merge_camera_xml(args.source, args.merge)
+        else:
+            merge_world_xml(args.source, args.merge)
         print("XML snippet merged successfully!")
     else:
-        if not os.path.exists(args.xml_file):
-            print(f"File '{args.xml_file}' not found.")
-        if not os.path.exists(args.sdf_jinja_file):
-            print(f"File '{args.sdf_jinja_file}' not found.")
+        if not os.path.exists(args.source):
+            print(f"File '{args.source}' not found.")
+        if not os.path.exists(args.merge):
+            print(f"File '{args.merge}' not found.")

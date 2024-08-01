@@ -12,7 +12,7 @@ hero:
       link: "/README"
     - theme: alt
       text: "Guide"
-      link: "/README"
+      link: "/introduction"
     - theme: alt
       text: "API Reference"
       link: "reference/index"

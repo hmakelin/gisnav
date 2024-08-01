@@ -5,15 +5,31 @@ MAP
   END
   EXTENT -180 -90 180 90
   WEB
+    VALIDATION
+        "mapserver_hostname" "^localhost|gisnav-mapserver-1$"
+        "default_mapserver_hostname" "localhost"
+    END
     METADATA
         "wms_title"           "GISNav WMS"
         "wms_abstract"        "GISNav orthoimagery and digital elevation model (DEM) WMS service"
-        "wms_onlineresource"  "http://gisnav-mapserver-1/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
+        "wms_onlineresource"  "http://%mapserver_hostname%/cgi-bin/mapserv.cgi?map=/etc/mapserver/default.map"
         "wms_srs"             "EPSG:3857 EPSG:4326"
         "wms_enable_request"  "GetMap GetCapabilities"
         "wms_feature_info_mime_type" "text/plain"
+        "wfs_srs"             "EPSG:4326"
+        "wfs_enable_request"  "*"
+        "wfs_feature_info_mime_type" "text/xml; subtype=gml/3.1.1"
+        "wfs_getfeature_formatlist" "GML2,GML3,application/json"
     END
   END
+
+  OUTPUTFORMAT
+    NAME "geojson"
+    DRIVER "OGR/GEOJSON"
+    MIMETYPE "application/json"
+    FORMATOPTION "FORM=SIMPLE"
+  END
+
   LAYER
     NAME          "imagery"
     DATA          "/etc/mapserver/imagery.vrt"
@@ -23,10 +39,11 @@ MAP
     END
     METADATA
       "wms_title"       "GISNav orthoimagery"
-      "wms_abstract"    "Aggregated orthoimagery from shared volume orthoimagery folder"
+      "wms_abstract"    "Orthoimagery from USGS"
     END
     TOLERANCE 1
   END
+
   LAYER
     NAME          "dem"
     DATA          "/etc/mapserver/dem.vrt"
@@ -35,9 +52,36 @@ MAP
       "init=epsg:4326"
     END
     METADATA
-      "wms_title"       "GISNav digital elevation models (DEM)"
-      "wms_abstract"    "Aggregated Digital Elevation Model (DEM) from shared volume dem folder"
+      "wms_title"       "GISNav elevation"
+      "wms_abstract"    "Digital Elevation Model (DEM) from USGS"
     END
     TOLERANCE 1
+  END
+
+  LAYER
+    NAME          "position"
+    TYPE POINT
+    CONNECTIONTYPE POSTGIS
+    CONNECTION "dbname=gisnav user=gisnav password=gisnav host=gisnav-postgres-1"
+    DATA "geom FROM feature.position USING UNIQUE id USING SRID=4326"
+    STATUS ON
+    METADATA
+      "wfs_title"       "Position"
+      "wfs_abstract"    "Position data as WFS"
+      "gml_include_items" "all"
+      "wfs_enable_request" "*"
+      "wfs_getfeature_formatlist" "GML2,GML3,geojson"
+      "gml_featureid"    "id"
+
+      "wfs_namespace_prefix" "gml"
+    END
+    CLASS
+      NAME      "position"
+      STYLE
+        COLOR 255 0 0
+        SYMBOL "circle"
+        SIZE 6
+      END
+    END
   END
 END

@@ -127,7 +127,7 @@ def generate_launch_description():
             "protocol",
             default_value="uorb",
             description="Outbound communications protocol for mock GPS messages. "
-            "Choose 'uorb' or 'nmea'.",
+            "Choose 'uorb', 'ublox', or 'nmea'.",
         )
     )
 
@@ -142,8 +142,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "port",
             default_value="/dev/ttyS1",
-            description="Outbound serial port for NMEA node. "
-            "Ignored if protocol is not NMEA.",
+            description="Outbound serial port for NMEA or u-blox nodes. "
+            "Ignored if protocol does not use serial output.",
         )
     )
 

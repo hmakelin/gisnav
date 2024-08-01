@@ -11,7 +11,7 @@ The recommended way of developing GISNav is to deploy a SITL simulation and supp
 The easy way to deploy for development is via the Makefile. Use the below commands to run a local ROS 2 default launch configuration of GISNav and to deploy a supporting SITL simulation as Docker Compose services.
 
 - The `uorb` target uses the `micro-ros-agent` middleware service and `UORBNode`.
-- The `ublox` and `nmea` targets use `socat` running on the Docker host to bridge the serial port output via TCP to the SITL simulation container.
+- The `ubx` and `nmea` targets use `socat` running on the Docker host to bridge the serial port output via TCP to the SITL simulation container.
 
 ::: code-group
 
@@ -22,7 +22,7 @@ make dev PROTOCOL=uorb
 
 ```bash [u-blox]
 cd ~/colcon_ws/src/gisnav
-make dev PROTOCOL=ublox
+make dev PROTOCOL=ubx
 ```
 
 ```bash [NMEA <Badge type="warning" text="Deprecated"/>]
@@ -58,9 +58,9 @@ ros2 launch gisnav local.launch.py --show-args
 
 ### Redirecting serial output for SITL simulation <Badge type="info" text="NMEA/u-blox"/>
 
-The `px4` SITL simulation container listens for serial messages (e.g NMEA or u-blox) at TCP port 15000. GISNav `NMEANode` and `UBloxNode` write into a serial port, and this serial port traffic must be bridged to the TCP port of the running `px4` container to make the mock GPS demo work in SITL simulation.
+The `px4` SITL simulation container listens for serial messages (e.g NMEA or u-blox) at TCP port 15000. GISNav `NMEANode` and `UBXNode` write into a serial port, and this serial port traffic must be bridged to the TCP port of the running `px4` container to make the mock GPS demo work in SITL simulation.
 
-The Makefile `make dev PROTOCOL=nmea` and `make dev PROTOCOL=ublox` recipes create a pseudo-tty (virtual serial port) using `socat` to bridge the GISNav serial port output via TCP to the Docker container running the SITL simulation. The Makefile hardcodes `localhost` as the container host as the targets are intended for local development, but you can use the below example if your simulation is running on a different host:
+The Makefile `make dev PROTOCOL=nmea` and `make dev PROTOCOL=ubx` recipes create a pseudo-tty (virtual serial port) using `socat` to bridge the GISNav serial port output via TCP to the Docker container running the SITL simulation. The Makefile hardcodes `localhost` as the container host as the targets are intended for local development, but you can use the below example if your simulation is running on a different host:
 
 ```bash
 cd ~/colcon_ws/src/gisnav
@@ -79,10 +79,10 @@ cd ~/colcon_ws
 ros2 launch gisnav local.launch.py protocol:=uorb
 ```
 
-```bash [u-blox]
+```bash [UBX]
 cd ~/colcon_ws
 PTY_PORT=$(readlink /tmp/gisnav-pty-link)
-ros2 launch gisnav local.launch.py protocol:=u-blox port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+ros2 launch gisnav local.launch.py protocol:=ubx port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
 ```
 
 ```bash [NMEA <Badge type="warning" text="Deprecated"/>]

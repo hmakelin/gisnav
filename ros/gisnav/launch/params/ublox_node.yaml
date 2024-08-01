@@ -2,8 +2,12 @@
 # It probably should not be statically declared here because the appropriate
 # outbound port should probably be some pseudo-tty (virtual serial port) on a
 # development machine --> use launch args to provide suitable port instead
-gisnav:
-  nmea_node:
+ublox:
+  ublox_node:
     ros__parameters:
-      baudrate: 9600
-      #port: "/dev/ttyS1"
+      device: /dev/ttyACM0
+      uart1/baudrate: 9600
+      rate: 5
+      dynamic_model: airborne1
+      fix_mode: 3d
+      publish/nav/pvt: true

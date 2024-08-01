@@ -28,7 +28,7 @@ from .constants import (
     ROS_NAMESPACE,
     STEREO_NODE_NAME,
     TWIST_NODE_NAME,
-    UBLOX_NODE_NAME,
+    UBX_NODE_NAME,
     UORB_NODE_NAME,
     WFST_NODE_NAME,
 )
@@ -95,21 +95,21 @@ except ModuleNotFoundError as e:
     print(f"Could not import NMEANode because a module was not found: {e}")
 
 try:
-    from .extensions.ublox_node import UBloxNode
+    from .extensions.ubx_node import UBXNode
 
-    def run_ublox_node():
-        """Spins up a :class:`.UBloxNode`
+    def run_ubx_node():
+        """Spins up a :class:`.UBXNode`
 
         > [!NOTE] Must install extra
-        > Not available if the ``ublox_node`` Python extra has not been installed.
+        > Not available if the ``ubx_node`` Python extra has not been installed.
 
         .. code-block:: bash
-            :caption: Install WFSTNode
+            :caption: Install UBXNode
 
             cd ~/colcon_ws/src/gisnav/gisnav
-            pip install .[ublox_node]
+            pip install .[ubx_node]
         """
-        _run(UBloxNode, UBLOX_NODE_NAME, **_rclpy_node_kwargs)
+        _run(UBXNode, UBX_NODE_NAME, **_rclpy_node_kwargs)
 
 except ModuleNotFoundError as e:
     print(f"Could not import WFSTNode because a module was not found: {e}")

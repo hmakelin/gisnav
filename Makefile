@@ -67,14 +67,14 @@ check: lint test
 	@echo "Running code quality checks..."
 
 .PHONY: dev
-dev: install
+dev:
 ifeq ($(PROTOCOL),uorb)
 	@echo "Protocol is uorb; no need for serial-to-TCP bridge."
 	@echo "Launching GISNav locally..."
 	@ros2 launch gisnav local.launch.py protocol:=uorb
 else
 	@echo "Setting up socat bridge to send $(PROTOCOL) serial output to simulator container over TCP port 15000..."
-	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:localhost:15000 || (echo "Could not establish serial-to-TCP bridge"; exit 1)
+	@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:localhost:15000 || (echo "Could not establish serial-to-TCP bridge. Is the SITL simulation container running?"; exit 1)
 	@sleep 3  # Give socat time to create the pty
 	@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
 	@echo "Launching GISNav locally..."

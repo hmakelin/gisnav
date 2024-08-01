@@ -6,7 +6,6 @@ from typing import Final, Optional, Tuple
 
 import numpy as np
 import rclpy
-import serial
 import tf2_geometry_msgs
 import tf2_ros
 import tf_transformations
@@ -14,21 +13,24 @@ from builtin_interfaces.msg import Time
 from geometry_msgs.msg import PointStamped, PoseStamped, TwistWithCovariance, Vector3
 from nav_msgs.msg import Odometry
 from pyproj import Transformer
-from pyubx2 import UBXMessage
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import QoSPresetProfiles
+from ublox_msgs.msg import NavPVT
 
 from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY
+from ..constants import (
+    ROS_TOPIC_RELATIVE_NAV_PVT,
+    ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY,
+)
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
 
-class UBloxNode(Node):
-    """A node that publishes u-blox messages to FCU via serial port"""
+class UBXNode(Node):
+    """A node that publishes UBX messages to FCU via serial port"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default for :attr:`.dem_vertical_datum`"""
@@ -361,7 +363,7 @@ class UBloxNode(Node):
                 vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
             )
 
-            self.publish_ublox_message(
+            self.nav_pvt(
                 int(lat * 1e7),
                 int(lon * 1e7),
                 alt_ellipsoid,
@@ -383,7 +385,8 @@ class UBloxNode(Node):
         _publish_inner(odometry)
 
     @narrow_types
-    def publish_ublox_message(
+    @ROS.publish(ROS_TOPIC_RELATIVE_NAV_PVT, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    def nav_pvt(
         self,
         lat: int,  # todo update to new message definition with degrees, not 1e7 degrees
         lon: int,  # todo update to new message definition with degrees, not 1e7 degrees
@@ -401,57 +404,75 @@ class UBloxNode(Node):
         eph: float,
         epv: float,
         satellites_visible: int,
-    ) -> None:
-        """Publish mock GPS message via u-blox, or None if cannot be computed"""
-        np.radians(yaw_degrees)
+    ) -> Optional[NavPVT]:
+        """Retusn UBX mock GPS message, or None if cannot be computed"""
+        msg = NavPVT()
 
         try:
-            # Convert lat and lon to degrees (assumed to be in 1e-7 degrees)
-            lat_deg = lat * 1e-7
-            lon_deg = lon * 1e-7
+            # Convert timestamp to GPS time of week
+            gps_week, time_of_week = self.unix_to_gps_time(
+                timestamp / 1e6
+            )  # Assuming timestamp is in microseconds
 
-            # Create UBX-NAV-PVT message
-            pvt_msg = UBXMessage(
-                "NAV",
-                "PVT",
-                iTOW=timestamp,
-                # GPS time of week in milliseconds
-                year=time.gmtime(timestamp).tm_year,
-                month=time.gmtime(timestamp).tm_mon,
-                day=time.gmtime(timestamp).tm_mday,
-                hour=time.gmtime(timestamp).tm_hour,
-                min=time.gmtime(timestamp).tm_min,
-                sec=time.gmtime(timestamp).tm_sec,
-                valid=3,  # Valid UTC date and valid UTC time of day
-                tAcc=50,  # Time accuracy estimate in nanoseconds
-                nano=0,  # Fraction of second in nanoseconds
-                fixType=3,  # 3D fix
-                flags=1,  # Fix valid
-                flags2=0,
-                numSV=satellites_visible,
-                lon=int(lon_deg * 1e7),
-                lat=int(lat_deg * 1e7),
-                height=int(altitude_ellipsoid * 1000),
-                hMSL=int(altitude_amsl * 1000),
-                hAcc=int(eph * 1000),
-                vAcc=int(epv * 1000),
-                velN=int(vel_n_m_s * 1000),
-                velE=int(vel_e_m_s * 1000),
-                velD=int(vel_d_m_s * 1000),
-                gSpeed=int(
-                    np.sqrt(vel_n_m_s**2 + vel_e_m_s**2 + vel_d_m_s**2) * 1000
-                ),
-                headMot=int(np.degrees(cog_rad) * 1e5),
-                sAcc=int(s_variance_m_s * 1000),
-                headAcc=int(np.degrees(h_variance_rad) * 1e5),
-                pDOP=0,  # Position DOP
-                headVeh=int(yaw_degrees * 1e5),
+            msg.iTOW = int(time_of_week * 1000)  # GPS time of week in ms
+            (
+                msg.year,
+                msg.month,
+                msg.day,
+                msg.hour,
+                msg.min,
+                msg.sec,
+            ) = self.get_utc_time(timestamp / 1e6)
+
+            msg.valid = (
+                0x01 | 0x02 | 0x04
+            )  # Assuming valid date, time, and fully resolved
+            msg.tAcc = 50000000  # Time accuracy estimate in ns (50ms)
+            msg.nano = 0  # Fraction of second, range -1e9 .. 1e9 (UTC)
+
+            msg.fixType = 3  # 3D-Fix
+            msg.flags = 0x01  # gnssFixOK
+            msg.flags2 = 0
+            msg.numSV = satellites_visible
+
+            msg.lon = lon
+            msg.lat = lat
+            msg.height = int(
+                altitude_ellipsoid * int(1e3)
+            )  # Height above ellipsoid in mm
+            msg.hMSL = int(
+                altitude_amsl * int(1e3)
+            )  # Height above mean sea level in mm
+            msg.hAcc = int(eph * int(1e3))  # Horizontal accuracy estimate in mm
+            msg.vAcc = int(epv * int(1e3))  # Vertical accuracy estimate in mm
+
+            msg.velN = int(vel_n_m_s * int(1e3))  # NED north velocity in mm/s
+            msg.velE = int(vel_e_m_s * int(1e3))  # NED east velocity in mm/s
+            msg.velD = int(vel_d_m_s * int(1e3))  # NED down velocity in mm/s
+            msg.gSpeed = int(
+                np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * int(1e3)
+            )  # Ground Speed (2-D) in mm/s
+            msg.headMot = int(
+                np.degrees(cog_rad) * int(1e5)
+            )  # Heading of motion (2-D) in degrees * 1e-5
+
+            msg.sAcc = int(s_variance_m_s * int(1e3))  # Speed accuracy estimate in mm/s
+            msg.headAcc = int(
+                np.degrees(h_variance_rad) * int(1e5)
+            )  # Heading accuracy estimate in degrees * 1e-5
+
+            msg.pDOP = 0  # Position DOP * 0.01 (unitless)
+
+            msg.headVeh = int(
+                yaw_degrees * 100000
+            )  # Heading of vehicle (2-D) in degrees * 1e-5
+        except AssertionError as e:
+            self.get_logger().warning(
+                f"Could not create mock GPS message due to exception: {e}"
             )
+            msg = None
 
-            self._write_ublox_to_serial([pvt_msg.serialize()])
-
-        except Exception as e:
-            print(f"Error publishing GPS data: {e}")
+        return msg
 
     @narrow_types
     def _convert_to_wgs84(
@@ -543,11 +564,20 @@ class UBloxNode(Node):
             self.get_logger().error(f"Could not transform twist with covariance: {ex}")
             return None
 
-    def _write_ublox_to_serial(self, messages: List[str]) -> None:
-        """Writes a collection of u-blox messages to :attr:`.port`.
+    def _unix_to_gps_time(self, unix_time):
+        gps_epoch = 315964800  # GPS epoch in Unix time (1980-01-06 00:00:00 UTC)
+        gps_time = unix_time - gps_epoch
+        gps_week = int(gps_time / 604800)  # 604800 seconds in a week
+        time_of_week = gps_time % 604800
+        return gps_week, time_of_week
 
-        :param messages: A list of u-blox messages to be written to the serial port
-        """
-        with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-            for message in messages:
-                ser.write((message + "\r\n").encode())
+    def _get_utc_time(self, unix_time):
+        utc_time = time.gmtime(unix_time)
+        return (
+            utc_time.tm_year,
+            utc_time.tm_mon,
+            utc_time.tm_mday,
+            utc_time.tm_hour,
+            utc_time.tm_min,
+            utc_time.tm_sec,
+        )

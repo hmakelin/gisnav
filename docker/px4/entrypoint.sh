@@ -9,14 +9,13 @@ fi
 echo "Setting up MAVLink router to MAVROS at ${GISNAV_COMPANION_IP:?empty or not set}:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}"
 mavlink-routerd -e ${GISNAV_COMPANION_IP:?empty or not set}:${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set} 127.0.0.1:14540 &
 
-# TODO update NMEA support / socat - px4 now in host network to make uXRCE-DDS
-# bridge work
 # Listen to GISNav mock GPS messages on TCP port and bridge to serial port on
 # px4 container (simulation host). Bridging serial ports over TCP is easier with
 # Docker than e.g. bridging via virtual serial ports (pseudo-ttys) on Docker
 # host
-#socat tcp-listen:15000 pty,link=/dev/ttyS4 &
-#socat tcp-listen:15000,reuseaddr,fork pty,raw,echo=0,link=/dev/ttyS4 &
+#socat tcp-listen:15000 pty,link=/dev/ACM0 &
+echo "Setting up socat bridge at from TCP port ${SOCAT_BRIDGE_PORT:?empty or not set} to device /dev/ACM0"
+socat tcp-listen:${SOCAT_BRIDGE_PORT:?empty or not set},reuseaddr,fork pty,raw,echo=0,link=/dev/ACM0 &
 
 # Setup uXRCE agent IP
 # PX4 needs the IP as int32 - convert_ip.py script does the conversion

@@ -68,6 +68,13 @@ services:
       homepage.name: micro-ROS agent
       homepage.description: uORB to ROS (PX4) middleware
 
+  ubx:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: UBX agent
+      homepage.description: UBX to ROS middleware
+
   qgc:
     labels:
       <<: *labels

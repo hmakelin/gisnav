@@ -1,0 +1,8 @@
+ublox_gps_node:
+  ros__parameters:
+    #device: /dev/ttyACM0  # pty created dynamically in entrypoint.sh
+    uart1/baudrate: 9600
+    rate: 5.0
+    dynamic_model: airborne1
+    fix_mode: 3d
+    publish/nav/pvt: true

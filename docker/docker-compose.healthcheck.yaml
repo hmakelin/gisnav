@@ -19,6 +19,14 @@ services:
         ]
       <<: *settings
 
+  ubx:
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "
+        timeout 30 tcpdump -i any -c 1 tcp src port ${SOCAT_BRIDGE_PORT:?empty or not set} > /tmp/tcp_check.log 2>&1 &&
+        grep -q 'TCP' /tmp/tcp_check.log"
+      ]
+      <<: *settings
+
   mavros:
     healthcheck:
       test: ["CMD", "bash", "-c", "

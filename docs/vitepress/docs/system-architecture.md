@@ -37,22 +37,25 @@ graph TB
     end
 
     subgraph extension["GISNav extension nodes"]
-        NMEANode["NMEANode"]
+        UBXNode["UBXNode"]
         UORBNode["UORBNode"]
     end
 
     subgraph robot_localization["robot_localization ROS package"]
         ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| UORBNode
-        ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| NMEANode
+        ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| UBXNode
     end
 
     TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(local pose, odom frame)"| ekf
 
     PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
+    UBXNode -->|"ublox_msgs/NavPVT"| ubx[" "]
+
     ekf["ekf_localization_node"] -->|"nav_msgs/TransformStamped\n(map->odom, odom->base_link)"| tf
 
     style micro_ros_agent fill-opacity:0, stroke-opacity:0;
+    style ubx fill-opacity:0, stroke-opacity:0;
     style tf fill-opacity:0, stroke-opacity:0;
 
 ```
@@ -99,6 +102,7 @@ graph TD
             mavros-msgs
         end
         gscam
+        ubx
         px4
         ardupilot
         qgc
@@ -114,6 +118,7 @@ graph TD
     mavros-msgs --> mavros
     mavros-msgs --> gisnav
     ros_humble --> gscam
+    ros_humble --> ubx
     ubuntu_focal --> px4
     ros_foxy --> ardupilot
     ubuntu_focal --> qgc
@@ -174,6 +179,7 @@ graph TB
             subgraph middleware ["Middleware Services"]
                 middleware_mavros[mavros]
                 middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
+                middleware_ubx[ubx]
                 middleware_gscam[gscam]
             end
             subgraph application ["Application Services"]
@@ -207,9 +213,11 @@ graph TB
     mw_qgc -->|14550/udp\nMAVLink| simulation_px4
     simulation_px4 ------>|14540/udp\nMAVLink| middleware_mavros
     simulation_px4 ------>|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
+    simulation_px4 ------>|15000/TCP via socat\nUBX| middleware_ubx
     simulation_px4 ------>|5600/udp\nRTP H.264 Video| middleware_gscam
     middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+    middleware_ubx -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
     application_gisnav -->|"80/tcp\nHTTP WMS/WFS-T\nvia nginx (local)\ndirectly (containerized)"| gis_mapserver

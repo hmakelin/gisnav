@@ -45,7 +45,7 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
 """Topic into which :class:`.UORBNode` publishes :attr:`.UORBNode.sensor_gps`."""
 
-ROS_TOPIC_RELATIVE_NAV_PVT: Final = "~navpvt"
+ROS_TOPIC_RELATIVE_NAV_PVT: Final = "~/navpvt"
 """Topic into which :class:`.UBXNode` publishes :attr:`.UBXNode.nav_pvt`."""
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"

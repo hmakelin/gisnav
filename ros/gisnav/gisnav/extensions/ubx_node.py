@@ -63,23 +63,24 @@ class UBXNode(MockGPSNode):
         vel_n_m_s: float,
         vel_e_m_s: float,
         vel_d_m_s: float,
-        cog_rad: float,
+        cog: float,
         s_variance_m_s: float,
         timestamp: int,
         eph: float,
         epv: float,
         satellites_visible: int,
+        **kwargs,  # extra keyword arguments from MockGPSDict - not used here
     ) -> Optional[NavPVT]:
         """Retusn UBX mock GPS message, or None if cannot be computed"""
         msg = NavPVT()
 
         try:
             # Convert timestamp to GPS time of week
-            gps_week, time_of_week = self.unix_to_gps_time(
+            gps_week, time_of_week = self._unix_to_gps_time(
                 timestamp / 1e6
             )  # Assuming timestamp is in microseconds
 
-            msg.iTOW = int(time_of_week * 1000)  # GPS time of week in ms
+            msg.i_tow = int(time_of_week * 1000)  # GPS time of week in ms
             (
                 msg.year,
                 msg.month,
@@ -87,51 +88,53 @@ class UBXNode(MockGPSNode):
                 msg.hour,
                 msg.min,
                 msg.sec,
-            ) = self.get_utc_time(timestamp / 1e6)
+            ) = self._get_utc_time(timestamp / 1e6)
 
             msg.valid = (
                 0x01 | 0x02 | 0x04
             )  # Assuming valid date, time, and fully resolved
-            msg.tAcc = 50000000  # Time accuracy estimate in ns (50ms)
+            msg.t_acc = 50000000  # Time accuracy estimate in ns (50ms)
             msg.nano = 0  # Fraction of second, range -1e9 .. 1e9 (UTC)
 
-            msg.fixType = 3  # 3D-Fix
+            msg.fix_type = 3  # 3D-Fix
             msg.flags = 0x01  # gnssFixOK
             msg.flags2 = 0
-            msg.numSV = satellites_visible
+            msg.num_sv = satellites_visible
 
             msg.lon = lon
             msg.lat = lat
             msg.height = int(
                 altitude_ellipsoid * int(1e3)
             )  # Height above ellipsoid in mm
-            msg.hMSL = int(
+            msg.h_msl = int(
                 altitude_amsl * int(1e3)
             )  # Height above mean sea level in mm
-            msg.hAcc = int(eph * int(1e3))  # Horizontal accuracy estimate in mm
-            msg.vAcc = int(epv * int(1e3))  # Vertical accuracy estimate in mm
+            msg.h_acc = int(eph * int(1e3))  # Horizontal accuracy estimate in mm
+            msg.v_acc = int(epv * int(1e3))  # Vertical accuracy estimate in mm
 
-            msg.velN = int(vel_n_m_s * int(1e3))  # NED north velocity in mm/s
-            msg.velE = int(vel_e_m_s * int(1e3))  # NED east velocity in mm/s
-            msg.velD = int(vel_d_m_s * int(1e3))  # NED down velocity in mm/s
-            msg.gSpeed = int(
+            msg.vel_n = int(vel_n_m_s * int(1e3))  # NED north velocity in mm/s
+            msg.vel_e = int(vel_e_m_s * int(1e3))  # NED east velocity in mm/s
+            msg.vel_d = int(vel_d_m_s * int(1e3))  # NED down velocity in mm/s
+            msg.g_speed = int(
                 np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * int(1e3)
             )  # Ground Speed (2-D) in mm/s
-            msg.headMot = int(
-                np.degrees(cog_rad) * int(1e5)
+            msg.heading = int(
+                np.degrees(cog) * int(1e5)
             )  # Heading of motion (2-D) in degrees * 1e-5
 
-            msg.sAcc = int(s_variance_m_s * int(1e3))  # Speed accuracy estimate in mm/s
-            msg.headAcc = int(
+            msg.s_acc = int(
+                s_variance_m_s * int(1e3)
+            )  # Speed accuracy estimate in mm/s
+            msg.head_acc = int(
                 np.degrees(h_variance_rad) * int(1e5)
             )  # Heading accuracy estimate in degrees * 1e-5
 
-            msg.pDOP = 0  # Position DOP * 0.01 (unitless)
+            msg.p_dop = 0  # Position DOP * 0.01 (unitless)
 
-            msg.headVeh = int(
+            msg.head_veh = int(
                 yaw_degrees * 100000
             )  # Heading of vehicle (2-D) in degrees * 1e-5
-        except AssertionError as e:
+        except Exception as e:
             self.get_logger().warning(
                 f"Could not create mock GPS message due to exception: {e}"
             )

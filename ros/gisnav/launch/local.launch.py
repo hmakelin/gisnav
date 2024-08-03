@@ -61,8 +61,8 @@ def launch_setup(context, *args, **kwargs):
     elif protocol == "ubx":
         actions.append(
             Node(
-                package="ublox",
-                executable="ublox_gps",
+                package="ublox_gps",
+                executable="ublox_gps_node",
                 name="ublox_node",
                 namespace=_PACKAGE_NAME,
                 parameters=[
@@ -73,7 +73,7 @@ def launch_setup(context, *args, **kwargs):
         )
     else:
         raise ValueError(
-            f"Unsupported protocol {protocol}. Choose either 'uorb'm 'ubx', or 'nmea'."
+            f"Unsupported protocol {protocol}. Choose either 'uorb' 'ubx', or 'nmea'."
         )
 
     actions.append(
@@ -141,7 +141,7 @@ def generate_launch_description():
     ld.add_action(
         DeclareLaunchArgument(
             "port",
-            default_value="/dev/ttyS1",
+            default_value="/dev/ttyACMO0",
             description="Outbound serial port for NMEA or UBX nodes. "
             "Ignored if protocol does not use serial output.",
         )

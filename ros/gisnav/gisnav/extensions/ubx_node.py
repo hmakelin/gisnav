@@ -48,11 +48,7 @@ class UBXNode(MockGPSNode):
         """Baudrate for outgoing u-blox messages"""
 
     def _publish(self, mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
-        @narrow_types(self)
-        def _publish_inner(mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
-            self.nav_pvt(**mock_gps_dict)
-
-        _publish_inner(mock_gps_dict)
+        self.nav_pvt(**mock_gps_dict)
 
     @narrow_types
     @ROS.publish(ROS_TOPIC_RELATIVE_NAV_PVT, 10)  # QoSPresetProfiles.SENSOR_DATA.value,

@@ -354,7 +354,12 @@ class MockGPSNode(Node, ABC):
                 # velocity because the map to odom transform jumps around - vehicle is
                 # not actually doing that.
                 mock_gps_dict = self.odom_to_typed_dict(msg)
-                self._publish(mock_gps_dict)
+                if mock_gps_dict is not None:
+                    self._publish(mock_gps_dict)
+                else:
+                    self.get_logger().info(
+                        "Mock GPS dictionary was None - skipping publishing."
+                    )
             else:
                 remaining = (
                     self._REQUIRED_ODOMETRY_MESSAGES_BEFORE_PUBLISH

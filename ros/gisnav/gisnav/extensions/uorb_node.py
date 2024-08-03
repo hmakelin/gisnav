@@ -28,11 +28,7 @@ class UORBNode(MockGPSNode):
         super().__init__(*args, **kwargs)
 
     def _publish(self, mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
-        @narrow_types(self)
-        def _publish_inner(mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
-            self.sensor_gps(**mock_gps_dict)
-
-        _publish_inner(mock_gps_dict)
+        self.sensor_gps(**mock_gps_dict)
 
     @narrow_types
     @ROS.publish(ROS_TOPIC_SENSOR_GPS, 10)  # QoSPresetProfiles.SENSOR_DATA.value,

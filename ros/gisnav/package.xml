@@ -34,6 +34,7 @@
   <depend>tf_transformations</depend>
   <depend>tf2_ros</depend>
   <depend>robot_localization</depend>
+  <depend>ublox_msgs</depend>
 
   <!-- socat only required for SITL simulation (serial to TCP bridge) -->
   <depend>socat</depend>

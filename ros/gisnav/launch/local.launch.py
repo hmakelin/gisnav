@@ -61,13 +61,13 @@ def launch_setup(context, *args, **kwargs):
     elif protocol == "ubx":
         actions.append(
             Node(
-                package="ublox_gps",
-                executable="ublox_gps_node",
+                package="gisnav",
+                executable="ublox_node",
                 name="ublox_node",
                 namespace=_PACKAGE_NAME,
                 parameters=[
                     os.path.join(package_share_dir, "launch/params/ublox_node.yaml"),
-                    {"device": port_config},
+                    {"serial_port": port_config},
                 ],
             )
         )

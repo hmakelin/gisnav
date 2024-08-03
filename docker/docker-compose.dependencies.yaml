@@ -6,9 +6,11 @@ name: gisnav
 
 services:
 
+  # TODO: have separate profiles for uros agent and ubx middleware
   gisnav:
     depends_on:
       - micro-ros-agent
+      - ubx
       - mavros
       - gscam
       - mapserver

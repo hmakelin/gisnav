@@ -58,8 +58,12 @@ RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gaz
 #RUN echo "gps start -e /dev/ttyS4 -p nmea -d /dev/ttyS4 -b 115200 -g 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
 #    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board \
 #    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
-RUN echo "gps start -d /dev/ttyS4 -p nmea -b 115200" >> ROMFS/px4fmu_common/init.d-posix/rcS \
-    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS4\"" >> boards/px4/sitl/default.px4board
+
+# TODO: configure GPS serial ports in environment variables
+# Cube Orange: GPS 1 -> ttyS2, GPS 2 --> ttyS5
+RUN echo "gps start -d /dev/ttyS2 -e /dev/ttyS5 -p ubx" >> ROMFS/px4fmu_common/init.d-posix/rcS \
+    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS2\"" >> boards/px4/sitl/default.px4board \
+    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS5\"" >> boards/px4/sitl/default.px4board
 
 # Fix uXRCE-DDS bridge host (uXRCE-DDS middleware not on localhost)
 # GISNAV_COMPANION_IP needs to be set in entrypoint.sh

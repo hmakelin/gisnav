@@ -47,16 +47,7 @@ services:
       - "camera_info_url:=file:///etc/gscam/camera_calibration.yaml"
 
   ubx:
-    command:
-      - "ros2"
-      - "run"
-      - "ublox_gps"
-      - "ublox_gps_node"
-      - "--ros-args"
-      - "--params-file"
-      - "/etc/ublox_gps/config.yaml"
-      - "-p"
-      - "device:=`readlink /tmp/gisnav-pty-link`"  # pty created in entrypoint script
+    command: "ros2 run ubx_publisher ubx_publisher_node --ros-args --log-level debug -p serial_port:=/dev/pts/0"  # pty created in entrypoint script, TODO try to $(readlink /tmp/gisnav-pty-link) instead of hard-coding /dev/pts/0 here
 
   fileserver:
     command: apache2ctl -D FOREGROUND

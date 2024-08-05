@@ -14,8 +14,15 @@ mavlink-routerd -e ${GISNAV_COMPANION_IP:?empty or not set}:${GISNAV_CMP_MAVROS_
 # Docker than e.g. bridging via virtual serial ports (pseudo-ttys) on Docker
 # host
 #socat tcp-listen:15000 pty,link=/dev/ACM0 &
-echo "Setting up socat bridge at from TCP port ${SOCAT_BRIDGE_PORT:?empty or not set} to device /dev/ACM0"
-socat tcp-listen:${SOCAT_BRIDGE_PORT:?empty or not set},reuseaddr,fork pty,raw,echo=0,link=/dev/ACM0 &
+# TODO: do not hard code /dev/ttyS2, use .env file
+echo "Setting up socat bridge at from TCP port ${SOCAT_BRIDGE_PORT:?empty or not set} to /tmp/gisnav-pty-link"
+socat tcp-listen:${SOCAT_BRIDGE_PORT:?empty or not set},reuseaddr,fork pty,raw,echo=0,link=/tmp/gisnav-pty-link &
+echo "PTY device created at (might not show up until client connects at ${SOCAT_BRIDGE_PORT}): $(readlink /tmp/gisnav-pty-link)"
+
+# Start socat and capture the PTY name
+#echo "Setting up socat bridge at from TCP port ${SOCAT_BRIDGE_PORT:?empty or not set} to PTY"
+#socat tcp-listen:${SOCAT_BRIDGE_PORT},reuseaddr,fork pty,link=/tmp/gisnav-pty-link,raw,echo=0 || (echo "Could not establish TCP-to-serial bridge."; exit 1) &
+#echo "PTS device created at (might not show up until client connects at ${SOCAT_BRIDGE_PORT}): $(readlink /tmp/gisnav-pty-link)"
 
 # Setup uXRCE agent IP
 # PX4 needs the IP as int32 - convert_ip.py script does the conversion

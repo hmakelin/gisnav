@@ -62,8 +62,9 @@ RUN cat 6011_typhoon_h480 >> ROMFS/px4fmu_common/init.d-posix/airframes/6011_gaz
 # TODO: configure GPS serial ports in environment variables
 # Cube Orange: GPS 1 -> ttyS2, GPS 2 --> ttyS5
 RUN echo "gps start -d /dev/ttyS2 -e /dev/ttyS5 -p ubx" >> ROMFS/px4fmu_common/init.d-posix/rcS \
-    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS2\"" >> boards/px4/sitl/default.px4board \
-    && echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS5\"" >> boards/px4/sitl/default.px4board
+    && echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/pts/0\"" >> boards/px4/sitl/default.px4board  # TODO use dynamically allocated PTY device, not hard-coded pts/0
+    #&& echo "CONFIG_BOARD_SERIAL_GPS1=\"/dev/ttyS2\"" >> boards/px4/sitl/default.px4board \
+    #&& echo "CONFIG_BOARD_SERIAL_GPS2=\"/dev/ttyS5\"" >> boards/px4/sitl/default.px4board
 
 # Fix uXRCE-DDS bridge host (uXRCE-DDS middleware not on localhost)
 # GISNAV_COMPANION_IP needs to be set in entrypoint.sh

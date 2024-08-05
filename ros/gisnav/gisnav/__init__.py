@@ -141,6 +141,7 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             isinstance(node, PoseNode)
             or isinstance(node, TwistNode)
             or isinstance(node, UORBNode)
+            or isinstance(node, NMEANode)
         ):
             # We need to use a multi-threaded executor with PoseNode because when
             # running keypoint matching on CPU (no GPU) the heavy processing prevents

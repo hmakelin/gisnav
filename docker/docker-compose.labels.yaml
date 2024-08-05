@@ -75,6 +75,13 @@ services:
       homepage.name: UBX agent
       homepage.description: UBX to ROS middleware
 
+  nmea:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: NMEA ROS to serial bridge
+      homepage.description: Publishes ROS NMEA sentences to serial port
+
   qgc:
     labels:
       <<: *labels

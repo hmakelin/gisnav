@@ -1,38 +1,26 @@
 """This module contains :class:`.NMEANode`, an extension ROS node that publishes
-mock GPS (GNSS) messages to FCU over the NMEA protocol via a serial port
+mock GPS (GNSS) messages as NMEA sentences to ROS
 """
-import warnings
 from datetime import datetime
-from typing import Final, List, Optional, Tuple
-
+from typing import Final, Optional, Tuple
+import rclpy.time
 import numpy as np
 import pynmea2
-import rclpy
-import serial
-import tf2_geometry_msgs
 import tf2_ros
-import tf_transformations
-from geometry_msgs.msg import Vector3Stamped
-from nav_msgs.msg import Odometry
+from std_msgs.msg import Header
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
-from rclpy.node import Node
-from rclpy.qos import QoSPresetProfiles
 
-from .. import _transformations as tf_
 from .._decorators import ROS, narrow_types
-from ..constants import ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY
+from nmea_msgs.msg import Sentence
+
+from ._mock_gps_node import MockGPSNode
+from ..constants import ROS_TOPIC_RELATIVE_NMEA_SENTENCE
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
 
-warnings.warn(
-    "NMEANode is deprecated. Use UORBNode or UBloxNode instead.",
-    DeprecationWarning,
-)
-
-
-class NMEANode(Node):
+class NMEANode(MockGPSNode):
     """Publishes mock GPS messages to FCU over NMEA protocol via a serial port"""
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
@@ -73,15 +61,6 @@ class NMEANode(Node):
         self.odometry
 
     @property
-    @ROS.parameter(ROS_D_DEM_VERTICAL_DATUM, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def dem_vertical_datum(self) -> Optional[int]:
-        """DEM vertical datum
-
-        > [!IMPORTANT]
-        > Must match DEM that is published in :attr:`.GISNode.orthoimage`
-        """
-
-    @property
     @ROS.parameter(ROS_D_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
     def port(self) -> Optional[str]:
         """Serial port for outgoing NMEA messages"""
@@ -91,259 +70,32 @@ class NMEANode(Node):
     def baudrate(self) -> Optional[int]:
         """Baudrate for outgoing NMEA messages"""
 
-    def _odometry_cb(self, msg: Odometry) -> None:
-        """Callback for :attr:`.odometry`"""
-        self._publish(msg)
+    def _publish(self, mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
+        eph_sqrd=mock_gps_dict["eph"]**2
+        epv_sqrd=mock_gps_dict["epv"]**2
 
-    @property
-    @ROS.subscribe(
-        ROS_TOPIC_ROBOT_LOCALIZATION_ODOMETRY,
-        QoSPresetProfiles.SENSOR_DATA.value,
-        callback=_odometry_cb,
-    )
-    def odometry(self) -> Optional[Odometry]:
-        """Subscribed filtered odometry from ``robot_localization`` package EKF node,
-        or None if unknown"""
+        self.get_logger().info(f"publishin {mock_gps_dict}")
 
-    def _publish(self, odometry: Odometry) -> None:
-        @narrow_types(self)
-        def _publish_inner(odometry: Odometry) -> None:
-            pose = odometry.pose.pose
-            # WGS 84 longitude and latitude, and AGL altitude in meters
-            # TODO: this is alt above ellipsoid, not agl
-            lon, lat, alt_agl = tf_.ecef_to_wgs84(
-                pose.position.x, pose.position.y, pose.position.z
-            )
+        self.publish_nmea_sentences(
+            rms=np.sqrt(eph_sqrd + epv_sqrd),
+            sd_x=np.sqrt(eph_sqrd / 2),
+            sd_y=np.sqrt(eph_sqrd / 2),
+            sd_z=epv_sqrd,
+            **mock_gps_dict
+        )
 
-            alt_agl += (
-                3  # adjust for ellipsoid amsl for SITL TODO publish over nmea instead
-            )
-
-            timestamp = tf_.usec_from_header(odometry.header)
-            # timestamp = int(time.time() * 1e6)
-
-            # Heading (yaw := z axis rotation) variance, assume no covariances
-            pose_cov = odometry.pose.covariance.reshape((6, 6))
-            std_dev_c_z = pose_cov[5, 5]
-            std_dev_c_z**2
-
-            # WGS 84 ellipsoid and AMSL altitudes
-            altitudes = self._convert_to_wgs84(
-                lat,
-                lon,
-                alt_agl,
-            )
-            if altitudes is not None:
-                alt_ellipsoid, alt_amsl = altitudes
-            else:
-                return None
-
-            # Make satellites_visible value unrealistic but technically valid to make
-            # GISNav generated mock GPS messages easy to identify. Do not make this
-            # zero because the messages might then get rejected because of too low
-            # satellite count.
-            np.iinfo(np.uint8).max
-
-            # Pose variance: eph (horizontal error SD) and epv (vertical error SD),
-            # assume no covariances
-            x_var = pose_cov[0, 0]
-            y_var = pose_cov[1, 1]
-            eph = np.sqrt(x_var + y_var)
-            z_var = pose_cov[2, 2]
-            epv = np.sqrt(z_var)
-            rms = np.sqrt(x_var + y_var + z_var)
-
-            # 3D velocity
-            # Twist in ENU -> remap to NED here by swapping x and y axes and inverting
-            # z axis
-            # TODO: map is not published by GISNav - should use an ENU map frame
-            #  published by gisnav instead
-            twist = odometry.twist.twist
-
-            # TODO: should be able to use the stamp here or extrapolate? instead
-            #  of getting latest
-            transform = tf_.get_transform(
-                self,
-                "map",
-                "camera_optical",
-                rclpy.time.Time(),  # odometry.header.stamp
-            )
-
-            # Need to convert linear twist vector to stamped version becase
-            # do_transform_vector3 expects stamped
-            vector_stamped = Vector3Stamped(header=odometry.header, vector=twist.linear)
-            vector_stamped.header.frame_id = odometry.child_frame_id
-            if transform is None:
-                # TODO: do this better
-                return None
-            linear_enu = tf2_geometry_msgs.do_transform_vector3(
-                vector_stamped, transform
-            )
-            linear_enu = linear_enu.vector
-            vel_n_m_s = linear_enu.y
-            vel_e_m_s = linear_enu.x
-            # vel_d_m_s = -linear_enu.z
-
-            # Heading
-            vehicle_yaw_degrees = tf_.extract_yaw(pose.orientation)
-            # TODO: should be able to use the stamp here or extrapolate? instead
-            #  of getting latest
-            transform_earth_to_map = tf_.get_transform(
-                self, "map", "earth", rclpy.time.Time()  # odometry.header.stamp
-            )
-
-            if transform_earth_to_map is not None:
-                pose_map = tf2_geometry_msgs.do_transform_pose(
-                    pose, transform_earth_to_map
-                )
-                euler = tf_transformations.euler_from_quaternion(
-                    tf_.as_np_quaternion(pose_map.orientation).tolist()
-                )
-                yaw_rad = euler[2]  # ENU frame
-                yaw_rad = -yaw_rad  # NED frame ("heading")
-
-                if yaw_rad < 0:
-                    yaw_rad = 2 * np.pi + yaw_rad
-
-                # re-center yaw to [0, 2*pi), it should be at [-pi, pi) before
-                # re-centering
-                vehicle_yaw_degrees = np.degrees(yaw_rad)
-                # vehicle_yaw_degrees = int(vehicle_yaw_degrees % 360)
-                # MAVLink yaw definition 0 := not available
-                vehicle_yaw_degrees = (
-                    360 if vehicle_yaw_degrees == 0 else vehicle_yaw_degrees
-                )
-
-            # Speed variance, assume no covariances
-            twist_cov = odometry.twist.covariance.reshape((6, 6))
-            # Twist in ENU -> remap to NED here by swapping x and y axes, z axis
-            # inversion should not affect variance
-            vel_n_m_s_var = twist_cov[1, 1]
-            vel_e_m_s_var = twist_cov[0, 0]
-            vel_d_m_s_var = twist_cov[2, 2]
-            vel_n_m_s_var + vel_e_m_s_var + vel_d_m_s_var
-
-            # Course over ground and its variance
-            def _calculate_cog_variance(
-                vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
-            ) -> float:
-                numerator = (vel_e_m_s_var * vel_n_m_s**2) + (
-                    vel_n_m_s_var * vel_e_m_s**2
-                )
-                denominator = (vel_e_m_s**2 + vel_n_m_s**2) ** 2
-
-                # Calculate the variance of the CoG in radians
-                cog_var = numerator / denominator
-
-                # TODO handle possible exceptions arising from variance exploding at 0
-                #  velocity (as it should)
-                return float(cog_var)
-
-            def _calculate_course_over_ground(
-                east_velocity: float, north_velocity: float
-            ) -> float:
-                """Calculates course over ground from east and north velocities.
-
-                :param east_velocity: The velocity towards the east in meters per
-                    second.
-                :param north_velocity: The velocity towards the north in meters per
-                    second.
-                :return: The course over ground in degrees from the north, in the range
-                    [0, 2 * pi).
-
-                The course over ground is calculated using the arctangent of the east
-                and north velocities. The result is adjusted to ensure it is within
-                the [0, 2 * pi) range.
-                """
-                # TODO: do not send this sentence if the variance is too high (i.e.
-                #  vehicle is not moving)
-                magnitude = np.sqrt(east_velocity**2 + north_velocity**2)
-
-                if east_velocity >= 0 and north_velocity >= 0:
-                    # top-right quadrant
-                    course_over_ground_radians = np.arcsin(east_velocity / magnitude)
-                elif east_velocity >= 0 and north_velocity < 0:
-                    # bottom-right quadrant
-                    course_over_ground_radians = 0.5 * np.pi + np.arcsin(
-                        -north_velocity / magnitude
-                    )
-                elif east_velocity < 0 and north_velocity < 0:
-                    # bottom-left quadrant
-                    course_over_ground_radians = np.pi + np.arcsin(
-                        -east_velocity / magnitude
-                    )
-                elif east_velocity < 0 and north_velocity >= 0:
-                    # top-left quadrant
-                    course_over_ground_radians = 1.5 * np.pi + np.arcsin(
-                        north_velocity / magnitude
-                    )
-                else:
-                    # todo: this is unreachable?
-                    course_over_ground_radians = 0.0
-
-                return course_over_ground_radians
-
-            # Compute course over ground - pay attention to sine only being
-            # defined for 0<=theta<=90
-
-            # Compute course over ground variance
-            # cog_variance_rad = _calculate_cog_variance(
-            #    vel_n_m_s, vel_e_m_s, vel_n_m_s_var, vel_e_m_s_var
-            # )
-            # _calculate_course_over_ground(vel_e_m_s, vel_n_m_s)
-
-            nmea_sentences = self.nmea_sentences(
-                lat,
-                lon,
-                alt_amsl,
-                timestamp,
-                vel_n_m_s,
-                vel_e_m_s,
-                vehicle_yaw_degrees,
-                0.0,  # eph,  # TODO: fix
-                0.0,  # eph,
-                0.0,  # epv,
-                odometry,
-                rms,
-                eph,
-                np.sqrt(x_var),
-                np.sqrt(y_var),
-                epv,
-            )
-            if nmea_sentences is not None:
-                self._write_nmea_to_serial(nmea_sentences)
-
-        _publish_inner(odometry)
 
     def compute_rmc_parameters(
-        self, odometry: Odometry
-    ) -> Tuple[str, str, str, str, str, str, float, float, str]:
+        self, timestamp, lat, lon, ground_speed_knots, cog,
+    ) -> Tuple[str, str, str, str, str, str, str]:
         """Calculates RMC parameters based on odometry data.
 
-        :param odometry: The odometry data from which to extract GPS details.
         :returns: A tuple with formatted time, status, latitude, latitude direction,
                   longitude, longitude direction, speed, course, and date.
         """
-        # Assume position and timestamp extraction as before
-        pose = odometry.pose.pose
-        lon, lat, _ = tf_.ecef_to_wgs84(
-            pose.position.x, pose.position.y, pose.position.z
-        )
-        timestamp = tf_.usec_from_header(odometry.header)
         # timestamp = int(time.time() * 1e6)
         time_str = self.format_time_from_timestamp(timestamp)
         date_str = self.format_date_from_timestamp(timestamp)
-
-        # Convert speed from m/s to knots
-        twist = odometry.twist.twist
-        speed_knots: float = (
-            np.sqrt(twist.linear.x**2 + twist.linear.y**2) * 1.94384
-        )  # m/s to knots
-
-        # Calculate course over ground in degrees
-        course_degrees: float = (
-            np.degrees(np.arctan2(twist.linear.y, twist.linear.x)) % 360
-        )
 
         lat_nmea = self._decimal_to_nmea(lat)
         lon_nmea = self._decimal_to_nmea(lon)
@@ -360,31 +112,28 @@ class NMEANode(Node):
             lat_dir,
             lon_nmea,
             lon_dir,
-            speed_knots,
-            course_degrees,
+            ground_speed_knots,
+            np.degrees(cog),
             date_str,
         )
 
-    @narrow_types
-    def nmea_sentences(
+    def publish_nmea_sentences(
         self,
-        lat_deg: float,
-        lon_deg: float,
+        lat: float,
+        lon: float,
         altitude_amsl: float,
         timestamp: int,
         vel_n_m_s: float,
         vel_e_m_s: float,
-        yaw_degrees: float,
-        pdop: float,
-        hdop: float,
-        vdop: float,
-        odometry: Odometry,
+        yaw_degrees: int,
+        cog: float,
         rms: float,
         eph: float,
         sd_x: float,
         sd_y: float,
         sd_z: float,
-    ) -> Optional[List[str]]:
+        **kwargs,
+    ) -> None:
         """Outgoing NMEA mock GPS sentences
 
         Published sentences:
@@ -395,6 +144,11 @@ class NMEANode(Node):
         - VTG (velocities, disabled)
         - RMC (velocities, disabled)
         """
+        self.get_logger().error("NMEA SENTENCES")
+        yaw_degrees = float(yaw_degrees)
+        pdop, hdop, vdop = 0.0, 0.0, 0.0  # not relevant for GISNav
+
+        lat_deg, lon_deg = lat / 1e7, lon / 1e7
         # Convert timestamp to hhmmss format
         time_str = self.format_time_from_timestamp(timestamp)
         self.format_date_from_timestamp(timestamp)
@@ -406,29 +160,33 @@ class NMEANode(Node):
         lon_dir = "E" if lon_deg >= 0 else "W"
 
         # Calculate ground speed in knots and course over ground
-        # ground_speed_knots = (
-        #    np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
-        # )  # m/s to knots
+        ground_speed_knots = (
+           np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
+        )  # m/s to knots
 
         # The PX4 nmea.cpp driver sets s_variance_m_s to 0 if we publish velocity,
         # which will inevitable lead to failsafes triggering when the simulated GPS
         # is turned off (nsh$ failure gps -i 0 off), so we comment the VTG and RMC
         # messages out for now to not publish velocity
-        self.compute_rmc_parameters(odometry)
-        return [
-            self.GGA(
-                time_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
-            ),
-            # self.VTG(cog_degrees, ground_speed_knots),
-            self.GSA(pdop, hdop, vdop),
-            self.HDT(yaw_degrees),
-            self.GST(time_str, rms, eph, eph, 0.0, sd_y, sd_x, sd_z),
-            # self.RMC(*rmc_params),
-            self.GSV,
-        ]
+        header = Header()
+        header.stamp = rclpy.time.Time().to_msg()
+        header.frame_id = "base_link"
+        rmc_params = self.compute_rmc_parameters(timestamp, lat, lon, ground_speed_knots, cog)
+        self.GGA(
+            header, time_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
+        )
+        self.VTG(header, np.degrees(cog), ground_speed_knots)
+        self.GSA(header, pdop, hdop, vdop)
+        self.HDT(header, yaw_degrees)
+        self.GST(header, time_str, rms, eph, eph, 0.0, sd_y, sd_x, sd_z)
+        self.RMC(header, *rmc_params)
+        self.GSV(header)
 
-    @staticmethod
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
+                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def GGA(
+        self,
+        header,
         time_str: str,
         lat_nmea: str,
         lat_dir: str,
@@ -436,7 +194,7 @@ class NMEANode(Node):
         lon_dir: str,
         altitude_amsl: float,
         hdop: float,
-    ) -> str:
+    ) -> Sentence:
         """Returns an NMEA GPGGA sentence
 
         :param time_str: UTC time in HHMMSS format.
@@ -448,7 +206,7 @@ class NMEANode(Node):
         :param hdop: Horizontal dilution of precision.
         :returns: A formatted NMEA GGA sentence as a string.
         """
-        return str(
+        sentence = Sentence(header=header, sentence=str(
             pynmea2.GGA(
                 "GP",
                 "GGA",
@@ -469,17 +227,20 @@ class NMEANode(Node):
                     "",
                 ),
             )
-        )
+        ))
+        self.get_logger().error(f"publishgin GGA {sentence}")
+        return sentence
 
-    @staticmethod
-    def VTG(cog_degrees: float, ground_speed_knots: float) -> str:
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
+                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    def VTG(self, header, cog_degrees: float, ground_speed_knots: float) -> Sentence:
         """Returns an NMEA GPVTG sentence
 
         :param cog_degrees: Course over ground in degrees.
         :param ground_speed_knots: Speed over ground in knots.
         :returns: A formatted NMEA VTG sentence as a string.
         """
-        return str(
+        return Sentence(header=header, sentence=str(
             pynmea2.VTG(
                 "GP",
                 "VTG",
@@ -494,10 +255,11 @@ class NMEANode(Node):
                     "K",
                 ),
             )
-        )
+        ))
 
-    @staticmethod
-    def GSA(pdop: float, hdop: float, vdop: float) -> str:
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
+                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    def GSA(self, header, pdop: float, hdop: float, vdop: float) -> Sentence:
         """Returns an NMEA GPGSA sentence
 
         :param pdop: Positional dilution of precision.
@@ -505,7 +267,7 @@ class NMEANode(Node):
         :param vdop: Vertical dilution of precision.
         :returns: A formatted NMEA GSA sentence as a string.
         """
-        return str(
+        return Sentence(header=header, sentence=str(
             pynmea2.GSA(
                 "GP",
                 "GSA",
@@ -518,20 +280,24 @@ class NMEANode(Node):
                     f"{vdop:.2f}",
                 ),
             )
-        )
+        ))
 
-    @staticmethod
-    def HDT(yaw_deg: float):
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
+                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    def HDT(self, header, yaw_deg: float) -> Sentence:
         """Returns an NMEA GPHDT sentence
 
         :param yaw_deg: Vehicle heading in degrees. Heading increases "clockwise" so
             that north is 0 degrees and east is 90 degrees.
         :returns: A formatted NMEA HDT sentence as a string.
         """
-        return str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T")))
+        return Sentence(header=header, sentence=str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T"))))
 
-    @staticmethod
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
+                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def GST(
+            self,
+            header,
         time_str: str,
         rms_deviation: float,
         std_dev_major_axis: float,
@@ -540,7 +306,7 @@ class NMEANode(Node):
         std_dev_latitude: float,
         std_dev_longitude: float,
         std_dev_altitude: float,
-    ) -> str:
+    ) -> Sentence:
         """Returns an NMEA GPGST sentence.
 
         :param time_str: UTC time in hhmmss format.
@@ -553,7 +319,7 @@ class NMEANode(Node):
         :param std_dev_altitude: Standard deviation of altitude error.
         :returns: A formatted NMEA GST sentence as a string.
         """
-        return str(
+        return Sentence(header=header, sentence=str(
             pynmea2.GST(
                 "GP",
                 "GST",
@@ -568,10 +334,13 @@ class NMEANode(Node):
                     f"{std_dev_altitude:.2f}",
                 ),
             )
-        )
+        ))
 
-    @staticmethod
+
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def RMC(
+        self,
+            header,
         time_str: str,
         status: str,
         lat_nmea: str,
@@ -583,7 +352,7 @@ class NMEANode(Node):
         date_str: str,
         magnetic_variation: float = 0,
         var_dir: str = "E",
-    ) -> str:
+    ) -> Sentence:
         """Returns an NMEA GPRMC sentence.
 
         :param time_str: UTC time in hhmmss format.
@@ -599,7 +368,7 @@ class NMEANode(Node):
         :param var_dir: Direction of magnetic variation, 'E' or 'W' (optional).
         :returns: A formatted NMEA RMC sentence as a string.
         """
-        return str(
+        return Sentence(header=header, sentence=str(
             pynmea2.RMC(
                 "GP",
                 "RMC",
@@ -617,7 +386,7 @@ class NMEANode(Node):
                     var_dir,
                 ),
             )
-        )
+        ))
 
     def format_time_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a time string in
@@ -637,33 +406,6 @@ class NMEANode(Node):
         dt = datetime.fromtimestamp(timestamp / 1e6)
         return dt.strftime("%y%m%d")
 
-    @narrow_types
-    def _convert_to_wgs84(
-        self, lat: float, lon: float, elevation: float
-    ) -> Optional[Tuple[float, float]]:
-        """Converts elevation or altitude from :attr:`.dem_vertical_datum` to WGS 84.
-
-        :param lat: Latitude in decimal degrees.
-        :param lon: Longitude in decimal degrees.
-        :param elevation: Elevation in the specified datum.
-        :return: A tuple containing elevation above WGS 84 ellipsoid and AMSL.
-        """
-        _, _, wgs84_elevation = self._transformer_to_wgs84.transform(
-            lon, lat, elevation
-        )
-        _, _, msl_elevation = self._transformer_to_msl.transform(lon, lat, elevation)
-
-        return wgs84_elevation, msl_elevation
-
-    def _write_nmea_to_serial(self, nmea_sentences: List[str]) -> None:
-        """Writes a collection of NMEA sentences to :attr:`.port`.
-
-        :param nmea_sentences: A list of NMEA sentences to be written to the serial port
-        """
-        with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
-            for sentence in nmea_sentences:
-                ser.write((sentence + "\r\n").encode())
-
     @staticmethod
     def _decimal_to_nmea(degrees: float) -> str:
         """Convert decimal degree to NMEA format (d)ddmm.mmmm where d is degrees and m
@@ -677,9 +419,10 @@ class NMEANode(Node):
         m = abs(degrees - d) * 60
         return f"{abs(d):02d}{m:07.4f}"
 
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
     def ZDA(
-        self, time_zone_hour_offset: int = 0, time_zone_minute_offset: int = 0
-    ) -> str:
+        self, header, time_zone_hour_offset: int = 0, time_zone_minute_offset: int = 0
+    ) -> Sentence:
         utc_now = datetime.utcnow()
         zda = pynmea2.ZDA(
             "GP",
@@ -693,10 +436,10 @@ class NMEANode(Node):
                 str(time_zone_minute_offset),
             ),
         )
-        return str(zda)
+        return Sentence(header=header, sentence=str(zda))
 
-    @property
-    def GSV(self) -> str:
+    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    def GSV(self, header) -> Sentence:
         """Returns NMEA GPGSV sentences for 12 statically defined dummy satellites.
 
         :returns: A formatted NMEA GSV sentences as a string.
@@ -744,4 +487,4 @@ class NMEANode(Node):
             for i in range(total_messages)
         ]
 
-        return "\r\n".join(messages)
+        return Sentence(header=header, sentence="\r\n".join(messages))

@@ -35,6 +35,18 @@ services:
       GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?
     extra_hosts:
       - "host.docker.internal:host-gateway"  # for socat
+
+  nmea:
+    networks:
+      - dds
+    ports:
+      - "${SOCAT_BRIDGE_PORT:?empty or not set}:${SOCAT_BRIDGE_PORT:?empty or not set}/udp"
+    environment:
+      SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
+      GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # for socat
+
   qgc:
     network_mode: host
 

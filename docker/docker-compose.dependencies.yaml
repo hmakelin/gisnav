@@ -10,7 +10,8 @@ services:
   gisnav:
     depends_on:
       - micro-ros-agent
-      - ubx
+      # - ubx
+      - nmea
       - mavros
       - gscam
       - mapserver

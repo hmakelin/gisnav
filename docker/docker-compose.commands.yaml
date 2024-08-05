@@ -49,6 +49,9 @@ services:
   ubx:
     command: "ros2 run ubx_publisher ubx_publisher_node --ros-args --log-level debug -p serial_port:=/dev/pts/0"  # pty created in entrypoint script, TODO try to $(readlink /tmp/gisnav-pty-link) instead of hard-coding /dev/pts/0 here
 
+  nmea:
+    command: "ros2 run nmea_publisher nmea_publisher_node --ros-args --log-level debug -p serial_port:=/dev/pts/0"  # pty created in entrypoint script, TODO try to $(readlink /tmp/gisnav-pty-link) instead of hard-coding /dev/pts/0 here
+
   fileserver:
     command: apache2ctl -D FOREGROUND
 

@@ -48,6 +48,9 @@ ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
 ROS_TOPIC_RELATIVE_NAV_PVT: Final = "~/navpvt"
 """Topic into which :class:`.UBXNode` publishes :attr:`.UBXNode.nav_pvt`."""
 
+ROS_TOPIC_RELATIVE_NMEA_SENTENCE: Final = "~/sentence"
+"""Topic into which :class:`.NMEANode` publishes all sentences."""
+
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 """Relative topic into which :class:`.BBoxNode` publishes
 :attr:`.BBoxNode.fov_bounding_box`.

@@ -1,8 +1,7 @@
 SHELL := /bin/bash
 
-# Default output protocol for mock GPS messages (uorb or ublox). u-blox requires
-# an exposed serial port while uORB uses ROS.
-PROTOCOL=ublox
+# Default output protocol for mock GPS messages
+PROTOCOL=nmea
 
 .PHONY: docs
 docs:
@@ -70,14 +69,6 @@ check: lint test
 dev:
 	@echo "Launching GISNav locally using $(PROTOCOL) protocol..."
 	@ros2 launch gisnav local.launch.py protocol:=$(PROTOCOL)
-
-# This part has moved to the entrypoint script of the ubx middleware service:
-#@echo "Setting up socat bridge to send $(PROTOCOL) serial output to simulator container over TCP port 15000..."
-#@socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:localhost:15000 || (echo "Could not establish serial-to-TCP bridge. Is the SITL simulation container running?"; exit 1)
-#@sleep 3  # Give socat time to create the pty
-#@echo PTS device created at: `readlink /tmp/gisnav-pty-link`
-#@echo "Launching GISNav locally..."
-#@ros2 launch gisnav local.launch.py protocol:=$(PROTOCOL) port:=`readlink /tmp/gisnav-pty-link` baudrate:=9600
 
 .PHONY: help
 help:

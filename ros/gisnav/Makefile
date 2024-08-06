@@ -12,7 +12,7 @@ test-launch:
 
 .PHONY: test-unit
 test-unit:
-	@python3 -m unittest discover -s gisnav/test/unit -p "test_*.py"
+	@python3 -m unittest discover -s test/unit -p "test_*.py"
 
 .PHONY: test-static
 test-static:

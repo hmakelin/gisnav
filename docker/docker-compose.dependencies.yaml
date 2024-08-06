@@ -6,7 +6,7 @@ name: gisnav
 
 services:
 
-  # TODO: have separate profiles for uros agent and ubx middleware
+  # TODO: have separate profiles for uros/ubx/nmea middleware
   gisnav:
     depends_on:
       - micro-ros-agent
@@ -22,14 +22,6 @@ services:
   px4:
     depends_on:
       - qgc
-
-  # TODO: remove dependency to px4 - ubx dependency on px4 is OK for SITL simulation
-  #  on simulation host but not for SITL or HIL on companion computer
-  # autoheal should restart ubx if TCP listener on px4 end is not available
-  #  on first service start --> commented out as not strictly needed
-  #ubx:
-  #  depends_on:
-  #    - px4
 
   nginx:
     depends_on:

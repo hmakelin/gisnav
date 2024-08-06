@@ -3,22 +3,23 @@ mock GPS (GNSS) messages as NMEA sentences to ROS
 """
 from datetime import datetime
 from typing import Final, Optional, Tuple
-import rclpy.time
+
 import numpy as np
 import pynmea2
+import rclpy.time
 import tf2_ros
-from std_msgs.msg import Header
+from nmea_msgs.msg import Sentence
 from pyproj import Transformer
 from rcl_interfaces.msg import ParameterDescriptor
+from std_msgs.msg import Header
 
-from .._decorators import ROS, narrow_types
-from nmea_msgs.msg import Sentence
-
-from ._mock_gps_node import MockGPSNode
+from .._decorators import ROS
 from ..constants import ROS_TOPIC_RELATIVE_NMEA_SENTENCE
+from ._mock_gps_node import MockGPSNode
 
 _ROS_PARAM_DESCRIPTOR_READ_ONLY: Final = ParameterDescriptor(read_only=True)
 """A read only ROS parameter descriptor"""
+
 
 class NMEANode(MockGPSNode):
     """Publishes mock GPS messages to FCU over NMEA protocol via a serial port"""
@@ -71,8 +72,8 @@ class NMEANode(MockGPSNode):
         """Baudrate for outgoing NMEA messages"""
 
     def _publish(self, mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
-        eph_sqrd=mock_gps_dict["eph"]**2
-        epv_sqrd=mock_gps_dict["epv"]**2
+        eph_sqrd = mock_gps_dict["eph"] ** 2
+        epv_sqrd = mock_gps_dict["epv"] ** 2
 
         self.get_logger().info(f"publishin {mock_gps_dict}")
 
@@ -81,13 +82,17 @@ class NMEANode(MockGPSNode):
             sd_x=np.sqrt(eph_sqrd / 2),
             sd_y=np.sqrt(eph_sqrd / 2),
             sd_z=epv_sqrd,
-            **mock_gps_dict
+            **mock_gps_dict,
         )
 
-
     def compute_rmc_parameters(
-        self, timestamp, lat, lon, ground_speed_knots, cog,
-    ) -> Tuple[str, str, str, str, str, str, str]:
+        self,
+        timestamp,
+        lat,
+        lon,
+        ground_speed_knots,
+        cog,
+    ) -> Tuple[str, str, str, str, str, str, float, float, str]:
         """Calculates RMC parameters based on odometry data.
 
         :returns: A tuple with formatted time, status, latitude, latitude direction,
@@ -144,8 +149,6 @@ class NMEANode(MockGPSNode):
         - VTG (velocities, disabled)
         - RMC (velocities, disabled)
         """
-        self.get_logger().error("NMEA SENTENCES")
-        yaw_degrees = float(yaw_degrees)
         pdop, hdop, vdop = 0.0, 0.0, 0.0  # not relevant for GISNav
 
         lat_deg, lon_deg = lat / 1e7, lon / 1e7
@@ -161,7 +164,7 @@ class NMEANode(MockGPSNode):
 
         # Calculate ground speed in knots and course over ground
         ground_speed_knots = (
-           np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
+            np.sqrt(vel_n_m_s**2 + vel_e_m_s**2) * 1.94384
         )  # m/s to knots
 
         # The PX4 nmea.cpp driver sets s_variance_m_s to 0 if we publish velocity,
@@ -171,19 +174,22 @@ class NMEANode(MockGPSNode):
         header = Header()
         header.stamp = rclpy.time.Time().to_msg()
         header.frame_id = "base_link"
-        rmc_params = self.compute_rmc_parameters(timestamp, lat, lon, ground_speed_knots, cog)
+        rmc_params = self.compute_rmc_parameters(
+            timestamp, lat, lon, ground_speed_knots, cog
+        )
         self.GGA(
             header, time_str, lat_nmea, lat_dir, lon_nmea, lon_dir, altitude_amsl, hdop
         )
         self.VTG(header, np.degrees(cog), ground_speed_knots)
         self.GSA(header, pdop, hdop, vdop)
-        self.HDT(header, yaw_degrees)
+        self.HDT(header, float(yaw_degrees))
         self.GST(header, time_str, rms, eph, eph, 0.0, sd_y, sd_x, sd_z)
         self.RMC(header, *rmc_params)
         self.GSV(header)
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
-                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def GGA(
         self,
         header,
@@ -206,33 +212,36 @@ class NMEANode(MockGPSNode):
         :param hdop: Horizontal dilution of precision.
         :returns: A formatted NMEA GGA sentence as a string.
         """
-        sentence = Sentence(header=header, sentence=str(
-            pynmea2.GGA(
-                "GP",
-                "GGA",
-                (
-                    time_str,
-                    lat_nmea,
-                    lat_dir,
-                    lon_nmea,
-                    lon_dir,
-                    "1",
-                    "12",
-                    f"{hdop:.2f}",
-                    f"{altitude_amsl:.1f}",
-                    "M",
-                    "0.0",  # TODO: geoid altitude at sea level - important
-                    "M",
-                    "",
-                    "",
-                ),
-            )
-        ))
-        self.get_logger().error(f"publishgin GGA {sentence}")
+        sentence = Sentence(
+            header=header,
+            sentence=str(
+                pynmea2.GGA(
+                    "GP",
+                    "GGA",
+                    (
+                        time_str,
+                        lat_nmea,
+                        lat_dir,
+                        lon_nmea,
+                        lon_dir,
+                        "1",
+                        "12",
+                        f"{hdop:.2f}",
+                        f"{altitude_amsl:.1f}",
+                        "M",
+                        "0.0",  # TODO: geoid altitude at sea level - important
+                        "M",
+                        "",
+                        "",
+                    ),
+                )
+            ),
+        )
         return sentence
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
-                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def VTG(self, header, cog_degrees: float, ground_speed_knots: float) -> Sentence:
         """Returns an NMEA GPVTG sentence
 
@@ -240,25 +249,29 @@ class NMEANode(MockGPSNode):
         :param ground_speed_knots: Speed over ground in knots.
         :returns: A formatted NMEA VTG sentence as a string.
         """
-        return Sentence(header=header, sentence=str(
-            pynmea2.VTG(
-                "GP",
-                "VTG",
-                (
-                    f"{cog_degrees:.1f}",
-                    "T",
-                    "",
-                    "M",
-                    f"{ground_speed_knots:.1f}",
-                    "N",
-                    "",
-                    "K",
-                ),
-            )
-        ))
+        return Sentence(
+            header=header,
+            sentence=str(
+                pynmea2.VTG(
+                    "GP",
+                    "VTG",
+                    (
+                        f"{cog_degrees:.1f}",
+                        "T",
+                        "",
+                        "M",
+                        f"{ground_speed_knots:.1f}",
+                        "N",
+                        "",
+                        "K",
+                    ),
+                )
+            ),
+        )
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
-                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def GSA(self, header, pdop: float, hdop: float, vdop: float) -> Sentence:
         """Returns an NMEA GPGSA sentence
 
@@ -267,23 +280,27 @@ class NMEANode(MockGPSNode):
         :param vdop: Vertical dilution of precision.
         :returns: A formatted NMEA GSA sentence as a string.
         """
-        return Sentence(header=header, sentence=str(
-            pynmea2.GSA(
-                "GP",
-                "GSA",
-                (
-                    "A",
-                    "3",  # Mode: A=Automatic, 3=3D fix
-                    *[str(sat).zfill(2) for sat in range(12)],  # 12 satellites
-                    f"{pdop:.2f}",
-                    f"{hdop:.2f}",
-                    f"{vdop:.2f}",
-                ),
-            )
-        ))
+        return Sentence(
+            header=header,
+            sentence=str(
+                pynmea2.GSA(
+                    "GP",
+                    "GSA",
+                    (
+                        "A",
+                        "3",  # Mode: A=Automatic, 3=3D fix
+                        *[str(sat).zfill(2) for sat in range(12)],  # 12 satellites
+                        f"{pdop:.2f}",
+                        f"{hdop:.2f}",
+                        f"{vdop:.2f}",
+                    ),
+                )
+            ),
+        )
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
-                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def HDT(self, header, yaw_deg: float) -> Sentence:
         """Returns an NMEA GPHDT sentence
 
@@ -291,13 +308,17 @@ class NMEANode(MockGPSNode):
             that north is 0 degrees and east is 90 degrees.
         :returns: A formatted NMEA HDT sentence as a string.
         """
-        return Sentence(header=header, sentence=str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T"))))
+        return Sentence(
+            header=header,
+            sentence=str(pynmea2.HDT("GP", "HDT", (f"{yaw_deg:.1f}", "T"))),
+        )
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE,
-                 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def GST(
-            self,
-            header,
+        self,
+        header,
         time_str: str,
         rms_deviation: float,
         std_dev_major_axis: float,
@@ -319,28 +340,32 @@ class NMEANode(MockGPSNode):
         :param std_dev_altitude: Standard deviation of altitude error.
         :returns: A formatted NMEA GST sentence as a string.
         """
-        return Sentence(header=header, sentence=str(
-            pynmea2.GST(
-                "GP",
-                "GST",
-                (
-                    time_str,
-                    f"{rms_deviation:.2f}",
-                    f"{std_dev_major_axis:.2f}",
-                    f"{std_dev_minor_axis:.2f}",
-                    f"{orientation_major_axis:.1f}",
-                    f"{std_dev_latitude:.2f}",
-                    f"{std_dev_longitude:.2f}",
-                    f"{std_dev_altitude:.2f}",
-                ),
-            )
-        ))
+        return Sentence(
+            header=header,
+            sentence=str(
+                pynmea2.GST(
+                    "GP",
+                    "GST",
+                    (
+                        time_str,
+                        f"{rms_deviation:.2f}",
+                        f"{std_dev_major_axis:.2f}",
+                        f"{std_dev_minor_axis:.2f}",
+                        f"{orientation_major_axis:.1f}",
+                        f"{std_dev_latitude:.2f}",
+                        f"{std_dev_longitude:.2f}",
+                        f"{std_dev_altitude:.2f}",
+                    ),
+                )
+            ),
+        )
 
-
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def RMC(
         self,
-            header,
+        header,
         time_str: str,
         status: str,
         lat_nmea: str,
@@ -368,25 +393,28 @@ class NMEANode(MockGPSNode):
         :param var_dir: Direction of magnetic variation, 'E' or 'W' (optional).
         :returns: A formatted NMEA RMC sentence as a string.
         """
-        return Sentence(header=header, sentence=str(
-            pynmea2.RMC(
-                "GP",
-                "RMC",
-                (
-                    time_str,
-                    status,
-                    lat_nmea,
-                    lat_dir,
-                    lon_nmea,
-                    lon_dir,
-                    f"{speed_knots:.1f}",
-                    f"{course_degrees:.1f}",
-                    date_str,
-                    f"{magnetic_variation:.1f}",
-                    var_dir,
-                ),
-            )
-        ))
+        return Sentence(
+            header=header,
+            sentence=str(
+                pynmea2.RMC(
+                    "GP",
+                    "RMC",
+                    (
+                        time_str,
+                        status,
+                        lat_nmea,
+                        lat_dir,
+                        lon_nmea,
+                        lon_dir,
+                        f"{speed_knots:.1f}",
+                        f"{course_degrees:.1f}",
+                        date_str,
+                        f"{magnetic_variation:.1f}",
+                        var_dir,
+                    ),
+                )
+            ),
+        )
 
     def format_time_from_timestamp(self, timestamp: int) -> str:
         """Helper function to convert a POSIX timestamp to a time string in
@@ -419,7 +447,9 @@ class NMEANode(MockGPSNode):
         m = abs(degrees - d) * 60
         return f"{abs(d):02d}{m:07.4f}"
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def ZDA(
         self, header, time_zone_hour_offset: int = 0, time_zone_minute_offset: int = 0
     ) -> Sentence:
@@ -438,7 +468,9 @@ class NMEANode(MockGPSNode):
         )
         return Sentence(header=header, sentence=str(zda))
 
-    @ROS.publish(ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10)  # QoSPresetProfiles.SENSOR_DATA.value,
+    @ROS.publish(
+        ROS_TOPIC_RELATIVE_NMEA_SENTENCE, 10
+    )  # QoSPresetProfiles.SENSOR_DATA.value,
     def GSV(self, header) -> Sentence:
         """Returns NMEA GPGSV sentences for 12 statically defined dummy satellites.
 

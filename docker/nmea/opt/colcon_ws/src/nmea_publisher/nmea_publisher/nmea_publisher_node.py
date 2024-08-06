@@ -2,8 +2,8 @@
 
 import rclpy
 import serial
-from rclpy.node import Node
 from nmea_msgs.msg import Sentence
+from rclpy.node import Node
 
 
 class NMEAPublisherNode(Node):
@@ -25,7 +25,8 @@ class NMEAPublisherNode(Node):
         )
 
         self.get_logger().info(
-            f"NMEA serial publisher initialized. Publishing to {self.serial_port} at {self.baud_rate}"
+            f"NMEA serial publisher initialized. Publishing to "
+            f"{self.serial_port} at {self.baud_rate}"
         )
 
     def sentence_callback(self, msg) -> None:
@@ -37,10 +38,14 @@ class NMEAPublisherNode(Node):
 
         except Exception as e:
             self.get_logger().warning(
-                f"Could not write NMEA sentence {msg} to serial port {self.serial_port} because of exception: {e}")
+                f"Could not write NMEA sentence {msg} to serial port "
+                f"{self.serial_port} because of exception: {e}"
+            )
             return None
 
-        self.get_logger().debug(f"Published NMEA sentence {msg} to serial port {self.serial_port}")
+        self.get_logger().debug(
+            f"Published NMEA sentence {msg} to serial port {self.serial_port}"
+        )
 
 
 def main(args=None):

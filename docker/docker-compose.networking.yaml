@@ -28,8 +28,6 @@ services:
   ubx:
     networks:
       - dds
-    ports:
-      - "${SOCAT_BRIDGE_PORT:?empty or not set}:${SOCAT_BRIDGE_PORT:?empty or not set}/tcp"
     environment:
       SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
       GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?
@@ -39,8 +37,6 @@ services:
   nmea:
     networks:
       - dds
-    ports:
-      - "${SOCAT_BRIDGE_PORT:?empty or not set}:${SOCAT_BRIDGE_PORT:?empty or not set}/tcp"
     environment:
       SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
       GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?

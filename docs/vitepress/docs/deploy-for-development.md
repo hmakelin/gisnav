@@ -10,8 +10,8 @@ The recommended way of developing GISNav is to deploy a SITL simulation and supp
 
 The easy way to deploy for development is via the Makefile. Use the below commands to run a local ROS 2 default launch configuration of GISNav and to deploy a supporting SITL simulation as Docker Compose services.
 
-- The `uorb` target uses the `micro-ros-agent` middleware service and `UORBNode`.
-- The `ubx` and `nmea` targets use `socat` running on the Docker host to bridge the serial port output via TCP to the SITL simulation container.
+- The `uorb` target uses the `micro-ros-agent` middleware service.
+- The `ubx` and `nmea` targets use `socat` to bridge the serial communication over TCP between the docker containers.
 
 ::: code-group
 
@@ -20,20 +20,20 @@ cd ~/colcon_ws/src/gisnav
 make dev PROTOCOL=uorb
 ```
 
+```bash [NMEA <Badge type="tip" text="Recommended"/>]
+cd ~/colcon_ws/src/gisnav
+make dev PROTOCOL=nmea
+```
+
 ```bash [u-blox]
 cd ~/colcon_ws/src/gisnav
 make dev PROTOCOL=ubx
 ```
-
-```bash [NMEA <Badge type="warning" text="Deprecated"/>]
-cd ~/colcon_ws/src/gisnav
-make dev PROTOCOL=nmea
-```
 :::
 
-::: warning NMEA deprecated
-The PX4 NMEA driver hard-codes some variables like the `s_variance_m_s` speed variance to 0 which may lead to failsafes triggering (unverified) if only relying on GISNav for velocity estimates (e.g. when [simulating failure of the primary GPS](/README#simulate-gps-failure)).
-NMEA also was not originally intended for airborne drone navigation and the message types are not well suited for GISNav's use case.
+::: info Todo
+UBX support is not fully implemented and most likely does not work yet
+
 :::
 
 ::: tip Ctrl-C and relaunch
@@ -58,12 +58,16 @@ ros2 launch gisnav local.launch.py --show-args
 
 ### Redirecting serial output for SITL simulation <Badge type="info" text="NMEA/u-blox"/>
 
-The `px4` SITL simulation container listens for serial messages (e.g NMEA or u-blox) at TCP port 15000. GISNav `NMEANode` and `UBXNode` write into a serial port, and this serial port traffic must be bridged to the TCP port of the running `px4` container to make the mock GPS demo work in SITL simulation.
+The `px4` SITL simulation container listens for serial messages (NMEA or UBX) at TCP port 15000. GISNav `NMEANode` and `UBXNode` write into ROS, and the `nmea` and `ubx` middlware service use `socat` to bridge the serial communication over TCP between the docker containers. This TCP traffic is again directed to a serial port in the `px4` container to make the mock GPS demo work in SITL simulation.
+
+::: info uORB bypasses the PX4 GPS driver
+When using the `uORB` protocol, the PX4 GPS driver is bypassed and the uORB messages are used directly by the FCU.
+
+:::
 
 The Makefile `make dev PROTOCOL=nmea` and `make dev PROTOCOL=ubx` recipes create a pseudo-tty (virtual serial port) using `socat` to bridge the GISNav serial port output via TCP to the Docker container running the SITL simulation. The Makefile hardcodes `localhost` as the container host as the targets are intended for local development, but you can use the below example if your simulation is running on a different host:
 
 ```bash
-cd ~/colcon_ws/src/gisnav
 gnc start px4
 PX4_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1)
 socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000
@@ -79,16 +83,16 @@ cd ~/colcon_ws
 ros2 launch gisnav local.launch.py protocol:=uorb
 ```
 
+```bash [NMEA <Badge type="tip" text="Recommended"/>]
+cd ~/colcon_ws
+PTY_PORT=$(readlink /tmp/gisnav-pty-link)
+ros2 launch gisnav local.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+```
+
 ```bash [UBX]
 cd ~/colcon_ws
 PTY_PORT=$(readlink /tmp/gisnav-pty-link)
 ros2 launch gisnav local.launch.py protocol:=ubx port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
-```
-
-```bash [NMEA <Badge type="warning" text="Deprecated"/>]
-cd ~/colcon_ws
-PTY_PORT=$(readlink /tmp/gisnav-pty-link)
-ros2 launch gisnav local.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
 ```
 
 :::

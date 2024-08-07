@@ -15,24 +15,42 @@ of the drone's *approximate* global position retrieved from an onboard GIS syste
 The below steps demonstrate how GISNav enables GNSS-free flight with PX4 Autopilot's [Mission mode][1] in a SITL
 simulation.
 
-You will need to have the [docker compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
+You will need to have the [Docker Compose plugin][2] and [NVIDIA Container Toolkit][3] installed.
 
 [1]: https://docs.px4.io/main/en/flight_modes/mission.html
 [2]: https://docs.docker.com/compose/install/linux/
 [3]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+## Install GISNav CLI
+
+The GISNav CLI (`gnc`) is a Docker Compose wrapper that significantly simplifies building and deploying GISNav's Docker Compose services.
+
+Create the Debian package yourself and install `gnc` from it using the following commands:
+
+```bash
+git clone https://github.com/hmakelin/gisnav.git
+cd gisnav
+make install
+```
 
 ## Build and run SITL simulation
 
 Build the Docker images and create and run the containers (downloading and building
 everything will take a long time):
 
-> **Note** This script will automatically expose your xhost to the created
-> Docker containers to make the GUI applications work.
+> **Note**
+> * This script will automatically expose your X server to the created
+>   Docker containers to make the GUI applications work.
+> * We stop autoheal because current healthchecks are quite naive and often
+>   flag healthy services as unhealthy.
+> * Gazebo in the `px4` service will on first run download a number of models
+>   and will be slow to start up (on first run).
+> * `mapserver` service will on first run transfer some files to a shared
+>   volume and will be slow to start up (on first run).
 
 ```bash
-git clone https://github.com/hmakelin/gisnav.git
-cd gisnav
-make -C docker demo
+gnc create --build px4 gisnav
+gnc start px4 gisnav && gnc stop autoheal
 ```
 
 [4]: http://wiki.ros.org/docker/Tutorials/GUI
@@ -61,7 +79,20 @@ You can check if PX4 is receiving the mock GPS position estimates by typing the 
 listener sensor_gps
 ```
 
+> **Note**
+> The `gisnav` service will by default will send uORB messages to PX4 via the
+> micro-ROS agent which bypasses the GPS driver so you will not see the GPS
+> status with commands like `gps status`.
+
 [5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
+
+## Build and run SITL simulation
+
+Stop all simulation services with the below command:
+
+```bash
+gnc stop
+```
 
 # Documentation
 

@@ -2,7 +2,7 @@
 mock GPS (GNSS) messages as NMEA sentences to ROS
 """
 from datetime import datetime
-from typing import Final, Optional, Tuple
+from typing import Final, Tuple
 
 import numpy as np
 import pynmea2
@@ -26,12 +26,6 @@ class NMEANode(MockGPSNode):
 
     ROS_D_DEM_VERTICAL_DATUM = 5703
     """Default for :attr:`.dem_vertical_datum`"""
-
-    ROS_D_PORT = "/dev/ttyS1"
-    """Default for :attr:`.port`"""
-
-    ROS_D_BAUDRATE = 9600
-    """Default for :attr:`.baudrate`"""
 
     # EPSG code for WGS 84 and a common mean sea level datum (e.g., EGM96)
     _EPSG_WGS84 = 4326
@@ -61,21 +55,9 @@ class NMEANode(MockGPSNode):
         # Subscribe
         self.odometry
 
-    @property
-    @ROS.parameter(ROS_D_PORT, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def port(self) -> Optional[str]:
-        """Serial port for outgoing NMEA messages"""
-
-    @property
-    @ROS.parameter(ROS_D_BAUDRATE, descriptor=_ROS_PARAM_DESCRIPTOR_READ_ONLY)
-    def baudrate(self) -> Optional[int]:
-        """Baudrate for outgoing NMEA messages"""
-
     def _publish(self, mock_gps_dict: MockGPSNode.MockGPSDict) -> None:
         eph_sqrd = mock_gps_dict["eph"] ** 2
         epv_sqrd = mock_gps_dict["epv"] ** 2
-
-        self.get_logger().info(f"publishin {mock_gps_dict}")
 
         self.publish_nmea_sentences(
             rms=np.sqrt(eph_sqrd + epv_sqrd),

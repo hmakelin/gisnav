@@ -1,5 +1,8 @@
 SHELL := /bin/bash
 
+# include ROS app makefile targets (test-static, test-unit, test-launch, test-sitl)
+include ros/gisnav/Makefile
+
 # Default output protocol for mock GPS messages
 PROTOCOL=nmea
 

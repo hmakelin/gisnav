@@ -79,6 +79,10 @@ $(BUILD_DIR)/etc/systemd:
 	@cp -r etc/systemd/ $@
 
 $(BUILD_DIR)/etc/gisnav: $(BUILD_DIR)/etc/gisnav/ros $(BUILD_DIR)/etc/gisnav/docker $(BUILD_DIR)/etc/gisnav/docs
+	@dest=debian/gisnav/$@ && \
+	mkdir -p $@ && \
+	touch $(BUILD_DIR)/COLCON_IGNORE && \
+	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml $$dest
 
 $(BUILD_DIR)/etc/gisnav/ros:
 	@dest=debian/gisnav/$@ && \

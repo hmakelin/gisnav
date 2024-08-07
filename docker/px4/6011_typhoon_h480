@@ -19,17 +19,17 @@ param set-default SENS_GPS_MASK 7
 param set-default EKF2_GPS_CTRL 15      # max: lon/lat, alt, 3D vel, heading
 #param set-default EKF2_GPS_CHECK 0
 
-# Secondary GPS (GISNav) at GPS 2 serial port via NMEA
+# Secondary GPS (GISNav) at GPS 2 serial port via UBX
 # https://docs.px4.io/v1.14/en/hardware/serial_port_mapping.html#default-px4board
-param set-default GPS_2_CONFIG 202
-param set-default GPS_2_GNSS 1
-param set-default GPS_2_PROTOCOL 6  # NMEA
-param set-default SER_GPS2_BAUD 115200  # 0 := auto
+param set-default GPS_2_CONFIG 202  # GPS2
+param set-default GPS_2_GNSS 1  # 0 := GPS, 1:= SBAS
+param set-default GPS_2_PROTOCOL 0  # 0 := auto, 1 := UBX
+param set-default SER_GPS2_BAUD 0  # 0 := auto
 
-param set-default GPS_1_CONFIG 201
-param set-default GPS_1_GNSS 1
-param set-default GPS_1_PROTOCOL 6  # NMEA
-param set-default SER_GPS2_BAUD 115200  # 0 := auto
+param set-default GPS_1_CONFIG 201  # GPS1
+param set-default GPS_1_GNSS 1  # 0 := GPS, 1:= SBAS
+param set-default GPS_1_PROTOCOL 0  # 0 := auto, 1:= UBX
+param set-default SER_GPS2_BAUD 0  # 0 := auto
 
 # HIL simulation
 param set-default COM_RC_IN_MODE 1

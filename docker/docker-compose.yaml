@@ -91,6 +91,14 @@ services:
     build:
       context: gscam
 
+  ubx:
+    build:
+      context: ubx
+
+  nmea:
+    build:
+      context: nmea
+
   autoheal:
     image: willfarrell/autoheal
     restart: always

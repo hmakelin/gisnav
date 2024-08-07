@@ -68,6 +68,20 @@ services:
       homepage.name: micro-ROS agent
       homepage.description: uORB to ROS (PX4) middleware
 
+  ubx:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: UBX agent
+      homepage.description: UBX to ROS middleware
+
+  nmea:
+    labels:
+      <<: *labels
+      homepage.group: Middleware services
+      homepage.name: NMEA ROS to serial bridge
+      homepage.description: Publishes ROS NMEA sentences to serial port
+
   qgc:
     labels:
       <<: *labels

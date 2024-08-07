@@ -34,17 +34,13 @@ At its core, GISNav uses PyTorch and deep learning for keypoint matching and Ope
 
 ## Autopilot integration
 
-GISNav integrates with MAVLink based autopilot software including PX4 and ArduPilot.
+GISNav integrates with MAVLink based autopilot software including PX4 and ArduPilot. NMEA and uORB protocols are supported for downstream integrations. uORB works with PX4 only.
 
 ::: warning Warning: ArduPilot support unmaintained
 ArduPilot simulation needs significant rework to get working again. Only PX4 is currently tested.
 
 :::
 
-::: info NMEA and uORB SensorGps (PX4) messages supported
-TODO: Swap NMEA integration for u-blox for a (potentially) better downstream integration
-
-:::
 
 ## Source code
 

@@ -25,6 +25,24 @@ services:
     environment:
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
 
+  ubx:
+    networks:
+      - dds
+    environment:
+      SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
+      GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # for socat
+
+  nmea:
+    networks:
+      - dds
+    environment:
+      SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
+      GISNAV_FCU_URL: ${GISNAV_FCU_URL:?empty or not set}  # todo TCP bridge only for simulation?
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # for socat
+
   qgc:
     network_mode: host
 
@@ -38,6 +56,7 @@ services:
     network_mode: host
     environment:
       UXRCE_DDS_PRT: ${UXRCE_DDS_PRT:?empty or not set}
+      SOCAT_BRIDGE_PORT: ${SOCAT_BRIDGE_PORT:?empty or not set}
       GISNAV_COMPANION_HOST: ${GISNAV_COMPANION_HOST:?empty or not set}
       GISNAV_CMP_MAVROS_BIND_PORT: ${GISNAV_CMP_MAVROS_BIND_PORT:?empty or not set}
     extra_hosts:

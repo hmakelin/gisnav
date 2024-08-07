@@ -10,12 +10,6 @@ This page provides an overview of both the topography of the GISNav ROS 2 packag
 
 The core ROS topography diagram below depicts how ROS messages flow through GISNav. The [API reference](/reference/) has more detailed information on the purpose and design of each ROS node.
 
-::: info Todo
-- From BBoxNode, publish map to `base_link` and `base_link` to `camera` transformations separately to simplify implementation and reduce amount of maintained code.
-- Implement REP 105 properly (currently only partially implemented).
-- Include default topic names in diagram.
-:::
-
 ```mermaid
 graph TB
     subgraph ros_middleware["ROS middleware"]
@@ -37,23 +31,34 @@ graph TB
     end
 
     subgraph extension["GISNav extension nodes"]
-        NMEANode["NMEANode"]
+        UBXNode["UBXNode"]
         UORBNode["UORBNode"]
+        NMEANode["NMEANode"]
     end
+
+    odometry["/robot_localization/odometry/filtered"] -->|"nav_msgs/Odometry"| UORBNode
+    odometry -->|"nav_msgs/Odometry"| UBXNode
+    odometry -->|"nav_msgs/Odometry"| NMEANode
 
     subgraph robot_localization["robot_localization ROS package"]
-        ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| UORBNode
-        ekf["ekf_localization_node"] -->|"nav_msgs/Odometry"| NMEANode
+        ekf_global_node
+        ekf_local_node
     end
+    ekf_global_node -->|"nav_msgs/Odometry"| odometry
+    ekf_local_node -->|"nav_msgs/Odometry"| odometry
+    TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(local pose, odom frame)"| ekf_local_node
 
-    TwistNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(local pose, odom frame)"| ekf
-
-    PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf
+    PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf_global_node
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
-    ekf["ekf_localization_node"] -->|"nav_msgs/TransformStamped\n(map->odom, odom->base_link)"| tf
+    UBXNode -->|"ublox_msgs/NavPVT"| ubx[" "]
+
+    ekf_global_node -->|"nav_msgs/TransformStamped\n(map->odom)"| tf
+    ekf_local_node -->|"nav_msgs/TransformStamped\n(odom->base_link)"| tf
 
     style micro_ros_agent fill-opacity:0, stroke-opacity:0;
-    style tf fill-opacity:0, stroke-opacity:0;
+    style ubx fill-opacity:0, stroke-opacity:0;
+    style tf fill-opacity:0, stroke-width:1px,stroke-dasharray:3;
+    style odometry fill-opacity:0, stroke-width:1px,stroke-dasharray:3;
 
 ```
 
@@ -99,6 +104,8 @@ graph TD
             mavros-msgs
         end
         gscam
+        ubx
+        nmea
         px4
         ardupilot
         qgc
@@ -114,6 +121,7 @@ graph TD
     mavros-msgs --> mavros
     mavros-msgs --> gisnav
     ros_humble --> gscam
+    ros_humble --> ubx
     ubuntu_focal --> px4
     ros_foxy --> ardupilot
     ubuntu_focal --> qgc
@@ -136,14 +144,13 @@ The diagram below depicts the GISNav services topography for SITL simulation tha
 
 Some notes on the service topography:
 
-- The Application services, Simulation services, Middleware services, GIS services, and Admin services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description besides that only neighboring layers should talk to each other - there should be no jumps across layers in communication.
-- `socat` could also be considered a middleware service but runs non-containerized on the Docker host so it is not included in the Middleware services in the diagram.
+- The Application services, Simulation services, Middleware services, GIS services, and Admin services terms are an attempt to identify and give descriptive names to layers that have naturally emerged in the architecture. They have no further description.
 - GISnav uses `gscam` to publish the ROS `sensor_msgs.msg.CameraInfo` and `sensor_msgs.msg.Image` messages. The camera topics are not published over the MAVROS middleware.
 
 ::: info Todo
 - Serve static documentation.
 - Make shared memory transport work. It does not work possibly because of what's described in the note on privileged users [here](https://fast-dds.docs.eprosima.com/en/latest/fastdds/transport/shared_memory/shared_memory.html#segment). A `dds` network is included to allow Fast DDS to communicate via UDP over the network stack instead (`dds` network included in diagram and it includes the `gisnav` service).
-- `px4` shares the host network stack (along with `qgc`) because receiving communication from `uxrce_dds_agent` seems to depend on ephemeral ports  (unverified) -> try to isolate the simulator and QGC in a `mavlink` network
+- `px4` shares the host network stack (along with `qgc`) because receiving communication from `uxrce_dds_agent` seems to depend on ephemeral ports which makes exposing specific ports difficult (unverified) -> try to isolate the simulator and QGC in a `mavlink` network
 - Show `gis` network, which connects `nginx`, `mapserver`, and `gisnav` (not in diagram)
 :::
 
@@ -174,6 +181,7 @@ graph TB
             subgraph middleware ["Middleware Services"]
                 middleware_mavros[mavros]
                 middleware_micro_ros_agent["micro-ros-agent\n(uXRCE-DDS Agent)"]
+                middleware_ubx_nmea[ubx or nmea]
                 middleware_gscam[gscam]
             end
             subgraph application ["Application Services"]
@@ -207,9 +215,11 @@ graph TB
     mw_qgc -->|14550/udp\nMAVLink| simulation_px4
     simulation_px4 ------>|14540/udp\nMAVLink| middleware_mavros
     simulation_px4 ------>|8888/udp\nDDS-XRCE | middleware_micro_ros_agent
+    simulation_px4 ------>|15000/TCP via socat\nUBX or NMEA| middleware_ubx_nmea
     simulation_px4 ------>|5600/udp\nRTP H.264 Video| middleware_gscam
     middleware_micro_ros_agent -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_mavros -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
+    middleware_ubx_nmea -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
     middleware_gscam -->|/dev/shm\nROS 2 Fast DDS| application_gisnav
 
     application_gisnav -->|"80/tcp\nHTTP WMS/WFS-T\nvia nginx (local)\ndirectly (containerized)"| gis_mapserver

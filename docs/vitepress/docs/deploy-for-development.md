@@ -10,33 +10,29 @@ The recommended way of developing GISNav is to deploy a SITL simulation and supp
 
 The easy way to deploy for development is via the Makefile. Use the below commands to run a local ROS 2 default launch configuration of GISNav and to deploy a supporting SITL simulation as Docker Compose services.
 
-Two Makefile targets are provided for uORB and NMEA output:
-
-- The `dev-uorb` target uses the `micro-ros-agent` middleware service and `UORBNode` and plays more nicely with PX4 than the NMEA target.
-- The `dev-nmea` target uses `socat` running on the Docker host to bridge the serial port output from the `NMEANode` via TCP to the `px4` SITL simulation container.
+- The `uorb` target uses the `micro-ros-agent` middleware service.
+- The `ubx` and `nmea` targets use `socat` to bridge the serial communication over TCP between the docker containers.
 
 ::: code-group
 
 ```bash [uORB <Badge type="tip" text="Recommended for PX4"/>]
 cd ~/colcon_ws/src/gisnav
-make -C docker dev-uorb
+make dev PROTOCOL=uorb
 ```
 
-```bash [NMEA]
+```bash [NMEA <Badge type="tip" text="Recommended"/>]
 cd ~/colcon_ws/src/gisnav
-make -C docker dev-nmea
+make dev PROTOCOL=nmea
+```
+
+```bash [u-blox]
+cd ~/colcon_ws/src/gisnav
+make dev PROTOCOL=ubx
 ```
 :::
 
-::: tip Use uORB if possible
-The PX4 NMEA driver hard-codes some variables like the `s_variance_m_s` speed variance to 0 which may lead to failsafes triggering (unverified) if only relying on GISNav for velocity estimates (e.g. when [simulating failure of the primary GPS](/README#simulate-gps-failure)).
-
-:::
-
-::: info Prompt for `sudo` access
-The Docker Compose service containers are hard-coded to use their Docker DNS hostnames when communicating with each other over Docker bridge networks. The Makefile `dev` recipe will add some of these hostnames to the `/etc/hosts` file on your Docker host i.e. the development computer so that your local GISNav installation will be able to any containers it wants to talk to on the host network. You may therefore be prompted for `sudo` access when running the above command.
-
-Read more about the [service architecture](/system-architecture#service-architecture) for more context.
+::: info Todo
+UBX support is not fully implemented and most likely does not work yet
 
 :::
 
@@ -51,56 +47,28 @@ The Makefile uses the ROS launch system under the hood to define and deploy conf
 
 ### Default configuration
 
-The `default.launch.py` file can be used for all launches. A `dev.launch.py` configuration is provided to include additional nodes that help with development.
-
-::: info Todo
-Merge `dev.launch.py` into `default.launch.py` by adding more launch arguments to `default.launch.py`.
-
-:::
+A `local.launch.py` launch configuration is provided that allows choosing the output protocol and port.
 
 To see what launch arguments the launch file accepts, type in the following command:
 
 ```bash
 cd ~/colcon_ws
-ros2 launch gisnav default.launch.py --show-args
+ros2 launch gisnav local.launch.py --show-args
 ```
 
-### Edit local hosts file
+### Redirecting serial output for SITL simulation <Badge type="info" text="NMEA/u-blox"/>
 
-With a local installation of GISNav we cannot rely on the Docker DNS and must find our containers manually.
+The `px4` SITL simulation container listens for serial messages (NMEA or UBX) at TCP port 15000. GISNav `NMEANode` and `UBXNode` write into ROS, and the `nmea` and `ubx` middlware service use `socat` to bridge the serial communication over TCP between the docker containers. This TCP traffic is again directed to a serial port in the `px4` container to make the mock GPS demo work in SITL simulation.
 
-The `dev-base-setup` Makefile target automates finding the relevant container IP addresses and adding them to your `/etc/hosts` file:
+::: info uORB bypasses the PX4 GPS driver
+When using the `uORB` protocol, the PX4 GPS driver is bypassed and the uORB messages are used directly by the FCU.
 
-```bash
-cd ~/colcon_ws/src/gisnav/docker
-make dev-base-setup
-```
+:::
 
-Alternatively, following the below steps will do the same thing.
-
-`GISNode` needs to know where `gisnav-mapserver-1` is. You can find them with the following commands if the `mapserver` service is running:
+The Makefile `make dev PROTOCOL=nmea` and `make dev PROTOCOL=ubx` recipes create a pseudo-tty (virtual serial port) using `socat` to bridge the GISNav serial port output via TCP to the Docker container running the SITL simulation. The Makefile hardcodes `localhost` as the container host as the targets are intended for local development, but you can use the below example if your simulation is running on a different host:
 
 ```bash
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start mapserver
-MAPSERVER_IP=`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-mapserver-1`
-```
-
-If these are not yet in your `/etc/hosts` file, add them:
-
-```bash
-echo "$(MAPSERVER_IP) gisnav-mapserver-1" | sudo tee -a /etc/hosts
-```
-
-### Redirecting serial output for SITL simulation <Badge type="info" text="NMEA only"/>
-
-The `px4` SITL simulation container listens for NMEA messages at TCP port 15000. GISNav `NMEANode` writes into a serial port, and this serial port traffic must be bridged to the TCP port of the running `px4` container to make the mock GPS demo work in SITL simulation.
-
-The Makefile `dev-nmea` recipe looks up the IP address of the running `px4` container creates a pseudo-tty (virtual serial port) using `socat` to bridge the GISNav serial port output via TCP to the Docker container running the PX4 SITL simulation.
-
-```bash
-cd ~/colcon_ws/src/gisnav/docker
-docker compose -p gisnav start px4
+gnc start px4
 PX4_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' gisnav-px4-1)
 socat pty,link=/tmp/gisnav-pty-link,raw,echo=0 tcp:$(PX4_IP):15000
 ```
@@ -112,13 +80,19 @@ You are now ready to launch GISNav via the ROS launch system.
 ::: code-group
 ```bash [uORB <Badge type="tip" text="Recommended for PX4"/>]
 cd ~/colcon_ws
-ros2 launch gisnav default.launch.py protocol:=uorb
+ros2 launch gisnav local.launch.py protocol:=uorb
 ```
 
-```bash [NMEA]
+```bash [NMEA <Badge type="tip" text="Recommended"/>]
 cd ~/colcon_ws
 PTY_PORT=$(readlink /tmp/gisnav-pty-link)
-ros2 launch gisnav default.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+ros2 launch gisnav local.launch.py protocol:=nmea port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
+```
+
+```bash [UBX]
+cd ~/colcon_ws
+PTY_PORT=$(readlink /tmp/gisnav-pty-link)
+ros2 launch gisnav local.launch.py protocol:=ubx port:=${PTY_PORT} baudrate:=${BAUDRATE:-9600}
 ```
 
 :::

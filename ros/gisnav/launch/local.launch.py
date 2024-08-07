@@ -58,9 +58,22 @@ def launch_setup(context, *args, **kwargs):
                 ],
             )
         )
+    elif protocol == "ubx":
+        actions.append(
+            Node(
+                package="gisnav",
+                executable="ublox_node",
+                name="ublox_node",
+                namespace=_PACKAGE_NAME,
+                parameters=[
+                    os.path.join(package_share_dir, "launch/params/ublox_node.yaml"),
+                    {"serial_port": port_config},
+                ],
+            )
+        )
     else:
         raise ValueError(
-            f"Unsupported protocol {protocol}. Choose either 'uorb' or 'nmea'."
+            f"Unsupported protocol {protocol}. Choose either 'uorb' 'ubx', or 'nmea'."
         )
 
     actions.append(
@@ -114,7 +127,7 @@ def generate_launch_description():
             "protocol",
             default_value="uorb",
             description="Outbound communications protocol for mock GPS messages. "
-            "Choose 'uorb' or 'nmea'.",
+            "Choose 'uorb', 'ubx', or 'nmea'.",
         )
     )
 
@@ -128,9 +141,9 @@ def generate_launch_description():
     ld.add_action(
         DeclareLaunchArgument(
             "port",
-            default_value="/dev/ttyS1",
-            description="Outbound serial port for NMEA node. "
-            "Ignored if protocol is not NMEA.",
+            default_value="/dev/ttyACMO0",
+            description="Outbound serial port for NMEA or UBX nodes. "
+            "Ignored if protocol does not use serial output.",
         )
     )
 

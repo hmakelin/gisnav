@@ -28,6 +28,7 @@ from .constants import (
     ROS_NAMESPACE,
     STEREO_NODE_NAME,
     TWIST_NODE_NAME,
+    UBX_NODE_NAME,
     UORB_NODE_NAME,
     WFST_NODE_NAME,
 )
@@ -93,6 +94,26 @@ try:
 except ModuleNotFoundError as e:
     print(f"Could not import NMEANode because a module was not found: {e}")
 
+try:
+    from .extensions.ubx_node import UBXNode
+
+    def run_ubx_node():
+        """Spins up a :class:`.UBXNode`
+
+        > [!NOTE] Must install extra
+        > Not available if the ``ubx_node`` Python extra has not been installed.
+
+        .. code-block:: bash
+            :caption: Install UBXNode
+
+            cd ~/colcon_ws/src/gisnav/gisnav
+            pip install .[ubx_node]
+        """
+        _run(UBXNode, UBX_NODE_NAME, **_rclpy_node_kwargs)
+
+except ModuleNotFoundError as e:
+    print(f"Could not import WFSTNode because a module was not found: {e}")
+
 
 def _run(constructor: rclpy.node.Node, *args, **kwargs):
     """Spins up a ROS 2 node, using MultiThreadedExecutor for PoseNode
@@ -120,6 +141,7 @@ def _run(constructor: rclpy.node.Node, *args, **kwargs):
             isinstance(node, PoseNode)
             or isinstance(node, TwistNode)
             or isinstance(node, UORBNode)
+            or isinstance(node, NMEANode)
         ):
             # We need to use a multi-threaded executor with PoseNode because when
             # running keypoint matching on CPU (no GPU) the heavy processing prevents

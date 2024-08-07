@@ -15,6 +15,9 @@ ROS_NAMESPACE: Final = "gisnav"
 GIS_NODE_NAME: Final = "gis_node"
 """Name of :class:`.GISNode` spun up by :func:`.run_gis_node`"""
 
+UBX_NODE_NAME: Final = "ubx_node"
+"""Name of :class:`.UBXNode` spun up by :func:`.run_ubx_node`"""
+
 BBOX_NODE_NAME: Final = "bbox_node"
 """Name of :class:`.BBoxNode` spun up by :func:`.run_bbox_node`"""
 
@@ -41,6 +44,12 @@ ROS_TOPIC_RELATIVE_ORTHOIMAGE: Final = "~/orthoimage"
 
 ROS_TOPIC_SENSOR_GPS: Final = "/fmu/in/sensor_gps"
 """Topic into which :class:`.UORBNode` publishes :attr:`.UORBNode.sensor_gps`."""
+
+ROS_TOPIC_RELATIVE_NAV_PVT: Final = "~/navpvt"
+"""Topic into which :class:`.UBXNode` publishes :attr:`.UBXNode.nav_pvt`."""
+
+ROS_TOPIC_RELATIVE_NMEA_SENTENCE: Final = "~/sentence"
+"""Topic into which :class:`.NMEANode` publishes all sentences."""
 
 ROS_TOPIC_RELATIVE_FOV_BOUNDING_BOX: Final = "~/fov/bounding_box"
 """Relative topic into which :class:`.BBoxNode` publishes

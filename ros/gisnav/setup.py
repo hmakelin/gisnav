@@ -155,6 +155,7 @@ setup(
             "twist_node = gisnav:run_twist_node",
             "bbox_node = gisnav:run_bbox_node",
             "wfst_node = gisnav:run_wfst_node",
+            "ublox_node = gisnav:run_ubx_node",
         ],
     },
 )

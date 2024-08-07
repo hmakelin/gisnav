@@ -711,6 +711,9 @@ An open source machine learning software library: [torch.ch](http://torch.ch/)
 
 Python machine learning library based on Torch: [pytorch.org](https://pytorch.org/)
 
+### UBX
+Communication protocol (form u-blox) for GPS receivers
+
 ### Ubuntu
 A Linux distribution, only supported OS for GISNav: [ubuntu.com](https://ubuntu.com/)
 

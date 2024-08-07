@@ -1,5 +1,8 @@
 SHELL := /bin/bash
 
+# Default output protocol for mock GPS messages
+PROTOCOL=nmea
+
 .PHONY: docs
 docs:
 	@cd docs/sphinx && sphinx-build -M markdown ./source ./build
@@ -62,6 +65,11 @@ format: lint
 check: lint test
 	@echo "Running code quality checks..."
 
+.PHONY: dev
+dev:
+	@echo "Launching GISNav locally using $(PROTOCOL) protocol..."
+	@ros2 launch gisnav local.launch.py protocol:=$(PROTOCOL)
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -69,6 +77,7 @@ help:
 	@echo "  docs preview   - Preview the documentation"
 	@echo "  docs dev       - Run the documentation development server"
 	@echo "  build          - Build the project"
+	@echo "  dev            - Run GISNav locally"
 	@echo "  dist           - Create a distribution package"
 	@echo "  clean          - Clean up all generated files"
 	@echo "  clean docs     - Clean up documentation build files only"

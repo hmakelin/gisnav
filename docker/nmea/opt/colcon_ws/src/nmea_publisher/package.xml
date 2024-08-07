@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>nmea_publisher</name>
+  <version>1.0.0</version>
+  <description>Listens to ROS NMEA messages and publishes them to a serial port</description>
+  <maintainer email="hmakelin@protonmail.com">Harri Makelin</maintainer>
+  <license>MIT</license>
+
+  <depend>nmea_msgs</depend>
+  <depend>python3-serial</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

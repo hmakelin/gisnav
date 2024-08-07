@@ -57,3 +57,15 @@ services:
       args:
         ROS_DISTRO: humble
     <<: *ros
+
+  ubx:
+    build:
+      args:
+        ROS_DISTRO: humble
+    <<: *ros
+
+  nmea:
+    build:
+      args:
+        ROS_DISTRO: humble
+    <<: *ros

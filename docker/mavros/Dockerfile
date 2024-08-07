@@ -77,6 +77,7 @@ COPY ros/gisnav/package.xml gisnav/ros/gisnav/package.xml
 # the setup.py python dependencies later.
 RUN cd gisnav/ros/gisnav && \
     rosdep update && \
+    apt-get update && \
     rosdep install --from-paths . -y -r --ignore-src && \
     rm -rf /var/lib/apt/lists/* && \
     apt clean
@@ -125,5 +126,10 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && nvm use 20 \
     && cd docs/vitepress \
     && npm install
+
+COPY Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml /opt/colcon_ws/src/gisnav/
+
+# .git needed to make pre-commit work -> initialize a blank repo
+RUN git init
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -17,7 +17,8 @@ test-launch:
 test-unit:
 	@python3 -m unittest discover -s $(MAKEFILE_DIR)test/unit -p "test_*.py"
 
+# TODO: move test-static to same directory as .pre-commit-config.yaml
 .PHONY: test-static
 test-static:
-	@pre-commit run --all-files --config $(MAKEFILE_DIR).pre-commit-config.yaml
+	@pre-commit run --all-files --config $(MAKEFILE_DIR)/../../.pre-commit-config.yaml
 # test end

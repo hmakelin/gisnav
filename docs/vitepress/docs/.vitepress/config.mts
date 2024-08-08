@@ -71,6 +71,7 @@ export default withMermaid({
             { text: 'GISNode', link: '/reference/public/gis_node' },
             { text: 'StereoNode', link: '/reference/public/stereo_node' },
             { text: 'PoseNode', link: '/reference/public/pose_node' },
+            { text: 'TwistNode', link: '/reference/public/twist_node' },
           ]
         },
         {

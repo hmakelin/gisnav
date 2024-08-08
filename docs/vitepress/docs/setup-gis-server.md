@@ -1,6 +1,6 @@
 # Setup GIS Server
 
-GISNav uses an onboard GIS server as a source for high-resolution orthoimagery and digital elevation models (DEM) for the approximate global position of the vehicle. This page describes how to setup a self-hosted GIS server. If you are [running the mock GPS demo](/README), you can
+GISNav uses an onboard GIS server as a source for high-resolution orthoimagery and digital elevation models (DEM) for the approximate global position of the vehicle. This page describes how to setup a self-hosted GIS server. If you are [running the mock GPS demo](/sitl-local), you can
 simply use the provided `mapserver` [Docker Compose service](/deploy-with-docker-compose).
 
 ## Overview
@@ -12,7 +12,7 @@ The DEM is optionally used to input ground elevation z-coordinates to the Perspe
 
 You should probably self-host an onboard GIS server with public domain orthoimagery because in a realistic scenario, the GIS should be embedded onboard and not depend on an internet connection. For development, it may sometimes be more convenient to proxy an existing commercial tile-based endpoint.
 
-Because the [mock GPS demo](/README) uses NAIP imagery, in this section we will briefly describe how to obtain NAIP data in case you want to build your own GIS service.
+Because the [mock GPS demo](/sitl-local) uses NAIP imagery, in this section we will briefly describe how to obtain NAIP data in case you want to build your own GIS service.
 
 ::: info Tile-based endpoints
 Commercial web-based map services are often [tile-based](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames) because it is more efficient to serve pre-rendered tiles than to render unique rasters for each individual requested bounding box. You will need a WMS proxy if you decide to go with a tile-based endpoint.

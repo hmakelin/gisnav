@@ -129,7 +129,9 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
 
 COPY Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml /opt/colcon_ws/src/gisnav/
 
-# .git needed to make pre-commit work -> initialize a blank repo
-RUN git init
+# .git needed to make pre-commit and git describe work
+# TODO: solve this in a better way - we have an unnecessarily large git
+#  history in the container
+COPY .git /opt/colcon_ws/src/gisnav/.git
 
 ENTRYPOINT ["/entrypoint.sh"]

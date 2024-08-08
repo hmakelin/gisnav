@@ -37,7 +37,7 @@ The interdependencies between different services are hard-coded into the Docker 
 
 ### Mock GPS demo
 
-To deploy the [mock GPS demonstration](/README) introduced locally without using the Makefile, follow the below steps to create, start, and shutdown the required containers. These steps simply repeat what the `demo` Makefile recipe would do.
+To deploy the [mock GPS demonstration](/sitl-local) introduced locally without using the Makefile, follow the below steps to create, start, and shutdown the required containers. These steps simply repeat what the `demo` Makefile recipe would do.
 
 #### Build images
 

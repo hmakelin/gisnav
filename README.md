@@ -23,9 +23,9 @@ You will need to have the [Docker Compose plugin][2] and [NVIDIA Container Toolk
 
 ## Install GISNav CLI
 
-The GISNav CLI (`gnc`) is a Docker Compose wrapper that significantly simplifies building and deploying GISNav's Docker Compose services.
+The GISNav CLI (`gnc`) is a Docker Compose wrapper that significantly simplifies building and deploying GISNav's Docker Compose services. It is packaged as a Debian distributable.
 
-Create the Debian package yourself and install `gnc` from it using the following commands:
+Create the Debian distributable and install `gnc` from it using the following commands:
 
 ```bash
 git clone https://github.com/hmakelin/gisnav.git
@@ -80,7 +80,7 @@ listener sensor_gps
 ```
 
 > **Note**
-> The `gisnav` service will by default will send uORB messages to PX4 via the
+> The `gisnav` service will by default send uORB messages to PX4 via the
 > micro-ROS agent which bypasses the GPS driver so you will not see the GPS
 > status with commands like `gps status`.
 
@@ -97,7 +97,7 @@ gnc stop
 # Documentation
 
 See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development,
-for code examples and API documentation, and for contribution guidelines.
+for code examples and API documentation, and integration examples.
 
 [6]: https://hmakelin.github.io/gisnav
 

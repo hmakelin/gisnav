@@ -97,7 +97,7 @@ gnc stop
 # Documentation
 
 See the [latest developer documentation][6] for information on how to setup a local environment for GISNav development,
-for code examples and API documentation, and for contribution guidelines.
+for code examples and API documentation, and integration examples.
 
 [6]: https://hmakelin.github.io/gisnav
 

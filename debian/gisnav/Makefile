@@ -78,11 +78,15 @@ $(BUILD_DIR)/etc/systemd:
 	@mkdir -p $@
 	@cp -r etc/systemd/ $@
 
+# We need to copy .git to make git describe work for the docs (docs are built
+# with git version string). pre-commit might also need the .git folder.
+# TODO: only copy over a shallow copy of git repo  - we do not need entire history
+# nor all branches
 $(BUILD_DIR)/etc/gisnav: $(BUILD_DIR)/etc/gisnav/ros $(BUILD_DIR)/etc/gisnav/docker $(BUILD_DIR)/etc/gisnav/docs
 	@dest=debian/gisnav/$@ && \
 	mkdir -p $@ && \
 	touch $(BUILD_DIR)/COLCON_IGNORE && \
-	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml $$dest
+	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml .git $$dest
 
 $(BUILD_DIR)/etc/gisnav/ros:
 	@dest=debian/gisnav/$@ && \
@@ -97,8 +101,8 @@ $(BUILD_DIR)/etc/gisnav/docker:
 	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docker/ $$dest
 	@echo -e "\033[1;33;40mWarning! Check the file list above that no unintended files were copied over to the distributable.\033[0m"
 
-# TODO package.json needed for gisnav image build to go through - try to
-# refactor it out (need better defined gisnav image)
 $(BUILD_DIR)/etc/gisnav/docs:
-	@mkdir -p $@/vitepress
-	@echo "{}" > $@/vitepress/package.json
+	@dest=debian/gisnav/$@ && \
+	mkdir -p $@ && \
+	touch $(BUILD_DIR)/COLCON_IGNORE && \
+	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docs/ $$dest

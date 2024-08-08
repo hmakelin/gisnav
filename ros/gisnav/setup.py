@@ -124,7 +124,7 @@ setup(
         "nmea_node": ["pynmea2"],
         "dev": [
             "aiohttp",
-            "autodocsumm",
+            "autodocsumm!=0.2.13",
             "coverage",
             "docutils>=0.17",
             "jupyter",

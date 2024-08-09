@@ -51,12 +51,14 @@ graph TB
     PoseNode -->|"geometry_msgs/PoseWithCovarianceStamped\n(global pose, map frame)"| ekf_global_node
     UORBNode -->|"px4_msgs/SensorGps"| micro_ros_agent[" "]
     UBXNode -->|"ublox_msgs/NavPVT"| ubx[" "]
+    NMEANode -->|"nmea_msgs/Sentence"| nmea[" "]
 
     ekf_global_node -->|"nav_msgs/TransformStamped\n(map->odom)"| tf
     ekf_local_node -->|"nav_msgs/TransformStamped\n(odom->base_link)"| tf
 
     style micro_ros_agent fill-opacity:0, stroke-opacity:0;
     style ubx fill-opacity:0, stroke-opacity:0;
+    style nmea fill-opacity:0, stroke-opacity:0;
     style tf fill-opacity:0, stroke-width:1px,stroke-dasharray:3;
     style odometry fill-opacity:0, stroke-width:1px,stroke-dasharray:3;
 
@@ -166,7 +168,6 @@ graph TB
             end
         end
     end
-    simulation_px4 ----->|"/dev/ttyS4 (px4 GPS 2)\ntcp:15000 (socat bridge)\n/dev/ttyS1 (gisnav NMEA)"| application_gisnav
 
     browser["Web browser"] -->|"80/http\n(443/https not currently supported)"| nginx
 

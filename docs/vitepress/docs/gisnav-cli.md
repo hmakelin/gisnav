@@ -44,13 +44,14 @@ gnc start px4 gisnav
 Start simulation on `localhost`, and `gisnav` on `jetsonnano.local`:
 
 ::: info Companion computer hostname
-The `GISNAV_COMPANION_HOST` environment variable is set below to tell the `px4` service where to find the middleware. `gnc` does not set these automatically and assumes the defaults from the `docker/.env` file.
+The `GISNAV_COMPANION_HOST` environment variable is set below to tell the `px4` service where to find the middleware. `gnc` does not set these automatically and assumes the defaults from the `docker/.env` file. We need to set the environment variable before we create the containers.
 
 :::
 
 ```bash
 companion_host=jetsonnano.local
 export GISNAV_COMPANION_HOST=$companion_host
+gnc create px4 gisnav@$companion_host
 gnc start px4 gisnav@$companion_host
 ```
 

@@ -30,4 +30,12 @@ else
     echo "docker command not found. Skipping docker compose down."
 fi
 
+# Remove /etc/gisnav folder and all contents
+#if [ -d "/etc/gisnav" ]; then
+#    rm -rf /etc/gisnav
+#    echo "Successfully removed /etc/gisnav and all its contents."
+#else
+#    echo "/etc/gisnav does not exist. Skipping removal."
+#fi
+
 exit 0

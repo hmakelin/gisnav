@@ -8,7 +8,7 @@ SHELL := /bin/bash
 PACKAGE_NAME = gisnav
 BUILD_DIR = build
 DIST_DIR = dist
-REPO_ROOT_PATH = ../..
+REPO_ROOT_PATH = $(shell realpath ../..)
 ARCHITECTURE = all
 
 # Get the latest git tag and format the version string
@@ -28,7 +28,7 @@ all: dist
 # Phony target for cleaning the build directory
 .PHONY: clean
 clean:
-	@rm -rf $(BUILD_DIR) $(DIST_DIR)
+	@rm -rf $(MAKEFILE_DIR)$(BUILD_DIR) $(MAKEFILE_DIR)$(DIST_DIR)
 
 .PHONY: distclean
 distclean:
@@ -78,31 +78,18 @@ $(BUILD_DIR)/etc/systemd:
 	@mkdir -p $@
 	@cp -r etc/systemd/ $@
 
-# We need to copy .git to make git describe work for the docs (docs are built
-# with git version string). pre-commit might also need the .git folder.
-# TODO: only copy over a shallow copy of git repo  - we do not need entire history
-# nor all branches
-$(BUILD_DIR)/etc/gisnav: $(BUILD_DIR)/etc/gisnav/ros $(BUILD_DIR)/etc/gisnav/docker $(BUILD_DIR)/etc/gisnav/docs
-	@dest=debian/gisnav/$@ && \
-	mkdir -p $@ && \
-	touch $(BUILD_DIR)/COLCON_IGNORE && \
-	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml .git $$dest
-
-$(BUILD_DIR)/etc/gisnav/ros:
-	@dest=debian/gisnav/$@ && \
-	mkdir -p $@ && \
-	touch $(BUILD_DIR)/COLCON_IGNORE && \
-	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' ros/ $$dest
-	@echo -e "\033[1;33;40mWarning! Check the file list above that no unintended files were copied over to the distributable.\033[0m"
-
-$(BUILD_DIR)/etc/gisnav/docker:
-	@dest=debian/gisnav/$@ && \
-	mkdir -p $@ && \
-	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docker/ $$dest
-	@echo -e "\033[1;33;40mWarning! Check the file list above that no unintended files were copied over to the distributable.\033[0m"
-
-$(BUILD_DIR)/etc/gisnav/docs:
-	@dest=debian/gisnav/$@ && \
-	mkdir -p $@ && \
-	touch $(BUILD_DIR)/COLCON_IGNORE && \
-	cd ${REPO_ROOT_PATH}; rsync -av --exclude-from='.gitignore' docs/ $$dest
+# We need a shallow copy of git repo to make git describe work for the docs
+# (docs are built with git version string). pre-commit might also need the
+# .git folder.
+# We also grab any uncommitted changes from the local repo and apply them
+# as a patch to the shallow copy, to make development more convenient. We apply
+# staged changes first, and then unstaged changes (we create a combined patch
+# file)
+$(BUILD_DIR)/etc/gisnav:
+	@mkdir -p $@
+	@touch $(BUILD_DIR)/COLCON_IGNORE
+	@git clone --depth 1 file://${REPO_ROOT_PATH} $@
+	@cd ${REPO_ROOT_PATH} && git diff --cached > /tmp/gisnav-diff.patch \
+	&& git diff >> /tmp/gisnav-diff.patch
+	@cd $@ && git apply /tmp/gisnav-diff.patch
+	@rm -rf /tmp/gisnav-diff.patch

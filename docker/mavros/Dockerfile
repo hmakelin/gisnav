@@ -9,12 +9,13 @@ SHELL ["/bin/bash", "-c"]
 # Install GeographicLib related dependencies
 # Also add universe repository for ROS packages
 # tcpdump for health checks
+# Need mavros-extras for the gimbal_control plugin (mavros-extras v2.8+)
 RUN apt-get update && \
     apt-get -y install software-properties-common wget curl tcpdump && \
     add-apt-repository ppa:ubuntugis/ppa && \
     add-apt-repository universe && \
     apt-get update && \
-    apt-get -y install gdal-bin libgdal-dev geographiclib-tools ros-${ROS_DISTRO}-mavros && \
+    apt-get -y install gdal-bin libgdal-dev geographiclib-tools ros-${ROS_DISTRO}-mavros ros-${ROS_DISTRO}-mavros-extras && \
     geographiclib-get-geoids egm96-5 && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean

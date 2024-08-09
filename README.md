@@ -63,8 +63,7 @@ Docker container, and then start the mission.
 
 ## Simulate GPS failure
 
-Wait until the drone has risen to its final mission altitude. You should see a visualization of the GISNav-estimated
-field of view projected on the ground appear. You can then try disabling GPS through your [MAVLink Shell][5]
+Wait until the drone has risen to its final mission altitude. You can then try disabling GPS through your [MAVLink Shell][5]
 *(accessible e.g. through QGroundControl > Analyze Tools > MAVLink Console)*:
 
 ```

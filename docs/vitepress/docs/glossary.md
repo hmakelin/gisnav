@@ -284,7 +284,7 @@ Used to refer to the [vehicle](#vehicle), typically in a [ROS](#ros-ros-2) conte
 
 ### Rotation
 
-Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [vehicle](#heading). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
+Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [FOV](#fov--fov). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
 
 ### Service
 - A [Docker Compose](#docker-compose) service
@@ -292,7 +292,7 @@ Most likely rotation of the [reference raster](#reference-reference-image-refere
 - A [systemd](#systemd) service
 
 ### Service orchestration
-Deploying and managing [Docker Compose](#docker-compose) [services](#service) that constitute a GISNav [deployment](#deploy-deployment). Currently done using [Make](#make-make) (Makefiles).
+Deploying and managing [Docker Compose](#docker-compose) [services](#service), potentially on multiple hosts, that constitute a GISNav [deployment](#deploy-deployment).
 
 ### Simulation host
 Computer that hosts the (Gazebo) simulation world. Typically a more powerful server, or a desktop or laptop personal computer.
@@ -712,7 +712,7 @@ An open source machine learning software library: [torch.ch](http://torch.ch/)
 Python machine learning library based on Torch: [pytorch.org](https://pytorch.org/)
 
 ### UBX
-Communication protocol (form u-blox) for GPS receivers
+Communication protocol (from u-blox) for GPS receivers
 
 ### Ubuntu
 A Linux distribution, only supported OS for GISNav: [ubuntu.com](https://ubuntu.com/)

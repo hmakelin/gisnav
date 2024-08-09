@@ -284,7 +284,7 @@ Used to refer to the [vehicle](#vehicle), typically in a [ROS](#ros-ros-2) conte
 
 ### Rotation
 
-Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [FOV](#fov--fov). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
+Most likely rotation of the [reference raster](#reference-reference-image-reference-raster) when aligning it with the [FOV](#fov-fov). This is done in [pose](#pose) estimation because the neural [networks](#network) are not assumed to be rotation agnostic.
 
 ### Service
 - A [Docker Compose](#docker-compose) service

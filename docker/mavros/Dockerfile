@@ -4,58 +4,28 @@ FROM ros:${ROS_DISTRO} as mavros-msgs
 ARG ROS_DISTRO
 ENV ROS_DISTRO=${ROS_DISTRO}
 
-# Combine apt update, upgrade and cleaning up in one layer
-RUN apt update --fix-missing && \
-    apt -y upgrade
-
 SHELL ["/bin/bash", "-c"]
-
-WORKDIR /opt/colcon_ws/src/
 
 # Install GeographicLib related dependencies
 # Also add universe repository for ROS packages
 # tcpdump for health checks
-RUN apt-get -y install software-properties-common wget curl tcpdump && \
+# Need mavros-extras for the gimbal_control plugin (mavros-extras v2.8+)
+RUN apt-get update && \
+    apt-get -y install software-properties-common wget curl tcpdump && \
     add-apt-repository ppa:ubuntugis/ppa && \
     add-apt-repository universe && \
     apt-get update && \
-    apt-get -y install gdal-bin libgdal-dev geographiclib-tools && \
-    geographiclib-get-geoids egm96-5
+    apt-get -y install gdal-bin libgdal-dev geographiclib-tools ros-${ROS_DISTRO}-mavros ros-${ROS_DISTRO}-mavros-extras && \
+    geographiclib-get-geoids egm96-5 && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
-# Get mavros with gimbal protocol v2 plugin and build mavros_msgs only
-# mavros_msgs is needed by both downstream images so it is already built here
-# adds an additional custom patch to gps_input.cpp
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    git clone --branch 2.8.0 https://github.com/mavlink/mavros.git && \
-    rosdep update && \
-    apt-get update && \
-    rosdep install --from-paths . --ignore-src -y && \
-    cd .. && \
-    colcon build --packages-ignore mavros mavros_extras libmavconn && \
-    sed -i 's/rclcpp::Time last_pos_time;/rclcpp::Time last_pos_time{0, 0, get_clock()->get_clock_type()};/' \
-      src/mavros/mavros_extras/src/plugins/gps_input.cpp
-
+RUN mkdir -p /opt/colcon_ws/src
 
 FROM mavros-msgs AS mavros
 ARG ROS_DISTRO
 
 WORKDIR /opt/colcon_ws/
-
-COPY mavros/filter_plugins.sh /opt/colcon_ws/src/mavros
-
-# Build mavros and mavros_extras gimbal protocol v2 (gimbal_control) plugin
-# We use the filter_plugins.sh script to disable unneeded plugins to significantly
-# speed up build time and use of memory.
-# mavros_msgs was built earlier so we ignore it here
-RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
-    && source install/setup.bash \
-    && cd src/mavros \
-    && ./filter_plugins.sh \
-    && cd /opt/colcon_ws/ \
-    && colcon build --packages-ignore mavros_msgs
-
-RUN rm -rf /var/lib/apt/lists/* && \
-    apt clean
 
 COPY mavros/entrypoint.sh /
 
@@ -129,9 +99,10 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
 
 COPY Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml /opt/colcon_ws/src/gisnav/
 
-# .git needed to make pre-commit and git describe work
-# TODO: solve this in a better way - we have an unnecessarily large git
-#  history in the container
-COPY .git /opt/colcon_ws/src/gisnav/.git
+# .git needed to make pre-commit and git describe work. We create a shallow
+# copy of the repo to avoid carrying over all of commit history.
+COPY .git /tmp/gisnav/.git
+RUN git clone --depth 1 /tmp/gisnav/.git /opt/colcon_ws/src/gisnav/.git && \
+    rm -rf /tmp/gisnav/.git
 
 ENTRYPOINT ["/entrypoint.sh"]

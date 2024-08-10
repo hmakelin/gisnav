@@ -85,9 +85,7 @@ listener sensor_gps
 
 [5]: https://docs.px4.io/main/en/debug/mavlink_shell.html#qgroundcontrol
 
-## Build and run SITL simulation
-
-Stop all simulation services with the below command:
+Finally, you can stop all simulation services with the below command:
 
 ```bash
 gnc stop

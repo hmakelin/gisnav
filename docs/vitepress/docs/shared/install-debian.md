@@ -6,7 +6,7 @@ You can make this process quicker by building your own (potentially cross-platfo
 :::
 
 ```bash
-GISNAV_RELEASE=v0.68.0
+GISNAV_RELEASE=v0.68.1
 wget https://github.com/hmakelin/gisnav/releases/download/${GISNAV_RELEASE}/gisnav-${GISNAV_RELEASE}_all.deb -O gisnav-${GISNAV_RELEASE}_all.deb
 sudo dpkg -i ./gisnav-${GISNAV_RELEASE}_all.deb
 ```

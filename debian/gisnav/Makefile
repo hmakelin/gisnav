@@ -91,5 +91,9 @@ $(BUILD_DIR)/etc/gisnav:
 	@git clone --depth 1 file://${REPO_ROOT_PATH} $@
 	@cd ${REPO_ROOT_PATH} && git diff --cached > /tmp/gisnav-diff.patch \
 	&& git diff >> /tmp/gisnav-diff.patch
-	@cd $@ && git apply /tmp/gisnav-diff.patch
+	@if [ -s /tmp/gisnav-diff.patch ]; then \
+		cd $@ && git apply /tmp/gisnav-diff.patch; \
+	else \
+		echo "No changes to apply."; \
+	fi
 	@rm -rf /tmp/gisnav-diff.patch

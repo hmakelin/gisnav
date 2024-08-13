@@ -40,8 +40,11 @@ ENV ROS_DISTRO=${ROS_DISTRO}
 
 WORKDIR /opt/colcon_ws/src/
 
-# Copy package.xml only to install system dependencies
-COPY ros/gisnav/package.xml gisnav/ros/gisnav/package.xml
+# .git needed to make pre-commit and git describe work. We create a shallow
+# copy of the repo to avoid carrying over all of commit history.
+COPY . /tmp/gisnav
+RUN git clone --depth 1 /tmp/gisnav/ gisnav/ && \
+    rm -rf /tmp/gisnav
 
 # Install GISNav system dependencies - we will install
 # the setup.py python dependencies later.
@@ -59,9 +62,6 @@ RUN git clone --branch release/1.14 https://github.com/px4/px4_msgs.git && \
     cd .. && \
     colcon build --packages-select px4_msgs
 
-# Copy rest of gisnav ros2 package
-COPY ros/ gisnav/ros
-
 WORKDIR /opt/colcon_ws/src/gisnav/
 
 # Install python dependencies, mainly torch and related CUDA deps
@@ -73,9 +73,8 @@ RUN cd ros/gisnav && \
     source install/setup.bash && \
     colcon build --packages-select gisnav gisnav_msgs
 
-COPY docker/mavros/gisnav/entrypoint.sh /
-
-RUN chmod +x /entrypoint.sh
+RUN cp docker/mavros/gisnav/entrypoint.sh / && \
+    chmod +x /entrypoint.sh
 
 # Download LightGlue pretrained weights
 RUN python3 -c  \
@@ -87,8 +86,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && apt clean
 
-COPY docs/ docs/
-
 # Node 18 for building the docs (Sphinx dependencies already in setup.py)
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
     && source ~/.nvm/nvm.sh \
@@ -96,13 +93,5 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     && nvm use 20 \
     && cd docs/vitepress \
     && npm install
-
-COPY Makefile .pre-commit-config.yaml LICENSE.md README.md pyproject.toml /opt/colcon_ws/src/gisnav/
-
-# .git needed to make pre-commit and git describe work. We create a shallow
-# copy of the repo to avoid carrying over all of commit history.
-COPY .git /tmp/gisnav/.git
-RUN git clone --depth 1 /tmp/gisnav/.git /opt/colcon_ws/src/gisnav/.git && \
-    rm -rf /tmp/gisnav/.git
 
 ENTRYPOINT ["/entrypoint.sh"]

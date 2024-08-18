@@ -26,13 +26,15 @@ If you are experienced with `docker compose`, using `gnc` should be intuitive. A
 Prepare services on `localhost`:
 
 ```bash
-gnc create --build gisnav px4
+gnc build px4 gisnav --with-dependencies
+gnc create gisnav px4
 ```
 
 Prepare `gisnav` on remote host `jetsonnano.local`:
 
 ```bash
-gnc create --build gisnav@jetsonnano.local
+gnc build gisnav@jetsonnano.local --with-dependencies
+gnc create gisnav@jetsonnano.local
 ```
 
 Start both simulation and `gisnav` services on `localhost`:

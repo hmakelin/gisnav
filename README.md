@@ -49,7 +49,8 @@ everything will take a long time):
 >   volume and will be slow to start up (on first run).
 
 ```bash
-gnc create --build px4 gisnav
+gnc build px4 gisnav --with-dependencies
+gnc create px4 gisnav
 gnc start px4 gisnav && gnc stop autoheal
 ```
 
